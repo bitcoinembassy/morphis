@@ -11,12 +11,12 @@ print("Listening on %s." % listen_address)
 
 while True:
     # Wait for next request from client.
-    message = socket.recv()
+    message = ssocket.recv()
     print("Received request: %s" % message)
 
     # simulate work
     time.sleep(1);
 
-    socket.send(b"World")
+    ssocket.send(b"World")
     print("Sent response!")
 
