@@ -2,7 +2,7 @@ import asyncio
 import time
 import zmq
 
-def server(loop):
+def engageNet(loop, pipe):
     listen_address = "tcp://*:5555"
 
     context = zmq.Context()
@@ -11,41 +11,44 @@ def server(loop):
 
     print("S: Listening on {}.".format(listen_address))
 
+    csocket = context.socket(zmq.REQ)
+
+    poller = zmq.Poller()
+    poller.register(ssocket, zmq.POLLIN)
+    poller.register(csocket. zmq.POLLIN)
+    poller.register(pipe, zmq.
+
     i = 0
 
     while True:
-        # Wait for next request from client.
-        address, empty, message = ssocket.recv_multipart()
+        socks = dict(poller.poll())
 
-    #    message = ssocket.recv()
+        if ssocket in socks:
+            # Wait for next request from client.
+            address, empty, message = ssocket.recv_multipart()
 
-        print("S: Received request [{}] from [{}].".format(message, address))
+            print("S: Received request [{}] from [{}].".format(message, address))
 
-        # simulate work
-#        time.sleep(1);
+            ssocket.send_multipart([address, b'', b"World"])
+            print("S: Sent response #{} to [{}]!".format(i, address))
+            i = i + 1
 
-        ssocket.send_multipart([address, b'', b"World"])
-        print("S: Sent response #{} to [{}]!".format(i, address))
-        i = i + 1
+        if csocket in socks:
+            message = csocket.recv()
+            print("C: Received response: [{}].".format(message))
+            
 
 def client(loop):
     connect_address = "tcp://localhost:5555"
 
-    context = zmq.Context()
-    socket = context.socket(zmq.REQ)
-    socket.connect(connect_address)
+            csocket.send(b"Hello")
+            print("C: Sent request!")
 
+
+    socket.connect(connect_address)
     print("Connecting to {}.".format(connect_address))
 
     while True:
-        socket.send(b"Hello")
-        print("C: Sent request!")
-
-        message = socket.recv()
-        print("C: Received response: [{}].".format(message))
-
-        # simulate work
-#        time.sleep(1);
 
 def main():
     loop = asyncio.get_event_loop()
