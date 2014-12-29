@@ -18,7 +18,7 @@ while True:
     print("Received request: %s" % message)
 
     # simulate work
-    time.sleep(1);
+#    time.sleep(1);
 
     ssocket.send_multipart([address, b'', b"World"])
     print("Sent response!")
