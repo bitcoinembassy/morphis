@@ -43,7 +43,7 @@ def engageNet(loop, context, pipe):
 
                 print("C: Received response [{}] from [{}].".format(message, csockid))
 
-                csocket.send(b"Hello")
+                sock.send(b"Hello")
                 print("C: Sent request to [{}]!".format(csockid))
             elif sock == ssocket:
                 # Wait for next request from client.
