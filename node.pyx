@@ -21,6 +21,8 @@ def engageNet(loop, context, pipe, config):
 def _engageNet(loop, context, pipe, config):
     listen_address = "tcp://*:{}".format(config["port"])
 
+    print("S: listen_address=[{}].".format(listen_address))
+
     ssocket = context.socket(zmq.ROUTER)
     ssocket.identity = b"asdf";
     ssocket.bind(listen_address)
@@ -89,16 +91,14 @@ def _engageNet(loop, context, pipe, config):
 
 def main():
     try:
-        docopt_config = "Usage: my_program.py [--port PORT]"
+        docopt_config = "Usage: my_program.py [--port=PORT]"
         arguments = docopt.docopt(docopt_config)
         port = arguments["--port"]
-        if port == False:
+        if port == None:
             port = 5555
     except docopt.DocoptExit as e:
         print(e.message)
         return
-
-    print(port)
 
     context = zmq.Context()
 
@@ -113,7 +113,7 @@ def main():
 #    thread.daemon = True
     thread.start()
 
-#    pipe[0].send_multipart([b"conn", b"tcp://localhost:5555"])
+#    pipe[0].send_multipart([b"conn", "tcp://localhost:{}".format(port).encode()])
 
     private_key = enc.generate_RSA(4096)
     public_key = private_key.publickey();
