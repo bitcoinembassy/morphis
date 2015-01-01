@@ -48,8 +48,10 @@ def _engageNet(loop, context, pipe, config):
     while True:
         try:
             ready_socks = poller.poll()
-        except:
-            break
+        except Exception as e:
+            handleException("poller.poll()", e)
+            debug("Exiting due to FATAL error.")
+            sys.exit(1)
 
         print("WOKEN")
 
