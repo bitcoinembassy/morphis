@@ -3,6 +3,7 @@ import docopt
 import sys
 import threading
 import time
+import traceback
 import zmq
 
 from zhelpers import zpipe
@@ -15,7 +16,13 @@ def debug(message):
 def engageNet(loop, context, pipe, config):
     try:
         _engageNet(loop, context, pipe, config)
-    except Exception:
+    except Exception as e:
+        exc_type, exc_obj, exc_tb = sys.exc_info()
+        debug("FATAL: _engageNet threw [{}]: {}".format(exc_type, str(e)))
+#        fname = exc_tb.tb_frame.f_code.co_filename
+#        print(exc_type, fname, exc_tb.tb_lineno)
+        traceback.print_tb(exc_tb)
+        debug("Exiting due to FATAL error.")
         sys.exit(1)
 
 def _engageNet(loop, context, pipe, config):
