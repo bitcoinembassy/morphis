@@ -1,5 +1,7 @@
-import threading
 import asyncio
+import docopt
+import sys
+import threading
 import time
 import zmq
 
@@ -10,8 +12,14 @@ import enc
 def debug(message):
     print(message)
 
-def engageNet(loop, context, pipe):
-    listen_address = "tcp://*:5555"
+def engageNet(loop, context, pipe, config):
+    try:
+        _engageNet(loop, context, pipe, config)
+    except Exception:
+        sys.exit(1)
+
+def _engageNet(loop, context, pipe, config):
+    listen_address = "tcp://*:{}".format(config["port"])
 
     ssocket = context.socket(zmq.ROUTER)
     ssocket.identity = b"asdf";
@@ -80,14 +88,28 @@ def engageNet(loop, context, pipe):
                     print("C: Sent request!")
 
 def main():
+    try:
+        docopt_config = "Usage: my_program.py [--port PORT]"
+        arguments = docopt.docopt(docopt_config)
+        port = arguments["--port"]
+        if port == False:
+            port = 5555
+    except docopt.DocoptExit as e:
+        print(e.message)
+        return
+
+    print(port)
+
     context = zmq.Context()
 
     pipe = zpipe(context)
 
     loop = asyncio.get_event_loop()
 
+    net_config = {"port": port}
+
     #loop.run_in_executor(None, engageNet, loop, context, pipe[0])
-    thread = threading.Thread(target=engageNet, args=(loop, context, pipe[1]))
+    thread = threading.Thread(target=engageNet, args=(loop, context, pipe[1], net_config))
 #    thread.daemon = True
     thread.start()
 
