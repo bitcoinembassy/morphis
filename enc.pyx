@@ -7,10 +7,11 @@ def generate_RSA(int bits=4096):
     from Crypto.PublicKey import RSA
 
     new_key = RSA.generate(bits, e=65537)
-    public_key = new_key.publickey().exportKey("PEM")
-    private_key = new_key.exportKey("PEM")
+    #public_key = new_key.publickey().exportKey("PEM")
+    #private_key = new_key.exportKey("PEM")
 
-    return private_key, public_key 
+    #return private_key, public_key 
+    return new_key;
 
 def generate_ID(bytes public_key):
     from Crypto.Hash import SHA512
