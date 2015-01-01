@@ -29,12 +29,9 @@ def _engageNet(loop, context, pipe, config):
 
     print("S: Listening on {}.".format(listen_address))
 
-    csocket = context.socket(zmq.ROUTER)
-
     poller = zmq.Poller()
     poller.register(pipe, zmq.POLLIN)
     poller.register(ssocket, zmq.POLLIN)
-#    poller.register(csocket, zmq.POLLIN)
 
     i = 0
     clientid = 0
