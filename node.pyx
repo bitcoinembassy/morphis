@@ -10,6 +10,10 @@ from zhelpers import zpipe
 
 import enc
 
+def handleException(info, e):
+    debug("FATAL: {} threw [{}]: {}".format(info, sys.exc_info()[0], str(e)))
+    traceback.print_tb(sys.exc_info()[2])
+
 def debug(message):
     print(message)
 
@@ -17,11 +21,7 @@ def engageNet(loop, context, pipe, config):
     try:
         _engageNet(loop, context, pipe, config)
     except Exception as e:
-        exc_type, exc_obj, exc_tb = sys.exc_info()
-        debug("FATAL: _engageNet threw [{}]: {}".format(exc_type, str(e)))
-#        fname = exc_tb.tb_frame.f_code.co_filename
-#        print(exc_type, fname, exc_tb.tb_lineno)
-        traceback.print_tb(exc_tb)
+        handleException("_engageNet", e)
         debug("Exiting due to FATAL error.")
         sys.exit(1)
 
