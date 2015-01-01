@@ -91,7 +91,7 @@ def main():
 #    thread.daemon = True
     thread.start()
 
-    pipe[0].send_multipart([b"conn", b"tcp://localhost:5555"])
+#    pipe[0].send_multipart([b"conn", b"tcp://localhost:5555"])
 
     private_key = enc.generate_RSA(4096)
     public_key = private_key.publickey();
