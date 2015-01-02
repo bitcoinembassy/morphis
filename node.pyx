@@ -10,6 +10,12 @@ from zhelpers import zpipe
 
 import enc
 
+private_key = None;
+public_key = None;
+
+in_pipe = None;
+out_pipe = None;
+
 def handleException(info, e):
     debug("FATAL: {} threw [{}]: {}".format(info, sys.exc_info()[0], str(e)))
     traceback.print_tb(sys.exc_info()[2])
@@ -20,22 +26,29 @@ def debug(message):
 def engageNet(loop, context, in_pipe, out_pipe, config):
     try:
         _engageNet(loop, context, in_pipe, out_pipe, config)
-    except Exception as e:
+    except BaseException as e:
         handleException("_engageNet", e)
         debug("Exiting due to FATAL error.")
         sys.exit(1)
 
-in_pipe = None;
 def handleServerRequest():
-    global in_pipe;
+    global in_pipe, out_pipe
 
     meta = in_pipe[0].recv_pyobj()
     message = in_pipe[0].recv_multipart()
+    in_pipe[0].send(b"ok")
 
     print("S(a): Received request [{}] from [{}].".format(message, meta["address"]))
 
+    cmd = message.pop(0)
+
+    if cmd == b"pub_key_req":
+        remote_pkey = message.pop(0)
+
+        out_pipe[1].send_multipart([b"sresp", meta["address"], b"pub_key_response", public_key.exportKey("PEM")])
+
 def handleClientResponse():
-    global in_pipe;
+    global in_pipe
 
     meta = in_pipe[0].recv_pyobj()
     message = in_pipe[0].recv_multipart()
@@ -43,6 +56,7 @@ def handleClientResponse():
     print("C(a): Received response [{}] from [{}].".format(message, meta["ssockid"]))
 
 def _engageNet(loop, context, in_pipe, out_pipe, config):
+    global public_key
 
     listen_address = "tcp://*:{}".format(config["port"])
 
@@ -69,12 +83,12 @@ def _engageNet(loop, context, in_pipe, out_pipe, config):
     while True:
         try:
             ready_socks = poller.poll()
-        except Exception as e:
+        except BaseException as e:
             handleException("poller.poll()", e)
             debug("Exiting due to FATAL error.")
             sys.exit(1)
 
-        print("WOKEN")
+        print("WOKEN ready_socks=[{}].".format(ready_socks))
 
         for sockt in ready_socks:
             sock = sockt[0]
@@ -135,18 +149,31 @@ def _engageNet(loop, context, in_pipe, out_pipe, config):
                     clientid += 1
                     poller.register(csocket, zmq.POLLIN)
 
-                    csocket.send(b"Hello")
+                    csocket.send(b"pub_key_req", zmq.SNDMORE)
+                    csocket.send(public_key.exportKey("PEM"))
                     print("C: Sent request!")
+                elif cmd == b"sresp":
+                    addr = message.pop(0)
+
+                    print("S: Sending response [{}] to [{}].".format(message, addr))
+
+                    ssocket.send(addr, zmq.SNDMORE)
+                    ssocket.send(b"", zmq.SNDMORE)
+                    ssocket.send_multipart(message)
+                elif cmd == b"shutdown":
+                    return
 
 def main():
-    global in_pipe;
+    global in_pipe, out_pipe, public_key, private_key
 
     try:
-        docopt_config = "Usage: my_program.py [--port=PORT]"
+        docopt_config = "Usage: my_program.py [--port=PORT] [--connect=PORT]"
         arguments = docopt.docopt(docopt_config)
         port = arguments["--port"]
         if port == None:
             port = 5555
+
+        connect_dest = arguments["--connect"]
     except docopt.DocoptExit as e:
         print(e.message)
         return
@@ -171,15 +198,24 @@ def main():
     debug("node_id=[%s]." % node_id.hexdigest())
 
     # Start Net Engine.
-    #loop.run_in_executor(None, engageNet, loop, context, in_pipe[0])
-    thread = threading.Thread(target=engageNet, args=(loop, context, out_pipe[0], in_pipe[1], net_config))
-    thread.daemon = True
-    thread.start()
+    zmq_future = loop.run_in_executor(None, engageNet, loop, context, out_pipe[0], in_pipe[1], net_config)
+#    thread = threading.Thread(target=engageNet, args=(loop, context, out_pipe[0], in_pipe[1], net_config))
+#    thread.daemon = True
+#    thread.start()
 
-    # Connect to self for testing.
-    out_pipe[1].send_multipart([b"conn", "tcp://localhost:{}".format(port).encode()])
+    # Connect for testing.
+    if connect_dest != None:
+        out_pipe[1].send_multipart([b"conn", "tcp://{}".format(connect_dest).encode()])
 #    out_pipe[0].send_multipart([b"conn", "tcp://localhost:{}".format(port).encode()])
 
-    loop.run_forever()
+    try:
+        loop.run_until_complete(zmq_future)
+    except BaseException as e:
+        handleException("loop.run_until_complete()", e)
+        out_pipe[1].send_multipart([b"shutdown"])
+        loop.stop()
+        loop.close()
+        zmq_future.cancel()
+        sys.exit(1)
 
 main()
