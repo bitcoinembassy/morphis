@@ -17,15 +17,33 @@ def handleException(info, e):
 def debug(message):
     print(message)
 
-def engageNet(loop, context, pipe, config):
+def engageNet(loop, context, in_pipe, out_pipe, config):
     try:
-        _engageNet(loop, context, pipe, config)
+        _engageNet(loop, context, in_pipe, out_pipe, config)
     except Exception as e:
         handleException("_engageNet", e)
         debug("Exiting due to FATAL error.")
         sys.exit(1)
 
-def _engageNet(loop, context, pipe, config):
+in_pipe = None;
+def handleServerRequest():
+    global in_pipe;
+
+    meta = in_pipe[0].recv_pyobj()
+    message = in_pipe[0].recv_multipart()
+
+    print("S(a): Received request [{}] from [{}].".format(message, meta["address"]))
+
+def handleClientResponse():
+    global in_pipe;
+
+    meta = in_pipe[0].recv_pyobj()
+    message = in_pipe[0].recv_multipart()
+
+    print("C(a): Received response [{}] from [{}].".format(message, meta["ssockid"]))
+
+def _engageNet(loop, context, in_pipe, out_pipe, config):
+
     listen_address = "tcp://*:{}".format(config["port"])
 
     print("S: listen_address=[{}].".format(listen_address))
@@ -37,7 +55,7 @@ def _engageNet(loop, context, pipe, config):
     print("S: Listening on {}.".format(listen_address))
 
     poller = zmq.Poller()
-    poller.register(pipe, zmq.POLLIN)
+    poller.register(in_pipe, zmq.POLLIN)
     poller.register(ssocket, zmq.POLLIN)
 
     i = 0
@@ -70,23 +88,38 @@ def _engageNet(loop, context, pipe, config):
                 meta = {"type": "clientResponse",
                     "csockid": csockid}
 
-                pipe.send_pyobj(meta, zmq.SNDMORE)
-                pipe.send_multipart(message)
+                in_pipe.send_pyobj(meta, zmq.SNDMORE)
+                in_pipe.send_multipart(message)
+
+                loop.call_soon_threadsafe(handleClientResponse)
 
 #                sock.send(b"Hello")
 #                print("C: Sent request to [{}]!".format(csockid))
             elif sock == ssocket:
                 # Wait for next request from client.
-                address, empty, message = ssocket.recv_multipart()
+                address = ssocket.recv();
+                empty = ssocket.recv();
+                
+                message = ssocket.recv_multipart()
 
                 print("S: Received request [{}] from [{}].".format(message, address))
 
-                ssocket.send_multipart([address, b'', b"World"])
-                print("S: Sent response #{} to [{}]!".format(i, address))
-                i = i + 1
-            elif sock == pipe:
-                message = pipe.recv_multipart()
+                meta = {"type": "serverRequest",
+                    "address": address}
+
+                out_pipe.send_pyobj(meta, zmq.SNDMORE)
+                out_pipe.send_multipart(message)
+
+                loop.call_soon_threadsafe(handleServerRequest)
+
+#                ssocket.send_multipart([address, b'', b"World"])
+#                print("S: Sent response #{} to [{}]!".format(i, address))
+#                i = i + 1
+            elif sock == in_pipe:
+                message = in_pipe.recv_multipart()
                 print("XS: Received [{}] message.".format(message[0]))
+
+                in_pipe.send(b"ok")
 
                 cmd = message.pop(0)
                 if cmd == b"conn":
@@ -106,6 +139,8 @@ def _engageNet(loop, context, pipe, config):
                     print("C: Sent request!")
 
 def main():
+    global in_pipe;
+
     try:
         docopt_config = "Usage: my_program.py [--port=PORT]"
         arguments = docopt.docopt(docopt_config)
@@ -118,19 +153,14 @@ def main():
 
     context = zmq.Context()
 
-    pipe = zpipe(context)
+    in_pipe = zpipe(context)
+    out_pipe = zpipe(context)
 
     loop = asyncio.get_event_loop()
 
     net_config = {"port": port}
 
-    #loop.run_in_executor(None, engageNet, loop, context, pipe[0])
-    thread = threading.Thread(target=engageNet, args=(loop, context, pipe[1], net_config))
-#    thread.daemon = True
-    thread.start()
-
-#    pipe[0].send_multipart([b"conn", "tcp://localhost:{}".format(port).encode()])
-
+    # Generate Node Keys & Id.
     private_key = enc.generate_RSA(4096)
     public_key = private_key.publickey();
     
@@ -139,5 +169,17 @@ def main():
     node_id = enc.generate_ID(public_key.exportKey("DER"))
 
     debug("node_id=[%s]." % node_id.hexdigest())
+
+    # Start Net Engine.
+    #loop.run_in_executor(None, engageNet, loop, context, in_pipe[0])
+    thread = threading.Thread(target=engageNet, args=(loop, context, out_pipe[0], in_pipe[1], net_config))
+    thread.daemon = True
+    thread.start()
+
+    # Connect to self for testing.
+    out_pipe[1].send_multipart([b"conn", "tcp://localhost:{}".format(port).encode()])
+#    out_pipe[0].send_multipart([b"conn", "tcp://localhost:{}".format(port).encode()])
+
+    loop.run_forever()
 
 main()
