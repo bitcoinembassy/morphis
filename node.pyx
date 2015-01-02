@@ -36,7 +36,7 @@ def handleServerRequest():
 
     meta = in_pipe[0].recv_pyobj()
     message = in_pipe[0].recv_multipart()
-    in_pipe[0].send(b"ok")
+#    in_pipe[0].send(b"ok")
 
     print("S(a): Received request [{}] from [{}].".format(message, meta["address"]))
 
@@ -133,7 +133,7 @@ def _engageNet(loop, context, in_pipe, out_pipe, config):
                 message = in_pipe.recv_multipart()
                 print("XS: Received [{}] message.".format(message[0]))
 
-                in_pipe.send(b"ok")
+#                in_pipe.send(b"ok")
 
                 cmd = message.pop(0)
                 if cmd == b"conn":
