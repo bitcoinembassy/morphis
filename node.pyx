@@ -43,7 +43,10 @@ def _engageNet(loop, context, pipe, config):
     i = 0
     clientid = 0
 
-    csocks = {}
+    # fd, id
+    csockids = {}
+    # id, socket
+    csockets = {}
 
     while True:
         try:
@@ -57,15 +60,21 @@ def _engageNet(loop, context, pipe, config):
 
         for sockt in ready_socks:
             sock = sockt[0]
-            csockid = csocks.get(sock.fd)
+            csockid = csockids.get(sock.fd)
 
             if csockid != None:
-                message = sock.recv()
+                message = sock.recv_multipart()
 
                 print("C: Received response [{}] from [{}].".format(message, csockid))
 
-                sock.send(b"Hello")
-                print("C: Sent request to [{}]!".format(csockid))
+                meta = {"type": "clientResponse",
+                    "csockid": csockid}
+
+                pipe.send_pyobj(meta, zmq.SNDMORE)
+                pipe.send_multipart(message)
+
+#                sock.send(b"Hello")
+#                print("C: Sent request to [{}]!".format(csockid))
             elif sock == ssocket:
                 # Wait for next request from client.
                 address, empty, message = ssocket.recv_multipart()
@@ -88,7 +97,8 @@ def _engageNet(loop, context, pipe, config):
                     csocket = context.socket(zmq.REQ)
                     csocket.connect(addr)
 
-                    csocks[csocket.fd] = clientid
+                    csockids[csocket.fd] = clientid
+                    csockets[clientid] = csocket
                     clientid += 1
                     poller.register(csocket, zmq.POLLIN)
 
