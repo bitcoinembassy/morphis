@@ -27,7 +27,17 @@ def accept_client(client_reader, client_writer):
 
 @asyncio.coroutine
 def handle_client(client_reader, client_writer):
-    client_writer.write("HELLO\n".encode())
+    client_writer.write("SSH-2.0-mNet_0.0.1\n".encode())
+
+    try:
+        data = yield from asyncio.wait_for(client_reader.readline(), timeout=2.0)
+    except asyncio.TimeoutError:
+        log().warning("Client sent no line data by timeout.")
+        assert data == None
+        return
+
+    sdata = data.decode().rstrip()
+    log().info("Received [{}].".format(sdata))
 
 def main():
     global log
