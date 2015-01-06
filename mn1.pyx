@@ -7,6 +7,24 @@ clientObjs = {} # remoteAddress, dict
 
 log = logging.getLogger(__name__)
 
+class MNetServerProtocol(asyncio.Protocol):
+    def connection_made(self, transport):
+        self.transport = transport
+        peer_name = transport.get_extra_info("peername")
+        log.info("Connection made from [{}].".format(peer_name))
+
+    def data_received(self, data):
+        log.info("Received: [{}].".format(data.decode()))
+
+        log.info("Closing socket.")
+        self.transport.close()
+
+    def error_recieved(self, exc):
+        log.info("Error received:".format(exc))
+
+    def connection_lost(self, exc):
+        log.info("Connection lost.")
+
 def accept_client(client_reader, client_writer):
     global log, clientObjs
 
@@ -62,9 +80,15 @@ def main():
     print("Starting server.")
     log.info("Starting server.")
     loop = asyncio.get_event_loop()
-    f = asyncio.start_server(accept_client, host=None, port=5555)
-    loop.run_until_complete(f)
+#    f = asyncio.start_server(accept_client, host=None, port=5555)
+    server = loop.create_server(MNetServerProtocol, "127.0.0.1", 5555)
+
+#    loop.run_until_complete(f)
+    loop.run_until_complete(server)
     loop.run_forever()
+    server.close()
+    loop.run_until_complete(server.wait_closed())
+    loop.close()
 
 if __name__ == "__main__":
     #log.setLevel(logging.DEBUG)
