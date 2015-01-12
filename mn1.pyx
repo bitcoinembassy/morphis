@@ -10,69 +10,52 @@ log = logging.getLogger(__name__)
 class MNetServerProtocol(asyncio.Protocol):
     def connection_made(self, transport):
         self.transport = transport
-        peer_name = transport.get_extra_info("peername")
-        log.info("Connection made from [{}].".format(peer_name))
+        self.peerName = peer_name = transport.get_extra_info("peername")
+
+        log.info("S: Connection made from [{}].".format(peer_name))
+
+        client = clientObjs.get(peer_name)
+        if client == None:
+            log.info("S: Initializing new clientObj.")
+            client = {"connected": True}
+        clientObjs[peer_name] = client
+
+        self.client = client
+
+        transport.write("SSH-2.0-mNet_0.0.1\n".encode())
 
     def data_received(self, data):
-        log.info("Received: [{}].".format(data.decode()))
+        log.info("S: Received: [{}].".format(data.rstrip().decode()))
 
-        log.info("Closing socket.")
+        log.info("S: Closing socket.")
         self.transport.close()
 
     def error_recieved(self, exc):
-        log.info("Error received:".format(exc))
+        log.info("S: Error received:".format(exc))
 
     def connection_lost(self, exc):
-        log.info("Connection lost.")
+        log.info("S: Connection lost from [{}], client=[{}].".format(self.peerName, self.client))
+        self.client["connected"] = False
 
-def accept_client(client_reader, client_writer):
-    global log, clientObjs
+class MNetClientProtocol(asyncio.Protocol):
+    def connection_made(self, transport):
+        self.transport = transport
+        self.peerName = peer_name = transport.get_extra_info("peername")
 
-    peer_name = str(client_writer.get_extra_info("peername")[0])
-    log.info("peer_name [{}].".format(peer_name))
-    client = clientObjs.get(peer_name)
-    if client == None:
-        log.info("Initializing new clientObj.")
-        client = {}
-        clientObjs[peer_name] = client
+        log.info("C: Connection made from [{}].".format(peer_name))
 
-    task = asyncio.Task(handle_client(client, client_reader, client_writer))
-    clientPipes[task] = (client_reader, client_writer)
+    def data_received(self, data):
+        log.info("C: Received: [{}].".format(data.rstrip().decode()))
 
-    def client_done(task):
-        del clientPipes[task]
-        client_writer.close()
-        log.info("End connection.")
+        log.info("C: Closing socket.")
+        self.transport.close()
 
-    log.info("New connection.")
-    task.add_done_callback(client_done)
+    def error_recieved(self, exc):
+        log.info("C: Error received:".format(exc))
 
-@asyncio.coroutine
-def handle_client(client, client_reader, client_writer):
-    fails = client.get("fails")
-    if fails != None and fails >= 5:
-        client_writer.transport().abort()
-        return
-
-    client_writer.write("SSH-2.0-mNet_0.0.1\n".encode())
-
-    log.info("peer=[{}].".format(client))
-
-    try:
-        data = yield from asyncio.wait_for(client_reader.readline(), timeout=2.0)
-    except asyncio.TimeoutError:
-        log.warning("Client sent no line data by timeout.")
-        fails = client.get("fails")
-        if fails == None:
-            fails = 1
-        else:
-            fails += 1
-        client["fails"] = fails
-        assert data == None
-        return
-
-    sdata = data.decode().rstrip()
-    log.info("Received [{}].".format(sdata))
+    def connection_lost(self, exc):
+        log.info("C: Connection lost from [{}], client=[{}].".format(self.peerName, self.client))
+        self.client["connected"] = False
 
 def main():
     global log
@@ -82,11 +65,16 @@ def main():
     loop = asyncio.get_event_loop()
 #    f = asyncio.start_server(accept_client, host=None, port=5555)
     server = loop.create_server(MNetServerProtocol, "127.0.0.1", 5555)
+    loop.run_until_complete(server)
+
+    client = loop.create_connection(MNetClientProtocol, "127.0.0.1", 5555)
+    loop.run_until_complete(client)
 
 #    loop.run_until_complete(f)
-    loop.run_until_complete(server)
     loop.run_forever()
+    client.close()
     server.close()
+    loop.run_until_complete(client.wait_closed())
     loop.run_until_complete(server.wait_closed())
     loop.close()
 
