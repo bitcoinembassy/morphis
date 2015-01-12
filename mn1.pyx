@@ -53,8 +53,9 @@ class MNetServerProtocol(asyncio.Protocol):
 
         if self.binaryMode:
             self.buf += data
-            log.info("FSKDLFJSDKLJFSDKL")
-            raise NotImplementedError("TODO: YOU_ARE_HERE")
+            errmsg = "TODO: YOU_ARE_HERE"
+            log.fatal(errmsg)
+            raise NotImplementedError(errmsg)
             #TODO: YOU_ARE_HERE
 
         # Handle handshake packet, detect end.
