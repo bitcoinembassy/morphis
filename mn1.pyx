@@ -1,6 +1,7 @@
 import asyncio
 import llog
 import logging
+from asyncio import futures
 
 clientPipes = {} # task, [reader, writer]
 clientObjs = {} # remoteAddress, dict
@@ -10,20 +11,26 @@ log = logging.getLogger(__name__)
 @asyncio.coroutine
 def serverConnectTask(protocol):
     log.info("S: Sending server banner.")
-    protocol.transport.write("SSH-2.0-mNet_0.0.1\n".encode())
+    protocol.transport.write("SSH-2.0-mNet_0.0.1\r\n".encode())
 
-#    packet = yield from protocol.read_packet()
+    packet = yield from protocol.read_packet()
+
+    log.info("S: Received packet [{}].".format(packet))
 
 @asyncio.coroutine
 def clientConnectTask(protocol):
     log.info("C: Sending client banner.")
-    protocol.transport.write("SSH-2.0-mNet_0.0.1\n".encode())
+    protocol.transport.write("SSH-2.0-mNet_0.0.1\r\n".encode())
 
 #    packet = yield from protocol.read_packet()
 
 class MNetServerProtocol(asyncio.Protocol):
     def __init__(self, loop):
         self.loop = loop
+        self.packet = None
+        self.buf = b''
+        self.binaryMode = False
+        self.waiter = None
 
     def connection_made(self, transport):
         self.transport = transport
@@ -44,15 +51,70 @@ class MNetServerProtocol(asyncio.Protocol):
     def data_received(self, data):
         log.info("S: Received: [{}].".format(data.rstrip().decode()))
 
-        log.info("S: Closing socket.")
-        self.transport.close()
+        if self.binaryMode:
+            self.buf += data
+            log.info("FSKDLFJSDKLJFSDKL")
+            raise NotImplementedError("TODO: YOU_ARE_HERE")
+            #TODO: YOU_ARE_HERE
+
+        # Handle handshake packet, detect end.
+        end = data.find(b"\r\n")
+        if end != -1:
+            self.buf += data[0:end]
+            self.packet = self.buf
+            self.buf = data[end:]
+            self.binaryMode = True
+
+            if self.waiter != None:
+                self.waiter.set_result(False)
+                self.waiter = None
+        else:
+            self.buf += data
 
     def error_recieved(self, exc):
-        log.info("S: Error received:".format(exc))
+        log.info("S: Error received: {}".format(exc))
 
     def connection_lost(self, exc):
         log.info("S: Connection lost from [{}], client=[{}].".format(self.peerName, self.client))
         self.client["connected"] = False
+
+    @asyncio.coroutine
+    def do_wait(self):
+        if self.waiter is not None:
+            errmsg = "waiter already set!"
+            log.fatal(errmsg)
+            raise Exception(errmsg)
+
+        self.waiter = futures.Future(loop=self.loop)
+
+        try:
+            yield from self.waiter
+        finally:
+            self.waiter = None
+
+    @asyncio.coroutine
+    def read_packet(self):
+        if self.packet != None:
+            packet = self.packet
+            log.info("S: Returning next packet.")
+            self.packet = None
+#            asyncio.async(self.process_buffer())
+            return packet
+
+        log.info("S: Waiting for packet.")
+        yield from self.do_wait()
+
+        assert self.packet != None
+        packet = self.packet
+        self.packet = None
+
+        log.info("S: Returning packet.")
+
+        return packet
+
+    @asyncio.coroutine
+    def process_buffer(self):
+        print("TODO: process_buffer().")
 
 class MNetClientProtocol(asyncio.Protocol):
     def __init__(self, loop):
@@ -73,7 +135,7 @@ class MNetClientProtocol(asyncio.Protocol):
         self.transport.close()
 
     def error_recieved(self, exc):
-        log.info("C: Error received:".format(exc))
+        log.info("C: Error received: {}".format(exc))
 
     def connection_lost(self, exc):
         log.info("C: Connection lost to [{}], client=[{}].".format(self.peerName, self.client))
@@ -93,11 +155,14 @@ def main():
     loop.run_until_complete(client)
 
 #    loop.run_until_complete(f)
-    loop.run_forever()
+
+    try:
+        loop.run_forever()
+    except:
+        llog.handle_exception(log, "loop.run_forever()")
+
     client.close()
     server.close()
-    loop.run_until_complete(client.wait_closed())
-    loop.run_until_complete(server.wait_closed())
     loop.close()
 
 if __name__ == "__main__":
