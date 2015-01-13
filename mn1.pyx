@@ -22,35 +22,36 @@ def clientConnectTask(protocol):
     log.info("C: Sending client banner.")
     protocol.transport.write("SSH-2.0-mNet_0.0.1\r\n".encode())
 
-#    packet = yield from protocol.read_packet()
+    packet = yield from protocol.read_packet()
 
-class MNetServerProtocol(asyncio.Protocol):
+    log.info("C: Received packet [{}].".format(packet))
+
+class MNetProtocol(asyncio.Protocol):
     def __init__(self, loop):
         self.loop = loop
-        self.packet = None
-        self.buf = b''
         self.binaryMode = False
         self.waiter = None
+        self.packet = None
+        self.buf = b''
 
     def connection_made(self, transport):
         self.transport = transport
         self.peerName = peer_name = transport.get_extra_info("peername")
 
-        log.info("S: Connection made from [{}].".format(peer_name))
+        log.debug("P: Connection made with [{}].".format(peer_name))
 
         client = clientObjs.get(peer_name)
         if client == None:
-            log.info("S: Initializing new clientObj.")
+            log.info("P: Initializing new clientObj.")
             client = {"connected": True}
+        elif client["connected"]:
+            log.warning("P: Already connected with client [{}].".format(client))
+
         clientObjs[peer_name] = client
 
         self.client = client
 
-        asyncio.async(serverConnectTask(self))
-
     def data_received(self, data):
-        log.info("S: Received: [{}].".format(data.rstrip().decode()))
-
         if self.binaryMode:
             self.buf += data
             errmsg = "TODO: YOU_ARE_HERE"
@@ -72,13 +73,6 @@ class MNetServerProtocol(asyncio.Protocol):
         else:
             self.buf += data
 
-    def error_recieved(self, exc):
-        log.info("S: Error received: {}".format(exc))
-
-    def connection_lost(self, exc):
-        log.info("S: Connection lost from [{}], client=[{}].".format(self.peerName, self.client))
-        self.client["connected"] = False
-
     @asyncio.coroutine
     def do_wait(self):
         if self.waiter is not None:
@@ -97,19 +91,19 @@ class MNetServerProtocol(asyncio.Protocol):
     def read_packet(self):
         if self.packet != None:
             packet = self.packet
-            log.info("S: Returning next packet.")
+            log.info("P: Returning next packet.")
             self.packet = None
 #            asyncio.async(self.process_buffer())
             return packet
 
-        log.info("S: Waiting for packet.")
+        log.info("P: Waiting for packet.")
         yield from self.do_wait()
 
         assert self.packet != None
         packet = self.packet
         self.packet = None
 
-        log.info("S: Returning packet.")
+        log.info("P: Returning packet.")
 
         return packet
 
@@ -117,23 +111,41 @@ class MNetServerProtocol(asyncio.Protocol):
     def process_buffer(self):
         print("TODO: process_buffer().")
 
-class MNetClientProtocol(asyncio.Protocol):
+
+class MNetServerProtocol(MNetProtocol):
     def __init__(self, loop):
-        self.loop = loop
+        super().__init__(loop)
 
     def connection_made(self, transport):
-        self.transport = transport
-        self.peerName = peer_name = transport.get_extra_info("peername")
+        super().connection_made(transport)
+        log.info("S: Connection made from [{}].".format(self.peerName))
+        asyncio.async(serverConnectTask(self))
 
-        log.info("C: Connection made to [{}].".format(peer_name))
+    def data_received(self, data):
+        log.info("S: Received: [{}].".format(data.rstrip().decode()))
 
+        super().data_received(data)
+
+    def error_recieved(self, exc):
+        log.info("S: Error received: {}".format(exc))
+
+    def connection_lost(self, exc):
+        log.info("S: Connection lost from [{}], client=[{}].".format(self.peerName, self.client))
+        self.client["connected"] = False
+
+class MNetClientProtocol(MNetProtocol):
+    def __init__(self, loop):
+        super().__init__(loop)
+
+    def connection_made(self, transport):
+        super().connection_made(transport)
+        log.info("C: Connection made to [{}].".format(self.peerName))
         asyncio.async(clientConnectTask(self))
 
     def data_received(self, data):
         log.info("C: Received: [{}].".format(data.rstrip().decode()))
 
-        log.info("C: Closing socket.")
-        self.transport.close()
+        super().data_received(data)
 
     def error_recieved(self, exc):
         log.info("C: Error received: {}".format(exc))
