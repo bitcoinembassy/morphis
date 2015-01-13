@@ -54,22 +54,22 @@ class MNetProtocol(asyncio.Protocol):
     def data_received(self, data):
         if self.binaryMode:
             self.buf += data
-            errmsg = "TODO: YOU_ARE_HERE"
-            log.fatal(errmsg)
-            raise NotImplementedError(errmsg)
-            #TODO: YOU_ARE_HERE
+            self.process_buffer()
 
         # Handle handshake packet, detect end.
         end = data.find(b"\r\n")
         if end != -1:
             self.buf += data[0:end]
             self.packet = self.buf
-            self.buf = data[end:]
+            self.buf = data[end+2:]
             self.binaryMode = True
 
             if self.waiter != None:
                 self.waiter.set_result(False)
                 self.waiter = None
+
+            if len(self.buf) > 0:
+                self.process_buffer()
         else:
             self.buf += data
 
@@ -93,7 +93,6 @@ class MNetProtocol(asyncio.Protocol):
             packet = self.packet
             log.info("P: Returning next packet.")
             self.packet = None
-#            asyncio.async(self.process_buffer())
             return packet
 
         log.info("P: Waiting for packet.")
@@ -107,9 +106,15 @@ class MNetProtocol(asyncio.Protocol):
 
         return packet
 
-    @asyncio.coroutine
     def process_buffer(self):
-        print("TODO: process_buffer().")
+        log.info("P: process_buffer(): called (binaryMode={}, buf=[{}].".format(self.binaryMode, self.buf))
+
+        assert self.binaryMode
+
+        errmsg = "TODO: YOU_ARE_HERE"
+        log.fatal(errmsg)
+        raise NotImplementedError(errmsg)
+        #TODO: YOU_ARE_HERE
 
 
 class MNetServerProtocol(MNetProtocol):
