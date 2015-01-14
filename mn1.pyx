@@ -56,6 +56,12 @@ class MNetProtocol(asyncio.Protocol):
         self.client = client
 
     def data_received(self, data):
+        try:
+            self._data_received(data)
+        except:
+            llog.handle_exception(log, "_data_received()")
+
+    def _data_received(self, data):
         log.debug("data_received(..): start.")
 
         if self.binaryMode:
