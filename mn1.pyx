@@ -1,7 +1,6 @@
 import asyncio
 import llog
 import logging
-from asyncio import futures
 
 clientPipes = {} # task, [reader, writer]
 clientObjs = {} # remoteAddress, dict
@@ -96,7 +95,7 @@ class MNetProtocol(asyncio.Protocol):
             log.fatal(errmsg)
             raise Exception(errmsg)
 
-        self.waiter = futures.Future(loop=self.loop)
+        self.waiter = asyncio.futures.Future(loop=self.loop)
 
         try:
             yield from self.waiter
