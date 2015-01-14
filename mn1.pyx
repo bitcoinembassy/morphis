@@ -56,9 +56,13 @@ class MNetProtocol(asyncio.Protocol):
         self.client = client
 
     def data_received(self, data):
+        log.debug("data_received(..): start.")
+
         if self.binaryMode:
             self.buf += data
             self.process_buffer()
+            log.debug("data_received(..): end (binaryMode).")
+            return
 
         # Handle handshake packet, detect end.
         end = data.find(b"\r\n")
@@ -76,6 +80,8 @@ class MNetProtocol(asyncio.Protocol):
                 self.process_buffer()
         else:
             self.buf += data
+
+        log.debug("data_received(..): end.")
 
     @asyncio.coroutine
     def do_wait(self):
@@ -131,8 +137,7 @@ class MNetServerProtocol(MNetProtocol):
         asyncio.async(serverConnectTask(self))
 
     def data_received(self, data):
-        log.info("S: Received: [{}].".format(data.rstrip().decode()))
-
+        log.info("S: Received: [{}].".format(data))
         super().data_received(data)
 
     def error_recieved(self, exc):
@@ -152,8 +157,7 @@ class MNetClientProtocol(MNetProtocol):
         asyncio.async(clientConnectTask(self))
 
     def data_received(self, data):
-        log.info("C: Received: [{}].".format(data.rstrip().decode()))
-
+        log.info("C: Received: [{}].".format(data))
         super().data_received(data)
 
     def error_recieved(self, exc):
