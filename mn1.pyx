@@ -14,7 +14,9 @@ def serverConnectTask(protocol):
     protocol.transport.write("SSH-2.0-mNet_0.0.1\r\n".encode())
 
     packet = yield from protocol.read_packet()
+    log.info("S: Received packet [{}].".format(packet))
 
+    packet = yield from protocol.read_packet()
     log.info("S: Received packet [{}].".format(packet))
 
 @asyncio.coroutine
@@ -23,7 +25,9 @@ def clientConnectTask(protocol):
     protocol.transport.write("SSH-2.0-mNet_0.0.1\r\n".encode())
 
     packet = yield from protocol.read_packet()
+    log.info("C: Received packet [{}].".format(packet))
 
+    packet = yield from protocol.read_packet()
     log.info("C: Received packet [{}].".format(packet))
 
 class MNetProtocol(asyncio.Protocol):
