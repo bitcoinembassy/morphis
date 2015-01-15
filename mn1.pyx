@@ -1,6 +1,7 @@
 import asyncio
 import llog
 import logging
+import struct
 
 clientPipes = {} # task, [reader, writer]
 clientObjs = {} # remoteAddress, dict
@@ -34,8 +35,9 @@ class MNetProtocol(asyncio.Protocol):
         self.loop = loop
         self.binaryMode = False
         self.waiter = None
-        self.packet = None
         self.buf = b''
+        self.packet = None
+        self.bpSize = None
 
     def connection_made(self, transport):
         self.transport = transport
@@ -108,6 +110,9 @@ class MNetProtocol(asyncio.Protocol):
             packet = self.packet
             log.info("P: Returning next packet.")
             self.packet = None
+
+            asyncio.call_soon(self.process_buffer())
+
             return packet
 
         log.info("P: Waiting for packet.")
@@ -126,11 +131,32 @@ class MNetProtocol(asyncio.Protocol):
 
         assert self.binaryMode
 
-        errmsg = "TODO: YOU_ARE_HERE"
-        log.fatal(errmsg)
-        raise NotImplementedError(errmsg)
-        #TODO: YOU_ARE_HERE
+#        if self.encryption:
+#            raise NotImplementedError(errmsg)
 
+        while True:
+            if self.bpSize is None:
+                if len(self.buf) < 4:
+                    return
+
+                log.info("t=[{}].".format(self.buf[:4]))
+
+                packet_length = struct.unpack(">l", self.buf[:4])[0]
+                log.debug("packet_length=[{}].".format(packet_length))
+                self.bpSize = packet_length + 4 # Add size of packet_length as we leave it in buf.
+            else:
+                if len(self.buf) < self.bpSize:
+                    return;
+
+                self.packet = self.buf[0:self.bpSize]
+                self.buf = self.buf[self.bpSize:]
+                log.info("PACKET READ (s={}, r={})".format(self.bpSize, len(self.buf)))
+
+                if self.waiter != None:
+                    self.waiter.set_result(False)
+                    self.waiter = None
+
+                break;
 
 class MNetServerProtocol(MNetProtocol):
     def __init__(self, loop):
