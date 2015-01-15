@@ -37,7 +37,8 @@ class MNetProtocol(asyncio.Protocol):
         self.waiter = None
         self.buf = b''
         self.packet = None
-        self.bpSize = None
+        self.bpLength = None
+        self.macSize = 0
 
     def connection_made(self, transport):
         self.transport = transport
@@ -135,7 +136,7 @@ class MNetProtocol(asyncio.Protocol):
 #            raise NotImplementedError(errmsg)
 
         while True:
-            if self.bpSize is None:
+            if self.bpLength is None:
                 if len(self.buf) < 4:
                     return
 
@@ -143,14 +144,26 @@ class MNetProtocol(asyncio.Protocol):
 
                 packet_length = struct.unpack(">l", self.buf[:4])[0]
                 log.debug("packet_length=[{}].".format(packet_length))
-                self.bpSize = packet_length + 4 # Add size of packet_length as we leave it in buf.
+                self.bpLength = packet_length + 4 # Add size of packet_length as we leave it in buf.
             else:
-                if len(self.buf) < self.bpSize:
+                if len(self.buf) < (self.bpLength + self.macSize):
                     return;
 
-                self.packet = self.buf[0:self.bpSize]
-                self.buf = self.buf[self.bpSize:]
-                log.info("PACKET READ (s={}, r={})".format(self.bpSize, len(self.buf)))
+                log.info("PACKET READ (bpLength={}, macSize={}, len(self.buf)={})".format(self.bpLength, self.macSize, len(self.buf)))
+
+                padding_length = struct.unpack("B", self.buf[4:5])[0]
+                log.debug("padding_length=[{}].".format(padding_length))
+
+                padding_offset = self.bpLength - padding_length
+
+                payload = self.buf[5:padding_offset]
+                padding = self.buf[padding_offset:self.bpLength]
+                mac = self.buf[self.bpLength:self.bpLength + self.macSize]
+
+                log.debug("payload=[{}], padding=[{}], mac=[{}].".format(payload, padding, mac))
+
+                self.packet = self.buf[0:self.bpLength + self.macSize]
+                self.buf = self.buf[self.bpLength + self.macSize:]
 
                 if self.waiter != None:
                     self.waiter.set_result(False)
