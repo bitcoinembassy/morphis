@@ -1,8 +1,9 @@
+import llog
+
 import asyncio
 import struct
 import logging
 
-import llog
 import packet as mnetpacket
 
 clientPipes = {} # task, [reader, writer]
@@ -268,12 +269,6 @@ def main():
     log.info("Starting server.")
     loop = asyncio.get_event_loop()
 
-    def ehandler(loop, context):
-        exc = context["exception"]
-        llog.handle_exception(log, str(context["exception"]))
-
-    loop.set_exception_handler(ehandler)
-
 #    f = asyncio.start_server(accept_client, host=None, port=5555)
     server = loop.create_server(lambda: MNetServerProtocol(loop), "127.0.0.1", 5555)
     loop.run_until_complete(server)
@@ -299,7 +294,5 @@ if __name__ == "__main__":
     #ch.setLevel(logging.DEBUG)
     #ch.setFormatter(formatter)
     #log.addHandler(ch)
-
-    llog.init()
 
     main()
