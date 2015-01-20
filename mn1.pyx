@@ -46,10 +46,22 @@ def _connectTaskCommon(protocol):
     opobj = mnetpacket.MNetKexinitMessage()
     opobj.setPacketType(20)
     opobj.setCookie(os.urandom(16))
+    opobj.setServerHostKeyAlgorithms("ssh-dss")
     opobj.setKeyExchangeAlgorithms("diffie-hellman-group-exchange-sha256")
+    opobj.setEncryptionAlgorithmsClientToServer("aes256-cbc")
+    opobj.setEncryptionAlgorithmsServerToClient("aes256-cbc")
+    opobj.setMacAlgorithmsClientToServer("hmac-sha2-512")
+    opobj.setMacAlgorithmsServerToClient("hmac-sha2-512")
+    opobj.setCompressionAlgorithmsClientToServer("none")
+    opobj.setCompressionAlgorithmsServerToClient("none")
     opobj.encode()
 
     log.debug("outgoing packet=[{}].".format(opobj.buf))
+
+    protocol.writePacket(opobj)
+
+    packet = yield from protocol.read_packet()
+    log.info("X: Received packet [{}].".format(packet))
 
     return True
 
@@ -171,6 +183,26 @@ class MNetProtocol(asyncio.Protocol):
         log.info("P: Returning packet.")
 
         return packet
+
+    def writePacket(self, packetObject):
+        length = len(packetObject.buf)
+
+        extra = (length + 5) % 8;
+        if extra != 0:
+            padding = 8 - extra
+            if padding < 4:
+                padding += 8 #Minimum is 4, we need mod 8.
+        else:
+            padding = 8; #Minimum is 4, we need mod 8.
+
+        self.transport.write(struct.pack(">L", 1 + length + padding))
+        self.transport.write(struct.pack("B", padding & 0xff))
+
+        self.transport.write(packetObject.buf)
+        self.transport.write(os.urandom(padding))
+
+        if self.macSize != 0:
+            raise NotImplementedError("TODO")
 
     def process_buffer(self):
         try:
