@@ -16,3 +16,11 @@ def parseString(buf):
     value = buf[4:4 + length].decode()
 
     return length, value
+
+def encodeNameList(val):
+    return encodeString(val)
+
+def encodeString(val):
+    buf = val.encode(encoding="UTF-8")
+    length = struct.pack(">L", len(buf))
+    return length + buf

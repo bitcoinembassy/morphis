@@ -3,6 +3,7 @@ import llog
 import asyncio
 import struct
 import logging
+import os
 
 import packet as mnetpacket
 
@@ -41,6 +42,14 @@ def _connectTaskCommon(protocol):
     pobj = mnetpacket.MNetKexinitMessage(packet)
     log.info("cookie=[{}].".format(pobj.getCookie()))
     log.info("keyExchangeAlgorithms=[{}].".format(pobj.getKeyExchangeAlgorithms()))
+
+    opobj = mnetpacket.MNetKexinitMessage()
+    opobj.setPacketType(20)
+    opobj.setCookie(os.urandom(16))
+    opobj.setKeyExchangeAlgorithms("diffie-hellman-group-exchange-sha256")
+    opobj.encode()
+
+    log.debug("outgoing packet=[{}].".format(opobj.buf))
 
     return True
 
