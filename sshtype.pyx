@@ -3,7 +3,7 @@ import logging
 
 import llog
 
-log = logging.getLogger("sshtype")
+log = logging.getLogger(__name__)
 
 def parseNameList(buf):
     return parseString(buf)
