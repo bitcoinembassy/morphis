@@ -84,8 +84,10 @@ class MNetProtocol(asyncio.Protocol):
                 self.waiter.set_result(False)
                 self.waiter = None
 
-            if len(self.buf) > 0:
-                self.process_buffer()
+            # The following would overwrite packet if it were a complete
+            # packet in the buf.
+#            if len(self.buf) > 0:
+#                self.process_buffer()
         else:
             self.buf += data
 
@@ -112,7 +114,10 @@ class MNetProtocol(asyncio.Protocol):
             log.info("P: Returning next packet.")
             self.packet = None
 
-            asyncio.call_soon(self.process_buffer())
+            #asyncio.call_soon(self.process_buffer())
+            # For now, call process_buffer in this event.
+            if len(self.buf) > 0:
+                self.process_buffer()
 
             return packet
 
@@ -122,6 +127,10 @@ class MNetProtocol(asyncio.Protocol):
         assert self.packet != None
         packet = self.packet
         self.packet = None
+
+        # For now, call process_buffer in this event.
+        if len(self.buf) > 0:
+            self.process_buffer()
 
         log.info("P: Returning packet.")
 
@@ -144,6 +153,7 @@ class MNetProtocol(asyncio.Protocol):
 
                 packet_length = struct.unpack(">l", self.buf[:4])[0]
                 log.debug("packet_length=[{}].".format(packet_length))
+
                 self.bpLength = packet_length + 4 # Add size of packet_length as we leave it in buf.
             else:
                 if len(self.buf) < (self.bpLength + self.macSize):
