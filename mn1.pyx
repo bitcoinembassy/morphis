@@ -224,6 +224,7 @@ class MNetProtocol(asyncio.Protocol):
 #                self.packet = self.buf[0:self.bpLength + self.macSize]
                 self.packet = payload
                 self.buf = self.buf[self.bpLength + self.macSize:]
+                self.bpLength = None
 
                 if self.waiter != None:
                     self.waiter.set_result(False)
