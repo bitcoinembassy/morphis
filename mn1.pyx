@@ -21,7 +21,7 @@ def connectTaskCommon(protocol):
         llog.handle_exception(log, "_connectTaskCommon()")
 
 def _connectTaskCommon(protocol):
-    log.info("X: Sending server banner.")
+    log.info("X: Sending banner.")
     protocol.transport.write("SSH-2.0-mNet_0.0.1\r\n".encode())
 
     packet = yield from protocol.read_packet()
