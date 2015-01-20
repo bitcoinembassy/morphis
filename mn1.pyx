@@ -137,6 +137,14 @@ class MNetProtocol(asyncio.Protocol):
         return packet
 
     def process_buffer(self):
+        try:
+            self._process_buffer()
+        except:
+            llog.handle_exception(log, "_process_buffer()")
+
+
+
+    def _process_buffer(self):
         log.info("P: process_buffer(): called (binaryMode={}, buf=[{}].".format(self.binaryMode, self.buf))
 
         assert self.binaryMode
@@ -153,6 +161,11 @@ class MNetProtocol(asyncio.Protocol):
 
                 packet_length = struct.unpack(">l", self.buf[:4])[0]
                 log.debug("packet_length=[{}].".format(packet_length))
+
+                if packet_length > 35000:
+                    log.warning("Illegal packet_length [{}] received.".format(packet_length))
+                    self.transport.close()
+                    return
 
                 self.bpLength = packet_length + 4 # Add size of packet_length as we leave it in buf.
             else:
