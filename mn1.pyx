@@ -1,34 +1,60 @@
 import asyncio
-import llog
-import logging
 import struct
+import logging
+
+import llog
+import packet as mnetpacket
 
 clientPipes = {} # task, [reader, writer]
 clientObjs = {} # remoteAddress, dict
 
 log = logging.getLogger(__name__)
 
+# Returns True on success, False on failure.
 @asyncio.coroutine
-def serverConnectTask(protocol):
-    log.info("S: Sending server banner.")
+def connectTaskCommon(protocol):
+    try:
+        yield from _connectTaskCommon(protocol)
+    except:
+        llog.handle_exception(log, "_connectTaskCommon()")
+
+def _connectTaskCommon(protocol):
+    log.info("X: Sending server banner.")
     protocol.transport.write("SSH-2.0-mNet_0.0.1\r\n".encode())
 
     packet = yield from protocol.read_packet()
-    log.info("S: Received packet [{}].".format(packet))
+    log.info("X: Received packet [{}].".format(packet))
 
     packet = yield from protocol.read_packet()
-    log.info("S: Received packet [{}].".format(packet))
+    log.info("X: Received packet [{}].".format(packet))
+
+    pobj = mnetpacket.MNetPacket(packet)
+    packet_type = pobj.getPacketType()
+    log.info("packet_type=[{}].".format(packet_type))
+
+    if packet_type != 20:
+        log.warning("Peer sent unexpected packet_type[{}], disconnecting.".format(packet_type))
+        protocol.transport.close()
+        return False
+
+    pobj = mnetpacket.MNetKexinitMessage(packet)
+    log.info("cookie=[{}].".format(pobj.getCookie()))
+    log.info("keyExchangeAlgorithms=[{}].".format(pobj.getKeyExchangeAlgorithms()))
+
+    return True
+
+@asyncio.coroutine
+def serverConnectTask(protocol):
+    r = yield from connectTaskCommon(protocol)
+    if not r:
+        return r
+
 
 @asyncio.coroutine
 def clientConnectTask(protocol):
-    log.info("C: Sending client banner.")
-    protocol.transport.write("SSH-2.0-mNet_0.0.1\r\n".encode())
-
-    packet = yield from protocol.read_packet()
-    log.info("C: Received packet [{}].".format(packet))
-
-    packet = yield from protocol.read_packet()
-    log.info("C: Received packet [{}].".format(packet))
+    r = yield from connectTaskCommon(protocol)
+    if not r:
+        return r
 
 class MNetProtocol(asyncio.Protocol):
     def __init__(self, loop):
@@ -159,7 +185,7 @@ class MNetProtocol(asyncio.Protocol):
 
                 log.info("t=[{}].".format(self.buf[:4]))
 
-                packet_length = struct.unpack(">l", self.buf[:4])[0]
+                packet_length = struct.unpack(">L", self.buf[:4])[0]
                 log.debug("packet_length=[{}].".format(packet_length))
 
                 if packet_length > 35000:
@@ -185,7 +211,8 @@ class MNetProtocol(asyncio.Protocol):
 
                 log.debug("payload=[{}], padding=[{}], mac=[{}].".format(payload, padding, mac))
 
-                self.packet = self.buf[0:self.bpLength + self.macSize]
+#                self.packet = self.buf[0:self.bpLength + self.macSize]
+                self.packet = payload
                 self.buf = self.buf[self.bpLength + self.macSize:]
 
                 if self.waiter != None:
