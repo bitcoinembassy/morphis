@@ -288,11 +288,4 @@ def main():
     loop.close()
 
 if __name__ == "__main__":
-    #log.setLevel(logging.DEBUG)
-    #formatter = logging.Formatter("%(asctime)s %(levelname)s [%(module)s:%(lineno)d] %(message)s")
-    #ch = logging.StreamHandler()
-    #ch.setLevel(logging.DEBUG)
-    #ch.setFormatter(formatter)
-    #log.addHandler(ch)
-
     main()
