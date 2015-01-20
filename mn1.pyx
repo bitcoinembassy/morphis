@@ -267,6 +267,13 @@ def main():
     print("Starting server.")
     log.info("Starting server.")
     loop = asyncio.get_event_loop()
+
+    def ehandler(loop, context):
+        exc = context["exception"]
+        llog.handle_exception(log, str(context["exception"]))
+
+    loop.set_exception_handler(ehandler)
+
 #    f = asyncio.start_server(accept_client, host=None, port=5555)
     server = loop.create_server(lambda: MNetServerProtocol(loop), "127.0.0.1", 5555)
     loop.run_until_complete(server)
