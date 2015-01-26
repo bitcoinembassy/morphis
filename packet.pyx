@@ -20,6 +20,9 @@ class SshPacket():
     def parse(self):
         self.packetType = struct.unpack("B", self.buf[0:1])[0]
 
+    def getBuf(self):
+        return self.buf
+
     def setPacketType(self, packetType):
         self.packetType = packetType
 
@@ -28,6 +31,8 @@ class SshPacket():
 
 class SshKexInitMessage(SshPacket):
     def __init__(self, buf = None):
+        self.setPacketType(20)
+
         self.kex_algorithms = ""
         self.server_host_key_algorithms = ""
         self.encryption_algorithms_client_to_server = ""
@@ -108,6 +113,8 @@ class SshKexInitMessage(SshPacket):
 
 class SshKexdhInitMessage(SshPacket):
     def __init__(self, buf = None):
+        self.setPacketType(30)
+
         self.e = None
 
         super().__init__(buf)
@@ -122,3 +129,59 @@ class SshKexdhInitMessage(SshPacket):
         super().parse()
 
         self.e = sshtype.parseMpint(self.buf[1:])[1]
+
+    def encode(self):
+        nbuf = bytearray()
+
+        nbuf += struct.pack("B", self.getPacketType() & 0xff)
+        nbuf += sshtype.encodeMpint(self.e)
+
+        self.buf = nbuf
+
+class SshKexdhReplyMessage(SshPacket):
+    def __init__(self, buf = None):
+        self.setPacketType(31)
+
+        self.host_key = None
+        self.f = None
+        self.signature = None
+
+        super().__init__(buf)
+
+    def getHostKey(self):
+        return self.host_key
+
+    def setHostKey(self, val):
+        self.host_key = val
+
+    def getF(self):
+        return self.f
+
+    def setF(self, f):
+        self.f = f
+
+    def getSignature(self):
+        return self.signature
+
+    def setSignature(self, val):
+        self.signature = val
+
+    def parse(self):
+        super().parse()
+
+        i = 1
+        l, self.host_key = sshtype.parseString(self.buf[1:])
+        i += l
+        l, self.f = sshtype.parseMpint(self.buf[i:])
+        i += l
+        l, self.signature = sshtype.parseString(self.buf[i:])
+
+    def encode(self):
+        nbuf = bytearray()
+
+        nbuf += struct.pack("B", self.getPacketType() & 0xff)
+        nbuf += sshtype.encodeString(self.host_key)
+        nbuf += sshtype.encodeMpint(self.f)
+        nbuf += sshtype.encodeString(self.signature)
+
+        self.buf = nbuf
