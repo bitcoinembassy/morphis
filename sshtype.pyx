@@ -23,6 +23,11 @@ def parseMpint(buf):
     log.debug("length={}".format(length))
     return length, putil.inflate_long(buf[4:4+length])
 
+def encodeMpint(val):
+    buf = putil.deflate_long(val)
+    length = struct.pack(">L", len(buf))
+    return length + buf
+
 def encodeNameList(val):
     return encodeString(val)
 
