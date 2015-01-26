@@ -7,7 +7,7 @@ import sshtype
 
 log = logging.getLogger(__name__)
 
-class MNetPacket():
+class SshPacket():
     def __init__(self, buf = None):
         if buf == None:
             self.buf = None
@@ -26,7 +26,7 @@ class MNetPacket():
     def getPacketType(self):
         return self.packetType
 
-class MNetKexinitMessage(MNetPacket):
+class SshKexInitMessage(SshPacket):
     def __init__(self, buf = None):
         self.kex_algorithms = ""
         self.server_host_key_algorithms = ""
@@ -105,3 +105,20 @@ class MNetKexinitMessage(MNetPacket):
 
     def setCompressionAlgorithmsServerToClient(self, value):
         self.compression_algorithms_client_to_server = value
+
+class SshKexdhInitMessage(SshPacket):
+    def __init__(self, buf = None):
+        self.e = None
+
+        super().__init__(buf)
+
+    def getE(self):
+        return self.e
+
+    def setE(self, e):
+        self.e = e
+
+    def parse(self):
+        super().parse()
+
+        self.e = sshtype.parseMpint(self.buf[1:])[1]
