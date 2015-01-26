@@ -2,6 +2,7 @@ import struct
 import logging
 
 import llog
+import putil
 
 log = logging.getLogger(__name__)
 
@@ -16,6 +17,11 @@ def parseString(buf):
     value = buf[4:4 + length].decode()
 
     return length, value
+
+def parseMpint(buf):
+    length = struct.unpack(">L", buf[0:4])[0]
+    log.debug("length={}".format(length))
+    return length, putil.inflate_long(buf[4:4+length])
 
 def encodeNameList(val):
     return encodeString(val)
