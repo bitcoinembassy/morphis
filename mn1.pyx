@@ -14,40 +14,30 @@ log = logging.getLogger(__name__)
 
 # Returns True on success, False on failure.
 @asyncio.coroutine
-def connectTaskCommon(protocol):
+def connectTaskCommon(protocol, server):
     try:
-        yield from _connectTaskCommon(protocol)
+        yield from _connectTaskCommon(protocol, server)
     except:
         llog.handle_exception(log, "_connectTaskCommon()")
 
-def _connectTaskCommon(protocol):
+@asyncio.coroutine
+def _connectTaskCommon(protocol, server):
+    assert isinstance(server, bool)
+
     log.info("X: Sending banner.")
     protocol.transport.write("SSH-2.0-mNet_0.0.1\r\n".encode())
 
+    # Read banner.
     packet = yield from protocol.read_packet()
-    log.info("X: Received packet [{}].".format(packet))
+    log.info("X: Received banner [{}].".format(packet))
 
-    packet = yield from protocol.read_packet()
-    log.info("X: Received packet [{}].".format(packet))
-
-    pobj = mnetpacket.MNetPacket(packet)
-    packet_type = pobj.getPacketType()
-    log.info("packet_type=[{}].".format(packet_type))
-
-    if packet_type != 20:
-        log.warning("Peer sent unexpected packet_type[{}], disconnecting.".format(packet_type))
-        protocol.transport.close()
-        return False
-
-    pobj = mnetpacket.MNetKexinitMessage(packet)
-    log.info("cookie=[{}].".format(pobj.getCookie()))
-    log.info("keyExchangeAlgorithms=[{}].".format(pobj.getKeyExchangeAlgorithms()))
-
-    opobj = mnetpacket.MNetKexinitMessage()
+    # Send KexInit packet.
+    opobj = mnetpacket.SshKexInitMessage()
     opobj.setPacketType(20)
     opobj.setCookie(os.urandom(16))
     opobj.setServerHostKeyAlgorithms("ssh-dss")
-    opobj.setKeyExchangeAlgorithms("diffie-hellman-group-exchange-sha256")
+#    opobj.setKeyExchangeAlgorithms("diffie-hellman-group-exchange-sha256")
+    opobj.setKeyExchangeAlgorithms("diffie-hellman-group14-sha1")
     opobj.setEncryptionAlgorithmsClientToServer("aes256-cbc")
     opobj.setEncryptionAlgorithmsServerToClient("aes256-cbc")
     opobj.setMacAlgorithmsClientToServer("hmac-sha2-512")
@@ -57,28 +47,57 @@ def _connectTaskCommon(protocol):
     opobj.encode()
 
     log.debug("outgoing packet=[{}].".format(opobj.buf))
-
     protocol.writePacket(opobj)
 
+    # Read KexInit packet.
     packet = yield from protocol.read_packet()
     log.info("X: Received packet [{}].".format(packet))
+
+    pobj = mnetpacket.SshPacket(packet)
+    packet_type = pobj.getPacketType()
+    log.info("packet_type=[{}].".format(packet_type))
+
+    if packet_type != 20:
+        log.warning("Peer sent unexpected packet_type[{}], disconnecting.".format(packet_type))
+        protocol.transport.close()
+        return False
+
+    pobj = mnetpacket.SshKexInitMessage(packet)
+    log.info("cookie=[{}].".format(pobj.getCookie()))
+    log.info("keyExchangeAlgorithms=[{}].".format(pobj.getKeyExchangeAlgorithms()))
+
+    # Read KexdhInit packet.
+    packet = yield from protocol.read_packet()
+    log.info("X: Received packet [{}].".format(packet))
+
+    pobj = mnetpacket.SshPacket(packet)
+    packet_type = pobj.getPacketType()
+    log.info("packet_type=[{}].".format(packet_type))
+
+    if packet_type != 30:
+        log.warning("Peer sent unexpected packet_type[{}], disconnecting.".format(packet_type))
+        protocol.transport.close()
+        return False
+
+    pobj = mnetpacket.SshKexdhInitMessage(packet)
+    log.info("e=[{}].".format(pobj.getE()))
 
     return True
 
 @asyncio.coroutine
 def serverConnectTask(protocol):
-    r = yield from connectTaskCommon(protocol)
+    r = yield from connectTaskCommon(protocol, True)
     if not r:
         return r
 
 
 @asyncio.coroutine
 def clientConnectTask(protocol):
-    r = yield from connectTaskCommon(protocol)
+    r = yield from connectTaskCommon(protocol, False)
     if not r:
         return r
 
-class MNetProtocol(asyncio.Protocol):
+class SshProtocol(asyncio.Protocol):
     def __init__(self, loop):
         self.loop = loop
         self.binaryMode = False
@@ -264,7 +283,7 @@ class MNetProtocol(asyncio.Protocol):
 
                 break;
 
-class MNetServerProtocol(MNetProtocol):
+class SshServerProtocol(SshProtocol):
     def __init__(self, loop):
         super().__init__(loop)
 
@@ -284,7 +303,7 @@ class MNetServerProtocol(MNetProtocol):
         log.info("S: Connection lost from [{}], client=[{}].".format(self.peerName, self.client))
         self.client["connected"] = False
 
-class MNetClientProtocol(MNetProtocol):
+class SshClientProtocol(SshProtocol):
     def __init__(self, loop):
         super().__init__(loop)
 
@@ -312,10 +331,10 @@ def main():
     loop = asyncio.get_event_loop()
 
 #    f = asyncio.start_server(accept_client, host=None, port=5555)
-    server = loop.create_server(lambda: MNetServerProtocol(loop), "127.0.0.1", 5555)
+    server = loop.create_server(lambda: SshServerProtocol(loop), "127.0.0.1", 5555)
     loop.run_until_complete(server)
 
-    client = loop.create_connection(lambda: MNetClientProtocol(loop), "127.0.0.1", 5555)
+    client = loop.create_connection(lambda: SshClientProtocol(loop), "127.0.0.1", 5555)
     loop.run_until_complete(client)
 
 #    loop.run_until_complete(f)
