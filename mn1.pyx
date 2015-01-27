@@ -6,6 +6,8 @@ import logging
 import os
 
 import packet as mnetpacket
+import kex
+import dsskey as pdss
 
 clientPipes = {} # task, [reader, writer]
 clientObjs = {} # remoteAddress, dict
@@ -33,7 +35,6 @@ def _connectTaskCommon(protocol, server):
 
     # Send KexInit packet.
     opobj = mnetpacket.SshKexInitMessage()
-    opobj.setPacketType(20)
     opobj.setCookie(os.urandom(16))
     opobj.setServerHostKeyAlgorithms("ssh-dss")
 #    opobj.setKeyExchangeAlgorithms("diffie-hellman-group-exchange-sha256")
@@ -47,7 +48,7 @@ def _connectTaskCommon(protocol, server):
     opobj.encode()
 
     log.debug("outgoing packet=[{}].".format(opobj.buf))
-    protocol.writePacket(opobj)
+    protocol.write_packet(opobj)
 
     # Read KexInit packet.
     packet = yield from protocol.read_packet()
@@ -66,6 +67,7 @@ def _connectTaskCommon(protocol, server):
     log.info("cookie=[{}].".format(pobj.getCookie()))
     log.info("keyExchangeAlgorithms=[{}].".format(pobj.getKeyExchangeAlgorithms()))
 
+    """
     # Read KexdhInit packet.
     packet = yield from protocol.read_packet()
     log.info("X: Received packet [{}].".format(packet))
@@ -81,6 +83,14 @@ def _connectTaskCommon(protocol, server):
 
     pobj = mnetpacket.SshKexdhInitMessage(packet)
     log.info("e=[{}].".format(pobj.getE()))
+    """
+    ke = kex.KexGroup14(protocol)
+    log.info("Calling start_kex()...")
+    log.info("2Calling start_kex({})...".format(ke))
+    #yield from ke.start_kex()
+#    ke.start_kex()
+    yield from ke.test()
+    yield from ke.start_kex()
 
     return True
 
@@ -100,12 +110,19 @@ def clientConnectTask(protocol):
 class SshProtocol(asyncio.Protocol):
     def __init__(self, loop):
         self.loop = loop
+        self.server = None
+        self.k = None
+        self.h = None
         self.binaryMode = False
         self.waiter = None
         self.buf = b''
         self.packet = None
         self.bpLength = None
         self.macSize = 0
+
+    def set_K_H(self, k, h):
+        self.k = k
+        self.h = h
 
     def connection_made(self, transport):
         self.transport = transport
@@ -176,6 +193,7 @@ class SshProtocol(asyncio.Protocol):
 
     @asyncio.coroutine
     def read_packet(self):
+        log.info("AHHH")
         if self.packet != None:
             packet = self.packet
             log.info("P: Returning next packet.")
@@ -203,8 +221,8 @@ class SshProtocol(asyncio.Protocol):
 
         return packet
 
-    def writePacket(self, packetObject):
-        length = len(packetObject.buf)
+    def write_packet(self, packetObject):
+        length = len(packetObject.getBuf())
 
         extra = (length + 5) % 8;
         if extra != 0:
@@ -285,7 +303,12 @@ class SshProtocol(asyncio.Protocol):
 
 class SshServerProtocol(SshProtocol):
     def __init__(self, loop):
+        self.server = True
+        self.serverKey = pdss.DssKey.generate()
         super().__init__(loop)
+
+    def get_server_key(self):
+        return self.serverKey
 
     def connection_made(self, transport):
         super().connection_made(transport)
@@ -305,6 +328,7 @@ class SshServerProtocol(SshProtocol):
 
 class SshClientProtocol(SshProtocol):
     def __init__(self, loop):
+        self.server = False
         super().__init__(loop)
 
     def connection_made(self, transport):
