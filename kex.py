@@ -37,9 +37,9 @@ class KexGroup14():
 
     def __init__(self, protocol):
         self.protocol = protocol
-        self.x = long(0)
-        self.e = long(0)
-        self.f = long(0)
+        self.x = int(0)
+        self.e = int(0)
+        self.f = int(0)
         log.info("hi@#$")
 
     @asyncio.coroutine
