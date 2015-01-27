@@ -9,6 +9,7 @@ import packet as mnetpacket
 import kex
 import dsskey as pdss
 import rsakey as prsa
+from Crypto.Cipher import AES
 
 clientPipes = {} # task, [reader, writer]
 clientObjs = {} # remoteAddress, dict
@@ -99,8 +100,11 @@ def _connectTaskCommon(protocol, server):
     log.info("2Calling start_kex({})...".format(ke))
     #yield from ke.start_kex()
 #    ke.start_kex()
-    yield from ke.test()
-    yield from ke.start_kex()
+    yield from ke.do_kex()
+
+    # Setup encryption now that keys are exchanged.
+#TODO:
+
 
     return True
 

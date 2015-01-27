@@ -43,12 +43,7 @@ class KexGroup14():
         log.info("hi@#$")
 
     @asyncio.coroutine
-    def test(self):
-        print("TEST IS TEST")
-
-    @asyncio.coroutine
-    def start_kex(self):
-        print("HI")
+    def do_kex(self):
         self._generate_x()
         log.debug("x=[{}]".format(self.x))
 
