@@ -1,5 +1,5 @@
-# This file is based upon parts from paramiko.
-# LGPL               
+# This file is based upon parts from paramiko (r85d5e95f9280aa236602b77e9f5bd0aa4d3c8fcd).
+# LGPL
 
 """
 DSS keys.
@@ -12,6 +12,8 @@ from Crypto.PublicKey import DSA
 
 import putil as util
 from putil import *
+
+import sshtype
 
 #class DssKey (PKey):
 class DssKey():
@@ -48,13 +50,13 @@ class DssKey():
         self.size = util.bit_length(self.p)
 
     def asbytes(self):
-        m = Message()
-        m.add_string('ssh-dss')
-        m.add_mpint(self.p)
-        m.add_mpint(self.q)
-        m.add_mpint(self.g)
-        m.add_mpint(self.y)
-        return m.asbytes()
+        m = bytearray()
+        m += sshtype.encodeString('ssh-dss')
+        m += sshtype.encodeMpint(self.p)
+        m += sshtype.encodeMpint(self.q)
+        m += sshtype.encodeMpint(self.g)
+        m += sshtype.encodeMpint(self.y)
+        return m
 
     def __str__(self):
         return self.asbytes()
@@ -79,7 +81,7 @@ class DssKey():
 
     def sign_ssh_data(self, data):
         digest = sha1(data).digest()
-        dss = DSA.construct((long(self.y), long(self.g), long(self.p), long(self.q), long(self.x)))
+        dss = DSA.construct((int(self.y), int(self.g), int(self.p), int(self.q), int(self.x)))
         # generate a suitable k
         qsize = len(util.deflate_long(self.q, 0))
         while True:
@@ -87,8 +89,8 @@ class DssKey():
             if (k > 2) and (k < self.q):
                 break
         r, s = dss.sign(util.inflate_long(digest, 1), k)
-        m = Message()
-        m.add_string('ssh-dss')
+        m = bytearray()
+        m += sshtype.encodeString("ssh-dss")
         # apparently, in rare cases, r or s may be shorter than 20 bytes!
         rstr = util.deflate_long(r, 0)
         sstr = util.deflate_long(s, 0)
@@ -96,7 +98,7 @@ class DssKey():
             rstr = zero_byte * (20 - len(rstr)) + rstr
         if len(sstr) < 20:
             sstr = zero_byte * (20 - len(sstr)) + sstr
-        m.add_string(rstr + sstr)
+        m += sshtype.encodeBinary(rstr + sstr)
         return m
 
     def verify_ssh_sig(self, data, msg):
@@ -114,7 +116,7 @@ class DssKey():
         sigS = util.inflate_long(sig[20:], 1)
         sigM = util.inflate_long(sha1(data).digest(), 1)
 
-        dss = DSA.construct((long(self.y), long(self.g), long(self.p), long(self.q)))
+        dss = DSA.construct((int(self.y), int(self.g), int(self.p), int(self.q)))
         return dss.verify(sigM, (sigR, sigS))
 
     def _encode_key(self):
