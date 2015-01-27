@@ -1,4 +1,4 @@
-# This file is based upon parts of paramiko.
+# This file is based upon parts from paramiko (r85d5e95f9280aa236602b77e9f5bd0aa4d3c8fcd).
 # LGPL
 
 import struct
@@ -10,6 +10,7 @@ def byte_chr(c):
     return struct.pack('B', c)
 
 zero_byte = byte_chr(0)
+one_byte = byte_chr(1)
 max_byte = byte_chr(0xff)
 
 def byte_ord(c):
