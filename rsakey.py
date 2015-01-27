@@ -4,9 +4,11 @@
 """
 RSA keys.
 """
+import llog
 
 import os
 from hashlib import sha1
+import logging
 
 from Crypto.PublicKey import RSA
 
@@ -14,6 +16,8 @@ import putil as util
 from putil import *
 
 import sshtype
+
+log = logging.getLogger(__name__)
 
 SHA1_DIGESTINFO = b'\x30\x21\x30\x09\x06\x05\x2b\x0e\x03\x02\x1a\x05\x00\x04\x14'
 
@@ -24,7 +28,7 @@ class RsaKey():
     data.
     """
 
-    def __init__(self, msg=None, data=None, filename=None, password=None, vals=None, file_obj=None):
+    def __init__(self, data=None, filename=None, password=None, vals=None, file_obj=None):
         self.n = None
         self.e = None
         self.d = None
@@ -36,17 +40,17 @@ class RsaKey():
         if filename is not None:
             self._from_private_key_file(filename, password)
             return
-        if (msg is None) and (data is not None):
-            msg = Message(data)
         if vals is not None:
             self.e, self.n = vals
         else:
-            if msg is None:
+            if data is None:
                 raise SSHException('Key object may not be empty')
-            if msg.get_text() != 'ssh-rsa':
+            i, v = sshtype.parseString(data)
+            if v != 'ssh-rsa':
                 raise SSHException('Invalid key')
-            self.e = msg.get_mpint()
-            self.n = msg.get_mpint()
+            l, self.e = sshtype.parseMpint(data[i:])
+            i += l
+            l, self.n = sshtype.parseMpint(data[i:])
         self.size = util.bit_length(self.n)
 
     def asbytes(self):
@@ -83,16 +87,19 @@ class RsaKey():
         m += sshtype.encodeBinary(sig)
         return m
 
-    def verify_ssh_sig(self, data, msg):
-        if msg.get_text() != 'ssh-rsa':
+    def verify_ssh_sig(self, key_data, sig_msg):
+        i, v = sshtype.parseString(sig_msg)
+        if v != 'ssh-rsa':
             return False
-        sig = util.inflate_long(msg.get_binary(), True)
-        # verify the signature by SHA'ing the data and encrypting it using the
+        log.info("l[{}][{}]".format(i, len(sig_msg)))
+        sig = util.inflate_long(sshtype.parseBinary(sig_msg[i:])[1], True)
+        # verify the signature by SHA'ing the key_data and encrypting it using the
         # public key.  some wackiness ensues where we "pkcs1imify" the 20-byte
         # hash into a string as long as the RSA key.
-        hash_obj = util.inflate_long(self._pkcs1imify(sha1(data).digest()), True)
+        log.info("sig=[{}].".format(sig))
+        hash_obj = util.inflate_long(self._pkcs1imify(sha1(key_data).digest()), True)
         rsa = RSA.construct((int(self.n), int(self.e)))
-        return rsa.verify(hash_obj, (sig,))
+        return rsa.verify(hash_obj, (sig, ))
 
     def _encode_key(self):
         if (self.p is None) or (self.q is None):

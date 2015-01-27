@@ -120,6 +120,7 @@ def clientConnectTask(protocol):
 class SshProtocol(asyncio.Protocol):
     def __init__(self, loop):
         self.loop = loop
+        self.serverKey = serverKey
         self.server = None
         self.k = None
         self.h = None
@@ -132,6 +133,19 @@ class SshProtocol(asyncio.Protocol):
         self.remoteBanner = None
         self.localKexInitMessage = None
         self.remoteKexInitMessage = None
+
+    def get_server_key(self):
+        return self.serverKey
+
+    def verify_server_key(self, key_data, sig):
+        key = prsa.RsaKey(key_data)
+
+        if not key.verify_ssh_sig(self.h, sig):
+            raise SshException("Signature verification failed.")
+
+        log.info("Signature validated correctly!")
+
+        self.serverKey = key
 
     def set_K_H(self, k, h):
         self.k = k
@@ -343,10 +357,6 @@ class SshServerProtocol(SshProtocol):
         super().__init__(loop)
 
         self.server = True
-        self.serverKey = serverKey
-
-    def get_server_key(self):
-        return self.serverKey
 
     def connection_made(self, transport):
         super().connection_made(transport)

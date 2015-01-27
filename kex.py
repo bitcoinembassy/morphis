@@ -62,7 +62,16 @@ class KexGroup14():
             pkt = yield from self.protocol.read_packet()
             m = mnetpacket.SshKexdhInitMessage(pkt)
             log.info("Client sent e=[{}].".format(m.getE()))
-            return self._parse_kexdh_init(m)
+            self._parse_kexdh_init(m)
+
+            pkt = yield from self.protocol.read_packet()
+            m = mnetpacket.SshNewKeysMessage(pkt)
+            log.debug("Received SSH_MSG_NEWKEYS.")
+
+            m = mnetpacket.SshNewKeysMessage()
+            m.encode()
+            self.protocol.write_packet(m)
+            return
 
         # compute e = g^x mod p (where g=2), and send it
         self.e = pow(self.G, self.x, self.P)
@@ -75,7 +84,15 @@ class KexGroup14():
 #        self.transport._expect_packet(_MSG_KEXDH_REPLY)
         pkt = yield from self.protocol.read_packet()
         m = mnetpacket.SshKexdhReplyMessage(pkt)
-        return self._parse_kexdh_reply(m)
+        self._parse_kexdh_reply(m)
+
+        m = mnetpacket.SshNewKeysMessage()
+        m.encode()
+        self.protocol.write_packet(m)
+
+        pkt = yield from self.protocol.read_packet()
+        m = mnetpacket.SshNewKeysMessage(pkt)
+        log.debug("Received SSH_MSG_NEWKEYS.")
 
     ###  internals...
 
@@ -101,6 +118,7 @@ class KexGroup14():
             raise SSHException('Server kex "f" is out of range')
         sig = m.getSignature()
         K = pow(self.f, self.x, self.P)
+        log.debug("K=[{}].".format(K))
         # okay, build up the hash H of (V_C || V_S || I_C || I_S || K_S || e || f || K)
         hm = bytearray()
         hm += sshtype.encodeString(self.protocol.getLocalBanner())
@@ -116,7 +134,8 @@ class KexGroup14():
 
         self.protocol.set_K_H(K, H)
 
-#        self.transport._verify_key(host_key, sig)
+        log.info("Verifying signature...")
+        self.protocol.verify_server_key(host_key, sig)
 #        self.transport._activate_outbound()
 
     def _parse_kexdh_init(self, m):
@@ -125,6 +144,7 @@ class KexGroup14():
         if (self.e < 1) or (self.e > self.P - 1):
             raise SSHException('Client kex "e" is out of range')
         K = pow(self.e, self.x, self.P)
+        log.debug("K=[{}].".format(K))
         key = self.protocol.get_server_key().asbytes()
         # okay, build up the hash H of (V_C || V_S || I_C || I_S || K_S || e || f || K)
         hm = bytearray()

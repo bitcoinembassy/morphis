@@ -197,3 +197,21 @@ class SshKexdhReplyMessage(SshPacket):
         nbuf += sshtype.encodeBinary(self.signature)
 
         self.buf = nbuf
+
+class SshNewKeysMessage(SshPacket):
+    def __init__(self, buf = None):
+        super().__init__(buf)
+
+        packet_type = 21
+        if buf == None:
+            self.setPacketType(packet_type)
+        else:
+            if (self.getPacketType() != packet_type):
+                raise Exception("Expecting packet type [{}] but got [{}].".format(packet_type, self.getPacketType()))
+
+    def encode(self):
+        nbuf = bytearray()
+
+        nbuf += struct.pack("B", self.getPacketType() & 0xff)
+
+        self.buf = nbuf
