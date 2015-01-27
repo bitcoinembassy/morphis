@@ -1,4 +1,4 @@
-def generate_RSA(int bits=4096):
+def generate_RSA(bits=4096):
     '''
     Generate an RSA keypair with an exponent of 65537 in PEM format
     param: bits The key length in bits
@@ -13,7 +13,7 @@ def generate_RSA(int bits=4096):
     #return private_key, public_key 
     return new_key;
 
-def generate_ID(bytes public_key):
+def generate_ID(public_key):
     from Crypto.Hash import SHA512
 
     return SHA512.new(public_key)

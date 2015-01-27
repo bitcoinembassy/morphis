@@ -1,5 +1,5 @@
-# This file is based upon parts from paramiko.
-# LGPL               
+# This file is based upon parts from paramiko (r85d5e95f9280aa236602b77e9f5bd0aa4d3c8fcd).
+# LGPL
 
 import llog
 
@@ -56,9 +56,14 @@ class KexGroup14():
             # compute f = g^x mod p, but don't send it yet
             self.f = pow(self.G, self.x, self.P)
 #            self.transport._expect_packet(_MSG_KEXDH_INIT)
+
             log.info("TEST")
-            m = yield from self.protocol.read_packet()
-            return self._parse_kexdh_reply(m)
+
+            pkt = yield from self.protocol.read_packet()
+            m = mnetpacket.SshKexdhInitMessage(pkt)
+            log.info("Client sent e=[{}].".format(m.getE()))
+            return self._parse_kexdh_init(m)
+
         # compute e = g^x mod p (where g=2), and send it
         self.e = pow(self.G, self.x, self.P)
         m = mnetpacket.SshKexdhInitMessage()
@@ -68,8 +73,9 @@ class KexGroup14():
         self.protocol.write_packet(m)
 
 #        self.transport._expect_packet(_MSG_KEXDH_REPLY)
-        m = yield from self.protocol.read_packet()
-#        return self._parse_kexdh_init(m)
+        pkt = yield from self.protocol.read_packet()
+        m = mnetpacket.SshKexdhReplyMessage(pkt)
+        return self._parse_kexdh_reply(m)
 
     ###  internals...
 
@@ -89,23 +95,29 @@ class KexGroup14():
 
     def _parse_kexdh_reply(self, m):
         # client mode
-        host_key = m.get_string()
-        self.f = m.get_mpint()
+        host_key = m.getHostKey()
+        self.f = m.getF()
         if (self.f < 1) or (self.f > self.P - 1):
             raise SSHException('Server kex "f" is out of range')
-        sig = m.get_binary()
+        sig = m.getSignature()
         K = pow(self.f, self.x, self.P)
         # okay, build up the hash H of (V_C || V_S || I_C || I_S || K_S || e || f || K)
-        hm = Message()
-        hm.add(self.transport.local_version, self.transport.remote_version,
-               self.transport.local_kex_init, self.transport.remote_kex_init)
-        hm.add_string(host_key)
-        hm.add_mpint(self.e)
-        hm.add_mpint(self.f)
-        hm.add_mpint(K)
-        self.transport._set_K_H(K, sha1(hm.asbytes()).digest())
-        self.transport._verify_key(host_key, sig)
-        self.transport._activate_outbound()
+        hm = bytearray()
+        hm += sshtype.encodeString(self.protocol.getLocalBanner())
+        hm += sshtype.encodeString(self.protocol.getRemoteBanner())
+        hm += sshtype.encodeBinary(self.protocol.getLocalKexInitMessage())
+        hm += sshtype.encodeBinary(self.protocol.getRemoteKexInitMessage())
+        hm += sshtype.encodeBinary(host_key)
+        hm += sshtype.encodeMpint(self.e)
+        hm += sshtype.encodeMpint(self.f)
+        hm += sshtype.encodeMpint(K)
+
+        H = sha1(hm).digest()
+
+        self.protocol.set_K_H(K, H)
+
+#        self.transport._verify_key(host_key, sig)
+#        self.transport._activate_outbound()
 
     def _parse_kexdh_init(self, m):
         # server mode
@@ -118,24 +130,25 @@ class KexGroup14():
         hm = bytearray()
         hm += sshtype.encodeString(self.protocol.getRemoteBanner())
         hm += sshtype.encodeString(self.protocol.getLocalBanner())
-        hm += sshtype.encodeString(self.protocol.getRemoteKexInitMessage())
-        hm += sshtype.encodeString(self.protocol.getLocalKexInitMessage())
-        hm += sshtype.encodeString(key)
+        hm += sshtype.encodeBinary(self.protocol.getRemoteKexInitMessage())
+        hm += sshtype.encodeBinary(self.protocol.getLocalKexInitMessage())
+        hm += sshtype.encodeBinary(key)
         hm += sshtype.encodeMpint(self.e)
         hm += sshtype.encodeMpint(self.f)
         hm += sshtype.encodeMpint(K)
 
-        H = sha1(hm.asbytes()).digest()
+        H = sha1(hm).digest()
 
         self.protocol.set_K_H(K, H)
 
         # sign it
-        sig = self.transport.get_server_key().sign_ssh_data(H)
+        sig = self.protocol.get_server_key().sign_ssh_data(H)
         # send reply
-        m = Message()
-        m.add_byte(c_MSG_KEXDH_REPLY)
-        m.add_string(key)
-        m.add_mpint(self.f)
-        m.add_string(sig)
-        self.transport._send_message(m)
-        self.transport._activate_outbound()
+        m = mnetpacket.SshKexdhReplyMessage()
+        m.setHostKey(key)
+        m.setF(self.f)
+        m.setSignature(sig)
+        m.encode()
+
+        self.protocol.write_packet(m)
+#        self.transport._activate_outbound()

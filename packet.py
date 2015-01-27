@@ -31,21 +31,25 @@ class SshPacket():
 
 class SshKexInitMessage(SshPacket):
     def __init__(self, buf = None):
-        self.setPacketType(20)
-
-        self.kex_algorithms = ""
-        self.server_host_key_algorithms = ""
-        self.encryption_algorithms_client_to_server = ""
-        self.encryption_algorithms_server_to_client = ""
-        self.mac_algorithms_client_to_server = ""
-        self.mac_algorithms_server_to_client = ""
-        self.compression_algorithms_client_to_server = ""
-        self.compression_algorithms_server_to_client = ""
-        self.languages_client_to_server = ""
-        self.languages_server_to_client = ""
-        self.first_kex_packet_follows = ""
-
         super().__init__(buf)
+
+        packet_type = 20
+        if buf == None:
+            self.setPacketType(packet_type)
+            self.kex_algorithms = ""
+            self.server_host_key_algorithms = ""
+            self.encryption_algorithms_client_to_server = ""
+            self.encryption_algorithms_server_to_client = ""
+            self.mac_algorithms_client_to_server = ""
+            self.mac_algorithms_server_to_client = ""
+            self.compression_algorithms_client_to_server = ""
+            self.compression_algorithms_server_to_client = ""
+            self.languages_client_to_server = ""
+            self.languages_server_to_client = ""
+            self.first_kex_packet_follows = ""
+        else:
+            if (self.getPacketType() != packet_type):
+                raise Exception("Expecting packet type [{}] but got [{}].".format(packet_type, self.getPacketType()))
 
     def parse(self):
         super().parse()
@@ -113,11 +117,15 @@ class SshKexInitMessage(SshPacket):
 
 class SshKexdhInitMessage(SshPacket):
     def __init__(self, buf = None):
-        self.setPacketType(30)
-
-        self.e = None
-
         super().__init__(buf)
+
+        packet_type = 30
+        if buf == None:
+            self.setPacketType(packet_type)
+            self.e = None
+        else:
+            if (self.getPacketType() != packet_type):
+                raise Exception("Expecting packet type [{}] but got [{}].".format(packet_type, self.getPacketType()))
 
     def getE(self):
         return self.e
@@ -140,13 +148,17 @@ class SshKexdhInitMessage(SshPacket):
 
 class SshKexdhReplyMessage(SshPacket):
     def __init__(self, buf = None):
-        self.setPacketType(31)
-
-        self.host_key = None
-        self.f = None
-        self.signature = None
-
         super().__init__(buf)
+
+        packet_type = 31
+        if buf == None:
+            self.setPacketType(packet_type)
+            self.host_key = None
+            self.f = None
+            self.signature = None
+        else:
+            if (self.getPacketType() != packet_type):
+                raise Exception("Expecting packet type [{}] but got [{}].".format(packet_type, self.getPacketType()))
 
     def getHostKey(self):
         return self.host_key
@@ -170,18 +182,18 @@ class SshKexdhReplyMessage(SshPacket):
         super().parse()
 
         i = 1
-        l, self.host_key = sshtype.parseString(self.buf[1:])
+        l, self.host_key = sshtype.parseBinary(self.buf[i:])
         i += l
         l, self.f = sshtype.parseMpint(self.buf[i:])
         i += l
-        l, self.signature = sshtype.parseString(self.buf[i:])
+        l, self.signature = sshtype.parseBinary(self.buf[i:])
 
     def encode(self):
         nbuf = bytearray()
 
         nbuf += struct.pack("B", self.getPacketType() & 0xff)
-        nbuf += sshtype.encodeString(self.host_key)
+        nbuf += sshtype.encodeBinary(self.host_key)
         nbuf += sshtype.encodeMpint(self.f)
-        nbuf += sshtype.encodeString(self.signature)
+        nbuf += sshtype.encodeBinary(self.signature)
 
         self.buf = nbuf

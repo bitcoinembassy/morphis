@@ -8,11 +8,14 @@ import os
 import packet as mnetpacket
 import kex
 import dsskey as pdss
+import rsakey as prsa
 
 clientPipes = {} # task, [reader, writer]
 clientObjs = {} # remoteAddress, dict
 
 log = logging.getLogger(__name__)
+
+serverKey = prsa.RsaKey.generate(bits=4096)
 
 # Returns True on success, False on failure.
 @asyncio.coroutine
@@ -27,16 +30,19 @@ def _connectTaskCommon(protocol, server):
     assert isinstance(server, bool)
 
     log.info("X: Sending banner.")
-    protocol.transport.write("SSH-2.0-mNet_0.0.1\r\n".encode())
+    protocol.transport.write((protocol.getLocalBanner() + "\r\n").encode(encoding="UTF-8"))
 
     # Read banner.
     packet = yield from protocol.read_packet()
     log.info("X: Received banner [{}].".format(packet))
 
+    protocol.setRemoteBanner(packet.decode(encoding="UTF-8"))
+
     # Send KexInit packet.
     opobj = mnetpacket.SshKexInitMessage()
     opobj.setCookie(os.urandom(16))
-    opobj.setServerHostKeyAlgorithms("ssh-dss")
+#    opobj.setServerHostKeyAlgorithms("ssh-dss")
+    opobj.setServerHostKeyAlgorithms("ssh-rsa")
 #    opobj.setKeyExchangeAlgorithms("diffie-hellman-group-exchange-sha256")
     opobj.setKeyExchangeAlgorithms("diffie-hellman-group14-sha1")
     opobj.setEncryptionAlgorithmsClientToServer("aes256-cbc")
@@ -47,7 +53,9 @@ def _connectTaskCommon(protocol, server):
     opobj.setCompressionAlgorithmsServerToClient("none")
     opobj.encode()
 
-    log.debug("outgoing packet=[{}].".format(opobj.buf))
+    protocol.setLocalKexInitMessage(opobj.getBuf())
+
+    log.debug("outgoing packet=[{}].".format(opobj.getBuf()))
     protocol.write_packet(opobj)
 
     # Read KexInit packet.
@@ -62,6 +70,8 @@ def _connectTaskCommon(protocol, server):
         log.warning("Peer sent unexpected packet_type[{}], disconnecting.".format(packet_type))
         protocol.transport.close()
         return False
+
+    protocol.setRemoteKexInitMessage(packet)
 
     pobj = mnetpacket.SshKexInitMessage(packet)
     log.info("cookie=[{}].".format(pobj.getCookie()))
@@ -119,10 +129,34 @@ class SshProtocol(asyncio.Protocol):
         self.packet = None
         self.bpLength = None
         self.macSize = 0
+        self.remoteBanner = None
+        self.localKexInitMessage = None
+        self.remoteKexInitMessage = None
 
     def set_K_H(self, k, h):
         self.k = k
         self.h = h
+
+    def getRemoteBanner(self):
+        return self.remoteBanner
+
+    def setRemoteBanner(self, val):
+        self.remoteBanner = val
+
+    def getLocalBanner(self):
+        return "SSH-2.0-mNet_0.0.1"
+
+    def getLocalKexInitMessage(self):
+        return self.localKexInitMessage
+
+    def setLocalKexInitMessage(self, val):
+        self.localKexInitMessage = val
+
+    def getRemoteKexInitMessage(self):
+        return self.remoteKexInitMessage
+
+    def setRemoteKexInitMessage(self, val):
+        self.remoteKexInitMessage = val
 
     def connection_made(self, transport):
         self.transport = transport
@@ -193,7 +227,6 @@ class SshProtocol(asyncio.Protocol):
 
     @asyncio.coroutine
     def read_packet(self):
-        log.info("AHHH")
         if self.packet != None:
             packet = self.packet
             log.info("P: Returning next packet.")
@@ -223,6 +256,8 @@ class SshProtocol(asyncio.Protocol):
 
     def write_packet(self, packetObject):
         length = len(packetObject.getBuf())
+
+        log.debug("Writing [{}] bytes of data.".format(length))
 
         extra = (length + 5) % 8;
         if extra != 0:
@@ -303,9 +338,12 @@ class SshProtocol(asyncio.Protocol):
 
 class SshServerProtocol(SshProtocol):
     def __init__(self, loop):
-        self.server = True
-        self.serverKey = pdss.DssKey.generate()
+        global serverKey
+
         super().__init__(loop)
+
+        self.server = True
+        self.serverKey = serverKey
 
     def get_server_key(self):
         return self.serverKey
@@ -328,8 +366,9 @@ class SshServerProtocol(SshProtocol):
 
 class SshClientProtocol(SshProtocol):
     def __init__(self, loop):
-        self.server = False
         super().__init__(loop)
+
+        self.server = False
 
     def connection_made(self, transport):
         super().connection_made(transport)

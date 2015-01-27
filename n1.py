@@ -1,6 +1,6 @@
 import enc
 
-def debug(str message):
+def debug(message):
     print ("debug: %s" % message)
 
 def main():
