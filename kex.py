@@ -59,9 +59,9 @@ class KexGroup14():
             log.info("Client sent e=[{}].".format(m.getE()))
             self._parse_kexdh_init(m)
 
-            pkt = yield from self.protocol.read_packet()
-            m = mnetpacket.SshNewKeysMessage(pkt)
-            log.debug("Received SSH_MSG_NEWKEYS.")
+#            pkt = yield from self.protocol.read_packet()
+#            m = mnetpacket.SshNewKeysMessage(pkt)
+#            log.debug("Received SSH_MSG_NEWKEYS.")
 
             m = mnetpacket.SshNewKeysMessage()
             m.encode()
@@ -73,7 +73,6 @@ class KexGroup14():
         m = mnetpacket.SshKexdhInitMessage()
         m.setE(self.e)
         m.encode()
-        log.info("TEST2")
         self.protocol.write_packet(m)
 
 #        self.transport._expect_packet(_MSG_KEXDH_REPLY)
@@ -85,9 +84,9 @@ class KexGroup14():
         m.encode()
         self.protocol.write_packet(m)
 
-        pkt = yield from self.protocol.read_packet()
-        m = mnetpacket.SshNewKeysMessage(pkt)
-        log.debug("Received SSH_MSG_NEWKEYS.")
+#        pkt = yield from self.protocol.read_packet()
+#        m = mnetpacket.SshNewKeysMessage(pkt)
+#        log.debug("Received SSH_MSG_NEWKEYS.")
 
     ###  internals...
 

@@ -78,33 +78,9 @@ def _connectTaskCommon(protocol, server):
     log.info("cookie=[{}].".format(pobj.getCookie()))
     log.info("keyExchangeAlgorithms=[{}].".format(pobj.getKeyExchangeAlgorithms()))
 
-    """
-    # Read KexdhInit packet.
-    packet = yield from protocol.read_packet()
-    log.info("X: Received packet [{}].".format(packet))
-
-    pobj = mnetpacket.SshPacket(packet)
-    packet_type = pobj.getPacketType()
-    log.info("packet_type=[{}].".format(packet_type))
-
-    if packet_type != 30:
-        log.warning("Peer sent unexpected packet_type[{}], disconnecting.".format(packet_type))
-        protocol.transport.close()
-        return False
-
-    pobj = mnetpacket.SshKexdhInitMessage(packet)
-    log.info("e=[{}].".format(pobj.getE()))
-    """
     ke = kex.KexGroup14(protocol)
     log.info("Calling start_kex()...")
-    log.info("2Calling start_kex({})...".format(ke))
-    #yield from ke.start_kex()
-#    ke.start_kex()
     yield from ke.do_kex()
-
-    # Setup encryption now that keys are exchanged.
-#TODO:
-
 
     return True
 
