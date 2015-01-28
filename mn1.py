@@ -82,6 +82,13 @@ def _connectTaskCommon(protocol, server):
     log.info("Calling start_kex()...")
     yield from ke.do_kex()
 
+    # Setup encryption now that keys are exchanged.
+    protocol.init_outbound_encryption()
+
+    pkt = yield from protocol.read_packet()
+    m = mnetpacket.SshNewKeysMessage(pkt)
+    log.debug("Received SSH_MSG_NEWKEYS.")
+
     return True
 
 @asyncio.coroutine
@@ -151,6 +158,11 @@ class SshProtocol(asyncio.Protocol):
 
     def setRemoteKexInitMessage(self, val):
         self.remoteKexInitMessage = val
+
+    def init_outbound_encryption(self):
+        log.debug("Initializing outbound encryption.")
+        # use: AES.MODE_CBC: bs: 16, ks: 32.
+#TODO: YOU_ARE_HERE
 
     def connection_made(self, transport):
         self.transport = transport
