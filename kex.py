@@ -47,7 +47,7 @@ class KexGroup14():
         self._generate_x()
         log.debug("x=[{}]".format(self.x))
 
-        if self.protocol.server:
+        if self.protocol.serverMode:
             # compute f = g^x mod p, but don't send it yet
             self.f = pow(self.G, self.x, self.P)
 #            self.transport._expect_packet(_MSG_KEXDH_INIT)

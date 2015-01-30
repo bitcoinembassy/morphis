@@ -5,11 +5,14 @@ import struct
 import logging
 import os
 
+from Crypto.Cipher import AES
+from hashlib import sha1
+
 import packet as mnetpacket
 import kex
 import dsskey as pdss
 import rsakey as prsa
-from Crypto.Cipher import AES
+import sshtype
 
 clientPipes = {} # task, [reader, writer]
 clientObjs = {} # remoteAddress, dict
@@ -20,15 +23,15 @@ serverKey = prsa.RsaKey.generate(bits=4096)
 
 # Returns True on success, False on failure.
 @asyncio.coroutine
-def connectTaskCommon(protocol, server):
+def connectTaskCommon(protocol, serverMode):
     try:
-        yield from _connectTaskCommon(protocol, server)
+        yield from _connectTaskCommon(protocol, serverMode)
     except:
         llog.handle_exception(log, "_connectTaskCommon()")
 
 @asyncio.coroutine
-def _connectTaskCommon(protocol, server):
-    assert isinstance(server, bool)
+def _connectTaskCommon(protocol, serverMode):
+    assert isinstance(serverMode, bool)
 
     log.info("X: Sending banner.")
     protocol.transport.write((protocol.getLocalBanner() + "\r\n").encode(encoding="UTF-8"))
@@ -48,8 +51,10 @@ def _connectTaskCommon(protocol, server):
     opobj.setKeyExchangeAlgorithms("diffie-hellman-group14-sha1")
     opobj.setEncryptionAlgorithmsClientToServer("aes256-cbc")
     opobj.setEncryptionAlgorithmsServerToClient("aes256-cbc")
-    opobj.setMacAlgorithmsClientToServer("hmac-sha2-512")
-    opobj.setMacAlgorithmsServerToClient("hmac-sha2-512")
+#    opobj.setMacAlgorithmsClientToServer("hmac-sha2-512")
+#    opobj.setMacAlgorithmsServerToClient("hmac-sha2-512")
+    opobj.setMacAlgorithmsClientToServer("hmac-sha1")
+    opobj.setMacAlgorithmsServerToClient("hmac-sha1")
     opobj.setCompressionAlgorithmsClientToServer("none")
     opobj.setCompressionAlgorithmsServerToClient("none")
     opobj.encode()
@@ -78,6 +83,8 @@ def _connectTaskCommon(protocol, server):
     log.info("cookie=[{}].".format(pobj.getCookie()))
     log.info("keyExchangeAlgorithms=[{}].".format(pobj.getKeyExchangeAlgorithms()))
 
+    protocol.waitingForNewKeys = True
+
     ke = kex.KexGroup14(protocol)
     log.info("Calling start_kex()...")
     yield from ke.do_kex()
@@ -85,9 +92,24 @@ def _connectTaskCommon(protocol, server):
     # Setup encryption now that keys are exchanged.
     protocol.init_outbound_encryption()
 
-    pkt = yield from protocol.read_packet()
-    m = mnetpacket.SshNewKeysMessage(pkt)
+    if not protocol.serverMode:
+        """ Server gets done automatically since parameters are always there
+            before NEWKEYS is received, but client the parameters and NEWKEYS
+            message may come in the same tcppacket, so the auto part just turns
+            off inbound processing and waits for us to call
+            init_inbound_encryption when we have the parameters ready. """
+        protocol.init_inbound_encryption()
+        protocol.set_inbound_enabled(True)
+
+    packet = yield from protocol.read_packet()
+    m = mnetpacket.SshNewKeysMessage(packet)
     log.debug("Received SSH_MSG_NEWKEYS.")
+
+    log.debug("Connect task done (server={}).".format(serverMode))
+
+    packet = yield from protocol.read_packet()
+    m = mnetpacket.SshPacket(packet)
+    log.info("X: Received packet (type={}) [{}].".format(m.getPacketType(), packet))
 
     return True
 
@@ -107,16 +129,27 @@ def clientConnectTask(protocol):
 class SshProtocol(asyncio.Protocol):
     def __init__(self, loop):
         self.loop = loop
+
+        self.serverMode = None
+
+        self.binaryMode = False
+        self.inboundEnabled = True
+
         self.serverKey = serverKey
-        self.server = None
         self.k = None
         self.h = None
-        self.binaryMode = False
+        self.sessionId = None
+        self.inCipher = None
+        self.outCipher = None
+        self.hmacKey = None
+        self.waitingForNewKeys = False
+
         self.waiter = None
         self.buf = b''
         self.packet = None
         self.bpLength = None
         self.macSize = 0
+
         self.remoteBanner = None
         self.localKexInitMessage = None
         self.remoteKexInitMessage = None
@@ -137,6 +170,12 @@ class SshProtocol(asyncio.Protocol):
     def set_K_H(self, k, h):
         self.k = k
         self.h = h
+
+        if self.sessionId == None:
+            self.sessionId = h
+
+    def set_inbound_enabled(self, val):
+        self.inboundEnabled = val
 
     def getRemoteBanner(self):
         return self.remoteBanner
@@ -161,8 +200,56 @@ class SshProtocol(asyncio.Protocol):
 
     def init_outbound_encryption(self):
         log.debug("Initializing outbound encryption.")
-        # use: AES.MODE_CBC: bs: 16, ks: 32.
-#TODO: YOU_ARE_HERE
+        # use: AES.MODE_CBC: bs: 16, ks: 32. hmac-sha1=20 key size.
+        if not self.serverMode:
+            iiv = self.generateKey(b'A', 16)
+            ekey = self.generateKey(b'C', 32)
+            ikey = self.generateKey(b'E', 20)
+        else:
+            iiv = self.generateKey(b'B', 16)
+            ekey = self.generateKey(b'D', 32)
+            ikey = self.generateKey(b'F', 20)
+
+        log.info("ekey=[{}], iiv=[{}].".format(ekey, iiv))
+        self.outCipher = AES.new(ekey, AES.MODE_CBC, iiv)
+        self.hmacKey = ikey
+
+    def init_inbound_encryption(self):
+        log.debug("Initializing inbound encryption.")
+        # use: AES.MODE_CBC: bs: 16, ks: 32. hmac-sha1=20 key size.
+        if not self.serverMode:
+            iiv = self.generateKey(b'B', 16)
+            ekey = self.generateKey(b'D', 32)
+            ikey = self.generateKey(b'F', 20)
+        else:
+            iiv = self.generateKey(b'A', 16)
+            ekey = self.generateKey(b'C', 32)
+            ikey = self.generateKey(b'E', 20)
+
+        log.info("ekey=[{}], iiv=[{}].".format(ekey, iiv))
+        self.inCipher = AES.new(ekey, AES.MODE_CBC, iiv)
+        self.hmacKey = ikey
+
+    def generateKey(self, extra, needed_bytes):
+        assert isinstance(extra, bytes) and len(extra) == 1
+
+        buf = bytearray()
+        buf += sshtype.encodeMpint(self.k)
+        buf += self.h
+        buf += extra
+        buf += self.sessionId
+
+        r = sha1(buf).digest()
+
+        while len(r) < needed_bytes:
+            buf.clear()
+            buf += sshtype.encodeMpint(self.k)
+            buf += self.h
+            buf += r
+
+            r += sha1(buf).digest()
+
+        return r[:needed_bytes]
 
     def connection_made(self, transport):
         self.transport = transport
@@ -192,7 +279,8 @@ class SshProtocol(asyncio.Protocol):
 
         if self.binaryMode:
             self.buf += data
-            self.process_buffer()
+            if self.inboundEnabled:
+                self.process_buffer()
             log.debug("data_received(..): end (binaryMode).")
             return
 
@@ -288,8 +376,6 @@ class SshProtocol(asyncio.Protocol):
         except:
             llog.handle_exception(log, "_process_buffer()")
 
-
-
     def _process_buffer(self):
         log.info("P: process_buffer(): called (binaryMode={}, buf=[{}].".format(self.binaryMode, self.buf))
 
@@ -331,6 +417,17 @@ class SshProtocol(asyncio.Protocol):
 
                 log.debug("payload=[{}], padding=[{}], mac=[{}].".format(payload, padding, mac))
 
+                if self.waitingForNewKeys:
+                    tp = mnetpacket.SshPacket(payload)
+                    if tp.getPacketType() == mnetpacket.MSG_NEWKEYS:
+                        if self.serverMode:
+                            self.init_inbound_encryption()
+                        else:
+                            """ Disable further processing until inbound encryption is setup.
+                                It may not have yet as parameters and newkeys may have come in same tcp packet. """
+                            self.set_inbound_enabled(False)
+                        self.waitingForNewKeys = False
+
 #                self.packet = self.buf[0:self.bpLength + self.macSize]
                 self.packet = payload
                 self.buf = self.buf[self.bpLength + self.macSize:]
@@ -348,7 +445,7 @@ class SshServerProtocol(SshProtocol):
 
         super().__init__(loop)
 
-        self.server = True
+        self.serverMode = True
 
     def connection_made(self, transport):
         super().connection_made(transport)
@@ -370,7 +467,7 @@ class SshClientProtocol(SshProtocol):
     def __init__(self, loop):
         super().__init__(loop)
 
-        self.server = False
+        self.serverMode = False
 
     def connection_made(self, transport):
         super().connection_made(transport)

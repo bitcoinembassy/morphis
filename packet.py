@@ -5,6 +5,8 @@ import logging
 
 import sshtype
 
+MSG_NEWKEYS = 21
+
 log = logging.getLogger(__name__)
 
 class SshPacket():
@@ -202,7 +204,7 @@ class SshNewKeysMessage(SshPacket):
     def __init__(self, buf = None):
         super().__init__(buf)
 
-        packet_type = 21
+        packet_type = MSG_NEWKEYS
         if buf == None:
             self.setPacketType(packet_type)
         else:
