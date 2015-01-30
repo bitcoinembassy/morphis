@@ -7,6 +7,7 @@ import os
 
 from Crypto.Cipher import AES
 from hashlib import sha1
+import hmac
 
 import packet as mnetpacket
 import kex
@@ -141,14 +142,19 @@ class SshProtocol(asyncio.Protocol):
         self.sessionId = None
         self.inCipher = None
         self.outCipher = None
-        self.hmacKey = None
+        self.inHmacKey = None
+        self.outHmacKey = None
+        self.inHmacSize = 0
+        self.outHmacSize = 0
         self.waitingForNewKeys = False
 
         self.waiter = None
         self.buf = b''
         self.packet = None
         self.bpLength = None
-        self.macSize = 0
+
+        self.inPacketId = 0
+        self.OutPacketId = 0
 
         self.remoteBanner = None
         self.localKexInitMessage = None
@@ -212,7 +218,8 @@ class SshProtocol(asyncio.Protocol):
 
         log.info("ekey=[{}], iiv=[{}].".format(ekey, iiv))
         self.outCipher = AES.new(ekey, AES.MODE_CBC, iiv)
-        self.hmacKey = ikey
+        self.outHmacKey = ikey
+        self.outHmacSize = 20
 
     def init_inbound_encryption(self):
         log.debug("Initializing inbound encryption.")
@@ -228,7 +235,8 @@ class SshProtocol(asyncio.Protocol):
 
         log.info("ekey=[{}], iiv=[{}].".format(ekey, iiv))
         self.inCipher = AES.new(ekey, AES.MODE_CBC, iiv)
-        self.hmacKey = ikey
+        self.inHmacKey = ikey
+        self.inHmacSize = 20
 
     def generateKey(self, extra, needed_bytes):
         assert isinstance(extra, bytes) and len(extra) == 1
@@ -367,7 +375,7 @@ class SshProtocol(asyncio.Protocol):
         self.transport.write(packetObject.buf)
         self.transport.write(os.urandom(padding))
 
-        if self.macSize != 0:
+        if self.outHmacSize != 0:
             raise NotImplementedError("TODO")
 
     def process_buffer(self):
@@ -385,9 +393,9 @@ class SshProtocol(asyncio.Protocol):
 #            raise NotImplementedError(errmsg)
 
         if self.inCipher != None:
-            if len(self.buf) > 16: #bs
+            if len(self.buf) > 20: # max(16, 20): bs, hmacSize
                 try:
-                    l = len(self.buf)
+                    l = len(self.buf) - 20 # Reserve hmac.
                     bl = l - l % 16
                     blks = self.buf[:bl]
                     self.buf = self.buf[bl:]
@@ -419,10 +427,10 @@ class SshProtocol(asyncio.Protocol):
 
                 self.bpLength = packet_length + 4 # Add size of packet_length as we leave it in buf.
             else:
-                if len(self.cbuf) < (self.bpLength + self.macSize):
+                if len(self.cbuf) < self.bpLength or len(self.buf) < self.inHmacSize:
                     return;
 
-                log.info("PACKET READ (bpLength={}, macSize={}, len(self.cbuf)={})".format(self.bpLength, self.macSize, len(self.cbuf)))
+                log.info("PACKET READ (bpLength={}, inHmacSize={}, len(self.cbuf)={}, len(self.buf)={})".format(self.bpLength, self.inHmacSize, len(self.cbuf), len(self.buf)))
 
                 padding_length = struct.unpack("B", self.cbuf[4:5])[0]
                 log.debug("padding_length=[{}].".format(padding_length))
@@ -431,9 +439,31 @@ class SshProtocol(asyncio.Protocol):
 
                 payload = self.cbuf[5:padding_offset]
                 padding = self.cbuf[padding_offset:self.bpLength]
-                mac = self.cbuf[self.bpLength:self.bpLength + self.macSize]
+#                mac = self.cbuf[self.bpLength:self.bpLength + self.inHmacSize]
+                mac = self.buf[:self.inHmacSize]
 
-                log.debug("payload=[{}], padding=[{}], mac=[{}].".format(payload, padding, mac))
+                log.debug("payload=[{}], padding=[{}], mac=[{}] len(mac)={}.".format(payload, padding, mac, len(mac)))
+
+                if self.inHmacSize != 0:
+                    self.buf = self.buf[self.inHmacSize:]
+
+                    mbuf = struct.pack(">L", self.inPacketId)
+                    tmac = hmac.new(self.inHmacKey, digestmod=sha1)
+                    tmac.update(mbuf)
+                    tmac.update(self.cbuf)
+                    cmac = tmac.digest()
+                    log.debug("inPacketId={} cmac=[{}], len={}.".format(self.inPacketId, cmac, len(cmac)))
+                    r = hmac.compare_digest(cmac, mac)
+                    log.info("HMAC check result: [{}].".format(r))
+                    if not r:
+                        raise SshException("HMAC check failure, packetId={}.".format(inPacketId))
+
+                newbuf = self.cbuf[self.bpLength + self.inHmacSize:]
+                if self.cbuf == self.buf:
+                    self.cbuf = b''
+                    self.buf = newbuf
+                else:
+                    self.cbuf = newbuf
 
                 if self.waitingForNewKeys:
                     tp = mnetpacket.SshPacket(payload)
@@ -446,15 +476,8 @@ class SshProtocol(asyncio.Protocol):
                             self.set_inbound_enabled(False)
                         self.waitingForNewKeys = False
 
-#                self.packet = self.cbuf[0:self.bpLength + self.macSize]
                 self.packet = payload
-
-                newbuf = self.cbuf[self.bpLength + self.macSize:]
-                if self.cbuf == self.buf:
-                    self.cbuf = b''
-                    self.buf = newbuf
-                else:
-                    self.cbuf = newbuf
+                self.inPacketId = (self.inPacketId + 1) & 0xFFFFFFFF
 
                 self.bpLength = None
 
