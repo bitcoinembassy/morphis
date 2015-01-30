@@ -384,14 +384,32 @@ class SshProtocol(asyncio.Protocol):
 #        if self.encryption:
 #            raise NotImplementedError(errmsg)
 
+        if self.inCipher != None:
+            if len(self.buf) > 16: #bs
+                try:
+                    l = len(self.buf)
+                    bl = l - l % 16
+                    blks = self.buf[:bl]
+                    self.buf = self.buf[bl:]
+                    out = self.inCipher.decrypt(blks)
+                    log.debug("Decrypted [{}] to [{}].".format(blks, out))
+                    self.cbuf += out
+                    log.debug("cbuf=[{}], len={}".format(self.cbuf, len(self.cbuf)))
+                except:
+                    log.exception("inCiper.decrypt(..)")
+            else:
+                return
+        else:
+            self.cbuf = self.buf
+
         while True:
             if self.bpLength is None:
-                if len(self.buf) < 4:
+                if len(self.cbuf) < 4:
                     return
 
-                log.info("t=[{}].".format(self.buf[:4]))
+                log.info("t=[{}].".format(self.cbuf[:4]))
 
-                packet_length = struct.unpack(">L", self.buf[:4])[0]
+                packet_length = struct.unpack(">L", self.cbuf[:4])[0]
                 log.debug("packet_length=[{}].".format(packet_length))
 
                 if packet_length > 35000:
@@ -401,19 +419,19 @@ class SshProtocol(asyncio.Protocol):
 
                 self.bpLength = packet_length + 4 # Add size of packet_length as we leave it in buf.
             else:
-                if len(self.buf) < (self.bpLength + self.macSize):
+                if len(self.cbuf) < (self.bpLength + self.macSize):
                     return;
 
-                log.info("PACKET READ (bpLength={}, macSize={}, len(self.buf)={})".format(self.bpLength, self.macSize, len(self.buf)))
+                log.info("PACKET READ (bpLength={}, macSize={}, len(self.cbuf)={})".format(self.bpLength, self.macSize, len(self.cbuf)))
 
-                padding_length = struct.unpack("B", self.buf[4:5])[0]
+                padding_length = struct.unpack("B", self.cbuf[4:5])[0]
                 log.debug("padding_length=[{}].".format(padding_length))
 
                 padding_offset = self.bpLength - padding_length
 
-                payload = self.buf[5:padding_offset]
-                padding = self.buf[padding_offset:self.bpLength]
-                mac = self.buf[self.bpLength:self.bpLength + self.macSize]
+                payload = self.cbuf[5:padding_offset]
+                padding = self.cbuf[padding_offset:self.bpLength]
+                mac = self.cbuf[self.bpLength:self.bpLength + self.macSize]
 
                 log.debug("payload=[{}], padding=[{}], mac=[{}].".format(payload, padding, mac))
 
@@ -428,9 +446,16 @@ class SshProtocol(asyncio.Protocol):
                             self.set_inbound_enabled(False)
                         self.waitingForNewKeys = False
 
-#                self.packet = self.buf[0:self.bpLength + self.macSize]
+#                self.packet = self.cbuf[0:self.bpLength + self.macSize]
                 self.packet = payload
-                self.buf = self.buf[self.bpLength + self.macSize:]
+
+                newbuf = self.cbuf[self.bpLength + self.macSize:]
+                if self.cbuf == self.buf:
+                    self.cbuf = b''
+                    self.buf = newbuf
+                else:
+                    self.cbuf = newbuf
+
                 self.bpLength = None
 
                 if self.waiter != None:
