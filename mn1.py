@@ -69,7 +69,7 @@ def _connectTaskCommon(protocol, serverMode):
     packet = yield from protocol.read_packet()
     log.info("X: Received packet [{}].".format(packet))
 
-    pobj = mnetpacket.SshPacket(packet)
+    pobj = mnetpacket.SshPacket(None, packet)
     packet_type = pobj.getPacketType()
     log.info("packet_type=[{}].".format(packet_type))
 
@@ -109,8 +109,10 @@ def _connectTaskCommon(protocol, serverMode):
     log.debug("Connect task done (server={}).".format(serverMode))
 
     packet = yield from protocol.read_packet()
-    m = mnetpacket.SshPacket(packet)
+    m = mnetpacket.SshPacket(None, packet)
     log.info("X: Received packet (type={}) [{}].".format(m.getPacketType(), packet))
+
+
 
     return True
 
@@ -466,8 +468,8 @@ class SshProtocol(asyncio.Protocol):
                     self.cbuf = newbuf
 
                 if self.waitingForNewKeys:
-                    tp = mnetpacket.SshPacket(payload)
-                    if tp.getPacketType() == mnetpacket.MSG_NEWKEYS:
+                    tp = mnetpacket.SshPacket(None, payload)
+                    if tp.getPacketType() == mnetpacket.SSH_MSG_NEWKEYS:
                         if self.serverMode:
                             self.init_inbound_encryption()
                         else:
