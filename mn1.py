@@ -107,13 +107,32 @@ def _connectTaskCommon(protocol, serverMode):
     m = mnetpacket.SshNewKeysMessage(packet)
     log.debug("Received SSH_MSG_NEWKEYS.")
 
-    packet = yield from protocol.read_packet()
-    m = mnetpacket.SshPacket(None, packet)
-    log.info("X: Received packet (type={}) [{}].".format(m.getPacketType(), packet))
-
     if protocol.serverMode:
+        packet = yield from protocol.read_packet()
+        m = mnetpacket.SshPacket(None, packet)
+        log.info("X: Received packet (type={}) [{}].".format(m.getPacketType(), packet))
+
         m = mnetpacket.SshServiceRequestMessage(packet)
         log.info("Service requested [{}].".format(m.get_service_name()))
+
+        if m.get_service_name() != "ssh-userauth":
+            raise SshException("Remote end requested unexpected service (name=[{}]).".format(m.get_service_name()))
+
+        mr = mnetpacket.SshServiceAcceptMessage()
+        mr.set_service_name("ssh-userauth")
+        mr.encode()
+
+        protocol.write_packet(mr)
+    else:
+        m = mnetpacket.SshServiceRequestMessage()
+        m.set_service_name("ssh-userauth")
+        m.encode()
+
+        protocol.write_packet(m)
+
+        packet = yield from protocol.read_packet()
+        m = mnetpacket.SshServiceAcceptMessage(packet)
+        log.info("Service request accepted [{}].".format(m.get_service_name()))
 
     log.debug("Connect task done (server={}).".format(serverMode))
 
@@ -159,7 +178,7 @@ class SshProtocol(asyncio.Protocol):
         self.bpLength = None
 
         self.inPacketId = 0
-        self.OutPacketId = 0
+        self.outPacketId = 0
 
         self.remoteBanner = None
         self.localKexInitMessage = None
@@ -366,22 +385,46 @@ class SshProtocol(asyncio.Protocol):
 
         log.debug("Writing [{}] bytes of data.".format(length))
 
-        extra = (length + 5) % 8;
-        if extra != 0:
-            padding = 8 - extra
-            if padding < 4:
-                padding += 8 #Minimum is 4, we need mod 8.
+        mod_size = None
+        if self.outCipher == None:
+            mod_size = 8 # RFC says 8 minimum.
         else:
-            padding = 8; #Minimum is 4, we need mod 8.
+            mod_size = 16 # bs of current cipher is 16.
 
-        self.transport.write(struct.pack(">L", 1 + length + padding))
-        self.transport.write(struct.pack("B", padding & 0xff))
+        extra = (length + 5) % mod_size;
+        if extra != 0:
+            padding = mod_size - extra
+            if padding < 4:
+                padding += mod_size #Minimum padding is 4.
+        else:
+            padding = mod_size; #Minimum padding is 4.
 
-        self.transport.write(packetObject.buf)
-        self.transport.write(os.urandom(padding))
+        if self.outCipher == None:
+            self.transport.write(struct.pack(">L", 1 + length + padding))
+            self.transport.write(struct.pack("B", padding & 0xff))
+            self.transport.write(packetObject.buf)
+            for i in range(0, padding):
+                self.transport.write(struct.pack("B", 0))
+        else:
+            buf = bytearray()
+            buf += struct.pack(">L", 1 + length + padding)
+            buf += struct.pack("B", padding & 0xff)
+            buf += packetObject.buf
+            buf += os.urandom(padding)
 
-        if self.outHmacSize != 0:
-            raise NotImplementedError("TODO")
+            log.info("len(buf)=[{}], padding=[{}].".format(len(buf), padding))
+
+            if self.outHmacSize != 0:
+                tmac = hmac.new(self.outHmacKey, digestmod=sha1)
+                tmac.update(struct.pack(">L", self.outPacketId))
+                tmac.update(buf)
+
+                out = self.outCipher.encrypt(bytes(buf))
+
+                self.transport.write(out)
+                self.transport.write(tmac.digest())
+
+        self.outPacketId = (self.outPacketId + 1) & 0xFFFFFFFF
 
     def process_buffer(self):
         try:

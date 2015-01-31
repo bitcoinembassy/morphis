@@ -216,6 +216,9 @@ class SshServiceRequestMessage(SshPacket):
     def get_service_name(self):
         return self.service_name
 
+    def set_service_name(self, value):
+        self.service_name = value
+
     def parse(self):
         super().parse()
 
@@ -233,6 +236,15 @@ class SshServiceRequestMessage(SshPacket):
 class SshServiceAcceptMessage(SshPacket):
     def __init__(self, buf = None):
         super().__init__(SSH_MSG_SERVICE_ACCEPT, buf)
+
+        if buf == None:
+            self.service_name = None
+
+    def get_service_name(self):
+        return self.service_name
+
+    def set_service_name(self, value):
+        self.service_name = value
 
     def parse(self):
         super().parse()
