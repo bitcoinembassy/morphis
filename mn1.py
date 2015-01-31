@@ -29,7 +29,7 @@ def connectTaskCommon(protocol, serverMode):
     try:
         yield from _connectTaskCommon(protocol, serverMode)
     except:
-        llog.handle_exception(log, "_connectTaskCommon()")
+        log.exception("_connectTaskCommon() threw:")
 
 @asyncio.coroutine
 def _connectTaskCommon(protocol, serverMode):
@@ -285,7 +285,7 @@ class SshProtocol(asyncio.Protocol):
         try:
             self._data_received(data)
         except:
-            llog.handle_exception(log, "_data_received()")
+            log.exception("_data_received() threw:")
 
     def _data_received(self, data):
         log.debug("data_received(..): start.")
@@ -387,7 +387,7 @@ class SshProtocol(asyncio.Protocol):
         try:
             self._process_buffer()
         except:
-            llog.handle_exception(log, "_process_buffer()")
+            log.exception("_process_buffer() threw:")
 
     def _process_buffer(self):
         log.info("P: process_buffer(): called (binaryMode={}, buf=[{}].".format(self.binaryMode, self.buf))
@@ -565,7 +565,7 @@ def main():
     try:
         loop.run_forever()
     except:
-        llog.handle_exception(log, "loop.run_forever()")
+        log.exception("loop.run_forever() threw:")
 
     client.close()
     server.close()
