@@ -106,13 +106,15 @@ def _connectTaskCommon(protocol, serverMode):
     m = mnetpacket.SshNewKeysMessage(packet)
     log.debug("Received SSH_MSG_NEWKEYS.")
 
-    log.debug("Connect task done (server={}).".format(serverMode))
-
     packet = yield from protocol.read_packet()
     m = mnetpacket.SshPacket(None, packet)
     log.info("X: Received packet (type={}) [{}].".format(m.getPacketType(), packet))
 
+    if protocol.serverMode:
+        m = mnetpacket.SshServiceRequestMessage(packet)
+        log.info("Service requested [{}].".format(m.get_service_name()))
 
+    log.debug("Connect task done (server={}).".format(serverMode))
 
     return True
 

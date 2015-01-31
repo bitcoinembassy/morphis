@@ -5,8 +5,13 @@ import logging
 
 import sshtype
 
+SSH_MSG_DISCONNECT = 1
+SSH_MSG_IGNORE = 2
+SSH_MSG_UNIMPLEMENTED = 3
+SSH_MSG_DEBUG = 4
 SSH_MSG_SERVICE_REQUEST = 5
-SSH_MSG_SERVICE_RESPONSE = 6
+SSH_MSG_SERVICE_ACCEPT = 6
+SSH_MSG_KEXINIT = 20
 SSH_MSG_NEWKEYS = 21
 
 log = logging.getLogger(__name__)
@@ -204,3 +209,60 @@ class SshNewKeysMessage(SshPacket):
 class SshServiceRequestMessage(SshPacket):
     def __init__(self, buf = None):
         super().__init__(SSH_MSG_SERVICE_REQUEST, buf)
+
+        if buf == None:
+            self.service_name = None
+
+    def get_service_name(self):
+        return self.service_name
+
+    def parse(self):
+        super().parse()
+
+        i = 1
+        l, self.service_name = sshtype.parseString(self.buf[i:])
+
+    def encode(self):
+        nbuf += struct.pack("B", self.getPacketType() & 0xff)
+        nbuf += sshtype.encodeString(self.service_name)
+
+        self.buf = nbuf
+
+class SshServiceAcceptMessage(SshPacket):
+    def __init__(self, buf = None):
+        super().__init__(SSH_MSG_SERVICE_ACCEPT, buf)
+
+    def parse(self):
+        super().parse()
+
+        i = 1
+        l, self.service_name = sshtype.parseString(self.buf[i:])
+
+    def encode(self):
+        nbuf += struct.pack("B", self.getPacketType() & 0xff)
+        nbuf += sshtype.encodeString(self.service_name)
+
+        self.buf = nbuf
+
+class SshDisconnectMessage(SshPacket):
+    def __init__(self, buf = None):
+        super().__init__(SSH_MSG_DISCONNECT, buf)
+
+    def parse(self):
+        super().parse()
+
+        i = 1
+        self.reason_code = struct.unpack(">L", self.buf[i:i+4])[0]
+        i += 4
+        l, self.description = sshtype.parseString(self.buf[i:])
+        i += l
+        l, self.language_code = sshtype.parseString(self.buf[i:])
+
+    def encode(self):
+        nbuf += struct.pack("B", self.getPacketType() & 0xff)
+        nbuf += struct.pack(">L", self.self.reason_code)
+        nbuf += sshtype.encodeString(self.description)
+        nbuf += sshtype.encodeString(self.language_tag)
+
+        self.buf = nbuf
+
