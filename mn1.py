@@ -109,9 +109,8 @@ def _connectTaskCommon(protocol, serverMode):
 
     if protocol.serverMode:
         packet = yield from protocol.read_packet()
-        m = mnetpacket.SshPacket(None, packet)
-        log.info("X: Received packet (type={}) [{}].".format(m.getPacketType(), packet))
-
+#        m = mnetpacket.SshPacket(None, packet)
+#        log.info("X: Received packet (type={}) [{}].".format(m.getPacketType(), packet))
         m = mnetpacket.SshServiceRequestMessage(packet)
         log.info("Service requested [{}].".format(m.get_service_name()))
 
@@ -123,6 +122,22 @@ def _connectTaskCommon(protocol, serverMode):
         mr.encode()
 
         protocol.write_packet(mr)
+
+        packet = yield from protocol.read_packet()
+        m = mnetpacket.SshUserauthRequestMessage(packet)
+        log.info("Userauth requested with method=[{}].".format(m.get_method_name()))
+
+        if m.get_method_name() == "none":
+            mr = mnetpacket.SshUserauthFailureMessage()
+            mr.set_auths("publickey")
+            mr.set_partial_success(False)
+            mr.encode()
+
+            protocol.write_packet(mr)
+
+            packet = yield from protocol.read_packet()
+            m = mnetpacket.SshUserauthRequestMessage(packet)
+            log.info("Userauth requested with method=[{}].".format(m.get_method_name()))
     else:
         m = mnetpacket.SshServiceRequestMessage()
         m.set_service_name("ssh-userauth")

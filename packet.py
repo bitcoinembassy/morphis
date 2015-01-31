@@ -14,6 +14,11 @@ SSH_MSG_SERVICE_ACCEPT = 6
 SSH_MSG_KEXINIT = 20
 SSH_MSG_NEWKEYS = 21
 
+SSH_MSG_USERAUTH_REQUEST = 50
+SSH_MSG_USERAUTH_FAILURE = 51
+SSH_MSG_USERAUTH_SUCCESS = 52
+SSH_MSG_USERAUTH_BANNER = 53
+
 log = logging.getLogger(__name__)
 
 class SshPacket():
@@ -281,5 +286,74 @@ class SshDisconnectMessage(SshPacket):
         nbuf += struct.pack(">L", self.self.reason_code)
         nbuf += sshtype.encodeString(self.description)
         nbuf += sshtype.encodeString(self.language_tag)
+
+        self.buf = nbuf
+
+class SshUserauthRequestMessage(SshPacket):
+    def __init__(self, buf = None):
+        super().__init__(SSH_MSG_USERAUTH_REQUEST, buf)
+
+        if buf == None:
+            self.user_name = None
+            self.service_name = None
+            self.method_name = None
+
+    def parse(self):
+        super().parse()
+
+        i = 1
+        l, self.user_name = sshtype.parseString(self.buf[i:])
+        i += l
+        l, self.service_name = sshtype.parseString(self.buf[i:])
+        i += l
+        l, self.method_name = sshtype.parseString(self.buf[i:])
+
+    def encode(self):
+        nbuf = bytearray()
+
+        nbuf += struct.pack("B", self.getPacketType() & 0xff)
+        nbuf += sshtype.encodeString(self.user_name)
+        nbuf += sshtype.encodeString(self.service_name)
+        nbuf += sshtype.encodeString(self.method_name)
+
+        self.buf = nbuf
+
+    def get_method_name(self):
+        return self.method_name
+
+class SshUserauthFailureMessage(SshPacket):
+    def __init__(self, buf = None):
+        super().__init__(SSH_MSG_USERAUTH_FAILURE, buf)
+
+        if buf == None:
+            self.auths = None
+            self.partial_success = None
+
+    def get_auths(self):
+        return self.auths
+
+    def set_auths(self, val):
+        self.auths = val
+
+    def get_partial_success(self):
+        return self.partial_success
+
+    def set_partial_success(self, val):
+        self.partial_success = val
+
+    def parse(self):
+        super().parse()
+
+        i = 1
+        l, self.auths = sshtype.parseNamelist(self.buf[i:])
+        i += l
+        self.partial_success = struct.decode("?", self.buf[i:])
+
+    def encode(self):
+        nbuf = bytearray()
+
+        nbuf += struct.pack("B", self.getPacketType() & 0xff)
+        nbuf += sshtype.encodeNameList(self.auths)
+        nbuf += struct.pack("?", self.partial_success)
 
         self.buf = nbuf
