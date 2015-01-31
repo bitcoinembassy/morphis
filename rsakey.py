@@ -16,13 +16,15 @@ import putil as util
 from putil import *
 
 import sshtype
+import asymkey
+from sshexception import *
 
 log = logging.getLogger(__name__)
 
 SHA1_DIGESTINFO = b'\x30\x21\x30\x09\x06\x05\x2b\x0e\x03\x02\x1a\x05\x00\x04\x14'
 
 #class RsaKey (PKey):
-class RsaKey():
+class RsaKey(asymkey.AsymKey):
     """
     Representation of an RSA key which can be used to sign and verify SSH2
     data.
@@ -44,10 +46,10 @@ class RsaKey():
             self.e, self.n = vals
         else:
             if data is None:
-                raise SSHException('Key object may not be empty')
+                raise SshException('Key object may not be empty')
             i, v = sshtype.parseString(data)
             if v != 'ssh-rsa':
-                raise SSHException('Invalid key')
+                raise SshException('Invalid key')
             l, self.e = sshtype.parseMpint(data[i:])
             i += l
             l, self.n = sshtype.parseMpint(data[i:])
@@ -103,7 +105,8 @@ class RsaKey():
 
     def _encode_key(self):
         if (self.p is None) or (self.q is None):
-            raise SSHException('Not enough key info to write private key file')
+            raise SshException('Not enough key info to write private key file')
+        """
         keylist = [0, self.n, self.e, self.d, self.p, self.q,
                    self.d % (self.p - 1), self.d % (self.q - 1),
                    util.mod_inverse(self.q, self.p)]
@@ -111,8 +114,19 @@ class RsaKey():
             b = BER()
             b.encode(keylist)
         except BERException:
-            raise SSHException('Unable to create ber encoding of key')
+            raise SshException('Unable to create ber encoding of key')
         return b.asbytes()
+        """
+        b = bytearray()
+
+        b += struct.pack("B", 1) # mnk version.
+        b += sshtype.encodeMpint(self.e)
+        b += sshtype.encodeMpint(self.n)
+        b += sshtype.encodeMpint(self.d)
+        b += sshtype.encodeMpint(self.p)
+        b += sshtype.encodeMpint(self.q)
+
+        return b
 
     def write_private_key_file(self, filename, password=None):
         self._write_private_key_file('RSA', filename, self._encode_key(), password)
@@ -159,14 +173,15 @@ class RsaKey():
         self._decode_key(data)
 
     def _decode_key(self, data):
+        """
         # private key file contains:
         # RSAPrivateKey = { version = 0, n, e, d, p, q, d mod p-1, d mod q-1, q**-1 mod p }
         try:
             keylist = BER(data).decode()
         except BERException:
-            raise SSHException('Unable to parse key file')
+            raise SshException('Unable to parse key file')
         if (type(keylist) is not list) or (len(keylist) < 4) or (keylist[0] != 0):
-            raise SSHException('Not a valid RSA private key file (bad ber encoding)')
+            raise SshException('Not a valid RSA private key file (bad ber encoding)')
         self.n = keylist[1]
         self.e = keylist[2]
         self.d = keylist[3]
@@ -174,3 +189,18 @@ class RsaKey():
         self.p = keylist[4]
         self.q = keylist[5]
         self.size = util.bit_length(self.n)
+        """
+
+        ver = struct.unpack("B", data[:1])[0]
+        if ver != 1:
+            raise SshException("Unsupported mnk version [{}].".format(ver))
+        i = 1
+        l, self.e = sshtype.parseMpint(data[i:])
+        i += l
+        l, self.n = sshtype.parseMpint(data[i:])
+        i += l
+        l, self.d = sshtype.parseMpint(data[i:])
+        i += l
+        l, self.p = sshtype.parseMpint(data[i:])
+        i += l
+        l, self.q = sshtype.parseMpint(data[i:])

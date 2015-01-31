@@ -87,4 +87,3 @@ def bit_length(n):
             hbyte <<= 1
             bitlen -= 1
         return bitlen
-

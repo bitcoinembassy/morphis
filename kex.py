@@ -109,7 +109,7 @@ class KexGroup14():
         host_key = m.getHostKey()
         self.f = m.getF()
         if (self.f < 1) or (self.f > self.P - 1):
-            raise SSHException('Server kex "f" is out of range')
+            raise SshException('Server kex "f" is out of range')
         sig = m.getSignature()
         K = pow(self.f, self.x, self.P)
         log.debug("K=[{}].".format(K))
@@ -136,7 +136,7 @@ class KexGroup14():
         # server mode
         self.e = m.getE()
         if (self.e < 1) or (self.e > self.P - 1):
-            raise SSHException('Client kex "e" is out of range')
+            raise SshException('Client kex "e" is out of range')
         K = pow(self.e, self.x, self.P)
         log.debug("K=[{}].".format(K))
         key = self.protocol.get_server_key().asbytes()

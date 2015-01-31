@@ -223,6 +223,8 @@ class SshServiceRequestMessage(SshPacket):
         l, self.service_name = sshtype.parseString(self.buf[i:])
 
     def encode(self):
+        nbuf = bytearray()
+
         nbuf += struct.pack("B", self.getPacketType() & 0xff)
         nbuf += sshtype.encodeString(self.service_name)
 
@@ -239,6 +241,8 @@ class SshServiceAcceptMessage(SshPacket):
         l, self.service_name = sshtype.parseString(self.buf[i:])
 
     def encode(self):
+        nbuf = bytearray()
+
         nbuf += struct.pack("B", self.getPacketType() & 0xff)
         nbuf += sshtype.encodeString(self.service_name)
 
@@ -259,10 +263,11 @@ class SshDisconnectMessage(SshPacket):
         l, self.language_code = sshtype.parseString(self.buf[i:])
 
     def encode(self):
+        nbuf = bytearray()
+
         nbuf += struct.pack("B", self.getPacketType() & 0xff)
         nbuf += struct.pack(">L", self.self.reason_code)
         nbuf += sshtype.encodeString(self.description)
         nbuf += sshtype.encodeString(self.language_tag)
 
         self.buf = nbuf
-

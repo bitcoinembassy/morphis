@@ -3,3 +3,5 @@
 *.c
 build/
 __pycache__/
+
+server_key-rsa.mnk

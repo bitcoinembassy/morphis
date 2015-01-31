@@ -14,13 +14,14 @@ import kex
 import dsskey as pdss
 import rsakey as prsa
 import sshtype
+from sshexception import *
 
 clientPipes = {} # task, [reader, writer]
 clientObjs = {} # remoteAddress, dict
 
 log = logging.getLogger(__name__)
 
-serverKey = prsa.RsaKey.generate(bits=4096)
+serverKey = None
 
 # Returns True on success, False on failure.
 @asyncio.coroutine
@@ -460,7 +461,7 @@ class SshProtocol(asyncio.Protocol):
                     r = hmac.compare_digest(cmac, mac)
                     log.info("HMAC check result: [{}].".format(r))
                     if not r:
-                        raise SshException("HMAC check failure, packetId={}.".format(inPacketId))
+                        raise SshException("HMAC check failure, packetId={}.".format(self.inPacketId))
 
                 newbuf = self.cbuf[self.bpLength + self.inHmacSize:]
                 if self.cbuf == self.buf:
@@ -493,8 +494,6 @@ class SshProtocol(asyncio.Protocol):
 
 class SshServerProtocol(SshProtocol):
     def __init__(self, loop):
-        global serverKey
-
         super().__init__(loop)
 
         self.serverMode = True
@@ -538,10 +537,20 @@ class SshClientProtocol(SshProtocol):
         self.client["connected"] = False
 
 def main():
-    global log
+    global log, serverKey
 
     print("Starting server.")
     log.info("Starting server.")
+
+    key_filename = "server_key-rsa.mnk"
+    if os.path.exists(key_filename):
+        log.info("Server private key file found, loading.")
+        serverKey = prsa.RsaKey(filename=key_filename)
+    else:
+        log.info("Server private key file missing, generating.")
+        serverKey = prsa.RsaKey.generate(bits=4096)
+        serverKey.write_private_key_file(key_filename)
+
     loop = asyncio.get_event_loop()
 
 #    f = asyncio.start_server(accept_client, host=None, port=5555)
