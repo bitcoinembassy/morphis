@@ -11,8 +11,7 @@ import hmac
 
 import packet as mnetpacket
 import kex
-import dsskey as pdss
-import rsakey as prsa
+import rsakey
 import sshtype
 from sshexception import *
 
@@ -138,6 +137,50 @@ def _connectTaskCommon(protocol, serverMode):
             packet = yield from protocol.read_packet()
             m = mnetpacket.SshUserauthRequestMessage(packet)
             log.info("Userauth requested with method=[{}].".format(m.get_method_name()))
+
+        log.debug("m.signature_present()={}.".format(m.get_signature_present()))
+
+        if m.get_algorithm_name() != "ssh-rsa":
+            raise SshException("Unhandled client auth method [{}].".format(m.get_algorithm_name()))
+
+        if not m.get_signature_present():
+            mr = mnetpacket.SshUserauthPkOkMessage()
+            mr.set_algorithm_name(m.get_algorithm_name())
+            mr.set_public_key(m.get_public_key())
+            mr.encode()
+
+            protocol.write_packet(mr)
+
+            packet = yield from protocol.read_packet()
+            m = mnetpacket.SshUserauthRequestMessage(packet)
+            log.info("Userauth requested with method=[{}].".format(m.get_method_name()))
+
+            if m.get_algorithm_name() != "ssh-rsa":
+                raise SshException("Unhandled client auth method [{}].".format(m.get_algorithm_name()))
+
+        log.debug("signature=[{}].".format(m.get_signature()))
+
+        signature = m.get_signature()
+
+        buf = bytearray()
+        buf += sshtype.encodeBinary(protocol.get_session_id())
+        buf += packet[:-m.get_signature_length()]
+
+        client_key = rsakey.RsaKey(m.get_public_key())
+        r = client_key.verify_ssh_sig(buf, signature)
+
+        log.info("Signature check: {}.".format(r))
+        if not r:
+            raise SshException("Signature and key provided by client did not match.")
+
+        mr = mnetpacket.SshUserauthSuccessMessage()
+        mr.encode()
+
+        protocol.write_packet(mr)
+
+        packet = yield from protocol.read_packet()
+        m = mnetpacket.SshPacket(None, packet)
+        log.info("X: Received packet (type={}) [{}].".format(m.getPacketType(), packet))
     else:
         m = mnetpacket.SshServiceRequestMessage()
         m.set_service_name("ssh-userauth")
@@ -202,8 +245,11 @@ class SshProtocol(asyncio.Protocol):
     def get_server_key(self):
         return self.serverKey
 
+    def get_session_id(self):
+        return self.sessionId
+
     def verify_server_key(self, key_data, sig):
-        key = prsa.RsaKey(key_data)
+        key = rsakey.RsaKey(key_data)
 
         if not key.verify_ssh_sig(self.h, sig):
             raise SshException("Signature verification failed.")
@@ -603,10 +649,10 @@ def main():
     key_filename = "server_key-rsa.mnk"
     if os.path.exists(key_filename):
         log.info("Server private key file found, loading.")
-        serverKey = prsa.RsaKey(filename=key_filename)
+        serverKey = rsakey.RsaKey(filename=key_filename)
     else:
         log.info("Server private key file missing, generating.")
-        serverKey = prsa.RsaKey.generate(bits=4096)
+        serverKey = rsakey.RsaKey.generate(bits=4096)
         serverKey.write_private_key_file(key_filename)
 
     loop = asyncio.get_event_loop()

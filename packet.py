@@ -19,6 +19,8 @@ SSH_MSG_USERAUTH_FAILURE = 51
 SSH_MSG_USERAUTH_SUCCESS = 52
 SSH_MSG_USERAUTH_BANNER = 53
 
+SSH_MSG_USERAUTH_PK_OK = 60
+
 log = logging.getLogger(__name__)
 
 class SshPacket():
@@ -298,6 +300,33 @@ class SshUserauthRequestMessage(SshPacket):
             self.service_name = None
             self.method_name = None
 
+    def get_signature_present(self):
+        return self.signature_present
+
+    def set_signature_present(self, value):
+        self.signature_present = value
+
+    def get_algorithm_name(self):
+        return self.algorithm_name
+
+    def set_algorithm_name(self, value):
+        self.algorithm_name = value
+
+    def get_public_key(self):
+        return self.public_key
+
+    def set_public_key(self, value):
+        self.public_key = value
+
+    def get_signature(self):
+        return self.signature
+
+    def set_signature(self, value):
+        self.signature = value
+
+    def get_signature_length(self):
+        return self.signature_length
+
     def parse(self):
         super().parse()
 
@@ -307,6 +336,18 @@ class SshUserauthRequestMessage(SshPacket):
         l, self.service_name = sshtype.parseString(self.buf[i:])
         i += l
         l, self.method_name = sshtype.parseString(self.buf[i:])
+        i += l
+
+        if self.method_name == "publickey":
+            self.signature_present = struct.unpack("?", self.buf[i:i+1])[0]
+            i += 1
+            l, self.algorithm_name = sshtype.parseString(self.buf[i:])
+            i += l
+            l, self.public_key = sshtype.parseBinary(self.buf[i:])
+            if self.signature_present:
+                i += l
+                l, self.signature = sshtype.parseBinary(self.buf[i:])
+                self.signature_length = l
 
     def encode(self):
         nbuf = bytearray()
@@ -355,5 +396,52 @@ class SshUserauthFailureMessage(SshPacket):
         nbuf += struct.pack("B", self.getPacketType() & 0xff)
         nbuf += sshtype.encodeNameList(self.auths)
         nbuf += struct.pack("?", self.partial_success)
+
+        self.buf = nbuf
+
+class SshUserauthSuccessMessage(SshPacket):
+    def __init__(self, buf = None):
+        super().__init__(SSH_MSG_USERAUTH_SUCCESS, buf)
+
+    def parse(self):
+        super().parse()
+
+    def encode(self):
+        nbuf = bytearray()
+
+        nbuf += struct.pack("B", self.getPacketType() & 0xff)
+
+        self.buf = nbuf
+
+class SshUserauthPkOkMessage(SshPacket):
+    def __init__(self, buf = None):
+        super().__init__(SSH_MSG_USERAUTH_PK_OK, buf)
+
+    def get_algorithm_name(self):
+        return self.algorithm_name
+
+    def set_algorithm_name(self, value):
+        self.algorithm_name = value
+
+    def get_public_key(self):
+        return self.public_key
+
+    def set_public_key(self, value):
+        self.public_key = value
+
+    def parse(self):
+        super().parse()
+
+        i = 1
+        l, self.algorithm_name = sshtype.parseString(self.buf[i:])
+        i += l
+        l, self.public_key = sshtype.parseBinary(self.buf[i:])
+
+    def encode(self):
+        nbuf = bytearray()
+
+        nbuf += struct.pack("B", self.getPacketType() & 0xff)
+        nbuf += sshtype.encodeString(self.algorithm_name)
+        nbuf += sshtype.encodeBinary(self.public_key)
 
         self.buf = nbuf

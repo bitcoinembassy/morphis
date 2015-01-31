@@ -92,6 +92,7 @@ class RsaKey(asymkey.AsymKey):
     def verify_ssh_sig(self, key_data, sig_msg):
         i, v = sshtype.parseString(sig_msg)
         if v != 'ssh-rsa':
+            log.warning("Not an ssh-rsa signature!")
             return False
         log.info("l[{}][{}]".format(i, len(sig_msg)))
         sig = util.inflate_long(sshtype.parseBinary(sig_msg[i:])[1], True)
