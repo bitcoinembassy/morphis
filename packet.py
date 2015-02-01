@@ -57,6 +57,9 @@ class SshPacket():
     def getBuf(self):
         return self.buf
 
+    def get_buf(self):
+        return self.buf
+
     def setPacketType(self, packetType):
         self.packetType = packetType
 
@@ -315,6 +318,24 @@ class SshUserauthRequestMessage(SshPacket):
             self.service_name = None
             self.method_name = None
 
+    def get_user_name(self):
+        return self.user_name
+
+    def set_user_name(self, value):
+        self.user_name = value
+
+    def get_service_name(self):
+        return self.service_name
+
+    def set_service_name(self, value):
+        self.service_name = value
+
+    def get_method_name(self):
+        return self.method_name
+
+    def set_method_name(self, value):
+        self.method_name = value
+
     def get_signature_present(self):
         return self.signature_present
 
@@ -371,11 +392,15 @@ class SshUserauthRequestMessage(SshPacket):
         nbuf += sshtype.encodeString(self.user_name)
         nbuf += sshtype.encodeString(self.service_name)
         nbuf += sshtype.encodeString(self.method_name)
+        
+        if self.method_name == "publickey":
+            nbuf += struct.pack("B", self.signature_present)
+            nbuf += sshtype.encodeString(self.algorithm_name)
+            nbuf += sshtype.encodeBinary(self.public_key)
+            # Leave signature for caller to append, as they need this encoded
+            # data to sign.
 
         self.buf = nbuf
-
-    def get_method_name(self):
-        return self.method_name
 
 class SshUserauthFailureMessage(SshPacket):
     def __init__(self, buf = None):

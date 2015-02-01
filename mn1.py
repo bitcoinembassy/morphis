@@ -21,6 +21,7 @@ clientObjs = {} # remoteAddress, dict
 log = logging.getLogger(__name__)
 
 serverKey = None
+clientKey = None
 
 # Returns True on success, False on failure.
 @asyncio.coroutine
@@ -138,10 +139,12 @@ def _connectTaskCommon(protocol, serverMode):
             m = mnetpacket.SshUserauthRequestMessage(packet)
             log.info("Userauth requested with method=[{}].".format(m.get_method_name()))
 
-        log.debug("m.signature_present()={}.".format(m.get_signature_present()))
-
+        if m.get_method_name() != "publickey":
+            raise SshException("Unhandled client auth method [{}].".format(m.get_method_name()))
         if m.get_algorithm_name() != "ssh-rsa":
-            raise SshException("Unhandled client auth method [{}].".format(m.get_algorithm_name()))
+            raise SshException("Unhandled client auth algorithm [{}].".format(m.get_algorithm_name()))
+
+        log.debug("m.signature_present()={}.".format(m.get_signature_present()))
 
         if not m.get_signature_present():
             mr = mnetpacket.SshUserauthPkOkMessage()
@@ -155,8 +158,10 @@ def _connectTaskCommon(protocol, serverMode):
             m = mnetpacket.SshUserauthRequestMessage(packet)
             log.info("Userauth requested with method=[{}].".format(m.get_method_name()))
 
+            if m.get_method_name() != "publickey":
+                raise SshException("Unhandled client auth method [{}].".format(m.get_method_name()))
             if m.get_algorithm_name() != "ssh-rsa":
-                raise SshException("Unhandled client auth method [{}].".format(m.get_algorithm_name()))
+                raise SshException("Unhandled client auth algorithm [{}].".format(m.get_algorithm_name()))
 
         log.debug("signature=[{}].".format(m.get_signature()))
 
@@ -169,7 +174,7 @@ def _connectTaskCommon(protocol, serverMode):
         client_key = rsakey.RsaKey(m.get_public_key())
         r = client_key.verify_ssh_sig(buf, signature)
 
-        log.info("Signature check: {}.".format(r))
+        log.info("Userauth signature check result: [{}].".format(r))
         if not r:
             raise SshException("Signature and key provided by client did not match.")
 
@@ -191,6 +196,34 @@ def _connectTaskCommon(protocol, serverMode):
         packet = yield from protocol.read_packet()
         m = mnetpacket.SshServiceAcceptMessage(packet)
         log.info("Service request accepted [{}].".format(m.get_service_name()))
+
+        mr = mnetpacket.SshUserauthRequestMessage()
+        mr.set_user_name("dev")
+        mr.set_service_name("ssh-connection")
+        mr.set_method_name("publickey")
+        mr.set_signature_present(True)
+        mr.set_algorithm_name("ssh-rsa")
+
+        ckey = protocol.get_client_key()
+        mr.set_public_key(ckey.asbytes())
+
+        mr.encode()
+
+        mrb = bytearray()
+        mrb += sshtype.encodeBinary(protocol.get_session_id())
+        mrb += mr.get_buf()
+
+        sig = sshtype.encodeBinary(ckey.sign_ssh_data(mrb))
+
+        mrb = mr.get_buf()
+        assert mr.buf == mrb
+        mrb += sig
+
+        protocol.write_packet(mr)
+
+        packet = yield from protocol.read_packet()
+        m = mnetpacket.SshUserauthSuccessMessage(packet)
+        log.info("Userauth accepted.")
 
     log.debug("Connect task done (server={}).".format(serverMode))
 
@@ -219,6 +252,7 @@ class SshProtocol(asyncio.Protocol):
         self.inboundEnabled = True
 
         self.serverKey = serverKey
+        self.clientKey = clientKey
         self.k = None
         self.h = None
         self.sessionId = None
@@ -244,6 +278,9 @@ class SshProtocol(asyncio.Protocol):
 
     def get_server_key(self):
         return self.serverKey
+
+    def get_client_key(self):
+        return self.clientKey
 
     def get_session_id(self):
         return self.sessionId
@@ -444,7 +481,7 @@ class SshProtocol(asyncio.Protocol):
     def write_packet(self, packetObject):
         length = len(packetObject.getBuf())
 
-        log.debug("Writing [{}] bytes of data.".format(length))
+        log.debug("Writing packetType=[{}] with [{}] bytes of data.".format(packetObject.getPacketType(), length))
 
         mod_size = None
         if self.outCipher == None:
@@ -641,7 +678,7 @@ class SshClientProtocol(SshProtocol):
         self.client["connected"] = False
 
 def main():
-    global log, serverKey
+    global log, serverKey, clientKey
 
     print("Starting server.")
     log.info("Starting server.")
@@ -661,10 +698,19 @@ def main():
     server = loop.create_server(lambda: SshServerProtocol(loop), "127.0.0.1", 5555)
     loop.run_until_complete(server)
 
+    log.info("Starting test client.")
+
+    key_filename = "client_key-rsa.mnk"
+    if os.path.exists(key_filename):
+        log.info("Client private key file found, loading.")
+        clientKey = rsakey.RsaKey(filename=key_filename)
+    else:
+        log.info("Client private key file missing, generating.")
+        clientKey = rsakey.RsaKey.generate(bits=4096)
+        clientKey.write_private_key_file(key_filename)
+
     client = loop.create_connection(lambda: SshClientProtocol(loop), "127.0.0.1", 5555)
     loop.run_until_complete(client)
-
-#    loop.run_until_complete(f)
 
     try:
         loop.run_forever()
