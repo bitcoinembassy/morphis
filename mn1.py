@@ -625,10 +625,11 @@ class SshProtocol(asyncio.Protocol):
                 break;
 
 class SshServerProtocol(SshProtocol):
-    def __init__(self, loop):
+    def __init__(self, loop, channel_handler):
         super().__init__(loop)
 
         self.serverMode = True
+        self.channel_handler = channel_handler
 
     def connection_made(self, transport):
         super().connection_made(transport)
@@ -644,12 +645,22 @@ class SshServerProtocol(SshProtocol):
         if not r:
             return r
 
-        packet = yield from protocol.read_packet()
-#    m = mnetpacket.SshPacket(None, packet)
+        while True:
+            packet = yield from protocol.read_packet()
+            m = mnetpacket.SshPacket(None, packet)
+
+            t = m.getPacketType()
+            if t == mnetpacket.SSH_MSG_CHANNEL_OPEN:
+                yield from protocol._handle_open_channel(packet)
+
+    @asyncio.coroutine
+    def _handle_open_channel(self, packet):
         m = mnetpacket.SshChannelOpenMessage(packet)
         log.info("S: Received CHANNEL_OPEN message: [{}].".format(packet))
 
         log.info("S: CHANNEL_OPEN channel_type=[{}], sender_channel=[{}].".format(m.get_channel_type(), m.get_sender_channel()))
+
+        yield from self.channel_handler.open_channel(self, m)
 
     def data_received(self, data):
         log.info("S: Received: [{}].".format(data))
@@ -684,6 +695,21 @@ class SshClientProtocol(SshProtocol):
         log.info("C: Connection lost to [{}], client=[{}].".format(self.peerName, self.client))
         self.client["connected"] = False
 
+class ChannelHandler():
+    @asyncio.coroutine
+    def open_channel(self, protocol, msg):
+        log.info("OPENING CHANNEL [{}].".format(msg.get_channel_type()))
+
+        m = mnetpacket.SshChannelOpenConfirmationMessage()
+        m.set_recipient_channel(msg.get_sender_channel())
+        m.set_sender_channel(0)
+        m.set_initial_window_size(65535)
+        m.set_maximum_packet_size(65535)
+
+        m.encode()
+
+        protocol.write_packet(m)
+
 def main():
     global log, serverKey, clientKey
 
@@ -701,8 +727,10 @@ def main():
 
     loop = asyncio.get_event_loop()
 
+    chandler = ChannelHandler()
+
 #    f = asyncio.start_server(accept_client, host=None, port=5555)
-    server = loop.create_server(lambda: SshServerProtocol(loop), "127.0.0.1", 5555)
+    server = loop.create_server(lambda: SshServerProtocol(loop, chandler), "127.0.0.1", 5555)
     loop.run_until_complete(server)
 
     log.info("Starting test client.")

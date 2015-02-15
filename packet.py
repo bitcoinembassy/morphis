@@ -525,3 +525,57 @@ class SshChannelOpenMessage(SshPacket):
         nbuf += struct.pack(">L", self.maximum_packet_size)
 
         self.buf = nbuf
+
+class SshChannelOpenConfirmationMessage(SshPacket):
+    def __init__(self, buf = None):
+        super().__init__(SSH_MSG_CHANNEL_OPEN_CONFIRMATION, buf)
+
+    def get_recipient_channel(self):
+        return self.sender_channel
+
+    def set_recipient_channel(self, value):
+        self.recipient_channel = value
+
+    def get_sender_channel(self):
+        return self.sender_channel
+
+    def set_sender_channel(self, value):
+        self.sender_channel = value
+
+    def get_initial_window_size(self):
+        return self.initial_window_size
+
+    def set_initial_window_size(self, value):
+        self.initial_window_size = value
+
+    def get_maximum_packet_size(self):
+        return self.maximum_packet_size
+
+    def set_maximum_packet_size(self, value):
+        self.maximum_packet_size = value
+
+    def parse(self):
+        super().parse()
+
+        i = 1
+        l, self.channel_type = sshtype.parseString(self.buf[i:])
+        i += l
+        self.recipient_channel = struct.unpack(">L", self.buf[i:i+4])[0]
+        i += 4
+        self.sender_channel = struct.unpack(">L", self.buf[i:i+4])[0]
+        i += 4
+        self.initial_window_size = struct.unpack(">L", self.buf[i:i+4])[0]
+        i += 4
+        self.maximum_packet_size = struct.unpack(">L", self.buf[i:i+4])[0]
+        i += 4
+
+    def encode(self):
+        nbuf = bytearray()
+
+        nbuf += struct.pack("B", self.getPacketType() & 0xff)
+        nbuf += struct.pack(">L", self.recipient_channel)
+        nbuf += struct.pack(">L", self.sender_channel)
+        nbuf += struct.pack(">L", self.initial_window_size)
+        nbuf += struct.pack(">L", self.maximum_packet_size)
+
+        self.buf = nbuf
