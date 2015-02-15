@@ -27,9 +27,11 @@ clientKey = None
 @asyncio.coroutine
 def connectTaskCommon(protocol, serverMode):
     try:
-        yield from _connectTaskCommon(protocol, serverMode)
+        r = yield from _connectTaskCommon(protocol, serverMode)
     except:
         log.exception("_connectTaskCommon() threw:")
+
+    return r
 
 @asyncio.coroutine
 def _connectTaskCommon(protocol, serverMode):
@@ -182,10 +184,6 @@ def _connectTaskCommon(protocol, serverMode):
         mr.encode()
 
         protocol.write_packet(mr)
-
-        packet = yield from protocol.read_packet()
-        m = mnetpacket.SshPacket(None, packet)
-        log.info("X: Received packet (type={}) [{}].".format(m.getPacketType(), packet))
     else:
         m = mnetpacket.SshServiceRequestMessage()
         m.set_service_name("ssh-userauth")
@@ -228,13 +226,6 @@ def _connectTaskCommon(protocol, serverMode):
     log.debug("Connect task done (server={}).".format(serverMode))
 
     return True
-
-@asyncio.coroutine
-def serverConnectTask(protocol):
-    r = yield from connectTaskCommon(protocol, True)
-    if not r:
-        return r
-
 
 @asyncio.coroutine
 def clientConnectTask(protocol):
@@ -641,8 +632,24 @@ class SshServerProtocol(SshProtocol):
 
     def connection_made(self, transport):
         super().connection_made(transport)
+
         log.info("S: Connection made from [{}].".format(self.peerName))
-        asyncio.async(serverConnectTask(self))
+
+        asyncio.async(self._run())
+
+    @asyncio.coroutine
+    def _run(protocol):
+        r = yield from connectTaskCommon(protocol, True)
+
+        if not r:
+            return r
+
+        packet = yield from protocol.read_packet()
+#    m = mnetpacket.SshPacket(None, packet)
+        m = mnetpacket.SshChannelOpenMessage(packet)
+        log.info("S: Received CHANNEL_OPEN message: [{}].".format(packet))
+
+        log.info("S: CHANNEL_OPEN channel_type=[{}], sender_channel=[{}].".format(m.get_channel_type(), m.get_sender_channel()))
 
     def data_received(self, data):
         log.info("S: Received: [{}].".format(data))
