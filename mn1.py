@@ -14,6 +14,7 @@ import kex
 import rsakey
 import sshtype
 from sshexception import *
+from mutil import hex_dump
 
 clientPipes = {} # task, [reader, writer]
 clientObjs = {} # remoteAddress, dict
@@ -65,7 +66,6 @@ def _connectTaskCommon(protocol, serverMode):
 
     protocol.setLocalKexInitMessage(opobj.getBuf())
 
-    log.debug("outgoing packet=[{}].".format(opobj.getBuf()))
     protocol.write_packet(opobj)
 
     # Read KexInit packet.
@@ -397,6 +397,7 @@ class SshProtocol(asyncio.Protocol):
 
     def _data_received(self, data):
         log.debug("data_received(..): start.")
+        log.info("X: Received: [\n{}].".format(hex_dump(data)))
 
         if self.binaryMode:
             self.buf += data
@@ -472,7 +473,7 @@ class SshProtocol(asyncio.Protocol):
     def write_packet(self, packetObject):
         length = len(packetObject.getBuf())
 
-        log.debug("Writing packetType=[{}] with [{}] bytes of data.".format(packetObject.getPacketType(), length))
+        log.debug("Writing packetType=[{}] with [{}] bytes of data: [\n{}]".format(packetObject.getPacketType(), length, hex_dump(packetObject.getBuf())))
 
         mod_size = None
         if self.outCipher == None:
@@ -522,7 +523,7 @@ class SshProtocol(asyncio.Protocol):
             log.exception("_process_buffer() threw:")
 
     def _process_buffer(self):
-        log.info("P: process_buffer(): called (binaryMode={}, buf=[{}].".format(self.binaryMode, self.buf))
+        log.info("P: process_buffer(): called (binaryMode={}), buf=[\n{}].".format(self.binaryMode, hex_dump(self.buf)))
 
         assert self.binaryMode
 
@@ -537,9 +538,9 @@ class SshProtocol(asyncio.Protocol):
                     blks = self.buf[:bl]
                     self.buf = self.buf[bl:]
                     out = self.inCipher.decrypt(blks)
-                    log.debug("Decrypted [{}] to [{}].".format(blks, out))
+                    log.debug("Decrypted [\n{}] to [\n{}].".format(hex_dump(blks), hex_dump(out)))
                     self.cbuf += out
-                    log.debug("cbuf=[{}], len={}".format(self.cbuf, len(self.cbuf)))
+                    log.debug("len(cbuf)={}, cbuf=[\n{}]".format(len(self.cbuf), hex_dump(self.cbuf)))
                 except:
                     log.exception("inCiper.decrypt(..)")
             else:
@@ -579,7 +580,7 @@ class SshProtocol(asyncio.Protocol):
 #                mac = self.cbuf[self.bpLength:self.bpLength + self.inHmacSize]
                 mac = self.buf[:self.inHmacSize]
 
-                log.debug("payload=[{}], padding=[{}], mac=[{}] len(mac)={}.".format(payload, padding, mac, len(mac)))
+                log.debug("payload=[\n{}], padding=[\n{}], mac=[\n{}] len(mac)={}.".format(hex_dump(payload), hex_dump(padding), hex_dump(mac), len(mac)))
 
                 if self.inHmacSize != 0:
                     self.buf = self.buf[self.inHmacSize:]
@@ -589,7 +590,7 @@ class SshProtocol(asyncio.Protocol):
                     tmac.update(mbuf)
                     tmac.update(self.cbuf)
                     cmac = tmac.digest()
-                    log.debug("inPacketId={} cmac=[{}], len={}.".format(self.inPacketId, cmac, len(cmac)))
+                    log.debug("inPacketId={} len(cmac)={}, cmac=[\n{}].".format(self.inPacketId, len(cmac), hex_dump(cmac)))
                     r = hmac.compare_digest(cmac, mac)
                     log.info("HMAC check result: [{}].".format(r))
                     if not r:
@@ -663,7 +664,6 @@ class SshServerProtocol(SshProtocol):
         yield from self.channel_handler.open_channel(self, m)
 
     def data_received(self, data):
-        log.info("S: Received: [{}].".format(data))
         super().data_received(data)
 
     def error_recieved(self, exc):
