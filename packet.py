@@ -558,8 +558,6 @@ class SshChannelOpenConfirmationMessage(SshPacket):
         super().parse()
 
         i = 1
-        l, self.channel_type = sshtype.parseString(self.buf[i:])
-        i += l
         self.recipient_channel = struct.unpack(">L", self.buf[i:i+4])[0]
         i += 4
         self.sender_channel = struct.unpack(">L", self.buf[i:i+4])[0]
