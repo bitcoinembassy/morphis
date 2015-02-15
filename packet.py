@@ -577,3 +577,36 @@ class SshChannelOpenConfirmationMessage(SshPacket):
         nbuf += struct.pack(">L", self.maximum_packet_size)
 
         self.buf = nbuf
+
+class SshChannelDataMessage(SshPacket):
+    def __init__(self, buf = None):
+        super().__init__(SSH_MSG_CHANNEL_DATA, buf)
+
+    def get_recipient_channel(self):
+        return self.recipient_channel
+
+    def set_recipient_channel(self, value):
+        self.recipient_channel = value
+
+    def get_data(self):
+        return self.data
+
+    def set_data(self, value):
+        self.data = value
+
+    def parse(self):
+        super().parse()
+
+        i = 1
+        self.recipient_channel = struct.unpack(">L", self.buf[i:i+4])[0]
+        i += 4
+        self.data = self.buf[i:]
+
+    def encode(self):
+        nbuf = bytearray()
+
+        nbuf += struct.pack("B", self.getPacketType() & 0xff)
+        nbuf += struct.pack(">L", self.recipient_channel)
+        nbuf += self.data
+
+        self.buf = nbuf

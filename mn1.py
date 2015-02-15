@@ -670,8 +670,12 @@ class SshServerProtocol(SshProtocol):
             m = mnetpacket.SshPacket(None, packet)
 
             t = m.getPacketType()
+            log.debug("Received packet, type=[{}].".format(t))
             if t == mnetpacket.SSH_MSG_CHANNEL_OPEN:
                 yield from protocol._handle_open_channel(packet)
+            elif t == mnetpacket.SSH_MSG_CHANNEL_DATA:
+                m = mnetpacket.SshChannelDataMessage(packet)
+                log.debug("Received data, recipient_channel=[{}], value=[\n{}].".format(m.get_recipient_channel(), hex_dump(m.get_data())))
 
     @asyncio.coroutine
     def _handle_open_channel(self, packet):
