@@ -27,10 +27,10 @@ clientKey = None
 # Returns True on success, False on failure.
 @asyncio.coroutine
 def connectTaskCommon(protocol, serverMode):
-    try:
-        r = yield from _connectTaskCommon(protocol, serverMode)
-    except:
-        log.exception("_connectTaskCommon() threw:")
+#    try:
+    r = yield from _connectTaskCommon(protocol, serverMode)
+#    except:
+#        log.exception("_connectTaskCommon() threw:")
 
     return r
 
