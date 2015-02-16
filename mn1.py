@@ -659,32 +659,22 @@ class SshServerProtocol(SshProtocol):
         asyncio.async(self._run())
 
     @asyncio.coroutine
-    def _run(protocol):
-        r = yield from connectTaskCommon(protocol, True)
+    def _run(self):
+        r = yield from connectTaskCommon(self, True)
 
         if not r:
             return r
 
         while True:
-            packet = yield from protocol.read_packet()
+            packet = yield from self.read_packet()
             m = mnetpacket.SshPacket(None, packet)
 
             t = m.getPacketType()
             log.debug("Received packet, type=[{}].".format(t))
             if t == mnetpacket.SSH_MSG_CHANNEL_OPEN:
-                yield from protocol._handle_open_channel(packet)
+                yield from self.channel_handler.open_channel(self, packet)
             elif t == mnetpacket.SSH_MSG_CHANNEL_DATA:
-                m = mnetpacket.SshChannelDataMessage(packet)
-                log.debug("Received data, recipient_channel=[{}], value=[\n{}].".format(m.get_recipient_channel(), hex_dump(m.get_data())))
-
-    @asyncio.coroutine
-    def _handle_open_channel(self, packet):
-        m = mnetpacket.SshChannelOpenMessage(packet)
-        log.info("S: Received CHANNEL_OPEN message: [{}].".format(packet))
-
-        log.info("S: CHANNEL_OPEN channel_type=[{}], sender_channel=[{}].".format(m.get_channel_type(), m.get_sender_channel()))
-
-        yield from self.channel_handler.open_channel(self, m)
+                yield from self.channel_handler.data(self, packet)
 
     def data_received(self, data):
         super().data_received(data)
@@ -720,18 +710,24 @@ class SshClientProtocol(SshProtocol):
 
 class ChannelHandler():
     @asyncio.coroutine
-    def open_channel(self, protocol, msg):
-        log.info("OPENING CHANNEL [{}].".format(msg.get_channel_type()))
+    def open_channel(self, protocol, packet):
+        m = mnetpacket.SshChannelOpenMessage(packet)
+        log.info("S: Received CHANNEL_OPEN: channel_type=[{}], sender_channel=[{}].".format(m.get_channel_type(), m.get_sender_channel()))
 
-        m = mnetpacket.SshChannelOpenConfirmationMessage()
-        m.set_recipient_channel(msg.get_sender_channel())
-        m.set_sender_channel(0)
-        m.set_initial_window_size(65535)
-        m.set_maximum_packet_size(65535)
+        cm = mnetpacket.SshChannelOpenConfirmationMessage()
+        cm.set_recipient_channel(m.get_sender_channel())
+        cm.set_sender_channel(0)
+        cm.set_initial_window_size(65535)
+        cm.set_maximum_packet_size(65535)
 
-        m.encode()
+        cm.encode()
 
-        protocol.write_packet(m)
+        protocol.write_packet(cm)
+
+    @asyncio.coroutine
+    def data(self, protocol, packet):
+        m = mnetpacket.SshChannelDataMessage(packet)
+        log.debug("Received data, recipient_channel=[{}], value=[\n{}].".format(m.get_recipient_channel(), hex_dump(m.get_data())))
 
 def main():
     global log, serverKey, clientKey
