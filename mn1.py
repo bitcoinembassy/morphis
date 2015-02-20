@@ -417,11 +417,11 @@ class SshProtocol(asyncio.Protocol):
 
     def error_received(self, exc):
         log.info("X: Error received: {}".format(exc))
-        self.connection_handler.error_received(exc)
+        self.connection_handler.error_received(self, exc)
 
     def connection_lost(self, exc):
         log.info("X: Connection lost to [{}], client=[{}].".format(self.peerName, self.client))
-        self.connection_handler.connection_lost(exc)
+        self.connection_handler.connection_lost(self, exc)
 
     def _data_received(self, data):
         log.debug("data_received(..): start.")

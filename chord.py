@@ -44,4 +44,9 @@ class ChordEngine():
 
     def connection_made(self, peer):
         self.pending_connections.remove(peer)
-        self.peers[peer.get_protocol_handler().get_transport().get_extra_info("peername")] = peer
+        addr = peer.get_protocol_handler().get_transport().get_extra_info("peername")
+        self.peers[addr] = peer
+
+    def connection_lost(self, peer, exc):
+        addr = peer.get_protocol_handler().get_transport().get_extra_info("peername")
+        del self.peers[addr]

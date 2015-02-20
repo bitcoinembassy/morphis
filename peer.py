@@ -43,7 +43,7 @@ class ConnectionHandler():
         pass
 
     def connection_lost(self, p, exc):
-        self.peer.engine.connection_lost(peer, exc)
+        self.peer.engine.connection_lost(self.peer, exc)
 
 class ChannelHandler():
     def __init__(self, peer):
