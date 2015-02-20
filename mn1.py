@@ -237,6 +237,9 @@ class SshProtocol(asyncio.Protocol):
     def __init__(self, loop):
         self.loop = loop
 
+        self.channel_handler = None
+        self.connection_handler = None
+
         self.serverMode = None
 
         self.binaryMode = False
@@ -266,6 +269,15 @@ class SshProtocol(asyncio.Protocol):
         self.remoteBanner = None
         self.localKexInitMessage = None
         self.remoteKexInitMessage = None
+
+    def set_connection_handler(self, value):
+        self.connection_handler = value
+
+    def set_channel_handler(self, value):
+        self.channel_handler = value
+
+    def get_transport(self):
+        return self.transport
 
     def get_server_key(self):
         return self.serverKey
@@ -384,6 +396,8 @@ class SshProtocol(asyncio.Protocol):
 
         log.debug("P: Connection made with [{}].".format(peer_name))
 
+        self.connection_handler.connection_made(self)
+
         client = clientObjs.get(peer_name)
         if client == None:
             log.info("P: Initializing new clientObj.")
@@ -400,6 +414,14 @@ class SshProtocol(asyncio.Protocol):
             self._data_received(data)
         except:
             log.exception("_data_received() threw:")
+
+    def error_received(self, exc):
+        log.info("X: Error received: {}".format(exc))
+        self.connection_handler.error_received(exc)
+
+    def connection_lost(self, exc):
+        log.info("X: Connection lost to [{}], client=[{}].".format(self.peerName, self.client))
+        self.connection_handler.connection_lost(exc)
 
     def _data_received(self, data):
         log.debug("data_received(..): start.")
@@ -651,11 +673,10 @@ class SshProtocol(asyncio.Protocol):
                 break;
 
 class SshServerProtocol(SshProtocol):
-    def __init__(self, loop, channel_handler):
+    def __init__(self, loop):
         super().__init__(loop)
 
         self.serverMode = True
-        self.channel_handler = channel_handler
 
     def connection_made(self, transport):
         super().connection_made(transport)
@@ -685,11 +706,11 @@ class SshServerProtocol(SshProtocol):
     def data_received(self, data):
         super().data_received(data)
 
-    def error_recieved(self, exc):
-        log.info("S: Error received: {}".format(exc))
+    def error_received(self, exc):
+        super().error_received(exc)
 
     def connection_lost(self, exc):
-        log.info("S: Connection lost from [{}], client=[{}].".format(self.peerName, self.client))
+        super().connection_lost(exc)
         self.client["connected"] = False
 
 class SshClientProtocol(SshProtocol):
@@ -707,11 +728,11 @@ class SshClientProtocol(SshProtocol):
         log.info("C: Received: [{}].".format(data))
         super().data_received(data)
 
-    def error_recieved(self, exc):
-        log.info("C: Error received: {}".format(exc))
+    def error_received(self, exc):
+        super().error_received(exc)
 
     def connection_lost(self, exc):
-        log.info("C: Connection lost to [{}], client=[{}].".format(self.peerName, self.client))
+        super().connection_lost(exc)
         self.client["connected"] = False
 
 class ChannelHandler():

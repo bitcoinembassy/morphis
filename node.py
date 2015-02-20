@@ -9,6 +9,7 @@ import rsakey
 import mn1
 from mutil import hex_dump
 import chord
+import peer
 
 log = logging.getLogger(__name__)
 

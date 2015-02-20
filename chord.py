@@ -7,6 +7,7 @@ import os
 import packet as mnetpacket
 import rsakey
 import mn1
+import peer
 from mutil import hex_dump
 
 log = logging.getLogger(__name__)
@@ -17,7 +18,9 @@ class ChordEngine():
 
         self.server = None
         self.server_protocol = None
-        self.ch = ChannelHandler()
+
+        self.pending_connections = []
+        self.peers = {} # {(host, port): Peer}.
 
     def start(self):
         host, port = "127.0.0.1", 5555
@@ -29,29 +32,16 @@ class ChordEngine():
         self.server.close()
 
     def _create_server_protocol(self):
-        p = mn1.SshServerProtocol(self.node.get_loop(), self.ch)
-        p.set_server_key(self.node.get_node_key())
-        return p
+        ph = mn1.SshServerProtocol(self.node.get_loop())
+        ph.set_server_key(self.node.get_node_key())
 
-class ChannelHandler():
-    @asyncio.coroutine
-    def open_channel(self, protocol, packet):
-        m = mnetpacket.SshChannelOpenMessage(packet)
-        log.info("S: Received CHANNEL_OPEN: channel_type=[{}], sender_channel=[{}].".format(m.get_channel_type(), m.get_sender_channel()))
+        p = peer.Peer(self)
+        p.set_protocol_handler(ph)
 
-        cm = mnetpacket.SshChannelOpenConfirmationMessage()
-        cm.set_recipient_channel(m.get_sender_channel())
-        cm.set_sender_channel(0)
-        cm.set_initial_window_size(65535)
-        cm.set_maximum_packet_size(65535)
+        self.pending_connections.append(p)
 
-        cm.encode()
+        return ph
 
-        protocol.write_packet(cm)
-
-    @asyncio.coroutine
-    def data(self, protocol, packet):
-        m = mnetpacket.SshChannelDataMessage(packet)
-        log.debug("Received data, recipient_channel=[{}], value=[\n{}].".format(m.get_recipient_channel(), hex_dump(m.get_data())))
-
-
+    def connection_made(self, peer):
+        self.pending_connections.remove(peer)
+        self.peers[peer.get_protocol_handler().get_transport().get_extra_info("peername")] = peer
