@@ -270,8 +270,14 @@ class SshProtocol(asyncio.Protocol):
     def get_server_key(self):
         return self.serverKey
 
+    def set_server_key(self, value):
+        self.serverKey = value
+
     def get_client_key(self):
         return self.clientKey
+
+    def set_client_key(self, value):
+        self.clientKey = value
 
     def get_session_id(self):
         return self.sessionId
