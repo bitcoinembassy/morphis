@@ -14,9 +14,12 @@ import random
 log = logging.getLogger(__name__)
 
 class ChordEngine():
-    def __init__(self, node):
+    def __init__(self, node, bind_address):
         self.node = node
 
+        self.bind_address = bind_address
+
+        self.running = False
         self.server = None
         self.server_protocol = None
 
@@ -27,8 +30,19 @@ class ChordEngine():
         self.pending_connections = []
         self.peers = {} # {(host, port): Peer}.
 
+    def add_peer(self, host, port):
+        # FIXME: Check if allready in list.
+        meta = {"connected": False}
+        self.peer_list.append((host, port, meta))
+        self.unconnected_peer_cnt += 1
+
+        if self.running:
+            self._process_connection_count()
+
     def start(self):
-        host, port = "127.0.0.1", 5555
+        self.running = True
+
+        host, port = self.bind_address.split(':')
         self.server = self.node.get_loop().create_server(self._create_server_protocol, host, port)
         self.node.get_loop().run_until_complete(self.server)
         log.info("Node listening on [{}:{}].".format(host, port))

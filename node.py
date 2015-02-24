@@ -3,6 +3,7 @@ import llog
 import asyncio
 import logging
 import os
+import argparse
 
 import packet as mnetpacket
 import rsakey
@@ -18,8 +19,8 @@ class Node():
         self.loop = loop
         self.node_key = None
         self.chord_engine = None
-
-        self._load_key()
+        self.instance = None
+        self.bind_address = "127.0.0.1:5555"
 
     def get_loop(self):
         return self.loop
@@ -27,15 +28,25 @@ class Node():
     def get_node_key(self):
         return self.node_key
 
+    def set_bind_address(self, value):
+        self.bind_address = value
+
     def start(self):
-        self.chord_engine = chord.ChordEngine(self)
+        if not self.node_key:
+            self._load_key()
+
+        self.chord_engine = chord.ChordEngine(self, self.bind_address)
         self.chord_engine.start()
 
     def stop(self):
         self.chord_engine.stop()
 
     def _load_key(self):
-        key_filename = "node_key-rsa.mnk"
+        if self.instance:
+            key_filename = "node_key-rsa-{}.mnk".format(self.instance)
+        else:
+            key_filename = "node_key-rsa.mnk"
+
         if os.path.exists(key_filename):
             log.info("Node private key file found, loading.")
             self.node_key = rsakey.RsaKey(filename=key_filename)
@@ -48,10 +59,30 @@ def main():
     print("Launching node.")
     log.info("Launching node.")
 
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--nn", help="Node instance number.")
+    parser.add_argument("--addnode", help="Add a node to peer list.")
+    parser.add_argument("--bind", help="Specify bind address (host:port).")
+    args = parser.parse_args()
+
+    addnode = args.addnode
+    instance = args.nn
+    bindaddr = args.bind
+
     loop = asyncio.get_event_loop()
 
     node = Node(loop)
+    if instance:
+        node.instance = instance
+    if bindaddr:
+        bindaddr.split(':') # Just to preemptively test.
+        node.set_bind_address(bindaddr)
+
     node.start()
+
+    if addnode != None:
+        host, port = addnode.split(':')
+        node.chord_engine.add_peer(host, port)
 
     try:
         loop.run_forever()
