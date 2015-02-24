@@ -61,7 +61,7 @@ def main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--nn", help="Node instance number.")
-    parser.add_argument("--addnode", help="Add a node to peer list.")
+    parser.add_argument("--addnode", help="Add a node to peer list.", action="append")
     parser.add_argument("--bind", help="Specify bind address (host:port).")
     args = parser.parse_args()
 
@@ -81,8 +81,9 @@ def main():
     node.start()
 
     if addnode != None:
-        host, port = addnode.split(':')
-        node.chord_engine.add_peer(host, port)
+        for addnodei in addnode:
+            host, port = addnodei.split(':')
+            node.chord_engine.add_peer(host, port)
 
     try:
         loop.run_forever()
