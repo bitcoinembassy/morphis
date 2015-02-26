@@ -15,6 +15,7 @@ import rsakey
 import sshtype
 from sshexception import *
 from mutil import hex_dump
+import peer
 
 clientPipes = {} # task, [reader, writer]
 clientObjs = {} # remoteAddress, dict
@@ -237,6 +238,9 @@ class SshProtocol(asyncio.Protocol):
     def __init__(self, loop):
         self.loop = loop
 
+        self.channel_handler = None
+        self.connection_handler = None
+
         self.serverMode = None
 
         self.binaryMode = False
@@ -267,11 +271,26 @@ class SshProtocol(asyncio.Protocol):
         self.localKexInitMessage = None
         self.remoteKexInitMessage = None
 
+    def set_connection_handler(self, value):
+        self.connection_handler = value
+
+    def set_channel_handler(self, value):
+        self.channel_handler = value
+
+    def get_transport(self):
+        return self.transport
+
     def get_server_key(self):
         return self.serverKey
 
+    def set_server_key(self, value):
+        self.serverKey = value
+
     def get_client_key(self):
         return self.clientKey
+
+    def set_client_key(self, value):
+        self.clientKey = value
 
     def get_session_id(self):
         return self.sessionId
@@ -378,6 +397,8 @@ class SshProtocol(asyncio.Protocol):
 
         log.debug("P: Connection made with [{}].".format(peer_name))
 
+        self.connection_handler.connection_made(self)
+
         client = clientObjs.get(peer_name)
         if client == None:
             log.info("P: Initializing new clientObj.")
@@ -394,6 +415,14 @@ class SshProtocol(asyncio.Protocol):
             self._data_received(data)
         except:
             log.exception("_data_received() threw:")
+
+    def error_received(self, exc):
+        log.info("X: Error received: {}".format(exc))
+        self.connection_handler.error_received(self, exc)
+
+    def connection_lost(self, exc):
+        log.info("X: Connection lost to [{}], client=[{}].".format(self.peerName, self.client))
+        self.connection_handler.connection_lost(self, exc)
 
     def _data_received(self, data):
         log.debug("data_received(..): start.")
@@ -645,11 +674,10 @@ class SshProtocol(asyncio.Protocol):
                 break;
 
 class SshServerProtocol(SshProtocol):
-    def __init__(self, loop, channel_handler):
+    def __init__(self, loop):
         super().__init__(loop)
 
         self.serverMode = True
-        self.channel_handler = channel_handler
 
     def connection_made(self, transport):
         super().connection_made(transport)
@@ -679,11 +707,11 @@ class SshServerProtocol(SshProtocol):
     def data_received(self, data):
         super().data_received(data)
 
-    def error_recieved(self, exc):
-        log.info("S: Error received: {}".format(exc))
+    def error_received(self, exc):
+        super().error_received(exc)
 
     def connection_lost(self, exc):
-        log.info("S: Connection lost from [{}], client=[{}].".format(self.peerName, self.client))
+        super().connection_lost(exc)
         self.client["connected"] = False
 
 class SshClientProtocol(SshProtocol):
@@ -701,11 +729,11 @@ class SshClientProtocol(SshProtocol):
         log.info("C: Received: [{}].".format(data))
         super().data_received(data)
 
-    def error_recieved(self, exc):
-        log.info("C: Error received: {}".format(exc))
+    def error_received(self, exc):
+        super().error_received(exc)
 
     def connection_lost(self, exc):
-        log.info("C: Connection lost to [{}], client=[{}].".format(self.peerName, self.client))
+        super().connection_lost(exc)
         self.client["connected"] = False
 
 class ChannelHandler():
@@ -749,7 +777,9 @@ def main():
     chandler = ChannelHandler()
 
 #    f = asyncio.start_server(accept_client, host=None, port=5555)
-    server = loop.create_server(lambda: SshServerProtocol(loop, chandler), "127.0.0.1", 5555)
+#    server = loop.create_server(lambda: SshServerProtocol(loop, chandler), "127.0.0.1", 5555)
+    host, port = "127.0.0.1", 5555
+    server = loop.create_server(lambda: _create_server_protocol(loop), host, port)
     loop.run_until_complete(server)
 
     log.info("Starting test client.")
@@ -763,7 +793,7 @@ def main():
         clientKey = rsakey.RsaKey.generate(bits=4096)
         clientKey.write_private_key_file(key_filename)
 
-    client = loop.create_connection(lambda: SshClientProtocol(loop), "127.0.0.1", 5555)
+    client = loop.create_connection(lambda: _create_client_protocol(loop), "127.0.0.1", 5555)
     loop.run_until_complete(client)
 
     try:
@@ -774,6 +804,31 @@ def main():
     client.close()
     server.close()
     loop.close()
+
+def _create_server_protocol(loop):
+    ph = SshServerProtocol(loop)
+    ph.set_server_key(serverKey)
+
+    p = peer.Peer(TestEngine())
+    p.set_protocol_handler(ph)
+
+    return ph
+
+def _create_client_protocol(loop):
+    ph = SshClientProtocol(loop)
+    ph.set_client_key(clientKey)
+
+    p = peer.Peer(TestEngine())
+    p.set_protocol_handler(ph)
+
+    return ph
+
+class TestEngine():
+    def connection_made(self, peer):
+        pass
+
+    def connection_lost(self, peer, exc):
+        pass
 
 if __name__ == "__main__":
     main()
