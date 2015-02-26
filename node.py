@@ -11,6 +11,7 @@ import mn1
 from mutil import hex_dump
 import chord
 import peer
+import db
 
 log = logging.getLogger(__name__)
 
@@ -20,13 +21,21 @@ class Node():
         self.node_key = None
         self.chord_engine = None
         self.instance = None
+        self.instance_postfix = ""
         self.bind_address = None
+        self.db = None
 
     def get_loop(self):
         return self.loop
 
     def get_node_key(self):
         return self.node_key
+
+    def set_instance(self, value):
+        if value or self.instance:
+            self.instance_postfix = "-{}".format(value)
+
+        self.instance = value
 
     def set_bind_address(self, value):
         self.bind_address = value
@@ -35,6 +44,9 @@ class Node():
         if not self.node_key:
             self._load_key()
 
+        if not self.db:
+            self.db = db.Db("sqlite:///morphis{}.sqlite".format(self.instance_postfix))
+
         self.chord_engine = chord.ChordEngine(self, self.bind_address)
         self.chord_engine.start()
 
@@ -42,10 +54,7 @@ class Node():
         self.chord_engine.stop()
 
     def _load_key(self):
-        if self.instance:
-            key_filename = "node_key-rsa-{}.mnk".format(self.instance)
-        else:
-            key_filename = "node_key-rsa.mnk"
+        key_filename = "node_key-rsa{}.mnk".format(self.instance_postfix)
 
         if os.path.exists(key_filename):
             log.info("Node private key file found, loading.")
@@ -86,7 +95,7 @@ def main():
         nodes.append(node)
 
         if instance:
-            node.instance = instance
+            node.set_instance(instance)
         if bindaddr:
             bindaddr.split(':') # Just to preemptively test.
             node.set_bind_address(bindaddr)
