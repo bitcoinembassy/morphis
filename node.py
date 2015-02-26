@@ -20,7 +20,7 @@ class Node():
         self.node_key = None
         self.chord_engine = None
         self.instance = None
-        self.bind_address = "127.0.0.1:5555"
+        self.bind_address = None
 
     def get_loop(self):
         return self.loop
@@ -63,27 +63,49 @@ def main():
     parser.add_argument("--nn", help="Node instance number.")
     parser.add_argument("--addnode", help="Add a node to peer list.", action="append")
     parser.add_argument("--bind", help="Specify bind address (host:port).")
+    parser.add_argument("--nodecount", type=int, help="Specify amount of nodes to start.")
     args = parser.parse_args()
 
     addnode = args.addnode
     instance = args.nn
+    if instance == None:
+        instance = 0
     bindaddr = args.bind
+    if bindaddr == None:
+        bindaddr = "127.0.0.1:5555"
+    nodecount = args.nodecount
+    if nodecount == None:
+        nodecount = 1
 
     loop = asyncio.get_event_loop()
 
-    node = Node(loop)
-    if instance:
-        node.instance = instance
-    if bindaddr:
-        bindaddr.split(':') # Just to preemptively test.
-        node.set_bind_address(bindaddr)
+    nodes = []
 
-    node.start()
+    while True:
+        node = Node(loop)
+        nodes.append(node)
 
-    if addnode != None:
-        for addnodei in addnode:
-            host, port = addnodei.split(':')
-            node.chord_engine.add_peer(host, port)
+        if instance:
+            node.instance = instance
+        if bindaddr:
+            bindaddr.split(':') # Just to preemptively test.
+            node.set_bind_address(bindaddr)
+
+        node.start()
+
+        if addnode != None:
+            for addnodei in addnode:
+                host, port = addnodei.split(':')
+                node.chord_engine.add_peer(host, port)
+
+        nodecount -= 1
+        if not nodecount:
+            break;
+
+        instance += 1
+        host, port = bindaddr.split(':')
+        port = int(port) + 1
+        bindaddr = "{}:{}".format(host, port)
 
     try:
         loop.run_forever()
@@ -92,7 +114,8 @@ def main():
     except:
         log.exception("loop.run_forever() threw:")
 
-    node.stop()
+    for node in nodes:
+        node.stop()
     loop.close()
 
     log.info("Shutdown.")
