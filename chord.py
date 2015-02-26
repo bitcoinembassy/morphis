@@ -44,7 +44,9 @@ class ChordEngine():
 
         host, port = self.bind_address.split(':')
         self.server = self.node.get_loop().create_server(self._create_server_protocol, host, port)
-        self.node.get_loop().run_until_complete(self.server)
+#        self.node.get_loop().run_until_complete(self.server)
+        asyncio.async(self.server, loop=self.node.get_loop())
+
         log.info("Node listening on [{}:{}].".format(host, port))
 
         self._process_connection_count()
@@ -76,7 +78,8 @@ class ChordEngine():
         loop = self.node.get_loop()
         client = loop.create_connection(self._create_client_protocol, server[0], server[1])
 
-        loop.run_until_complete(client)
+#        loop.run_until_complete(client)
+        asyncio.async(client, loop=loop)
 
         self.unconnected_peer_cnt -= 1
 

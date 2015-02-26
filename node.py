@@ -65,6 +65,25 @@ class Node():
             self.node_key.write_private_key_file(key_filename)
 
 def main():
+    loop = asyncio.get_event_loop()
+
+    loop.run_until_complete(_main(loop))
+
+    try:
+        loop.run_forever()
+    except KeyboardInterrupt:
+        log.info("Got KeyboardInterrupt; shutting down.")
+    except:
+        log.exception("loop.run_forever() threw:")
+
+    for node in nodes:
+        node.stop()
+    loop.close()
+
+    log.info("Shutdown.")
+
+@asyncio.coroutine
+def _main(loop):
     print("Launching node.")
     log.info("Launching node.")
 
@@ -85,8 +104,6 @@ def main():
     nodecount = args.nodecount
     if nodecount == None:
         nodecount = 1
-
-    loop = asyncio.get_event_loop()
 
     nodes = []
 
@@ -115,19 +132,6 @@ def main():
         host, port = bindaddr.split(':')
         port = int(port) + 1
         bindaddr = "{}:{}".format(host, port)
-
-    try:
-        loop.run_forever()
-    except KeyboardInterrupt:
-        log.info("Got KeyboardInterrupt; shutting down.")
-    except:
-        log.exception("loop.run_forever() threw:")
-
-    for node in nodes:
-        node.stop()
-    loop.close()
-
-    log.info("Shutdown.")
 
 if __name__ == "__main__":
     main()
