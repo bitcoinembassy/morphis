@@ -15,6 +15,7 @@ import rsakey
 import sshtype
 from sshexception import *
 from mutil import hex_dump
+import peer
 
 clientPipes = {} # task, [reader, writer]
 clientObjs = {} # remoteAddress, dict
@@ -776,7 +777,9 @@ def main():
     chandler = ChannelHandler()
 
 #    f = asyncio.start_server(accept_client, host=None, port=5555)
-    server = loop.create_server(lambda: SshServerProtocol(loop, chandler), "127.0.0.1", 5555)
+#    server = loop.create_server(lambda: SshServerProtocol(loop, chandler), "127.0.0.1", 5555)
+    host, port = "127.0.0.1", 5555
+    server = loop.create_server(lambda: _create_server_protocol(loop), host, port)
     loop.run_until_complete(server)
 
     log.info("Starting test client.")
@@ -790,7 +793,7 @@ def main():
         clientKey = rsakey.RsaKey.generate(bits=4096)
         clientKey.write_private_key_file(key_filename)
 
-    client = loop.create_connection(lambda: SshClientProtocol(loop), "127.0.0.1", 5555)
+    client = loop.create_connection(lambda: _create_client_protocol(loop), "127.0.0.1", 5555)
     loop.run_until_complete(client)
 
     try:
@@ -801,6 +804,31 @@ def main():
     client.close()
     server.close()
     loop.close()
+
+def _create_server_protocol(loop):
+    ph = SshServerProtocol(loop)
+    ph.set_server_key(serverKey)
+
+    p = peer.Peer(TestEngine())
+    p.set_protocol_handler(ph)
+
+    return ph
+
+def _create_client_protocol(loop):
+    ph = SshClientProtocol(loop)
+    ph.set_client_key(clientKey)
+
+    p = peer.Peer(TestEngine())
+    p.set_protocol_handler(ph)
+
+    return ph
+
+class TestEngine():
+    def connection_made(self, peer):
+        pass
+
+    def connection_lost(self, peer, exc):
+        pass
 
 if __name__ == "__main__":
     main()
