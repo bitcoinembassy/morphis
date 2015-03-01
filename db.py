@@ -9,7 +9,7 @@ class Peer(Base):
     __tablename__ = "Peer"
     
     id = Column(Integer, primary_key=True)
-    name = Column(String(25), nullable=False)
+    name = Column(String(48), nullable=True)
 
     nodeid = Column(BINARY, nullable=True)
     pubkey = Column(BINARY, nullable=True)
