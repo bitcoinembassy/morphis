@@ -5,6 +5,8 @@ import logging
 import os
 import random
 
+from sqlalchemy import func
+
 import packet as mnetpacket
 import rsakey
 import mn1
@@ -36,7 +38,7 @@ class ChordEngine():
 
         sess = self.node.db.open_session()
 
-        if sess.query(Peer).filter(Peer.address == addr).count() > 0:
+        if sess.query(func.count("*")).filter(Peer.address == addr).scalar() > 0:
             log.info("Peer [{}] already in list.".format(addr))
             return
 
