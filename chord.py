@@ -3,13 +3,14 @@ import llog
 import asyncio
 import logging
 import os
+import random
 
 import packet as mnetpacket
 import rsakey
 import mn1
 import peer
+from db import Peer
 from mutil import hex_dump
-import random
 
 log = logging.getLogger(__name__)
 
@@ -30,11 +31,17 @@ class ChordEngine():
         self.pending_connections = []
         self.peers = {} # {(host, port): Peer}.
 
-    def add_peer(self, host, port):
-        # FIXME: Check if allready in list.
-        meta = {"connected": False}
-        self.peer_list.append((host, port, meta))
-        self.unconnected_peer_cnt += 1
+    def add_peer(self, addr):
+        peer = Peer(address=addr)
+
+        sess = self.node.db.open_session()
+
+        if sess.query(Peer).filter(Peer.address == addr).count() > 0:
+            log.info("Peer [{}] already in list.".format(addr))
+            return
+
+        sess.add(peer)
+        sess.commit()
 
         if self.running:
             self._process_connection_count()

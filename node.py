@@ -28,6 +28,9 @@ class Node():
     def get_loop(self):
         return self.loop
 
+    def get_db(self):
+        return self.db
+
     def get_node_key(self):
         return self.node_key
 
@@ -89,12 +92,12 @@ def _main(loop):
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--nn", help="Node instance number.")
-    parser.add_argument("--addnode", help="Add a node to peer list.", action="append")
+    parser.add_argument("--addpeer", help="Add a node to peer list.", action="append")
     parser.add_argument("--bind", help="Specify bind address (host:port).")
     parser.add_argument("--nodecount", type=int, help="Specify amount of nodes to start.")
     args = parser.parse_args()
 
-    addnode = args.addnode
+    addpeer = args.addpeer
     instance = args.nn
     if instance == None:
         instance = 0
@@ -119,10 +122,9 @@ def _main(loop):
 
         node.start()
 
-        if addnode != None:
-            for addnodei in addnode:
-                host, port = addnodei.split(':')
-                node.chord_engine.add_peer(host, port)
+        if addpeer != None and len(nodes) == 1:
+            for addpeer in addpeer:
+                node.chord_engine.add_peer(addpeer)
 
         nodecount -= 1
         if not nodecount:
