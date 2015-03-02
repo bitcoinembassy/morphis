@@ -1,3 +1,5 @@
+from contextlib import contextmanager
+
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import create_engine
 from sqlalchemy import Column, ForeignKey, Integer, String
@@ -34,8 +36,16 @@ class Db():
     def get_engine(self):
         return self.engine
 
+    @contextmanager
     def open_session(self):
-        return self.Session()
+        session = self.Session()
+        try:
+            yield session
+        except:
+            session.rollback()
+            raise
+        finally:
+            session.close()
 
     def _init_db(self):
         self.engine = create_engine(self.url, echo=False)

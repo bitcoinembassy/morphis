@@ -54,9 +54,9 @@ class Node():
         if not self.db:
             self.db = db.Db("sqlite:///morphis{}.sqlite".format(self.instance_postfix))
 
-        sess = self.db.open_session()
-        sess.execute(update(db.Peer, bind=self.db.engine).values(connected=False))
-        sess.commit()
+        with self.db.open_session() as sess:
+            sess.execute(update(db.Peer, bind=self.db.engine).values(connected=False))
+            sess.commit()
 
         self.chord_engine = chord.ChordEngine(self, self.bind_address)
         self.chord_engine.start()

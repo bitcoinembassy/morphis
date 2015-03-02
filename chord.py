@@ -40,14 +40,13 @@ class ChordEngine():
     def add_peer(self, addr):
         peer = Peer(address=addr, connected=False)
 
-        sess = self.node.db.open_session()
+        with self.node.db.open_session() as sess:
+            if sess.query(func.count("*")).filter(Peer.address == addr).scalar() > 0:
+                log.info("Peer [{}] already in list.".format(addr))
+                return
 
-        if sess.query(func.count("*")).filter(Peer.address == addr).scalar() > 0:
-            log.info("Peer [{}] already in list.".format(addr))
-            return
-
-        sess.add(peer)
-        sess.commit()
+            sess.add(peer)
+            sess.commit()
 
         if self.running:
             self._process_connection_count()
@@ -74,8 +73,10 @@ class ChordEngine():
 
         needed = self.maximum_connections - cnt
 
-        sess = self.node.db.open_session()
+        with self.node.db.open_session() as sess:
+            self.__process_connection_count(sess, needed)
 
+    def __process_connection_count(self, sess, needed):
         np = sess.query(Peer)\
             .filter(Peer.node_id == None, Peer.connected == False)\
             .limit(needed)
@@ -128,7 +129,7 @@ class ChordEngine():
 
         loop = self.node.get_loop()
         client = loop.create_connection(\
-            partial(self._create_client_protocol, peer),\
+            partial(self._create_client_protocol, peer.id),\
             host, port)
 
         asyncio.async(client, loop=loop)
@@ -148,12 +149,12 @@ class ChordEngine():
 
         return ph
 
-    def _create_client_protocol(self, dbpeer):
+    def _create_client_protocol(self, dbid):
         ph = mn1.SshClientProtocol(self.node.get_loop())
         ph.set_client_key(self.node.get_node_key())
 
         p = peer.Peer(self)
-        p.dbid = dbpeer.id
+        p.dbid = dbid
         p.set_protocol_handler(ph)
 
         self.pending_connections.append(p)
