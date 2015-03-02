@@ -181,9 +181,7 @@ class ChordEngine():
     def client_authenticated(self, peer):
         with self.node.db.open_session() as sess:
             dbpeer = sess.query(Peer).filter(Peer.node_id == peer.node_id).first()
-            if dbpeer:
-                peer.dbid = dbpeer.id
-            else:
+            if not dbpeer:
                 dbpeer = Peer()
                 sess.add(dbpeer)
 
@@ -198,3 +196,5 @@ class ChordEngine():
             dbpeer.connected = True
 
             sess.commit()
+
+            peer.dbid = dbpeer.id
