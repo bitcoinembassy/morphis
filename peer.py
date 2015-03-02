@@ -17,6 +17,8 @@ class Peer():
     def __init__(self, engine):
         self.engine = engine
 
+        self.dbid = None
+
         self.protocol_handler = None
 
         self.node_key = None

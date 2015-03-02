@@ -5,6 +5,8 @@ import logging
 import os
 import argparse
 
+from sqlalchemy import update
+
 import packet as mnetpacket
 import rsakey
 import mn1
@@ -14,6 +16,8 @@ import peer
 import db
 
 log = logging.getLogger(__name__)
+
+loop = None
 
 class Node():
     def __init__(self, loop):
@@ -50,6 +54,10 @@ class Node():
         if not self.db:
             self.db = db.Db("sqlite:///morphis{}.sqlite".format(self.instance_postfix))
 
+        sess = self.db.open_session()
+        sess.execute(update(db.Peer, bind=self.db.engine).values(connected=False))
+        sess.commit()
+
         self.chord_engine = chord.ChordEngine(self, self.bind_address)
         self.chord_engine.start()
 
@@ -68,9 +76,12 @@ class Node():
             self.node_key.write_private_key_file(key_filename)
 
 def main():
+    global loop
+
     loop = asyncio.get_event_loop()
 
-    loop.run_until_complete(_main(loop))
+    #loop.run_until_complete(_main(loop))
+    asyncio.async(_main(), loop=loop)
 
     try:
         loop.run_forever()
@@ -86,7 +97,9 @@ def main():
     log.info("Shutdown.")
 
 @asyncio.coroutine
-def _main(loop):
+def _main():
+    global loop
+
     print("Launching node.")
     log.info("Launching node.")
 

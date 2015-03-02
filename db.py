@@ -2,7 +2,7 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import create_engine
 from sqlalchemy import Column, ForeignKey, Integer, String
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.types import BINARY
+from sqlalchemy.types import BINARY, Boolean
 
 Base = declarative_base()
 
@@ -12,15 +12,22 @@ class Peer(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String(48), nullable=True)
 
-    nodeid = Column(BINARY, nullable=True)
+    node_id = Column(BINARY, nullable=True)
     pubkey = Column(BINARY, nullable=True)
+
+    distance = Column(Integer, nullable=True)
+    direction = Column(Integer, nullable=True)
     
     address = Column(String, nullable=True)
+
+    connected = Column(Boolean, nullable=False)
 
 class Db():
     def __init__(self, url):
         self.url = url
         self.Session = None
+
+        self.engine = None
 
         self._init_db()
 
