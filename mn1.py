@@ -181,6 +181,9 @@ def _connectTaskCommon(protocol, serverMode):
         if not r:
             raise SshException("Signature and key provided by client did not match.")
 
+        protocol.clientKey = client_key
+        protocol.connection_handler.client_authenticated(protocol)
+
         mr = mnetpacket.SshUserauthSuccessMessage()
         mr.encode()
 
@@ -226,6 +229,9 @@ def _connectTaskCommon(protocol, serverMode):
 
     log.debug("Connect task done (server={}).".format(serverMode))
 
+    if not serverMode:
+        protocol.transport.close()
+
     return True
 
 @asyncio.coroutine
@@ -237,6 +243,8 @@ def clientConnectTask(protocol):
 class SshProtocol(asyncio.Protocol):
     def __init__(self, loop):
         self.loop = loop
+
+        self.address = None
 
         self.channel_handler = None
         self.connection_handler = None
@@ -393,7 +401,7 @@ class SshProtocol(asyncio.Protocol):
 
     def connection_made(self, transport):
         self.transport = transport
-        self.peerName = peer_name = transport.get_extra_info("peername")
+        self.address = peer_name = transport.get_extra_info("peername")
 
         log.debug("P: Connection made with [{}].".format(peer_name))
 
@@ -421,7 +429,7 @@ class SshProtocol(asyncio.Protocol):
         self.connection_handler.error_received(self, exc)
 
     def connection_lost(self, exc):
-        log.info("X: Connection lost to [{}], client=[{}].".format(self.peerName, self.client))
+        log.info("X: Connection lost to [{}], client=[{}].".format(self.address, self.client))
         self.connection_handler.connection_lost(self, exc)
 
     def _data_received(self, data):
@@ -682,7 +690,7 @@ class SshServerProtocol(SshProtocol):
     def connection_made(self, transport):
         super().connection_made(transport)
 
-        log.info("S: Connection made from [{}].".format(self.peerName))
+        log.info("S: Connection made from [{}].".format(self.address))
 
         asyncio.async(self._run())
 
@@ -722,7 +730,7 @@ class SshClientProtocol(SshProtocol):
 
     def connection_made(self, transport):
         super().connection_made(transport)
-        log.info("C: Connection made to [{}].".format(self.peerName))
+        log.info("C: Connection made to [{}].".format(self.address))
         asyncio.async(clientConnectTask(self))
 
     def data_received(self, data):

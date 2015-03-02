@@ -169,3 +169,32 @@ class ChordEngine():
     def connection_lost(self, peer, exc):
         addr = peer.get_protocol_handler().get_transport().get_extra_info("peername")
         del self.peers[addr]
+
+        if not peer.dbid:
+            return
+
+        with self.node.db.open_session() as sess:
+            dbpeer = sess.query(Peer).get(peer.dbid)
+            dbpeer.connected = False
+            sess.commit()
+
+    def client_authenticated(self, peer):
+        with self.node.db.open_session() as sess:
+            dbpeer = sess.query(Peer).filter(Peer.node_id == peer.node_id).first()
+            if dbpeer:
+                peer.dbid = dbpeer.id
+            else:
+                dbpeer = Peer()
+                sess.add(dbpeer)
+
+                dbpeer.node_id = peer.node_id
+                dbpeer.pubkey = peer.node_key.asbytes()
+                pid = int.from_bytes(peer.node_id, "big")
+                nid = int.from_bytes(self.node_id, "big")
+                dbpeer.direction = 1 if pid >= nid else -1
+                dbpeer.distance = pid - nid if dbpeer.direction == 1 else nid - pid
+
+            dbpeer.address = "{}:{}".format(peer.protocol_handler.address[0], peer.protocol_handler.address[1])
+            dbpeer.connected = True
+
+            sess.commit()

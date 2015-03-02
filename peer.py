@@ -10,6 +10,7 @@ import mn1
 from mutil import hex_dump
 import chord
 import peer
+import enc
 
 log = logging.getLogger(__name__)
 
@@ -22,6 +23,7 @@ class Peer():
         self.protocol_handler = None
 
         self.node_key = None
+        self.node_id = None
         self.channel_handler = ChannelHandler(self)
         self.connection_handler = ConnectionHandler(self)
 
@@ -33,6 +35,10 @@ class Peer():
 
         self.protocol_handler.set_channel_handler(self.channel_handler)
         self.protocol_handler.set_connection_handler(self.connection_handler)
+
+    def _client_authenticated(self):
+        self.node_key = self.protocol_handler.clientKey
+        self.node_id = enc.generate_ID(self.node_key.asbytes())
 
 class ConnectionHandler():
     def __init__(self, peer):
@@ -46,6 +52,10 @@ class ConnectionHandler():
 
     def connection_lost(self, p, exc):
         self.peer.engine.connection_lost(self.peer, exc)
+
+    def client_authenticated(self, p):
+        self.peer._client_authenticated()
+        self.peer.engine.client_authenticated(self.peer)
 
 class ChannelHandler():
     def __init__(self, peer):
