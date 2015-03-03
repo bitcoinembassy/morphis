@@ -1,0 +1,5 @@
+morphis transport ddos protection:
+
+- consider morphis/ssh protocol disconnect message as authentic. consider tcp disconnect as ddos and simply reconnect. (issue with one host firewalled, thus only connecting host can reconnect). have some sanity to prevent loop.
+- add feature to morphis-ssh to be able to resume an ssh session with 0 protocol overhead. Ie: if tcp disconnects, simply tcp connect again and continue as if nothing happened (ssh session never died, keys reused, etc).
+
