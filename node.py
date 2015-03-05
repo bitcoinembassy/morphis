@@ -145,7 +145,7 @@ def __main():
 
         node.start()
 
-        if addpeer != None and len(nodes) == 1:
+        if addpeer != None:
             for addpeer in addpeer:
                 node.chord_engine.add_peer(addpeer)
 
