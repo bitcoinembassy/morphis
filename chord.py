@@ -14,7 +14,7 @@ import mn1
 import peer
 import enc
 from db import Peer
-from mutil import hex_dump
+from mutil import hex_dump, log_base2_8bit
 
 log = logging.getLogger(__name__)
 
@@ -90,17 +90,19 @@ class ChordEngine():
             return
 
         closestdistance = sess.query(func.min_(Peer.distance))\
-            .filter(Peer.distance != None, Peer.connected == False)\
+            .filter(Peer.distance != None)\
+            .filter(Peer.distance != 0)\
+            .filter(Peer.connected == False)\
             .scalar()
 
         if not closestdistance:
             sess.commit()
             return
 
-        distance = 512 - 1
+        distance = 512
 
-        while distance >= 0:
-            bucket_needs = 2 - len(peer_buckets[distance])
+        while distance > 0:
+            bucket_needs = 2 - len(peer_buckets[distance - 1])
             if not bucket_needs:
                 continue
 
@@ -187,10 +189,27 @@ class ChordEngine():
 
                 dbpeer.node_id = peer.node_id
                 dbpeer.pubkey = peer.node_key.asbytes()
-                pid = int.from_bytes(peer.node_id, "big")
-                nid = int.from_bytes(self.node_id, "big")
-                dbpeer.direction = 1 if pid >= nid else -1
-                dbpeer.distance = pid - nid if dbpeer.direction == 1 else nid - pid
+
+                pid = peer.node_id
+                nid = self.node_id
+
+                log.info("{},{}".format(len(pid), len(nid)))
+
+                dist = 0
+                for i in range(64): # 64 bytes in 512 bits.
+                    if pid[i] != nid[i]:
+                        dbpeer.direction = 1 if pid[i] > nid[i] else -1
+
+                        xv = pid[i] ^ nid[i]
+                        xv = log_base2_8bit(xv)
+
+                        dist = 8 * (63 - i) + xv
+
+                        break
+
+                if dist == 0:
+                    dbpeer.direction = 0
+                dbpeer.distance = dist
 
             dbpeer.address = "{}:{}".format(peer.protocol_handler.address[0], peer.protocol_handler.address[1])
             dbpeer.connected = True
@@ -198,3 +217,7 @@ class ChordEngine():
             sess.commit()
 
             peer.dbid = dbpeer.id
+
+            if dbpeer.distance == 0:
+                log.info("Peer is us! (Has the same ID!)")
+                peer.protocol_handler.transport.close()

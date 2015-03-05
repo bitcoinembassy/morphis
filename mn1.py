@@ -229,8 +229,8 @@ def _connectTaskCommon(protocol, serverMode):
 
     log.debug("Connect task done (server={}).".format(serverMode))
 
-    if not serverMode:
-        protocol.transport.close()
+#    if not serverMode:
+#        protocol.transport.close()
 
     return True
 
