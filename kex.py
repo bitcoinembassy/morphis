@@ -44,6 +44,9 @@ class KexGroup14():
 
     @asyncio.coroutine
     def do_kex(self):
+        # This method can return False for client mode if the client,
+        # after successfull authentication, is rejected by its id.
+
         self._generate_x()
         log.debug("x=[{}]".format(self.x))
 
@@ -66,7 +69,7 @@ class KexGroup14():
             m = mnetpacket.SshNewKeysMessage()
             m.encode()
             self.protocol.write_packet(m)
-            return
+            return True
 
         # compute e = g^x mod p (where g=2), and send it
         self.e = pow(self.G, self.x, self.P)
@@ -78,7 +81,12 @@ class KexGroup14():
 #        self.transport._expect_packet(_MSG_KEXDH_REPLY)
         pkt = yield from self.protocol.read_packet()
         m = mnetpacket.SshKexdhReplyMessage(pkt)
-        self._parse_kexdh_reply(m)
+
+        r = self._parse_kexdh_reply(m)
+
+        if not r:
+            # Client is rejected for some reason by higher level.
+            return False
 
         m = mnetpacket.SshNewKeysMessage()
         m.encode()
@@ -87,6 +95,8 @@ class KexGroup14():
 #        pkt = yield from self.protocol.read_packet()
 #        m = mnetpacket.SshNewKeysMessage(pkt)
 #        log.debug("Received SSH_MSG_NEWKEYS.")
+
+        return True
 
     ###  internals...
 
@@ -129,7 +139,8 @@ class KexGroup14():
         self.protocol.set_K_H(K, H)
 
         log.info("Verifying signature...")
-        self.protocol.verify_server_key(host_key, sig)
+        r = self.protocol.verify_server_key(host_key, sig)
+        return r
 #        self.transport._activate_outbound()
 
     def _parse_kexdh_init(self, m):

@@ -55,7 +55,7 @@ class ConnectionHandler():
 
     def client_authenticated(self, protocol):
         self.peer._client_authenticated()
-        self.peer.engine.client_authenticated(self.peer)
+        return self.peer.engine.client_authenticated(self.peer)
 
 class ChannelHandler():
     def __init__(self, peer):

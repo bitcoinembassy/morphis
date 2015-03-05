@@ -26,7 +26,7 @@ class ChordEngine():
         self.bind_address = bind_address
 
         self.running = False
-        self.server = None
+        self.server = None #Task.
         self.server_protocol = None
 
         self.pending_connections = []
@@ -169,6 +169,8 @@ class ChordEngine():
         self.peers[addr] = peer
 
     def connection_lost(self, peer, exc):
+        log.debug("connection_lost(): peer.id=[{}].".format(peer.dbid))
+
         addr = peer.get_protocol_handler().get_transport().get_extra_info("peername")
         del self.peers[addr]
 
@@ -220,4 +222,6 @@ class ChordEngine():
 
             if dbpeer.distance == 0:
                 log.info("Peer is us! (Has the same ID!)")
-                peer.protocol_handler.transport.close()
+                return False
+
+            return True

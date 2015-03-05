@@ -92,7 +92,12 @@ def _connectTaskCommon(protocol, serverMode):
 
     ke = kex.KexGroup14(protocol)
     log.info("Calling start_kex()...")
-    yield from ke.do_kex()
+    r = yield from ke.do_kex()
+
+    if not r:
+        # Client is rejected for some reason by higher level.
+        protocol.close()
+        return
 
     # Setup encryption now that keys are exchanged.
     protocol.init_outbound_encryption()
@@ -182,13 +187,19 @@ def _connectTaskCommon(protocol, serverMode):
             raise SshException("Signature and key provided by client did not match.")
 
         protocol.clientKey = client_key
-        protocol.connection_handler.client_authenticated(protocol)
+
+        r = protocol.connection_handler.client_authenticated(protocol)
+        if not r:
+            # Client is rejected for some reason by higher level.
+            protocol.close()
+            return
 
         mr = mnetpacket.SshUserauthSuccessMessage()
         mr.encode()
 
         protocol.write_packet(mr)
     else:
+        # client mode.
         m = mnetpacket.SshServiceRequestMessage()
         m.set_service_name("ssh-userauth")
         m.encode()
@@ -254,6 +265,8 @@ class SshProtocol(asyncio.Protocol):
         self.binaryMode = False
         self.inboundEnabled = True
 
+        self.closed = False
+
         self.serverKey = serverKey
         self.clientKey = clientKey
         self.k = None
@@ -303,6 +316,10 @@ class SshProtocol(asyncio.Protocol):
     def get_session_id(self):
         return self.sessionId
 
+    def close(self):
+        self.transport.close()
+        self.closed = True
+
     def verify_server_key(self, key_data, sig):
         key = rsakey.RsaKey(key_data)
 
@@ -312,6 +329,10 @@ class SshProtocol(asyncio.Protocol):
         log.info("Signature validated correctly!")
 
         self.serverKey = key
+
+        r = self.connection_handler.client_authenticated(self)
+
+        return r
 
     def set_K_H(self, k, h):
         self.k = k
@@ -480,6 +501,11 @@ class SshProtocol(asyncio.Protocol):
 
     @asyncio.coroutine
     def read_packet(self):
+        if self.closed:
+            errstr = "ProtocolHandler closed, cannot read_packet(..)!"
+            log.debug(errstr)
+            raise SshException(errstr)
+
         if self.packet != None:
             packet = self.packet
             log.info("P: Returning next packet.")
@@ -508,6 +534,10 @@ class SshProtocol(asyncio.Protocol):
         return packet
 
     def write_packet(self, packetObject):
+        if self.closed:
+            log.debug("ProtocolHandler closed, ignoring write_packet(..) call.")
+            return
+
         length = len(packetObject.getBuf())
 
         log.debug("Writing packetType=[{}] with [{}] bytes of data: [\n{}]".format(packetObject.getPacketType(), length, hex_dump(packetObject.getBuf())))
