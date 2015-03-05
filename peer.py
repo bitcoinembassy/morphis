@@ -44,16 +44,16 @@ class ConnectionHandler():
     def __init__(self, peer):
         self.peer = peer
 
-    def connection_made(self, p):
+    def connection_made(self, protocol):
         self.peer.engine.connection_made(self.peer)
 
-    def error_recieved(self, p, exc):
+    def error_recieved(self, protocol, exc):
         pass
 
-    def connection_lost(self, p, exc):
+    def connection_lost(self, protocol, exc):
         self.peer.engine.connection_lost(self.peer, exc)
 
-    def client_authenticated(self, p):
+    def client_authenticated(self, protocol):
         self.peer._client_authenticated()
         self.peer.engine.client_authenticated(self.peer)
 
