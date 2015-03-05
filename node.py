@@ -18,6 +18,7 @@ import db
 log = logging.getLogger(__name__)
 
 loop = None
+nodes = []
 
 class Node():
     def __init__(self, loop):
@@ -76,7 +77,7 @@ class Node():
             self.node_key.write_private_key_file(key_filename)
 
 def main():
-    global loop
+    global loop, nodes
 
     loop = asyncio.get_event_loop()
 
@@ -99,6 +100,15 @@ def main():
 @asyncio.coroutine
 def _main():
     global loop
+
+    try:
+        yield from __main()
+    except SystemExit:
+        loop.stop()
+
+@asyncio.coroutine
+def __main():
+    global loop, nodes
 
     print("Launching node.")
     log.info("Launching node.")
