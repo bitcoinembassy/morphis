@@ -4,6 +4,7 @@ import traceback
 import sys
 
 logging_initialized = False;
+contexts = {}
 
 def init():
     global logging_initialized
@@ -21,6 +22,27 @@ def init():
 def handle_exception(log, info):
     log.fatal("{} threw [{}]: {}".format(info, sys.exc_info()[0], str(sys.exc_info()[0])))
     traceback.print_tb(sys.exc_info()[2])
+
+def set_context(key, value):
+    contexts[key] = value
+
+def clear_context(key):
+    del contexts[key]
+
+class ContextFilter(logging.Filter):
+    global contexts
+
+    def filter(self, record):
+        for key, value in contexts.items():
+            record.__setattr__(key, value)
+
+        return True
+
+class ContextHandler(logging.StreamHandler):
+    def __init__(self, *args, **kwargs):
+        logging.StreamHandler.__init__(self, *args, **kwargs)
+
+        self.addFilter(ContextFilter())
 
 if not logging_initialized:
     init()

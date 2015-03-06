@@ -133,6 +133,9 @@ def __main():
 
     nodes = []
 
+    llog.set_context("nodeNum", 0) #FIXME: not here, but in mn1 in lots spots.
+    llog.set_context("connectionMode", "S") #FIXME: not here, but in mn1 in lots spots.
+
     while True:
         node = Node(loop)
         nodes.append(node)
