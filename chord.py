@@ -93,6 +93,7 @@ class ChordEngine():
             return
 
         # If we still need PeerS, then we now use our Chord algorithm.
+
         closestdistance = sess.query(func.min_(Peer.distance))\
             .filter(Peer.distance != None)\
             .filter(Peer.distance != 0)\
