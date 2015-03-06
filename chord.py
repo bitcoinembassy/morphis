@@ -200,8 +200,8 @@ class ChordEngine():
                 pid = peer.node_id
                 nid = self.node_id
 
-                log.info("{},{}".format(len(pid), len(nid)))
-                log.debug("pid=\n[{}], nid=\n[{}].".format(hex_dump(pid), hex_dump(nid)))
+                if log.isEnabledFor(logging.DEBUG):
+                    log.debug("pid=\n[{}], nid=\n[{}].".format(hex_dump(pid), hex_dump(nid)))
 
                 dist = 0
                 for i in range(64): # 64 bytes in 512 bits.
@@ -218,6 +218,10 @@ class ChordEngine():
                 if dist == 0:
                     dbpeer.direction = 0
                 dbpeer.distance = dist
+            else:
+                if dbpeer.connected:
+                    log.info("Already connected to Peer, disconnecting redundant connection.")
+                    return False
 
             dbpeer.address = "{}:{}".format(peer.protocol_handler.address[0], peer.protocol_handler.address[1])
             dbpeer.connected = True

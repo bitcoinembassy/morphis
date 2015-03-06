@@ -83,4 +83,5 @@ class ChannelHandler():
     @asyncio.coroutine
     def data(self, protocol, packet):
         m = mnetpacket.SshChannelDataMessage(packet)
-        log.debug("Received data, recipient_channel=[{}], value=[\n{}].".format(m.get_recipient_channel(), hex_dump(m.get_data())))
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("Received data, recipient_channel=[{}], value=[\n{}].".format(m.get_recipient_channel(), hex_dump(m.get_data())))

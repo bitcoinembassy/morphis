@@ -443,7 +443,8 @@ class SshProtocol(asyncio.Protocol):
 
     def _data_received(self, data):
         log.debug("data_received(..): start.")
-        log.info("X: Received: [\n{}].".format(hex_dump(data)))
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("X: Received: [\n{}].".format(hex_dump(data)))
 
         if self.binaryMode:
             self.buf += data
@@ -528,7 +529,8 @@ class SshProtocol(asyncio.Protocol):
 
         length = len(packetObject.getBuf())
 
-        log.debug("Writing packetType=[{}] with [{}] bytes of data: [\n{}]".format(packetObject.getPacketType(), length, hex_dump(packetObject.getBuf())))
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("Writing packetType=[{}] with [{}] bytes of data: [\n{}]".format(packetObject.getPacketType(), length, hex_dump(packetObject.getBuf())))
 
         mod_size = None
         if self.outCipher == None:
@@ -578,7 +580,8 @@ class SshProtocol(asyncio.Protocol):
             log.exception("_process_buffer() threw:")
 
     def _process_buffer(self):
-        log.info("P: process_buffer(): called (binaryMode={}), buf=[\n{}].".format(self.binaryMode, hex_dump(self.buf)))
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("P: process_buffer(): called (binaryMode={}), buf=[\n{}].".format(self.binaryMode, hex_dump(self.buf)))
 
         assert self.binaryMode
 
@@ -596,7 +599,8 @@ class SshProtocol(asyncio.Protocol):
             if len(self.cbuf) == 0:
                 offset = blksize
                 out = self.inCipher.decrypt(self.buf[:offset])
-                log.debug("Decrypted [\n{}] to [\n{}].".format(hex_dump(self.buf[:offset]), hex_dump(out)))
+                if log.isEnabledFor(logging.DEBUG):
+                    log.debug("Decrypted [\n{}] to [\n{}].".format(hex_dump(self.buf[:offset]), hex_dump(out)))
                 self.cbuf += out
                 packet_length = struct.unpack(">L", out[:4])[0]
                 log.debug("packet_length=[{}].".format(packet_length))
@@ -616,9 +620,11 @@ class SshProtocol(asyncio.Protocol):
             blks = self.buf[offset:bl]
             self.buf = self.buf[bl:]
             out = self.inCipher.decrypt(blks)
-            log.debug("Decrypted [\n{}] to [\n{}].".format(hex_dump(blks), hex_dump(out)))
             self.cbuf += out
-            log.debug("len(cbuf)={}, cbuf=[\n{}]".format(len(self.cbuf), hex_dump(self.cbuf)))
+
+            if log.isEnabledFor(logging.DEBUG):
+                log.debug("Decrypted [\n{}] to [\n{}].".format(hex_dump(blks), hex_dump(out)))
+                log.debug("len(cbuf)={}, cbuf=[\n{}]".format(len(self.cbuf), hex_dump(self.cbuf)))
         else:
             self.cbuf = self.buf
 
@@ -654,7 +660,8 @@ class SshProtocol(asyncio.Protocol):
 #                mac = self.cbuf[self.bpLength:self.bpLength + self.inHmacSize]
                 mac = self.buf[:self.inHmacSize]
 
-                log.debug("payload=[\n{}], padding=[\n{}], mac=[\n{}] len(mac)={}.".format(hex_dump(payload), hex_dump(padding), hex_dump(mac), len(mac)))
+                if log.isEnabledFor(logging.DEBUG):
+                    log.debug("payload=[\n{}], padding=[\n{}], mac=[\n{}] len(mac)={}.".format(hex_dump(payload), hex_dump(padding), hex_dump(mac), len(mac)))
 
                 if self.inHmacSize != 0:
                     self.buf = self.buf[self.inHmacSize:]
@@ -664,7 +671,8 @@ class SshProtocol(asyncio.Protocol):
                     tmac.update(mbuf)
                     tmac.update(self.cbuf)
                     cmac = tmac.digest()
-                    log.debug("inPacketId={} len(cmac)={}, cmac=[\n{}].".format(self.inPacketId, len(cmac), hex_dump(cmac)))
+                    if log.isEnabledFor(logging.DEBUG):
+                        log.debug("inPacketId={} len(cmac)={}, cmac=[\n{}].".format(self.inPacketId, len(cmac), hex_dump(cmac)))
                     r = hmac.compare_digest(cmac, mac)
                     log.info("HMAC check result: [{}].".format(r))
                     if not r:
@@ -781,7 +789,8 @@ class ChannelHandler():
     @asyncio.coroutine
     def data(self, protocol, packet):
         m = mnetpacket.SshChannelDataMessage(packet)
-        log.debug("Received data, recipient_channel=[{}], value=[\n{}].".format(m.get_recipient_channel(), hex_dump(m.get_data())))
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("Received data, recipient_channel=[{}], value=[\n{}].".format(m.get_recipient_channel(), hex_dump(m.get_data())))
 
 def main():
     global log, server_key, client_key
