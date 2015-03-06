@@ -77,6 +77,9 @@ class ChordEngine():
             self.__process_connection_count(sess, needed)
 
     def __process_connection_count(self, sess, needed):
+        # First connect to any unconnected PeerS that are in the database with
+        # a null node_id. Such entries had to be added manually; thus we should
+        # listen to the user and try them out.
         np = sess.query(Peer)\
             .filter(Peer.node_id == None, Peer.connected == False)\
             .limit(needed)
@@ -89,6 +92,7 @@ class ChordEngine():
             sess.commit()
             return
 
+        # If we still need PeerS, then we now use our Chord algorithm.
         closestdistance = sess.query(func.min_(Peer.distance))\
             .filter(Peer.distance != None)\
             .filter(Peer.distance != 0)\
@@ -102,7 +106,7 @@ class ChordEngine():
         distance = 512
 
         while distance > 0:
-            bucket_needs = 2 - len(peer_buckets[distance - 1])
+            bucket_needs = 2 - len(self.peer_buckets[distance - 1])
             if not bucket_needs:
                 continue
 
