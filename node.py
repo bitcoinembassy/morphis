@@ -55,6 +55,7 @@ class Node():
         if not self.db:
             self.db = db.Db("sqlite:///morphis{}.sqlite".format(self.instance_postfix))
 
+        log.info("Clearing out connected state from Peer table.")
         with self.db.open_session() as sess:
             sess.execute(update(db.Peer, bind=self.db.engine).values(connected=False))
             sess.commit()

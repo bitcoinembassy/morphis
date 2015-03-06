@@ -50,7 +50,7 @@ class KexGroup14():
         self._generate_x()
         log.debug("x=[{}]".format(self.x))
 
-        if self.protocol.serverMode:
+        if self.protocol.server_mode:
             # compute f = g^x mod p, but don't send it yet
             self.f = pow(self.G, self.x, self.P)
 #            self.transport._expect_packet(_MSG_KEXDH_INIT)
@@ -150,7 +150,7 @@ class KexGroup14():
             raise SshException('Client kex "e" is out of range')
         K = pow(self.e, self.x, self.P)
         log.debug("K=[{}].".format(K))
-        key = self.protocol.get_server_key().asbytes()
+        key = self.protocol.server_key.asbytes()
         # okay, build up the hash H of (V_C || V_S || I_C || I_S || K_S || e || f || K)
         hm = bytearray()
         hm += sshtype.encodeString(self.protocol.getRemoteBanner())
@@ -167,7 +167,7 @@ class KexGroup14():
         self.protocol.set_K_H(K, H)
 
         # sign it
-        sig = self.protocol.get_server_key().sign_ssh_data(H)
+        sig = self.protocol.server_key.sign_ssh_data(H)
         # send reply
         m = mnetpacket.SshKexdhReplyMessage()
         m.setHostKey(key)

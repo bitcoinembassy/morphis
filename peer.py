@@ -36,8 +36,8 @@ class Peer():
         self.protocol_handler.set_channel_handler(self.channel_handler)
         self.protocol_handler.set_connection_handler(self.connection_handler)
 
-    def _client_authenticated(self):
-        self.node_key = self.protocol_handler.clientKey
+    def _peer_authenticated(self, key):
+        self.node_key = key
         self.node_id = enc.generate_ID(self.node_key.asbytes())
 
 class ConnectionHandler():
@@ -53,9 +53,13 @@ class ConnectionHandler():
     def connection_lost(self, protocol, exc):
         self.peer.engine.connection_lost(self.peer, exc)
 
-    def client_authenticated(self, protocol):
-        self.peer._client_authenticated()
-        return self.peer.engine.client_authenticated(self.peer)
+    def peer_authenticated(self, protocol):
+        if protocol.server_mode:
+            self.peer._peer_authenticated(self.peer.protocol_handler.client_key)
+        else:
+            self.peer._peer_authenticated(self.peer.protocol_handler.server_key)
+
+        return self.peer.engine.peer_authenticated(self.peer)
 
 class ChannelHandler():
     def __init__(self, peer):

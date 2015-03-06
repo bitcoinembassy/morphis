@@ -142,7 +142,7 @@ class ChordEngine():
 
     def _create_server_protocol(self):
         ph = mn1.SshServerProtocol(self.node.get_loop())
-        ph.set_server_key(self.node.get_node_key())
+        ph.server_key = self.node.get_node_key()
 
         p = peer.Peer(self)
         p.set_protocol_handler(ph)
@@ -153,7 +153,7 @@ class ChordEngine():
 
     def _create_client_protocol(self, dbid):
         ph = mn1.SshClientProtocol(self.node.get_loop())
-        ph.set_client_key(self.node.get_node_key())
+        ph.client_key = self.node.get_node_key()
 
         p = peer.Peer(self)
         p.dbid = dbid
@@ -182,7 +182,7 @@ class ChordEngine():
             dbpeer.connected = False
             sess.commit()
 
-    def client_authenticated(self, peer):
+    def peer_authenticated(self, peer):
         with self.node.db.open_session() as sess:
             dbpeer = sess.query(Peer).filter(Peer.node_id == peer.node_id).first()
             if not dbpeer:
@@ -196,6 +196,7 @@ class ChordEngine():
                 nid = self.node_id
 
                 log.info("{},{}".format(len(pid), len(nid)))
+                log.debug("pid=\n[{}], nid=\n[{}].".format(hex_dump(pid), hex_dump(nid)))
 
                 dist = 0
                 for i in range(64): # 64 bytes in 512 bits.

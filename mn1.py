@@ -22,22 +22,22 @@ clientObjs = {} # remoteAddress, dict
 
 log = logging.getLogger(__name__)
 
-serverKey = None
-clientKey = None
+server_key = None
+client_key = None
 
 # Returns True on success, False on failure.
 @asyncio.coroutine
-def connectTaskCommon(protocol, serverMode):
+def connectTaskCommon(protocol, server_mode):
 #    try:
-    r = yield from _connectTaskCommon(protocol, serverMode)
+    r = yield from _connectTaskCommon(protocol, server_mode)
 #    except:
 #        log.exception("_connectTaskCommon() threw:")
 
     return r
 
 @asyncio.coroutine
-def _connectTaskCommon(protocol, serverMode):
-    assert isinstance(serverMode, bool)
+def _connectTaskCommon(protocol, server_mode):
+    assert isinstance(server_mode, bool)
 
     log.info("X: Sending banner.")
     protocol.transport.write((protocol.getLocalBanner() + "\r\n").encode(encoding="UTF-8"))
@@ -102,7 +102,7 @@ def _connectTaskCommon(protocol, serverMode):
     # Setup encryption now that keys are exchanged.
     protocol.init_outbound_encryption()
 
-    if not protocol.serverMode:
+    if not protocol.server_mode:
         """ Server gets done automatically since parameters are always there
             before NEWKEYS is received, but client the parameters and NEWKEYS
             message may come in the same tcppacket, so the auto part just turns
@@ -115,7 +115,7 @@ def _connectTaskCommon(protocol, serverMode):
     m = mnetpacket.SshNewKeysMessage(packet)
     log.debug("Received SSH_MSG_NEWKEYS.")
 
-    if protocol.serverMode:
+    if protocol.server_mode:
         packet = yield from protocol.read_packet()
 #        m = mnetpacket.SshPacket(None, packet)
 #        log.info("X: Received packet (type={}) [{}].".format(m.getPacketType(), packet))
@@ -186,9 +186,9 @@ def _connectTaskCommon(protocol, serverMode):
         if not r:
             raise SshException("Signature and key provided by client did not match.")
 
-        protocol.clientKey = client_key
+        protocol.client_key = client_key
 
-        r = protocol.connection_handler.client_authenticated(protocol)
+        r = protocol.connection_handler.peer_authenticated(protocol)
         if not r:
             # Client is rejected for some reason by higher level.
             protocol.close()
@@ -217,7 +217,7 @@ def _connectTaskCommon(protocol, serverMode):
         mr.set_signature_present(True)
         mr.set_algorithm_name("ssh-rsa")
 
-        ckey = protocol.get_client_key()
+        ckey = protocol.client_key
         mr.set_public_key(ckey.asbytes())
 
         mr.encode()
@@ -238,9 +238,9 @@ def _connectTaskCommon(protocol, serverMode):
         m = mnetpacket.SshUserauthSuccessMessage(packet)
         log.info("Userauth accepted.")
 
-    log.debug("Connect task done (server={}).".format(serverMode))
+    log.debug("Connect task done (server={}).".format(server_mode))
 
-#    if not serverMode:
+#    if not server_mode:
 #        protocol.transport.close()
 
     return True
@@ -260,15 +260,15 @@ class SshProtocol(asyncio.Protocol):
         self.channel_handler = None
         self.connection_handler = None
 
-        self.serverMode = None
+        self.server_mode = None
 
         self.binaryMode = False
         self.inboundEnabled = True
 
         self.closed = False
 
-        self.serverKey = serverKey
-        self.clientKey = clientKey
+        self.server_key = server_key
+        self.client_key = client_key
         self.k = None
         self.h = None
         self.sessionId = None
@@ -301,18 +301,6 @@ class SshProtocol(asyncio.Protocol):
     def get_transport(self):
         return self.transport
 
-    def get_server_key(self):
-        return self.serverKey
-
-    def set_server_key(self, value):
-        self.serverKey = value
-
-    def get_client_key(self):
-        return self.clientKey
-
-    def set_client_key(self, value):
-        self.clientKey = value
-
     def get_session_id(self):
         return self.sessionId
 
@@ -328,9 +316,9 @@ class SshProtocol(asyncio.Protocol):
 
         log.info("Signature validated correctly!")
 
-        self.serverKey = key
+        self.server_key = key
 
-        r = self.connection_handler.client_authenticated(self)
+        r = self.connection_handler.peer_authenticated(self)
 
         return r
 
@@ -368,7 +356,7 @@ class SshProtocol(asyncio.Protocol):
     def init_outbound_encryption(self):
         log.debug("Initializing outbound encryption.")
         # use: AES.MODE_CBC: bs: 16, ks: 32. hmac-sha1=20 key size.
-        if not self.serverMode:
+        if not self.server_mode:
             iiv = self.generateKey(b'A', 16)
             ekey = self.generateKey(b'C', 32)
             ikey = self.generateKey(b'E', 20)
@@ -385,7 +373,7 @@ class SshProtocol(asyncio.Protocol):
     def init_inbound_encryption(self):
         log.debug("Initializing inbound encryption.")
         # use: AES.MODE_CBC: bs: 16, ks: 32. hmac-sha1=20 key size.
-        if not self.serverMode:
+        if not self.server_mode:
             iiv = self.generateKey(b'B', 16)
             ekey = self.generateKey(b'D', 32)
             ikey = self.generateKey(b'F', 20)
@@ -692,7 +680,7 @@ class SshProtocol(asyncio.Protocol):
                 if self.waitingForNewKeys:
                     tp = mnetpacket.SshPacket(None, payload)
                     if tp.getPacketType() == mnetpacket.SSH_MSG_NEWKEYS:
-                        if self.serverMode:
+                        if self.server_mode:
                             self.init_inbound_encryption()
                         else:
                             """ Disable further processing until inbound encryption is setup.
@@ -715,7 +703,7 @@ class SshServerProtocol(SshProtocol):
     def __init__(self, loop):
         super().__init__(loop)
 
-        self.serverMode = True
+        self.server_mode = True
 
     def connection_made(self, transport):
         super().connection_made(transport)
@@ -756,7 +744,7 @@ class SshClientProtocol(SshProtocol):
     def __init__(self, loop):
         super().__init__(loop)
 
-        self.serverMode = False
+        self.server_mode = False
 
     def connection_made(self, transport):
         super().connection_made(transport)
@@ -796,7 +784,7 @@ class ChannelHandler():
         log.debug("Received data, recipient_channel=[{}], value=[\n{}].".format(m.get_recipient_channel(), hex_dump(m.get_data())))
 
 def main():
-    global log, serverKey, clientKey
+    global log, server_key, client_key
 
     print("Starting server.")
     log.info("Starting server.")
@@ -804,11 +792,11 @@ def main():
     key_filename = "server_key-rsa.mnk"
     if os.path.exists(key_filename):
         log.info("Server private key file found, loading.")
-        serverKey = rsakey.RsaKey(filename=key_filename)
+        server_key = rsakey.RsaKey(filename=key_filename)
     else:
         log.info("Server private key file missing, generating.")
-        serverKey = rsakey.RsaKey.generate(bits=4096)
-        serverKey.write_private_key_file(key_filename)
+        server_key = rsakey.RsaKey.generate(bits=4096)
+        server_key.write_private_key_file(key_filename)
 
     loop = asyncio.get_event_loop()
 
@@ -825,11 +813,11 @@ def main():
     key_filename = "client_key-rsa.mnk"
     if os.path.exists(key_filename):
         log.info("Client private key file found, loading.")
-        clientKey = rsakey.RsaKey(filename=key_filename)
+        client_key = rsakey.RsaKey(filename=key_filename)
     else:
         log.info("Client private key file missing, generating.")
-        clientKey = rsakey.RsaKey.generate(bits=4096)
-        clientKey.write_private_key_file(key_filename)
+        client_key = rsakey.RsaKey.generate(bits=4096)
+        client_key.write_private_key_file(key_filename)
 
     client = loop.create_connection(lambda: _create_client_protocol(loop), "127.0.0.1", 5555)
     loop.run_until_complete(client)
@@ -845,7 +833,7 @@ def main():
 
 def _create_server_protocol(loop):
     ph = SshServerProtocol(loop)
-    ph.set_server_key(serverKey)
+    ph.server_key = server_key
 
     p = peer.Peer(TestEngine())
     p.set_protocol_handler(ph)
@@ -854,7 +842,7 @@ def _create_server_protocol(loop):
 
 def _create_client_protocol(loop):
     ph = SshClientProtocol(loop)
-    ph.set_client_key(clientKey)
+    ph.client_key = client_key
 
     p = peer.Peer(TestEngine())
     p.set_protocol_handler(ph)
