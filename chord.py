@@ -29,7 +29,7 @@ class ChordEngine():
         self.server = None #Task.
         self.server_protocol = None
 
-        self.pending_connections = []
+        self.pending_connections = {} # {Task, Peer->dbid}
         self.peers = {} # {(host, port): Peer}.
 
         self.peer_buckets = [[] for i in range(512)]
@@ -142,11 +142,36 @@ class ChordEngine():
             partial(self._create_client_protocol, dbpeer.id),\
             host, port)
 
-        asyncio.async(client, loop=loop)
+        task = asyncio.async(client, loop=loop)
+        task.add_done_callback(self._client_connect_callback)
+
+        self.pending_connections[task] = dbpeer.id
 
         dbpeer.connected = True
 
         return True
+
+    def _client_connect_callback(self, task):
+        dbid = self.pending_connections.pop(task)
+
+        if task.cancelled():
+            log.info("Connection to Peer (dbid=[{}]) was cancelled."\
+                .format(dbid))
+        elif task.exception():
+            ex = task.exception()
+            log.info("Connection to Peer (dbid=[{}]) failed: {}: {}"\
+                .format(dbid, type(ex), ex))
+        else:
+            # Connect was successful, and we do nothing here as
+            # connection_made(..) will be called next.
+            return
+
+        # An exception or cancelled connect; update db, Etc.
+        with self.node.db.open_session() as sess:
+            dbpeer = sess.query(Peer).get(dbid)
+            dbpeer.connected = False
+
+            sess.commit()
 
     def _create_server_protocol(self):
         ph = mn1.SshServerProtocol(self.node.get_loop())
@@ -155,7 +180,7 @@ class ChordEngine():
         p = peer.Peer(self)
         p.set_protocol_handler(ph)
 
-        self.pending_connections.append(p)
+#        self.pending_connections.append(p)
 
         return ph
 
@@ -167,12 +192,12 @@ class ChordEngine():
         p.dbid = dbid
         p.set_protocol_handler(ph)
 
-        self.pending_connections.append(p)
+#        self.pending_connections.append(p)
 
         return ph
 
     def connection_made(self, peer):
-        self.pending_connections.remove(peer)
+        #self.pending_connections.remove(peer)
         addr = peer.get_protocol_handler().get_transport().get_extra_info("peername")
         self.peers[addr] = peer
 
