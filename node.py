@@ -21,14 +21,21 @@ loop = None
 nodes = []
 
 class Node():
-    def __init__(self, loop):
+    def __init__(self, loop, instance_id=None):
         self.loop = loop
-        self.node_key = None
-        self.chord_engine = None
-        self.instance = None
-        self.instance_postfix = ""
+
+        self.instance = instance_id
+        if instance_id:
+            self.instance_postfix = "-{}".format(instance_id)
+        else:
+            self.instance_postfix = ""
+
+        self.node_key = self._load_key()
+
+        self.db = db.Db("sqlite:///morphis{}.sqlite".format(self.instance_postfix))
         self.bind_address = None
-        self.db = None
+
+        self.chord_engine = chord.ChordEngine(self)
 
     def get_loop(self):
         return self.loop
@@ -39,28 +46,16 @@ class Node():
     def get_node_key(self):
         return self.node_key
 
-    def set_instance(self, value):
-        if value or self.instance:
-            self.instance_postfix = "-{}".format(value)
-
-        self.instance = value
-
     def set_bind_address(self, value):
         self.bind_address = value
 
     def start(self):
-        if not self.node_key:
-            self._load_key()
-
-        if not self.db:
-            self.db = db.Db("sqlite:///morphis{}.sqlite".format(self.instance_postfix))
-
         log.info("Clearing out connected state from Peer table.")
         with self.db.open_session() as sess:
             sess.execute(update(db.Peer, bind=self.db.engine).values(connected=False))
             sess.commit()
 
-        self.chord_engine = chord.ChordEngine(self, self.bind_address)
+        self.chord_engine.bind_address = self.bind_address
         self.chord_engine.start()
 
     def stop(self):
@@ -71,11 +66,12 @@ class Node():
 
         if os.path.exists(key_filename):
             log.info("Node private key file found, loading.")
-            self.node_key = rsakey.RsaKey(filename=key_filename)
+            return rsakey.RsaKey(filename=key_filename)
         else:
             log.info("Node private key file missing, generating.")
-            self.node_key = rsakey.RsaKey.generate(bits=4096)
-            self.node_key.write_private_key_file(key_filename)
+            node_key = rsakey.RsaKey.generate(bits=4096)
+            node_key.write_private_key_file(key_filename)
+            return node_key
 
 def main():
     global loop, nodes
@@ -123,8 +119,6 @@ def __main():
 
     addpeer = args.addpeer
     instance = args.nn
-    if instance == None:
-        instance = 0
     bindaddr = args.bind
     if bindaddr == None:
         bindaddr = "127.0.0.1:5555"
@@ -135,20 +129,17 @@ def __main():
     nodes = []
 
     while True:
-        node = Node(loop)
+        node = Node(loop, instance)
         nodes.append(node)
 
-        if instance:
-            node.set_instance(instance)
         if bindaddr:
             bindaddr.split(':') # Just to preemptively test.
             node.set_bind_address(bindaddr)
-
-        node.start()
-
         if addpeer != None:
             for addpeer in addpeer:
                 node.chord_engine.add_peer(addpeer)
+
+        node.start()
 
         nodecount -= 1
         if not nodecount:

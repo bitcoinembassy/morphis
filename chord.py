@@ -19,11 +19,11 @@ from mutil import hex_dump, log_base2_8bit
 log = logging.getLogger(__name__)
 
 class ChordEngine():
-    def __init__(self, node, bind_address):
+    def __init__(self, node, bind_address=None):
         self.node = node
         self.node_id = enc.generate_ID(node.node_key.asbytes())
 
-        self.bind_address = bind_address
+        self.bind_address = None
 
         self.running = False
         self.server = None #Task.
