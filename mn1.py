@@ -718,7 +718,7 @@ class SshServerProtocol(SshProtocol):
 
         log.info("S: Connection made from [{}].".format(self.address))
 
-        asyncio.async(self._run())
+        asyncio.async(self._run(), loop=self.loop)
 
     @asyncio.coroutine
     def _run(self):
@@ -757,7 +757,7 @@ class SshClientProtocol(SshProtocol):
     def connection_made(self, transport):
         super().connection_made(transport)
         log.info("C: Connection made to [{}].".format(self.address))
-        asyncio.async(clientConnectTask(self))
+        asyncio.async(clientConnectTask(self), loop=self.loop)
 
     def data_received(self, data):
         log.info("C: Received: [{}].".format(data))
