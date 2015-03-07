@@ -112,7 +112,7 @@ class ChordEngine():
                 continue
 
             q = sess.query(Peer)\
-                .filter(Peer.distance == distance, Peer.connected == None)\
+                .filter(Peer.distance == distance, Peer.connected == False)\
                 .order_by(desc(Peer.direction), Peer.node_id)
 
             np = q.limit(min(needed, bucket_needs))
@@ -131,17 +131,20 @@ class ChordEngine():
 
         sess.commit()
 
-    def _connect_peer(self, sess, peer):
-        host, port = peer.address.split(':')
+    def _connect_peer(self, sess, dbpeer):
+        log.info("Connecting to peer (id={}, addr=[{}]).".format(dbpeer.id,\
+            dbpeer.address))
+
+        host, port = dbpeer.address.split(':')
 
         loop = self.node.get_loop()
         client = loop.create_connection(\
-            partial(self._create_client_protocol, peer.id),\
+            partial(self._create_client_protocol, dbpeer.id),\
             host, port)
 
         asyncio.async(client, loop=loop)
 
-        peer.connected = True
+        dbpeer.connected = True
 
         return True
 
