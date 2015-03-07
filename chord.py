@@ -188,50 +188,107 @@ class ChordEngine():
             sess.commit()
 
     def peer_authenticated(self, peer):
+        log.info("Peer (dbid={}) has authenticated.".format(peer.dbid))
+
         with self.node.db.open_session() as sess:
-            dbpeer = sess.query(Peer).filter(Peer.node_id == peer.node_id).first()
-            if not dbpeer:
-                dbpeer = Peer()
-                sess.add(dbpeer)
+            if peer.dbid:
+                # This would be an outgoing connection; and thus this dbid does
+                # for sure exist in the database.
+                dbpeer = sess.query(Peer).get(peer.dbid)
 
-                dbpeer.node_id = peer.node_id
-                dbpeer.pubkey = peer.node_key.asbytes()
+                if not dbpeer.node_id:
+                    # Then it was a manually initiated connection (and no
+                    # public key was specified).
+                    dbpeer.node_id = peer.node_id
+                    dbpeer.pubkey = peer.node_key.asbytes()
 
-                pid = peer.node_id
-                nid = self.node_id
+                    dbpeer.distance, dbpeer.direction =\
+                        self._calc_distance(peer)
 
-                if log.isEnabledFor(logging.DEBUG):
-                    log.debug("pid=\n[{}], nid=\n[{}].".format(hex_dump(pid), hex_dump(nid)))
-
-                dist = 0
-                for i in range(64): # 64 bytes in 512 bits.
-                    if pid[i] != nid[i]:
-                        dbpeer.direction = 1 if pid[i] > nid[i] else -1
-
-                        xv = pid[i] ^ nid[i]
-                        xv = log_base2_8bit(xv)
-
-                        dist = 8 * (63 - i) + xv
-
-                        break
-
-                if dist == 0:
-                    dbpeer.direction = 0
-                dbpeer.distance = dist
+                    if dbpeer.distance == 0:
+                        log.info("Peer is us! (Has the same ID!)")
+                        sess.delete(dbpeer)
+                        sess.commit()
+                        return False
+                else:
+                    # Then we were trying to connect to a specific node_id.
+                    if dbpeer.node_id != peer.node_id:
+                        # Then the node we reached is not the node we were
+                        # trying to connect to.
+                        dbpeer.connected = False
+                        sess.commit()
+                        return False
             else:
-                if dbpeer.connected:
-                    log.info("Already connected to Peer, disconnecting redundant connection.")
-                    return False
+                # This would be an incoming connection.
+                dbpeer = sess.query(Peer).filter(Peer.node_id == peer.node_id).first()
 
-            dbpeer.address = "{}:{}".format(peer.protocol_handler.address[0], peer.protocol_handler.address[1])
-            dbpeer.connected = True
+                address = "{}:{}".format(peer.protocol_handler.address[0],\
+                    peer.protocol_handler.address[1])
+
+                if not dbpeer:
+                    # An incoming connection from an unknown Peer.
+                    dbpeer = Peer()
+                    dbpeer.node_id = peer.node_id
+                    dbpeer.pubkey = peer.node_key.asbytes()
+
+                    dbpeer.distance, dbpeer.direction =\
+                        self._calc_distance(peer)
+
+                    if dbpeer.distance == 0:
+                        log.info("Peer is us! (Has the same ID!)")
+                        return False
+
+                    dbpeer.address = address
+
+                    sess.add(dbpeer)
+                else:
+                    # Known Peer has connected to us.
+                    if dbpeer.distance == 0:
+                        log.warning("Found ourselves in the Peer table!")
+                        log.info("Peer is us! (Has the same ID!)")
+                        dbpeer.connected = False
+                        sess.commit()
+                        return False
+
+                    if dbpeer.connected:
+                        log.info("Already connected to Peer, disconnecting redundant connection.")
+                        return False
+
+                    if dbpeer.address != address:
+                        log.info("Remote Peer address has changed, updating our db record.")
+                        dbpeer.address = address
+
+                dbpeer.connected = True
 
             sess.commit()
 
-            peer.dbid = dbpeer.id
-
-            if dbpeer.distance == 0:
-                log.info("Peer is us! (Has the same ID!)")
-                return False
+            # For incoming connections only, but need to have committed first.
+            if not peer.dbid:
+                peer.dbid = dbpeer.id
 
             return True
+
+    # returns: distance, direction
+    def _calc_distance(self, peer):
+        pid = peer.node_id
+        nid = self.node_id
+
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("pid=\n[{}], nid=\n[{}].".format(hex_dump(pid),\
+                hex_dump(nid)))
+
+        dist = 0
+        direction = 0
+
+        for i in range(64): # 64 bytes in 512 bits.
+            if pid[i] != nid[i]:
+                direction = 1 if pid[i] > nid[i] else -1
+
+                xv = pid[i] ^ nid[i]
+                xv = log_base2_8bit(xv)
+
+                dist = 8 * (63 - i) + xv
+
+                break
+
+        return dist, direction
