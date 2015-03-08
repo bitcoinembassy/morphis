@@ -177,6 +177,10 @@ class ChordEngine():
         return True
 
     def _client_connect_callback(self, task):
+        asyncio.async(self.__client_connect_callback(task), loop=self.node.loop)
+
+    @asyncio.coroutine
+    def __client_connect_callback(self, task):
         dbid = self.pending_connections.pop(task)
 
         if task.cancelled():
@@ -192,11 +196,14 @@ class ChordEngine():
             return
 
         # An exception or cancelled connect; update db, Etc.
-        with self.node.db.open_session() as sess:
-            dbpeer = sess.query(Peer).get(dbid)
-            dbpeer.connected = False
+        def dbcall():
+            with self.node.db.open_session() as sess:
+                dbpeer = sess.query(Peer).get(dbid)
+                dbpeer.connected = False
 
-            sess.commit()
+                sess.commit()
+
+        yield from self.node.loop.run_in_executor(None, dbcall)
 
     def _create_server_protocol(self):
         ph = mn1.SshServerProtocol(self.node.loop)
