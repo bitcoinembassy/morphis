@@ -49,23 +49,29 @@ class ChordEngine():
             sess.commit()
 
         if self.running:
-            self._process_connection_count()
+            asyncio.async(\
+                self._process_connection_count(), loop=self.node.loop)
 
+    @asyncio.coroutine
     def start(self):
         self.running = True
 
         host, port = self.bind_address.split(':')
-        self.server = self.node.get_loop().create_server(self._create_server_protocol, host, port)
-#        self.node.get_loop().run_until_complete(self.server)
-        asyncio.async(self.server, loop=self.node.get_loop())
+        self.server = self.node.loop.create_server(\
+            self._create_server_protocol, host, port)
+
+#        self.node.loop.run_until_complete(self.server)
+#        asyncio.async(self.server, loop=self.node.loop)
+        yield from self.server
 
         log.info("Node listening on [{}:{}].".format(host, port))
 
-        self._process_connection_count()
+        yield from self._process_connection_count()
 
     def stop(self):
         self.server.close()
 
+    @asyncio.coroutine
     def _process_connection_count(self):
         cnt = len(self.pending_connections) + len(self.peers)
         if cnt >= self.maximum_connections:
@@ -73,9 +79,13 @@ class ChordEngine():
 
         needed = self.maximum_connections - cnt
 
-        with self.node.db.open_session() as sess:
-            self.__process_connection_count(sess, needed)
+        def dbcall():
+            with self.node.db.open_session() as sess:
+                self.__process_connection_count(sess, needed)
 
+        yield from self.node.loop.run_in_executor(None, dbcall)
+
+    # This method runs in separate thread.
     def __process_connection_count(self, sess, needed):
         # First connect to any unconnected PeerS that are in the database with
         # a null node_id. Such entries had to be added manually; thus we should
@@ -131,13 +141,14 @@ class ChordEngine():
 
         sess.commit()
 
+    # This method runs in separate thread.
     def _connect_peer(self, sess, dbpeer):
         log.info("Connecting to peer (id={}, addr=[{}]).".format(dbpeer.id,\
             dbpeer.address))
 
         host, port = dbpeer.address.split(':')
 
-        loop = self.node.get_loop()
+        loop = self.node.loop
         client = loop.create_connection(\
             partial(self._create_client_protocol, dbpeer.id),\
             host, port)
@@ -174,7 +185,7 @@ class ChordEngine():
             sess.commit()
 
     def _create_server_protocol(self):
-        ph = mn1.SshServerProtocol(self.node.get_loop())
+        ph = mn1.SshServerProtocol(self.node.loop)
         ph.server_key = self.node.get_node_key()
 
         p = peer.Peer(self)
@@ -185,7 +196,7 @@ class ChordEngine():
         return ph
 
     def _create_client_protocol(self, dbid):
-        ph = mn1.SshClientProtocol(self.node.get_loop())
+        ph = mn1.SshClientProtocol(self.node.loop)
         ph.client_key = self.node.get_node_key()
 
         p = peer.Peer(self)

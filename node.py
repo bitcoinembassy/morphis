@@ -49,14 +49,20 @@ class Node():
     def set_bind_address(self, value):
         self.bind_address = value
 
+    @asyncio.coroutine
     def start(self):
-        log.info("Clearing out connected state from Peer table.")
-        with self.db.open_session() as sess:
-            sess.execute(update(db.Peer, bind=self.db.engine).values(connected=False))
-            sess.commit()
+        def dbcall():
+            log.info("Clearing out connected state from Peer table.")
+            with self.db.open_session() as sess:
+                sess.execute(update(db.Peer, bind=self.db.engine)\
+                    .values(connected=False))
+                sess.commit()
+
+        yield from self.loop.run_in_executor(None, dbcall)
 
         self.chord_engine.bind_address = self.bind_address
-        self.chord_engine.start()
+
+        yield from self.chord_engine.start()
 
     def stop(self):
         self.chord_engine.stop()
@@ -139,7 +145,7 @@ def __main():
             for addpeer in addpeer:
                 node.chord_engine.add_peer(addpeer)
 
-        node.start()
+        yield from node.start()
 
         nodecount -= 1
         if not nodecount:
