@@ -10,6 +10,7 @@ import mn1
 from mutil import hex_dump
 import chord
 import peer
+import enc
 
 log = logging.getLogger(__name__)
 
@@ -17,9 +18,12 @@ class Peer():
     def __init__(self, engine):
         self.engine = engine
 
+        self.dbid = None
+
         self.protocol_handler = None
 
         self.node_key = None
+        self.node_id = None
         self.channel_handler = ChannelHandler(self)
         self.connection_handler = ConnectionHandler(self)
 
@@ -32,18 +36,30 @@ class Peer():
         self.protocol_handler.set_channel_handler(self.channel_handler)
         self.protocol_handler.set_connection_handler(self.connection_handler)
 
+    def _peer_authenticated(self, key):
+        self.node_key = key
+        self.node_id = enc.generate_ID(self.node_key.asbytes())
+
 class ConnectionHandler():
     def __init__(self, peer):
         self.peer = peer
 
-    def connection_made(self, p):
+    def connection_made(self, protocol):
         self.peer.engine.connection_made(self.peer)
 
-    def error_recieved(self, p, exc):
+    def error_recieved(self, protocol, exc):
         pass
 
-    def connection_lost(self, p, exc):
+    def connection_lost(self, protocol, exc):
         self.peer.engine.connection_lost(self.peer, exc)
+
+    def peer_authenticated(self, protocol):
+        if protocol.server_mode:
+            self.peer._peer_authenticated(self.peer.protocol_handler.client_key)
+        else:
+            self.peer._peer_authenticated(self.peer.protocol_handler.server_key)
+
+        return self.peer.engine.peer_authenticated(self.peer)
 
 class ChannelHandler():
     def __init__(self, peer):
@@ -67,4 +83,5 @@ class ChannelHandler():
     @asyncio.coroutine
     def data(self, protocol, packet):
         m = mnetpacket.SshChannelDataMessage(packet)
-        log.debug("Received data, recipient_channel=[{}], value=[\n{}].".format(m.get_recipient_channel(), hex_dump(m.get_data())))
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("Received data, recipient_channel=[{}], value=[\n{}].".format(m.get_recipient_channel(), hex_dump(m.get_data())))

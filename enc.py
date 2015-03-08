@@ -16,5 +16,5 @@ def generate_RSA(bits=4096):
 def generate_ID(public_key):
     from Crypto.Hash import SHA512
 
-    return SHA512.new(public_key)
+    return SHA512.new(public_key).digest()
 

@@ -7,3 +7,5 @@ __pycache__/
 server_key-rsa.mnk
 client_key-rsa.mnk
 node_key-rsa*.mnk
+
+*.sqlite

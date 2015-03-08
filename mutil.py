@@ -48,3 +48,16 @@ def hex_dump(data, offset = 0, length = None):
         col2.clear()
 
     return output.decode()
+
+bc_masks = [0x2, 0xC, 0xF0]
+bc_shifts = [1, 2, 4]
+
+def log_base2_8bit(val):
+    r = 0
+
+    for i in range(2, -1, -1):
+        if val & bc_masks[i]:
+            val >>= bc_shifts[i]
+            r |= bc_shifts[i]
+
+    return r
