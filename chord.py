@@ -79,39 +79,42 @@ class ChordEngine():
 
         needed = self.maximum_connections - cnt
 
-        def dbcall():
-            with self.node.db.open_session() as sess:
-                self.__process_connection_count(sess, needed)
+        yield from self.__process_connection_count(needed)
 
-        yield from self.node.loop.run_in_executor(None, dbcall)
-
-    # This method runs in separate thread.
-    def __process_connection_count(self, sess, needed):
+    @asyncio.coroutine
+    def __process_connection_count(self, needed):
         # First connect to any unconnected PeerS that are in the database with
         # a null node_id. Such entries had to be added manually; thus we should
         # listen to the user and try them out.
-        np = sess.query(Peer)\
-            .filter(Peer.node_id == None, Peer.connected == False)\
-            .limit(needed)
+        def dbcall():
+            with self.node.db.open_session() as sess:
+                return sess.query(Peer)\
+                    .filter(Peer.node_id == None, Peer.connected == False)\
+                    .limit(needed).all()
+
+        np = yield from self.node.loop.run_in_executor(None, dbcall)
 
         for n in np:
-            self._connect_peer(sess, n)
+            yield from self._connect_peer(n)
             needed -= 1
 
         if needed <= 0:
-            sess.commit()
             return
 
         # If we still need PeerS, then we now use our Chord algorithm.
 
-        closestdistance = sess.query(func.min_(Peer.distance))\
-            .filter(Peer.distance != None)\
-            .filter(Peer.distance != 0)\
-            .filter(Peer.connected == False)\
-            .scalar()
+        def dbcall():
+            with self.node.db.open_session() as sess:
+                return sess.query(func.min_(Peer.distance))\
+                    .filter(Peer.distance != None)\
+                    .filter(Peer.distance != 0)\
+                    .filter(Peer.connected == False)\
+                    .scalar()
+
+        closestdistance =\
+            yield from self.node.loop.run_in_executor(None, dbcall)
 
         if not closestdistance:
-            sess.commit()
             return
 
         distance = 512
@@ -121,28 +124,33 @@ class ChordEngine():
             if not bucket_needs:
                 continue
 
-            q = sess.query(Peer)\
-                .filter(Peer.distance == distance, Peer.connected == False)\
-                .order_by(desc(Peer.direction), Peer.node_id)
+            def dbcall():
+                with self.node.db.open_session() as sess:
+                    q = sess.query(Peer)\
+                        .filter(Peer.distance == distance,\
+                            Peer.connected == False)\
+                        .order_by(desc(Peer.direction), Peer.node_id)
 
-            np = q.limit(min(needed, bucket_needs))
+                    np = q.limit(min(needed, bucket_needs))
+                    return q.all()
 
-            for p in np:
-                self._connect_peer(sess, p)
-                needed -= 1
+            np = yield from self.node.loop.run_in_executor(None, dbcall)
 
-            if not needed:
-                break
+            if np:
+                for p in np:
+                    yield from self._connect_peer(p)
+                    needed -= 1
+
+                if not needed:
+                    break
 
             distance -= 1
 
             if distance < closestdistance:
                 break
 
-        sess.commit()
-
-    # This method runs in separate thread.
-    def _connect_peer(self, sess, dbpeer):
+    @asyncio.coroutine
+    def _connect_peer(self, dbpeer):
         log.info("Connecting to peer (id={}, addr=[{}]).".format(dbpeer.id,\
             dbpeer.address))
 
@@ -158,7 +166,13 @@ class ChordEngine():
 
         self.pending_connections[task] = dbpeer.id
 
-        dbpeer.connected = True
+        def dbcall(dbpeer):
+            with self.node.db.open_session() as sess:
+                dbpeer = sess.query(Peer).get(dbpeer.id)
+                dbpeer.connected = True
+                sess.commit()
+
+        yield from self.node.loop.run_in_executor(None, dbcall, dbpeer)
 
         return True
 
