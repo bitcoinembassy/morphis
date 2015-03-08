@@ -234,6 +234,10 @@ class ChordEngine():
         self.peers[addr] = peer
 
     def connection_lost(self, peer, exc):
+        asyncio.async(self._connection_lost(peer, exc), loop=self.node.loop)
+
+    @asyncio.coroutine
+    def _connection_lost(self, peer, exc):
         log.debug("connection_lost(): peer.id=[{}].".format(peer.dbid))
 
         addr = peer.get_protocol_handler().get_transport().get_extra_info("peername")
@@ -242,10 +246,13 @@ class ChordEngine():
         if not peer.dbid:
             return
 
-        with self.node.db.open_session() as sess:
-            dbpeer = sess.query(Peer).get(peer.dbid)
-            dbpeer.connected = False
-            sess.commit()
+        def dbcall():
+            with self.node.db.open_session() as sess:
+                dbpeer = sess.query(Peer).get(peer.dbid)
+                dbpeer.connected = False
+                sess.commit()
+
+        yield from self.node.loop.run_in_executor(None, dbcall)
 
     def peer_authenticated(self, peer):
         log.info("Peer (dbid={}) has authenticated.".format(peer.dbid))
