@@ -250,9 +250,6 @@ class ChordEngine():
                 # This would be an incoming connection.
                 dbpeer = sess.query(Peer).filter(Peer.node_id == peer.node_id).first()
 
-                address = "{}:{}".format(peer.protocol_handler.address[0],\
-                    peer.protocol_handler.address[1])
-
                 if not dbpeer:
                     # An incoming connection from an unknown Peer.
                     dbpeer = Peer()
@@ -266,7 +263,9 @@ class ChordEngine():
                         log.info("Peer is us! (Has the same ID!)")
                         return False
 
-                    dbpeer.address = address
+                    dbpeer.address = "{}:{}".format(\
+                        peer.protocol_handler.address[0],\
+                        peer.protocol_handler.address[1])
 
                     sess.add(dbpeer)
                 else:
@@ -282,9 +281,12 @@ class ChordEngine():
                         log.info("Already connected to Peer, disconnecting redundant connection.")
                         return False
 
-                    if dbpeer.address != address:
-                        log.info("Remote Peer address has changed, updating our db record.")
-                        dbpeer.address = address
+                    host, port = dbpeer.address.split(':')
+                    if host != peer.protocol_handler.address[0]:
+                        log.info("Remote Peer host has changed, updating our db record.")
+                        dbpeer.address = "{}:{}".format(\
+                            peer.protocol_handler.address[0],\
+                            port)
 
                 dbpeer.connected = True
 
