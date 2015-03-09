@@ -32,7 +32,7 @@ class ChordEngine():
         self.pending_connections = {} # {Task, Peer->dbid}
         self.peers = {} # {(host, port): Peer}.
 
-        self.peer_buckets = [[] for i in range(512)]
+        self.peer_buckets = [{} for i in range(512)] # [{addr: Peer}]
 
         self.minimum_connections = 1#10
         self.maximum_connections = 4#64
@@ -164,8 +164,11 @@ class ChordEngine():
         host, port = dbpeer.address.split(':')
 
         loop = self.node.loop
+
+        p = peer.Peer(self, dbpeer)
+
         client = loop.create_connection(\
-            partial(self._create_client_protocol, dbpeer.id),\
+            partial(self._create_client_protocol, p),\
             host, port)
 
         def dbcall(dbpeer):
@@ -205,15 +208,13 @@ class ChordEngine():
 
         return ph
 
-    def _create_client_protocol(self, dbid):
+    def _create_client_protocol(self, peer):
         ph = mn1.SshClientProtocol(self.node.loop)
         ph.client_key = self.node.get_node_key()
 
-        p = peer.Peer(self)
-        p.dbid = dbid
-        p.set_protocol_handler(ph)
+        peer.set_protocol_handler(ph)
 
-#        self.pending_connections.append(p)
+#        self.pending_connections.append(peer)
 
         return ph
 
@@ -231,6 +232,7 @@ class ChordEngine():
 
         addr = peer.get_protocol_handler().get_transport().get_extra_info("peername")
         del self.peers[addr]
+        self.peer_buckets[peer.distance - 1].pop(peer.address)
 
         if not peer.dbid:
             return
@@ -263,8 +265,8 @@ class ChordEngine():
                         dbpeer.node_id = peer.node_id
                         dbpeer.pubkey = peer.node_key.asbytes()
 
-                        dbpeer.distance, dbpeer.direction =\
-                            self._calc_distance(peer)
+                        dbpeer.distance = peer.distance
+                        dbpeer.direction = peer.direction
 
                         if dbpeer.distance == 0:
                             log.info("Peer is us! (Has the same ID!)")
@@ -300,17 +302,14 @@ class ChordEngine():
                         dbpeer.node_id = peer.node_id
                         dbpeer.pubkey = peer.node_key.asbytes()
 
-                        dbpeer.distance, dbpeer.direction =\
-                            self._calc_distance(peer)
+                        dbpeer.distance = peer.distance
+                        dbpeer.direction = peer.direction
 
                         if dbpeer.distance == 0:
                             log.info("Peer is us! (Has the same ID!)")
                             return False
 
-                        dbpeer.address = "{}:{}".format(\
-                            peer.protocol_handler.address[0],\
-                            peer.protocol_handler.address[1])
-
+                        dbpeer.address = peer.address
                         sess.add(dbpeer)
                     else:
                         # Known Peer has connected to us.
@@ -346,28 +345,3 @@ class ChordEngine():
                 peer.dbid = dbid
 
         return True
-
-    # returns: distance, direction
-    def _calc_distance(self, peer):
-        pid = peer.node_id
-        nid = self.node_id
-
-        if log.isEnabledFor(logging.DEBUG):
-            log.debug("pid=\n[{}], nid=\n[{}].".format(hex_dump(pid),\
-                hex_dump(nid)))
-
-        dist = 0
-        direction = 0
-
-        for i in range(64): # 64 bytes in 512 bits.
-            if pid[i] != nid[i]:
-                direction = 1 if pid[i] > nid[i] else -1
-
-                xv = pid[i] ^ nid[i]
-                xv = log_base2_8bit(xv)
-
-                dist = 8 * (63 - i) + xv
-
-                break
-
-        return dist, direction
