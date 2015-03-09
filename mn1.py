@@ -247,15 +247,6 @@ def _connectTaskCommon(protocol, server_mode):
 
     return True
 
-@asyncio.coroutine
-def clientConnectTask(protocol):
-    r = yield from connectTaskCommon(protocol, False)
-    if not r:
-        return r
-
-    # Connected and fully authenticated at this point.
-    yield from protocol.connection_handler.connection_ready()
-
 class SshProtocol(asyncio.Protocol):
     def __init__(self, loop):
         self.loop = loop
@@ -443,6 +434,71 @@ class SshProtocol(asyncio.Protocol):
         log.info("P: Connection made with [{}].".format(peer_name))
 
         self.connection_handler.connection_made(self)
+
+        asyncio.async(self._run(), loop=self.loop)
+
+    @asyncio.coroutine
+    def _run(self):
+        r = yield from connectTaskCommon(self, self.server_mode)
+
+        if not r:
+            return r
+
+        # Connected and fully authenticated at this point.
+        yield from self.connection_handler.connection_ready()
+
+        while True:
+            packet = yield from self.read_packet()
+            m = mnetpacket.SshPacket(None, packet)
+
+            t = m.getPacketType()
+            log.debug("Received packet, type=[{}].".format(t))
+            if t == mnetpacket.SSH_MSG_CHANNEL_OPEN:
+                msg = mnetpacket.SshChannelOpenMessage(packet)
+                log.info("P: Received CHANNEL_OPEN: channel_type=[{}], sender_channel=[{}].".format(msg.channel_type, msg.sender_channel))
+
+                r = yield from\
+                    self.channel_handler.request_open_channel(self, msg)
+
+                if r:
+                    sender_channel = self._open_channel(msg)
+                    yield from\
+                        self.channel_handler\
+                            .open_channel(self, msg, sender_channel)
+                else:
+                    self._open_channel_reject(msg)
+
+            elif t == mnetpacket.SSH_MSG_CHANNEL_DATA:
+                yield from self.channel_handler.data(self, packet)
+
+    def _open_channel(self, req_msg):
+        log.info("Accepting channel open request.")
+
+        cm = mnetpacket.SshChannelOpenConfirmationMessage()
+        cm.set_recipient_channel(req_msg.sender_channel)
+        cm.set_sender_channel(self._allocate_channel_id())
+        cm.set_initial_window_size(65535)
+        cm.set_maximum_packet_size(65535)
+
+        cm.encode()
+
+        self.write_packet(cm)
+
+        return cm.sender_channel
+
+    def _open_channel_reject(self, req_msg):
+        log.info("Rejecting channel open request.")
+
+        fm = mnetpacket.SshChannelOpenFailureMessage()
+        fm.recipient_channel = req_msg.sender_channel
+        fm.reason_code = 0
+        fm.description = "invalid"
+        fm.language_tag = "en"
+
+        fm.encode()
+
+        self.write_packet(fm)
+
 
     def data_received(self, data):
         try:
@@ -737,72 +793,6 @@ class SshServerProtocol(SshProtocol):
     def connection_made(self, transport):
         super().connection_made(transport)
 
-        log.info("S: Connection made from [{}].".format(self.address))
-
-        asyncio.async(self._run(), loop=self.loop)
-
-    @asyncio.coroutine
-    def _run(self):
-        r = yield from connectTaskCommon(self, True)
-
-        if not r:
-            return r
-
-        # Connected and fully authenticated at this point.
-        yield from self.connection_handler.connection_ready()
-
-        while True:
-            packet = yield from self.read_packet()
-            m = mnetpacket.SshPacket(None, packet)
-
-            t = m.getPacketType()
-            log.debug("Received packet, type=[{}].".format(t))
-            if t == mnetpacket.SSH_MSG_CHANNEL_OPEN:
-                msg = mnetpacket.SshChannelOpenMessage(packet)
-                log.info("S: Received CHANNEL_OPEN: channel_type=[{}], sender_channel=[{}].".format(msg.channel_type, msg.sender_channel))
-
-                r = yield from\
-                    self.channel_handler.request_open_channel(self, msg)
-
-                if r:
-                    sender_channel = self._open_channel(msg)
-                    yield from\
-                        self.channel_handler\
-                            .open_channel(self, msg, sender_channel)
-                else:
-                    self._open_channel_reject(msg)
-
-            elif t == mnetpacket.SSH_MSG_CHANNEL_DATA:
-                yield from self.channel_handler.data(self, packet)
-
-    def _open_channel(self, req_msg):
-        log.info("Accepting channel open request.")
-
-        cm = mnetpacket.SshChannelOpenConfirmationMessage()
-        cm.set_recipient_channel(req_msg.sender_channel)
-        cm.set_sender_channel(self._allocate_channel_id())
-        cm.set_initial_window_size(65535)
-        cm.set_maximum_packet_size(65535)
-
-        cm.encode()
-
-        self.write_packet(cm)
-
-        return cm.sender_channel
-
-    def _open_channel_reject(self, req_msg):
-        log.info("Rejecting channel open request.")
-
-        fm = mnetpacket.SshChannelOpenFailureMessage()
-        fm.recipient_channel = req_msg.sender_channel
-        fm.reason_code = 0
-        fm.description = "invalid"
-        fm.language_tag = "en"
-
-        fm.encode()
-
-        self.write_packet(fm)
-
     def data_received(self, data):
         super().data_received(data)
 
@@ -820,8 +810,6 @@ class SshClientProtocol(SshProtocol):
 
     def connection_made(self, transport):
         super().connection_made(transport)
-        log.info("C: Connection made to [{}].".format(self.address))
-        asyncio.async(clientConnectTask(self), loop=self.loop)
 
     def data_received(self, data):
         super().data_received(data)
