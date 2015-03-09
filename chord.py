@@ -4,6 +4,7 @@ import asyncio
 import logging
 import os
 import random
+import struct
 from functools import partial
 from datetime import datetime, timedelta
 
@@ -16,6 +17,9 @@ import peer as mnpeer
 import enc
 from db import Peer
 from mutil import hex_dump, log_base2_8bit
+
+# Chord Message Types.
+CHORD_MSG_FIND_NODE = 10
 
 log = logging.getLogger(__name__)
 
@@ -401,4 +405,48 @@ class ChordEngine():
     @asyncio.coroutine
     def channel_opened(self, peer, local_cid):
         log.info("Channel [{}] opened!".format(local_cid))
+
+        if peer.protocol.server_mode:
+            return
+
+        msg = ChordFindNode()
+        msg.node_id = self.node_id
+
+        peer.protocol.write_channel_data(local_cid, msg.encode())
+
+class ChordPacket(object):
+    def __init__(self, packet_type = None, buf = None):
+        self.buf = buf
+        self.packet_type = packet_type
+
+        if not buf:
+            return
+
+        self.parse()
+
+        if packet_type and self.packet_type != packet_type:
+            raise Exception("Expecting packet type [{}] but got [{}].".format(packet_type, self.packet_type))
+
+    def parse(self):
+        self.packetType = struct.unpack("B", self.buf[0:1])[0]
+
+    def encode(self):
+        nbuf = bytearray()
+        nbuf += struct.pack("B", self.packet_type & 0xff)
+
+        self.buf = nbuf
+
+        return nbuf
+
+class ChordFindNode(ChordPacket):
+    def __init__(self, buf = None):
+        self.node_id = None
+
+        super().__init__(CHORD_MSG_FIND_NODE, buf)
+
+    def encode(self):
+        nbuf = super().encode()
+        nbuf += self.node_id
+
+        return nbuf
 
