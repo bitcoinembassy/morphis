@@ -125,6 +125,8 @@ def __main():
 
     addpeer = args.addpeer
     instance = args.nn
+    if instance == None:
+        instance = 0
     bindaddr = args.bind
     if bindaddr == None:
         bindaddr = "127.0.0.1:5555"
