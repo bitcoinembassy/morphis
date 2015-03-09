@@ -4,7 +4,7 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import create_engine
 from sqlalchemy import Column, ForeignKey, Integer, String
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.types import BINARY, Boolean
+from sqlalchemy.types import BINARY, Boolean, DateTime
 
 Base = declarative_base()
 
@@ -23,6 +23,8 @@ class Peer(Base):
     address = Column(String, nullable=True)
 
     connected = Column(Boolean, nullable=False)
+
+    last_connect_attempt = Column(DateTime, nullable=True)
 
 class Db():
     def __init__(self, url):

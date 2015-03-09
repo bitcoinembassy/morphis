@@ -5,8 +5,9 @@ import logging
 import os
 import random
 from functools import partial
+from datetime import datetime, timedelta
 
-from sqlalchemy import func, desc
+from sqlalchemy import func, desc, or_
 
 import packet as mnetpacket
 import rsakey
@@ -135,9 +136,13 @@ class ChordEngine():
 
             def dbcall():
                 with self.node.db.open_session() as sess:
+                    grace = datetime.today() - timedelta(minutes=5)
+
                     q = sess.query(Peer)\
                         .filter(Peer.distance == distance,\
-                            Peer.connected == False)\
+                            Peer.connected == False,\
+                            or_(Peer.last_connect_attempt == None,\
+                                Peer.last_connect_attempt < grace))\
                         .order_by(desc(Peer.direction), Peer.node_id)
 
                     np = q.limit(min(needed, bucket_needs))
@@ -145,7 +150,9 @@ class ChordEngine():
 
             np = yield from self.node.loop.run_in_executor(None, dbcall)
 
-            if np:
+            if len(np):
+                bucket_needs = len(np)
+
                 for dbp in np:
                     peer = yield from self._connect_peer(dbp)
 
@@ -157,13 +164,18 @@ class ChordEngine():
                         log.error("Somehow we are trying to connect to an address [{}] already connected! [{}][{}]".format(dbp.address, existing, peer))
 
                     needed -= 1
+                    bucket_needs -= 1
 
                 if not needed:
                     break
 
+                if bucket_needs:
+                    continue
+
             distance -= 1
 
             if distance < closestdistance:
+                log.info("No more available PeerS to connect.")
                 break
 
     @asyncio.coroutine
@@ -185,6 +197,7 @@ class ChordEngine():
             with self.node.db.open_session() as sess:
                 dbpeer = sess.query(Peer).get(dbpeer.id)
                 dbpeer.connected = True
+                dbpeer.last_connect_attempt = datetime.today()
                 sess.commit()
 
         yield from self.node.loop.run_in_executor(None, dbcall, dbpeer)
