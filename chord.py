@@ -39,10 +39,12 @@ class ChordEngine():
 
     @asyncio.coroutine
     def add_peer(self, addr):
-        peer = Peer(address=addr, connected=False)
+        log.info("Adding peer (addr=[{}]).".format(addr))
 
         def dbcall():
             with self.node.db.open_session() as sess:
+                peer = Peer(address=addr, connected=False)
+
                 if sess.query(func.count("*")).filter(Peer.address == addr).scalar() > 0:
                     log.info("Peer [{}] already in list.".format(addr))
                     return False

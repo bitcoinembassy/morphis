@@ -144,8 +144,8 @@ def __main():
             bindaddr.split(':') # Just to preemptively test.
             node.set_bind_address(bindaddr)
         if addpeer != None:
-            for addpeer in addpeer:
-                node.chord_engine.add_peer(addpeer)
+            for peer in addpeer:
+                yield from node.chord_engine.add_peer(peer)
 
         yield from node.start()
 
