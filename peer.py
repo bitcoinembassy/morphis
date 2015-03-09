@@ -126,7 +126,9 @@ class ChannelHandler():
             self.peer.engine.channel_opened(self.peer, local_cid)
 
     @asyncio.coroutine
-    def data(self, protocol, packet):
+    def channel_data(self, protocol, packet):
         m = mnetpacket.SshChannelDataMessage(packet)
-        if log.isEnabledFor(logging.DEBUG):
-            log.debug("Received data, recipient_channel=[{}], value=[\n{}].".format(m.recipient_channel, hex_dump(m.data)))
+#        if log.isEnabledFor(logging.DEBUG):
+#            log.debug("Received data, recipient_channel=[{}], value=[\n{}].".format(m.recipient_channel, hex_dump(m.data)))
+        yield from self.peer.engine.channel_data(\
+            self.peer, m.recipient_channel, m.data)

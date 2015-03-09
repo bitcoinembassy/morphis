@@ -414,7 +414,16 @@ class ChordEngine():
 
         peer.protocol.write_channel_data(local_cid, msg.encode())
 
-class ChordPacket(object):
+    @asyncio.coroutine
+    def channel_data(self, peer, local_cid, data):
+        msg = ChordMessage(None, data)
+
+        log.info("packet_type=[{}].".format(msg.packet_type))
+
+        if msg.packet_type == CHORD_MSG_FIND_NODE:
+            log.info("Received CHORD_MSG_FIND_NODE message.")
+
+class ChordMessage(object):
     def __init__(self, packet_type = None, buf = None):
         self.buf = buf
         self.packet_type = packet_type
@@ -428,7 +437,7 @@ class ChordPacket(object):
             raise Exception("Expecting packet type [{}] but got [{}].".format(packet_type, self.packet_type))
 
     def parse(self):
-        self.packetType = struct.unpack("B", self.buf[0:1])[0]
+        self.packet_type = struct.unpack("B", self.buf[0:1])[0]
 
     def encode(self):
         nbuf = bytearray()
@@ -438,7 +447,7 @@ class ChordPacket(object):
 
         return nbuf
 
-class ChordFindNode(ChordPacket):
+class ChordFindNode(ChordMessage):
     def __init__(self, buf = None):
         self.node_id = None
 

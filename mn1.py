@@ -507,7 +507,7 @@ class SshProtocol(asyncio.Protocol):
                 msg = mnetpacket.SshChannelDataMessage(packet)
                 log.info("P: Received CHANNEL_DATA recipient_channel=[{}].".format(msg.recipient_channel))
 
-                yield from self.channel_handler.data(self, packet)
+                yield from self.channel_handler.channel_data(self, packet)
 
     def _open_channel(self, req_msg):
         log.info("Accepting channel open request.")
@@ -883,7 +883,7 @@ class ChannelHandler():
         pass
 
     @asyncio.coroutine
-    def data(self, protocol, packet):
+    def channel_data(self, protocol, packet):
         m = mnetpacket.SshChannelDataMessage(packet)
         if log.isEnabledFor(logging.DEBUG):
             log.debug("Received data, recipient_channel=[{}], value=[\n{}].".format(m.get_recipient_channel(), hex_dump(m.get_data())))
