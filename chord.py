@@ -343,3 +343,6 @@ class ChordEngine():
                 peer.dbid = dbid
 
         return True
+
+    def connection_ready(self, peer):
+        log.info("Connection to Peer (dbid={}) is now ready.".format(peer.dbid))

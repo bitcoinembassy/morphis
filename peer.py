@@ -103,6 +103,10 @@ class ConnectionHandler():
 
         return r
 
+    @asyncio.coroutine
+    def connection_ready(self):
+        self.peer.engine.connection_ready(self.peer)
+
 class ChannelHandler():
     def __init__(self, peer):
         self.peer = peer

@@ -251,6 +251,9 @@ def clientConnectTask(protocol):
     if not r:
         return r
 
+    # Connected and fully authenticated at this point.
+    yield from protocol.connection_handler.connection_ready()
+
 class SshProtocol(asyncio.Protocol):
     def __init__(self, loop):
         self.loop = loop
@@ -727,6 +730,9 @@ class SshServerProtocol(SshProtocol):
 
         if not r:
             return r
+
+        # Connected and fully authenticated at this point.
+        yield from self.connection_handler.connection_ready()
 
         while True:
             packet = yield from self.read_packet()
