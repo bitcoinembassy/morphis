@@ -99,7 +99,7 @@ class RsaKey(asymkey.AsymKey):
         # verify the signature by SHA'ing the key_data and encrypting it using the
         # public key.  some wackiness ensues where we "pkcs1imify" the 20-byte
         # hash into a string as long as the RSA key.
-        log.info("sig=[{}].".format(sig))
+        log.debug("sig=[{}].".format(sig))
         hash_obj = util.inflate_long(self._pkcs1imify(sha1(key_data).digest()), True)
         rsa = RSA.construct((int(self.n), int(self.e)))
         return rsa.verify(hash_obj, (sig, ))

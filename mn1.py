@@ -785,7 +785,6 @@ class SshClientProtocol(SshProtocol):
         asyncio.async(clientConnectTask(self), loop=self.loop)
 
     def data_received(self, data):
-        log.info("C: Received: [{}].".format(data))
         super().data_received(data)
 
     def error_received(self, exc):
