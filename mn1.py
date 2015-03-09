@@ -18,7 +18,6 @@ from mutil import hex_dump
 import peer
 
 clientPipes = {} # task, [reader, writer]
-clientObjs = {} # remoteAddress, dict
 
 log = logging.getLogger(__name__)
 
@@ -438,17 +437,6 @@ class SshProtocol(asyncio.Protocol):
 
         self.connection_handler.connection_made(self)
 
-        client = clientObjs.get(peer_name)
-        if client == None:
-            log.info("P: Initializing new clientObj.")
-            client = {"connected": True}
-        elif client["connected"]:
-            log.warning("P: Already connected with client [{}].".format(client))
-
-        clientObjs[peer_name] = client
-
-        self.client = client
-
     def data_received(self, data):
         try:
             self._data_received(data)
@@ -460,7 +448,7 @@ class SshProtocol(asyncio.Protocol):
         self.connection_handler.error_received(self, exc)
 
     def connection_lost(self, exc):
-        log.info("X: Connection lost to [{}], client=[{}].".format(self.address, self.client))
+        log.info("X: Connection lost to [{}].".format(self.address))
         self.connection_handler.connection_lost(self, exc)
 
     def _data_received(self, data):
@@ -812,7 +800,6 @@ class SshServerProtocol(SshProtocol):
 
     def connection_lost(self, exc):
         super().connection_lost(exc)
-        self.client["connected"] = False
 
 class SshClientProtocol(SshProtocol):
     def __init__(self, loop):
@@ -833,7 +820,6 @@ class SshClientProtocol(SshProtocol):
 
     def connection_lost(self, exc):
         super().connection_lost(exc)
-        self.client["connected"] = False
 
 class ChannelHandler():
     @asyncio.coroutine
