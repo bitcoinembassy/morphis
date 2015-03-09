@@ -82,7 +82,7 @@ class KexGroup14():
         pkt = yield from self.protocol.read_packet()
         m = mnetpacket.SshKexdhReplyMessage(pkt)
 
-        r = self._parse_kexdh_reply(m)
+        r = yield from self._parse_kexdh_reply(m)
 
         if not r:
             # Client is rejected for some reason by higher level.
@@ -114,6 +114,7 @@ class KexGroup14():
                 break
         self.x = putil.inflate_long(x_bytes)
 
+    @asyncio.coroutine
     def _parse_kexdh_reply(self, m):
         # client mode
         host_key = m.getHostKey()
@@ -139,7 +140,7 @@ class KexGroup14():
         self.protocol.set_K_H(K, H)
 
         log.info("Verifying signature...")
-        r = self.protocol.verify_server_key(host_key, sig)
+        r = yield from self.protocol.verify_server_key(host_key, sig)
         return r
 #        self.transport._activate_outbound()
 

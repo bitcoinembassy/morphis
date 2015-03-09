@@ -53,13 +53,16 @@ class ConnectionHandler():
     def connection_lost(self, protocol, exc):
         self.peer.engine.connection_lost(self.peer, exc)
 
+    @asyncio.coroutine
     def peer_authenticated(self, protocol):
         if protocol.server_mode:
             self.peer._peer_authenticated(self.peer.protocol_handler.client_key)
         else:
             self.peer._peer_authenticated(self.peer.protocol_handler.server_key)
 
-        return self.peer.engine.peer_authenticated(self.peer)
+        r = yield from self.peer.engine.peer_authenticated(self.peer)
+
+        return r
 
 class ChannelHandler():
     def __init__(self, peer):

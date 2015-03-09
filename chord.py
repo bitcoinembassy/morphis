@@ -37,35 +37,48 @@ class ChordEngine():
         self.minimum_connections = 1#10
         self.maximum_connections = 4#64
 
+    @asyncio.coroutine
     def add_peer(self, addr):
-        peer = Peer(address=addr, connected=False)
+        log.info("Adding peer (addr=[{}]).".format(addr))
 
-        with self.node.db.open_session() as sess:
-            if sess.query(func.count("*")).filter(Peer.address == addr).scalar() > 0:
-                log.info("Peer [{}] already in list.".format(addr))
-                return
+        def dbcall():
+            with self.node.db.open_session() as sess:
+                peer = Peer(address=addr, connected=False)
 
-            sess.add(peer)
-            sess.commit()
+                if sess.query(func.count("*")).filter(Peer.address == addr).scalar() > 0:
+                    log.info("Peer [{}] already in list.".format(addr))
+                    return False
 
-        if self.running:
-            self._process_connection_count()
+                sess.add(peer)
+                sess.commit()
 
+                return True
+
+        r = yield from self.node.loop.run_in_executor(None, dbcall)
+
+        if r and self.running:
+            yield from self._process_connection_count()
+
+    @asyncio.coroutine
     def start(self):
         self.running = True
 
         host, port = self.bind_address.split(':')
-        self.server = self.node.get_loop().create_server(self._create_server_protocol, host, port)
-#        self.node.get_loop().run_until_complete(self.server)
-        asyncio.async(self.server, loop=self.node.get_loop())
+        self.server = self.node.loop.create_server(\
+            self._create_server_protocol, host, port)
+
+#        self.node.loop.run_until_complete(self.server)
+#        asyncio.async(self.server, loop=self.node.loop)
+        yield from self.server
 
         log.info("Node listening on [{}:{}].".format(host, port))
 
-        self._process_connection_count()
+        yield from self._process_connection_count()
 
     def stop(self):
         self.server.close()
 
+    @asyncio.coroutine
     def _process_connection_count(self):
         cnt = len(self.pending_connections) + len(self.peers)
         if cnt >= self.maximum_connections:
@@ -73,35 +86,42 @@ class ChordEngine():
 
         needed = self.maximum_connections - cnt
 
-        with self.node.db.open_session() as sess:
-            self.__process_connection_count(sess, needed)
+        yield from self.__process_connection_count(needed)
 
-    def __process_connection_count(self, sess, needed):
+    @asyncio.coroutine
+    def __process_connection_count(self, needed):
         # First connect to any unconnected PeerS that are in the database with
         # a null node_id. Such entries had to be added manually; thus we should
         # listen to the user and try them out.
-        np = sess.query(Peer)\
-            .filter(Peer.node_id == None, Peer.connected == False)\
-            .limit(needed)
+        def dbcall():
+            with self.node.db.open_session() as sess:
+                return sess.query(Peer)\
+                    .filter(Peer.node_id == None, Peer.connected == False)\
+                    .limit(needed).all()
+
+        np = yield from self.node.loop.run_in_executor(None, dbcall)
 
         for n in np:
-            self._connect_peer(sess, n)
+            yield from self._connect_peer(n)
             needed -= 1
 
         if needed <= 0:
-            sess.commit()
             return
 
         # If we still need PeerS, then we now use our Chord algorithm.
 
-        closestdistance = sess.query(func.min_(Peer.distance))\
-            .filter(Peer.distance != None)\
-            .filter(Peer.distance != 0)\
-            .filter(Peer.connected == False)\
-            .scalar()
+        def dbcall():
+            with self.node.db.open_session() as sess:
+                return sess.query(func.min_(Peer.distance))\
+                    .filter(Peer.distance != None)\
+                    .filter(Peer.distance != 0)\
+                    .filter(Peer.connected == False)\
+                    .scalar()
+
+        closestdistance =\
+            yield from self.node.loop.run_in_executor(None, dbcall)
 
         if not closestdistance:
-            sess.commit()
             return
 
         distance = 512
@@ -111,70 +131,71 @@ class ChordEngine():
             if not bucket_needs:
                 continue
 
-            q = sess.query(Peer)\
-                .filter(Peer.distance == distance, Peer.connected == False)\
-                .order_by(desc(Peer.direction), Peer.node_id)
+            def dbcall():
+                with self.node.db.open_session() as sess:
+                    q = sess.query(Peer)\
+                        .filter(Peer.distance == distance,\
+                            Peer.connected == False)\
+                        .order_by(desc(Peer.direction), Peer.node_id)
 
-            np = q.limit(min(needed, bucket_needs))
+                    np = q.limit(min(needed, bucket_needs))
+                    return q.all()
 
-            for p in np:
-                self._connect_peer(sess, p)
-                needed -= 1
+            np = yield from self.node.loop.run_in_executor(None, dbcall)
 
-            if not needed:
-                break
+            if np:
+                for p in np:
+                    yield from self._connect_peer(p)
+                    needed -= 1
+
+                if not needed:
+                    break
 
             distance -= 1
 
             if distance < closestdistance:
                 break
 
-        sess.commit()
-
-    def _connect_peer(self, sess, dbpeer):
+    @asyncio.coroutine
+    def _connect_peer(self, dbpeer):
         log.info("Connecting to peer (id={}, addr=[{}]).".format(dbpeer.id,\
             dbpeer.address))
 
         host, port = dbpeer.address.split(':')
 
-        loop = self.node.get_loop()
+        loop = self.node.loop
         client = loop.create_connection(\
             partial(self._create_client_protocol, dbpeer.id),\
             host, port)
 
-        task = asyncio.async(client, loop=loop)
-        task.add_done_callback(self._client_connect_callback)
+        def dbcall(dbpeer):
+            with self.node.db.open_session() as sess:
+                dbpeer = sess.query(Peer).get(dbpeer.id)
+                dbpeer.connected = True
+                sess.commit()
 
-        self.pending_connections[task] = dbpeer.id
+        yield from self.node.loop.run_in_executor(None, dbcall, dbpeer)
 
-        dbpeer.connected = True
+        try:
+            yield from client
+        except Exception as ex:
+            log.info("Connection to Peer (dbid=[{}]) failed: {}: {}"\
+                .format(dbpeer.id, type(ex), ex))
+
+            # An exception on connect; update db, Etc.
+            def dbcall(dbpeer):
+                with self.node.db.open_session() as sess:
+                    dbpeer = sess.query(Peer).get(dbpeer.id)
+                    dbpeer.connected = False
+
+                    sess.commit()
+
+            yield from self.node.loop.run_in_executor(None, dbcall, dbpeer)
 
         return True
 
-    def _client_connect_callback(self, task):
-        dbid = self.pending_connections.pop(task)
-
-        if task.cancelled():
-            log.info("Connection to Peer (dbid=[{}]) was cancelled."\
-                .format(dbid))
-        elif task.exception():
-            ex = task.exception()
-            log.info("Connection to Peer (dbid=[{}]) failed: {}: {}"\
-                .format(dbid, type(ex), ex))
-        else:
-            # Connect was successful, and we do nothing here as
-            # connection_made(..) will be called next.
-            return
-
-        # An exception or cancelled connect; update db, Etc.
-        with self.node.db.open_session() as sess:
-            dbpeer = sess.query(Peer).get(dbid)
-            dbpeer.connected = False
-
-            sess.commit()
-
     def _create_server_protocol(self):
-        ph = mn1.SshServerProtocol(self.node.get_loop())
+        ph = mn1.SshServerProtocol(self.node.loop)
         ph.server_key = self.node.get_node_key()
 
         p = peer.Peer(self)
@@ -185,7 +206,7 @@ class ChordEngine():
         return ph
 
     def _create_client_protocol(self, dbid):
-        ph = mn1.SshClientProtocol(self.node.get_loop())
+        ph = mn1.SshClientProtocol(self.node.loop)
         ph.client_key = self.node.get_node_key()
 
         p = peer.Peer(self)
@@ -202,6 +223,10 @@ class ChordEngine():
         self.peers[addr] = peer
 
     def connection_lost(self, peer, exc):
+        asyncio.async(self._connection_lost(peer, exc), loop=self.node.loop)
+
+    @asyncio.coroutine
+    def _connection_lost(self, peer, exc):
         log.debug("connection_lost(): peer.id=[{}].".format(peer.dbid))
 
         addr = peer.get_protocol_handler().get_transport().get_extra_info("peername")
@@ -210,93 +235,117 @@ class ChordEngine():
         if not peer.dbid:
             return
 
-        with self.node.db.open_session() as sess:
-            dbpeer = sess.query(Peer).get(peer.dbid)
-            dbpeer.connected = False
-            sess.commit()
+        def dbcall():
+            with self.node.db.open_session() as sess:
+                dbpeer = sess.query(Peer).get(peer.dbid)
+                if not dbpeer:
+                    # Might have been deleted.
+                    return;
+                dbpeer.connected = False
+                sess.commit()
 
+        yield from self.node.loop.run_in_executor(None, dbcall)
+
+    @asyncio.coroutine
     def peer_authenticated(self, peer):
         log.info("Peer (dbid={}) has authenticated.".format(peer.dbid))
 
-        with self.node.db.open_session() as sess:
-            if peer.dbid:
-                # This would be an outgoing connection; and thus this dbid does
-                # for sure exist in the database.
-                dbpeer = sess.query(Peer).get(peer.dbid)
+        if peer.dbid:
+            # This would be an outgoing connection; and thus this dbid does
+            # for sure exist in the database.
+            def dbcall():
+                with self.node.db.open_session() as sess:
+                    dbpeer = sess.query(Peer).get(peer.dbid)
 
-                if not dbpeer.node_id:
-                    # Then it was a manually initiated connection (and no
-                    # public key was specified).
-                    dbpeer.node_id = peer.node_id
-                    dbpeer.pubkey = peer.node_key.asbytes()
+                    if not dbpeer.node_id:
+                        # Then it was a manually initiated connection (and no
+                        # public key was specified).
+                        dbpeer.node_id = peer.node_id
+                        dbpeer.pubkey = peer.node_key.asbytes()
 
-                    dbpeer.distance, dbpeer.direction =\
-                        self._calc_distance(peer)
+                        dbpeer.distance, dbpeer.direction =\
+                            self._calc_distance(peer)
 
-                    if dbpeer.distance == 0:
-                        log.info("Peer is us! (Has the same ID!)")
-                        sess.delete(dbpeer)
+                        if dbpeer.distance == 0:
+                            log.info("Peer is us! (Has the same ID!)")
+                            sess.delete(dbpeer)
+                            sess.commit()
+                            return False
+
                         sess.commit()
-                        return False
-                else:
-                    # Then we were trying to connect to a specific node_id.
-                    if dbpeer.node_id != peer.node_id:
-                        # Then the node we reached is not the node we were
-                        # trying to connect to.
-                        dbpeer.connected = False
-                        sess.commit()
-                        return False
-            else:
-                # This would be an incoming connection.
-                dbpeer = sess.query(Peer).filter(Peer.node_id == peer.node_id).first()
+                    else:
+                        # Then we were trying to connect to a specific node_id.
+                        if dbpeer.node_id != peer.node_id:
+                            # Then the node we reached is not the node we were
+                            # trying to connect to.
+                            dbpeer.connected = False
+                            sess.commit()
+                            return False
 
-                if not dbpeer:
-                    # An incoming connection from an unknown Peer.
-                    dbpeer = Peer()
-                    dbpeer.node_id = peer.node_id
-                    dbpeer.pubkey = peer.node_key.asbytes()
+                    return True
 
-                    dbpeer.distance, dbpeer.direction =\
-                        self._calc_distance(peer)
+            r = yield from self.node.loop.run_in_executor(None, dbcall)
+            if not r:
+                return False
+        else:
+            # This would be an incoming connection.
+            def dbcall():
+                with self.node.db.open_session() as sess:
+                    dbpeer = sess.query(Peer)\
+                        .filter(Peer.node_id == peer.node_id).first()
 
-                    if dbpeer.distance == 0:
-                        log.info("Peer is us! (Has the same ID!)")
-                        return False
+                    if not dbpeer:
+                        # An incoming connection from an unknown Peer.
+                        dbpeer = Peer()
+                        dbpeer.node_id = peer.node_id
+                        dbpeer.pubkey = peer.node_key.asbytes()
 
-                    dbpeer.address = "{}:{}".format(\
-                        peer.protocol_handler.address[0],\
-                        peer.protocol_handler.address[1])
+                        dbpeer.distance, dbpeer.direction =\
+                            self._calc_distance(peer)
 
-                    sess.add(dbpeer)
-                else:
-                    # Known Peer has connected to us.
-                    if dbpeer.distance == 0:
-                        log.warning("Found ourselves in the Peer table!")
-                        log.info("Peer is us! (Has the same ID!)")
-                        dbpeer.connected = False
-                        sess.commit()
-                        return False
+                        if dbpeer.distance == 0:
+                            log.info("Peer is us! (Has the same ID!)")
+                            return False
 
-                    if dbpeer.connected:
-                        log.info("Already connected to Peer, disconnecting redundant connection.")
-                        return False
-
-                    host, port = dbpeer.address.split(':')
-                    if host != peer.protocol_handler.address[0]:
-                        log.info("Remote Peer host has changed, updating our db record.")
                         dbpeer.address = "{}:{}".format(\
                             peer.protocol_handler.address[0],\
-                            port)
+                            peer.protocol_handler.address[1])
 
-                dbpeer.connected = True
+                        sess.add(dbpeer)
+                    else:
+                        # Known Peer has connected to us.
+                        if dbpeer.distance == 0:
+                            log.warning("Found ourselves in the Peer table!")
+                            log.info("Peer is us! (Has the same ID!)")
+                            dbpeer.connected = False
+                            sess.commit()
+                            return False
 
-            sess.commit()
+                        if dbpeer.connected:
+                            log.info("Already connected to Peer, disconnecting redundant connection.")
+                            return False
 
-            # For incoming connections only, but need to have committed first.
+                        host, port = dbpeer.address.split(':')
+                        if host != peer.protocol_handler.address[0]:
+                            log.info("Remote Peer host has changed, updating our db record.")
+                            dbpeer.address = "{}:{}".format(\
+                                peer.protocol_handler.address[0],\
+                                port)
+
+                    dbpeer.connected = True
+
+                    sess.commit()
+
+                    return True, dbpeer.id
+
+            r, dbid = yield from self.node.loop.run_in_executor(None, dbcall)
+            if not r:
+                return False
+
             if not peer.dbid:
-                peer.dbid = dbpeer.id
+                peer.dbid = dbid
 
-            return True
+        return True
 
     # returns: distance, direction
     def _calc_distance(self, peer):
