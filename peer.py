@@ -112,19 +112,15 @@ class ChannelHandler():
         self.peer = peer
 
     @asyncio.coroutine
-    def open_channel(self, protocol, packet):
-        m = mnetpacket.SshChannelOpenMessage(packet)
-        log.info("S: Received CHANNEL_OPEN: channel_type=[{}], sender_channel=[{}].".format(m.channel_type, m.sender_channel))
+    def request_open_channel(self, protocol, message):
+        r = yield from\
+            self.peer.engine.request_open_channel(self.peer, message)
+        return r
 
-        cm = mnetpacket.SshChannelOpenConfirmationMessage()
-        cm.set_recipient_channel(m.sender_channel)
-        cm.set_sender_channel(0)
-        cm.set_initial_window_size(65535)
-        cm.set_maximum_packet_size(65535)
-
-        cm.encode()
-
-        protocol.write_packet(cm)
+    @asyncio.coroutine
+    def open_channel(self, protocol, message, sender_channel):
+        yield from\
+            self.peer.engine.open_channel(self.peer, message, sender_channel)
 
     @asyncio.coroutine
     def data(self, protocol, packet):

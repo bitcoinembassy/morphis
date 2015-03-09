@@ -356,3 +356,14 @@ class ChordEngine():
             return;
 
         yield from peer.protocol_handler.open_channel("mpeer")
+
+    @asyncio.coroutine
+    def request_open_channel(self, peer, req):
+        if req.channel_type != "mpeer":
+            return False
+
+        return True
+
+    @asyncio.coroutine
+    def open_channel(self, peer, req, sender_channel):
+        pass

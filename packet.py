@@ -566,6 +566,33 @@ class SshChannelOpenConfirmationMessage(SshPacket):
 
         self.buf = nbuf
 
+class SshChannelOpenFailureMessage(SshPacket):
+    def __init__(self, buf = None):
+        super().__init__(SSH_MSG_CHANNEL_OPEN_FAILURE, buf)
+
+    def parse(self):
+        super().parse()
+
+        i = 1
+        self.recipient_channel = struct.unpack(">L", self.buf[i:i+4])[0]
+        i += 4
+        self.reason_code = struct.unpack(">L", self.buf[i:i+4])[0]
+        i += 4
+        l, self.description = sshtype.parseString(self.buf[i:])
+        i += l
+        l, self.language_tag = sshtype.parseString(self.buf[i:])
+
+    def encode(self):
+        nbuf = bytearray()
+
+        nbuf += struct.pack("B", self.getPacketType() & 0xff)
+        nbuf += struct.pack(">L", self.recipient_channel)
+        nbuf += struct.pack(">L", self.reason_code)
+        nbuf += sshtype.encodeString(self.description)
+        nbuf += sshtype.encodeString(self.language_tag)
+
+        self.buf = nbuf
+
 class SshChannelDataMessage(SshPacket):
     def __init__(self, buf = None):
         super().__init__(SSH_MSG_CHANNEL_DATA, buf)

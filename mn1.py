@@ -759,9 +759,50 @@ class SshServerProtocol(SshProtocol):
             t = m.getPacketType()
             log.debug("Received packet, type=[{}].".format(t))
             if t == mnetpacket.SSH_MSG_CHANNEL_OPEN:
-                yield from self.channel_handler.open_channel(self, packet)
+                msg = mnetpacket.SshChannelOpenMessage(packet)
+                log.info("S: Received CHANNEL_OPEN: channel_type=[{}], sender_channel=[{}].".format(msg.channel_type, msg.sender_channel))
+
+                r = yield from\
+                    self.channel_handler.request_open_channel(self, msg)
+
+                if r:
+                    sender_channel = self._open_channel(msg)
+                    yield from\
+                        self.channel_handler\
+                            .open_channel(self, msg, sender_channel)
+                else:
+                    self._open_channel_reject(msg)
+
             elif t == mnetpacket.SSH_MSG_CHANNEL_DATA:
                 yield from self.channel_handler.data(self, packet)
+
+    def _open_channel(self, req_msg):
+        log.info("Accepting channel open request.")
+
+        cm = mnetpacket.SshChannelOpenConfirmationMessage()
+        cm.set_recipient_channel(req_msg.sender_channel)
+        cm.set_sender_channel(self._allocate_channel_id())
+        cm.set_initial_window_size(65535)
+        cm.set_maximum_packet_size(65535)
+
+        cm.encode()
+
+        self.write_packet(cm)
+
+        return cm.sender_channel
+
+    def _open_channel_reject(self, req_msg):
+        log.info("Rejecting channel open request.")
+
+        fm = mnetpacket.SshChannelOpenFailureMessage()
+        fm.recipient_channel = req_msg.sender_channel
+        fm.reason_code = 0
+        fm.description = "invalid"
+        fm.language_tag = "en"
+
+        fm.encode()
+
+        self.write_packet(fm)
 
     def data_received(self, data):
         super().data_received(data)
@@ -796,19 +837,8 @@ class SshClientProtocol(SshProtocol):
 
 class ChannelHandler():
     @asyncio.coroutine
-    def open_channel(self, protocol, packet):
-        m = mnetpacket.SshChannelOpenMessage(packet)
-        log.info("S: Received CHANNEL_OPEN: channel_type=[{}], sender_channel=[{}].".format(m.channel_type, m.sender_channel))
-
-        cm = mnetpacket.SshChannelOpenConfirmationMessage()
-        cm.set_recipient_channel(m.get_sender_channel())
-        cm.set_sender_channel(_allocate_channel_id())
-        cm.set_initial_window_size(65535)
-        cm.set_maximum_packet_size(65535)
-
-        cm.encode()
-
-        protocol.write_packet(cm)
+    def open_channel(self, protocol, message):
+        pass
 
     @asyncio.coroutine
     def data(self, protocol, packet):
