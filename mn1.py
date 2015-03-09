@@ -70,7 +70,8 @@ def _connectTaskCommon(protocol, server_mode):
 
     # Read KexInit packet.
     packet = yield from protocol.read_packet()
-    log.info("X: Received packet [{}].".format(packet))
+    if log.isEnabledFor(logging.DEBUG):
+        log.debug("X: Received packet [{}].".format(hex_dump(packet)))
 
     pobj = mnetpacket.SshPacket(None, packet)
     packet_type = pobj.getPacketType()
@@ -84,7 +85,8 @@ def _connectTaskCommon(protocol, server_mode):
     protocol.setRemoteKexInitMessage(packet)
 
     pobj = mnetpacket.SshKexInitMessage(packet)
-    log.info("cookie=[{}].".format(pobj.getCookie()))
+    if log.isEnabledFor(logging.DEBUG):
+        log.debug("cookie=[{}].".format(pobj.getCookie()))
     log.info("keyExchangeAlgorithms=[{}].".format(pobj.getKeyExchangeAlgorithms()))
 
     protocol.waitingForNewKeys = True
@@ -170,7 +172,8 @@ def _connectTaskCommon(protocol, server_mode):
             if m.get_algorithm_name() != "ssh-rsa":
                 raise SshException("Unhandled client auth algorithm [{}].".format(m.get_algorithm_name()))
 
-        log.debug("signature=[{}].".format(m.get_signature()))
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("signature=[{}].".format(hex_dump(m.get_signature())))
 
         signature = m.get_signature()
 
@@ -237,7 +240,7 @@ def _connectTaskCommon(protocol, server_mode):
         m = mnetpacket.SshUserauthSuccessMessage(packet)
         log.info("Userauth accepted.")
 
-    log.debug("Connect task done (server={}).".format(server_mode))
+    log.info("Connect task done (server={}).".format(server_mode))
 
 #    if not server_mode:
 #        protocol.transport.close()
@@ -375,7 +378,7 @@ class SshProtocol(asyncio.Protocol):
         self.remoteKexInitMessage = val
 
     def init_outbound_encryption(self):
-        log.debug("Initializing outbound encryption.")
+        log.info("Initializing outbound encryption.")
         # use: AES.MODE_CBC: bs: 16, ks: 32. hmac-sha1=20 key size.
         if not self.server_mode:
             iiv = self.generateKey(b'A', 16)
@@ -386,13 +389,15 @@ class SshProtocol(asyncio.Protocol):
             ekey = self.generateKey(b'D', 32)
             ikey = self.generateKey(b'F', 20)
 
-        log.info("ekey=[{}], iiv=[{}].".format(ekey, iiv))
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("ekey=[{}], iiv=[{}].".format(ekey, iiv))
+
         self.outCipher = AES.new(ekey, AES.MODE_CBC, iiv)
         self.outHmacKey = ikey
         self.outHmacSize = 20
 
     def init_inbound_encryption(self):
-        log.debug("Initializing inbound encryption.")
+        log.info("Initializing inbound encryption.")
         # use: AES.MODE_CBC: bs: 16, ks: 32. hmac-sha1=20 key size.
         if not self.server_mode:
             iiv = self.generateKey(b'B', 16)
@@ -403,7 +408,9 @@ class SshProtocol(asyncio.Protocol):
             ekey = self.generateKey(b'C', 32)
             ikey = self.generateKey(b'E', 20)
 
-        log.info("ekey=[{}], iiv=[{}].".format(ekey, iiv))
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("ekey=[{}], iiv=[{}].".format(ekey, iiv))
+
         self.inCipher = AES.new(ekey, AES.MODE_CBC, iiv)
         self.inHmacKey = ikey
         self.inHmacSize = 20
@@ -433,7 +440,7 @@ class SshProtocol(asyncio.Protocol):
         self.transport = transport
         self.address = peer_name = transport.get_extra_info("peername")
 
-        log.debug("P: Connection made with [{}].".format(peer_name))
+        log.info("P: Connection made with [{}].".format(peer_name))
 
         self.connection_handler.connection_made(self)
 
@@ -452,8 +459,8 @@ class SshProtocol(asyncio.Protocol):
         self.connection_handler.connection_lost(self, exc)
 
     def _data_received(self, data):
-        log.debug("data_received(..): start.")
         if log.isEnabledFor(logging.DEBUG):
+            log.debug("data_received(..): start.")
             log.debug("X: Received: [\n{}].".format(hex_dump(data)))
 
         if self.binaryMode:
@@ -569,7 +576,8 @@ class SshProtocol(asyncio.Protocol):
             buf += packetObject.buf
             buf += os.urandom(padding)
 
-            log.info("len(buf)=[{}], padding=[{}].".format(len(buf), padding))
+            if log.isEnabledFor(logging.DEBUG):
+                log.debug("len(buf)=[{}], padding=[{}].".format(len(buf), padding))
 
             if self.outHmacSize != 0:
                 tmac = hmac.new(self.outHmacKey, digestmod=sha1)
@@ -643,10 +651,13 @@ class SshProtocol(asyncio.Protocol):
                 if len(self.cbuf) < 4:
                     return
 
-                log.info("t=[{}].".format(self.cbuf[:4]))
+                if log.isEnabledFor(logging.DEBUG):
+                    log.debug("t=[{}].".format(self.cbuf[:4]))
 
                 packet_length = struct.unpack(">L", self.cbuf[:4])[0]
-                log.debug("packet_length=[{}].".format(packet_length))
+
+                if log.isEnabledFor(logging.DEBUG):
+                    log.debug("packet_length=[{}].".format(packet_length))
 
                 if packet_length > 35000:
                     log.warning("Illegal packet_length [{}] received.".format(packet_length))

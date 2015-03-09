@@ -40,7 +40,6 @@ class KexGroup14():
         self.x = int(0)
         self.e = int(0)
         self.f = int(0)
-        log.info("hi@#$")
 
     @asyncio.coroutine
     def do_kex(self):
@@ -48,18 +47,19 @@ class KexGroup14():
         # after successfull authentication, is rejected by its id.
 
         self._generate_x()
-        log.debug("x=[{}]".format(self.x))
+
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("x=[{}]".format(self.x))
 
         if self.protocol.server_mode:
             # compute f = g^x mod p, but don't send it yet
             self.f = pow(self.G, self.x, self.P)
 #            self.transport._expect_packet(_MSG_KEXDH_INIT)
 
-            log.info("TEST")
-
             pkt = yield from self.protocol.read_packet()
             m = mnetpacket.SshKexdhInitMessage(pkt)
-            log.info("Client sent e=[{}].".format(m.getE()))
+            if log.isEnabledFor(logging.DEBUG):
+                log.debug("Client sent e=[{}].".format(m.getE()))
             self._parse_kexdh_init(m)
 
 #            pkt = yield from self.protocol.read_packet()
@@ -123,7 +123,8 @@ class KexGroup14():
             raise SshException('Server kex "f" is out of range')
         sig = m.getSignature()
         K = pow(self.f, self.x, self.P)
-        log.debug("K=[{}].".format(K))
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("K=[{}].".format(K))
         # okay, build up the hash H of (V_C || V_S || I_C || I_S || K_S || e || f || K)
         hm = bytearray()
         hm += sshtype.encodeString(self.protocol.getLocalBanner())
@@ -150,7 +151,8 @@ class KexGroup14():
         if (self.e < 1) or (self.e > self.P - 1):
             raise SshException('Client kex "e" is out of range')
         K = pow(self.e, self.x, self.P)
-        log.debug("K=[{}].".format(K))
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("K=[{}].".format(K))
         key = self.protocol.server_key.asbytes()
         # okay, build up the hash H of (V_C || V_S || I_C || I_S || K_S || e || f || K)
         hm = bytearray()

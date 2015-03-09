@@ -94,12 +94,14 @@ class RsaKey(asymkey.AsymKey):
         if v != 'ssh-rsa':
             log.warning("Not an ssh-rsa signature!")
             return False
-        log.info("l[{}][{}]".format(i, len(sig_msg)))
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("l[{}][{}]".format(i, len(sig_msg)))
         sig = util.inflate_long(sshtype.parseBinary(sig_msg[i:])[1], True)
         # verify the signature by SHA'ing the key_data and encrypting it using the
         # public key.  some wackiness ensues where we "pkcs1imify" the 20-byte
         # hash into a string as long as the RSA key.
-        log.debug("sig=[{}].".format(sig))
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("sig=[{}].".format(sig))
         hash_obj = util.inflate_long(self._pkcs1imify(sha1(key_data).digest()), True)
         rsa = RSA.construct((int(self.n), int(self.e)))
         return rsa.verify(hash_obj, (sig, ))
