@@ -161,11 +161,6 @@ class ChordEngine():
             partial(self._create_client_protocol, dbpeer.id),\
             host, port)
 
-        task = asyncio.async(client, loop=loop)
-        task.add_done_callback(self._client_connect_callback)
-
-        self.pending_connections[task] = dbpeer.id
-
         def dbcall(dbpeer):
             with self.node.db.open_session() as sess:
                 dbpeer = sess.query(Peer).get(dbpeer.id)
@@ -174,36 +169,23 @@ class ChordEngine():
 
         yield from self.node.loop.run_in_executor(None, dbcall, dbpeer)
 
-        return True
-
-    def _client_connect_callback(self, task):
-        asyncio.async(self.__client_connect_callback(task), loop=self.node.loop)
-
-    @asyncio.coroutine
-    def __client_connect_callback(self, task):
-        dbid = self.pending_connections.pop(task)
-
-        if task.cancelled():
-            log.info("Connection to Peer (dbid=[{}]) was cancelled."\
-                .format(dbid))
-        elif task.exception():
-            ex = task.exception()
+        try:
+            yield from client
+        except Exception as ex:
             log.info("Connection to Peer (dbid=[{}]) failed: {}: {}"\
-                .format(dbid, type(ex), ex))
-        else:
-            # Connect was successful, and we do nothing here as
-            # connection_made(..) will be called next.
-            return
+                .format(dbpeer.id, type(ex), ex))
 
-        # An exception or cancelled connect; update db, Etc.
-        def dbcall():
-            with self.node.db.open_session() as sess:
-                dbpeer = sess.query(Peer).get(dbid)
-                dbpeer.connected = False
+            # An exception on connect; update db, Etc.
+            def dbcall(dbpeer):
+                with self.node.db.open_session() as sess:
+                    dbpeer = sess.query(Peer).get(dbpeer.id)
+                    dbpeer.connected = False
 
-                sess.commit()
+                    sess.commit()
 
-        yield from self.node.loop.run_in_executor(None, dbcall)
+            yield from self.node.loop.run_in_executor(None, dbcall, dbpeer)
+
+        return True
 
     def _create_server_protocol(self):
         ph = mn1.SshServerProtocol(self.node.loop)
