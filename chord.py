@@ -37,20 +37,25 @@ class ChordEngine():
         self.minimum_connections = 1#10
         self.maximum_connections = 4#64
 
+    @asyncio.coroutine
     def add_peer(self, addr):
         peer = Peer(address=addr, connected=False)
 
-        with self.node.db.open_session() as sess:
-            if sess.query(func.count("*")).filter(Peer.address == addr).scalar() > 0:
-                log.info("Peer [{}] already in list.".format(addr))
-                return
+        def dbcall():
+            with self.node.db.open_session() as sess:
+                if sess.query(func.count("*")).filter(Peer.address == addr).scalar() > 0:
+                    log.info("Peer [{}] already in list.".format(addr))
+                    return False
 
-            sess.add(peer)
-            sess.commit()
+                sess.add(peer)
+                sess.commit()
 
-        if self.running:
-            asyncio.async(\
-                self._process_connection_count(), loop=self.node.loop)
+                return True
+
+        r = yield from self.node.loop.run_in_executor(None, dbcall)
+
+        if r and self.running:
+            yield from self._process_connection_count()
 
     @asyncio.coroutine
     def start(self):
