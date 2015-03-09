@@ -238,6 +238,9 @@ class ChordEngine():
         def dbcall():
             with self.node.db.open_session() as sess:
                 dbpeer = sess.query(Peer).get(peer.dbid)
+                if not dbpeer:
+                    # Might have been deleted.
+                    return;
                 dbpeer.connected = False
                 sess.commit()
 
