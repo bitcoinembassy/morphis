@@ -30,7 +30,7 @@ class ChordEngine():
         self.server_protocol = None
 
         self.pending_connections = {} # {Task, Peer->dbid}
-        self.peers = {} # {(host, port): Peer}.
+        self.peers = {} # {address: Peer}.
 
         self.peer_buckets = [{} for i in range(512)] # [{addr: Peer}]
 
@@ -219,9 +219,7 @@ class ChordEngine():
         return ph
 
     def connection_made(self, peer):
-        #self.pending_connections.remove(peer)
-        addr = peer.get_protocol_handler().get_transport().get_extra_info("peername")
-        self.peers[addr] = peer
+        self.peers[peer.address] = peer
 
     def connection_lost(self, peer, exc):
         asyncio.async(self._connection_lost(peer, exc), loop=self.node.loop)
@@ -231,7 +229,7 @@ class ChordEngine():
         log.debug("connection_lost(): peer.id=[{}].".format(peer.dbid))
 
         addr = peer.get_protocol_handler().get_transport().get_extra_info("peername")
-        del self.peers[addr]
+        del self.peers[peer.address]
         self.peer_buckets[peer.distance - 1].pop(peer.address)
 
         if not peer.dbid:
