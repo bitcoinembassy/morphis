@@ -188,7 +188,7 @@ def _connectTaskCommon(protocol, server_mode):
 
         protocol.client_key = client_key
 
-        r = protocol.connection_handler.peer_authenticated(protocol)
+        r = yield from protocol.connection_handler.peer_authenticated(protocol)
         if not r:
             # Client is rejected for some reason by higher level.
             protocol.close()
@@ -308,6 +308,7 @@ class SshProtocol(asyncio.Protocol):
         self.transport.close()
         self.closed = True
 
+    @asyncio.coroutine
     def verify_server_key(self, key_data, sig):
         key = rsakey.RsaKey(key_data)
 
@@ -318,7 +319,7 @@ class SshProtocol(asyncio.Protocol):
 
         self.server_key = key
 
-        r = self.connection_handler.peer_authenticated(self)
+        r = yield from self.connection_handler.peer_authenticated(self)
 
         return r
 
