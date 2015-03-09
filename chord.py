@@ -11,7 +11,7 @@ from sqlalchemy import func, desc
 import packet as mnetpacket
 import rsakey
 import mn1
-import peer
+import peer as mnpeer
 import enc
 from db import Peer
 from mutil import hex_dump, log_base2_8bit
@@ -101,9 +101,10 @@ class ChordEngine():
 
         np = yield from self.node.loop.run_in_executor(None, dbcall)
 
-        for n in np:
-            yield from self._connect_peer(n)
-            needed -= 1
+        for dbp in np:
+            peer = yield from self._connect_peer(dbp)
+            if peer:
+                needed -= 1
 
         if needed <= 0:
             return
@@ -127,7 +128,8 @@ class ChordEngine():
         distance = 512
 
         while distance > 0:
-            bucket_needs = 2 - len(self.peer_buckets[distance - 1])
+            peer_bucket = self.peer_buckets[distance - 1]
+            bucket_needs = 2 - len(peer_bucket)
             if not bucket_needs:
                 continue
 
@@ -144,8 +146,16 @@ class ChordEngine():
             np = yield from self.node.loop.run_in_executor(None, dbcall)
 
             if np:
-                for p in np:
-                    yield from self._connect_peer(p)
+                for dbp in np:
+                    peer = yield from self._connect_peer(dbp)
+
+                    if not peer:
+                        continue
+
+                    existing = peer_bucket.setdefault(dbp.address, peer)
+                    if existing is not peer:
+                        log.error("Somehow we are trying to connect to an address [{}] already connected! [{}][{}]".format(dbp.address, existing, peer))
+
                     needed -= 1
 
                 if not needed:
@@ -165,10 +175,10 @@ class ChordEngine():
 
         loop = self.node.loop
 
-        p = peer.Peer(self, dbpeer)
+        peer = mnpeer.Peer(self, dbpeer)
 
         client = loop.create_connection(\
-            partial(self._create_client_protocol, p),\
+            partial(self._create_client_protocol, peer),\
             host, port)
 
         def dbcall(dbpeer):
@@ -195,13 +205,15 @@ class ChordEngine():
 
             yield from self.node.loop.run_in_executor(None, dbcall, dbpeer)
 
-        return True
+            return None
+
+        return peer
 
     def _create_server_protocol(self):
         ph = mn1.SshServerProtocol(self.node.loop)
         ph.server_key = self.node.get_node_key()
 
-        p = peer.Peer(self)
+        p = mnpeer.Peer(self)
         p.set_protocol_handler(ph)
 
 #        self.pending_connections.append(p)
@@ -250,6 +262,8 @@ class ChordEngine():
     def peer_authenticated(self, peer):
         log.info("Peer (dbid={}) has authenticated.".format(peer.dbid))
 
+        add_to_bucket = True
+
         if peer.dbid:
             # This would be an outgoing connection; and thus this dbid does
             # for sure exist in the database.
@@ -275,6 +289,7 @@ class ChordEngine():
                         sess.commit()
                     else:
                         # Then we were trying to connect to a specific node_id.
+                        add_to_bucket = False # We already did when connecting.
                         if dbpeer.node_id != peer.node_id:
                             # Then the node we reached is not the node we were
                             # trying to connect to.
@@ -341,6 +356,12 @@ class ChordEngine():
 
             if not peer.dbid:
                 peer.dbid = dbid
+
+        if add_to_bucket:
+            existing = self.peer_buckets[peer.distance - 1]\
+                .setdefault(peer.address, peer)
+            if existing is not peer:
+                log.error("Somehow we are trying to connect to an address [{}] already connected!".format(peer.address))
 
         return True
 
