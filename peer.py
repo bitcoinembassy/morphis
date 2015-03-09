@@ -22,7 +22,6 @@ class Peer():
         self.distance = None
         self.direction = None
 
-        self.protocol_handler = None
         self.address = None
 
         self.node_key = None
@@ -35,14 +34,18 @@ class Peer():
             self.distance = dbpeer.distance
             self.direction = dbpeer.direction
 
-    def get_protocol_handler(self):
-        return self.protocol_handler
+        self._protocol = None
 
-    def set_protocol_handler(self, value):
-        self.protocol_handler = value
+    @property
+    def protocol(self):
+        return self._protocol
 
-        self.protocol_handler.set_channel_handler(self.channel_handler)
-        self.protocol_handler.set_connection_handler(self.connection_handler)
+    @protocol.setter
+    def protocol(self, value):
+        self._protocol = value
+
+        self._protocol.set_channel_handler(self.channel_handler)
+        self._protocol.set_connection_handler(self.connection_handler)
 
     def _peer_authenticated(self, key):
         self.node_key = key
@@ -82,8 +85,8 @@ class ConnectionHandler():
 
     def connection_made(self, protocol):
         self.peer.address = "{}:{}".format(\
-            self.peer.protocol_handler.address[0],\
-            self.peer.protocol_handler.address[1])
+            self.peer.protocol.address[0],\
+            self.peer.protocol.address[1])
         self.peer.engine.connection_made(self.peer)
 
     def error_recieved(self, protocol, exc):
@@ -95,9 +98,9 @@ class ConnectionHandler():
     @asyncio.coroutine
     def peer_authenticated(self, protocol):
         if protocol.server_mode:
-            self.peer._peer_authenticated(self.peer.protocol_handler.client_key)
+            self.peer._peer_authenticated(self.peer.protocol.client_key)
         else:
-            self.peer._peer_authenticated(self.peer.protocol_handler.server_key)
+            self.peer._peer_authenticated(self.peer.protocol.server_key)
 
         r = yield from self.peer.engine.peer_authenticated(self.peer)
 

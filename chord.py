@@ -227,7 +227,7 @@ class ChordEngine():
         ph.server_key = self.node.get_node_key()
 
         p = mnpeer.Peer(self)
-        p.set_protocol_handler(ph)
+        p.protocol = ph
 
 #        self.pending_connections.append(p)
 
@@ -237,7 +237,7 @@ class ChordEngine():
         ph = mn1.SshClientProtocol(self.node.loop)
         ph.client_key = self.node.get_node_key()
 
-        peer.set_protocol_handler(ph)
+        peer.protocol = ph
 
 #        self.pending_connections.append(peer)
 
@@ -253,7 +253,7 @@ class ChordEngine():
     def _connection_lost(self, peer, exc):
         log.debug("connection_lost(): peer.id=[{}].".format(peer.dbid))
 
-        addr = peer.get_protocol_handler().get_transport().get_extra_info("peername")
+        addr = peer.protocol.get_transport().get_extra_info("peername")
         del self.peers[peer.address]
         self.peer_buckets[peer.distance - 1].pop(peer.address)
 
@@ -351,10 +351,10 @@ class ChordEngine():
                             return False
 
                         host, port = dbpeer.address.split(':')
-                        if host != peer.protocol_handler.address[0]:
+                        if host != peer.protocol.address[0]:
                             log.info("Remote Peer host has changed, updating our db record.")
                             dbpeer.address = "{}:{}".format(\
-                                peer.protocol_handler.address[0],\
+                                peer.protocol.address[0],\
                                 port)
 
                     dbpeer.connected = True
@@ -380,7 +380,7 @@ class ChordEngine():
 
     @asyncio.coroutine
     def connection_ready(self, peer):
-        server_mode = peer.protocol_handler.server_mode
+        server_mode = peer.protocol.server_mode
 
         log.info("Connection to Peer (dbid={}, server_mode={}) is now ready."\
             .format(peer.dbid, server_mode))
@@ -389,7 +389,7 @@ class ChordEngine():
             # TODO: Do checks, limits, and stuff.
             return;
 
-        yield from peer.protocol_handler.open_channel("mpeer")
+        yield from peer.protocol.open_channel("mpeer")
 
     @asyncio.coroutine
     def request_open_channel(self, peer, req):
@@ -401,3 +401,4 @@ class ChordEngine():
     @asyncio.coroutine
     def channel_opened(self, peer, local_cid):
         log.info("Channel [{}] opened!".format(local_cid))
+

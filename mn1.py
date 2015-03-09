@@ -926,7 +926,7 @@ def _create_server_protocol(loop):
     ph.server_key = server_key
 
     p = peer.Peer(TestEngine())
-    p.set_protocol_handler(ph)
+    p.protocol = ph
 
     return ph
 
@@ -935,7 +935,7 @@ def _create_client_protocol(loop):
     ph.client_key = client_key
 
     p = peer.Peer(TestEngine())
-    p.set_protocol_handler(ph)
+    p.protocol = ph
 
     return ph
 
