@@ -118,9 +118,9 @@ class ChannelHandler():
         return r
 
     @asyncio.coroutine
-    def open_channel(self, protocol, message, sender_channel):
+    def channel_opened(self, protocol, local_cid):
         yield from\
-            self.peer.engine.open_channel(self.peer, message, sender_channel)
+            self.peer.engine.channel_opened(self.peer, local_cid)
 
     @asyncio.coroutine
     def data(self, protocol, packet):

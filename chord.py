@@ -399,5 +399,5 @@ class ChordEngine():
         return True
 
     @asyncio.coroutine
-    def open_channel(self, peer, req, sender_channel):
-        pass
+    def channel_opened(self, peer, local_cid):
+        log.info("Channel [{}] opened!".format(local_cid))

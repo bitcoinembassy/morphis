@@ -290,6 +290,9 @@ class SshProtocol(asyncio.Protocol):
         self.localKexInitMessage = None
         self.remoteKexInitMessage = None
 
+        self._channel_map = {} # {local_cid, remote_cid}
+        self._reverse_channel_map = {} # {remote_cid, local_cid}
+
     def set_connection_handler(self, value):
         self.connection_handler = value
 
@@ -308,14 +311,18 @@ class SshProtocol(asyncio.Protocol):
 
     @asyncio.coroutine
     def open_channel(self, channel_type):
+        local_cid = self._allocate_channel_id()
+
         msg = mnetpacket.SshChannelOpenMessage()
         msg.channel_type = channel_type
-        msg.sender_channel = self._allocate_channel_id()
+        msg.sender_channel = local_cid
         msg.initial_window_size = 65535
         msg.maximum_packet_size = 65535
         msg.encode()
 
         self.write_packet(msg)
+
+        self._channel_map[local_cid] = -1
 
     def _allocate_channel_id(self):
         nid = self._next_channel_id
@@ -452,31 +459,66 @@ class SshProtocol(asyncio.Protocol):
             m = mnetpacket.SshPacket(None, packet)
 
             t = m.getPacketType()
-            log.debug("Received packet, type=[{}].".format(t))
+            log.info("Received packet, type=[{}].".format(t))
             if t == mnetpacket.SSH_MSG_CHANNEL_OPEN:
                 msg = mnetpacket.SshChannelOpenMessage(packet)
                 log.info("P: Received CHANNEL_OPEN: channel_type=[{}], sender_channel=[{}].".format(msg.channel_type, msg.sender_channel))
+
+                if self._reverse_channel_map.get(msg.sender_channel):
+                    log.warning("Remote end sent a CHANNEL_OPEN request with an already open remote id; ignoring.")
+                    continue
 
                 r = yield from\
                     self.channel_handler.request_open_channel(self, msg)
 
                 if r:
-                    sender_channel = self._open_channel(msg)
-                    yield from\
-                        self.channel_handler\
-                            .open_channel(self, msg, sender_channel)
+                    local_cid = self._open_channel(msg)
+
+                    yield from self.channel_handler\
+                            .channel_opened(self, local_cid)
                 else:
                     self._open_channel_reject(msg)
 
+            elif t == mnetpacket.SSH_MSG_CHANNEL_OPEN_CONFIRMATION:
+                msg = mnetpacket.SshChannelOpenConfirmationMessage(packet)
+                log.info("P: Received CHANNEL_OPEN_CONFIRMATION: sender_channel=[{}], recipient_channel=[{}].".format(msg.sender_channel, msg.recipient_channel))
+
+                rcid = self._channel_map.get(msg.recipient_channel)
+                if rcid == None:
+                    log.warning("Received a CHANNEL_OPEN_CONFIRMATION for a local channel that was not started; ignoring.")
+                    return
+                if rcid != -1:
+                    log.warning("Received a CHANNEL_OPEN_CONFIRMATION for a local channel that was already open; ignoring.")
+                    return
+
+                lcid = self._reverse_channel_map\
+                    .setdefault(msg.sender_channel, msg.recipient_channel)
+
+                if lcid != msg.recipient_channel:
+                    log.warning("Received a CHANNEL_OPEN_CONFIRMATION for a remote channel that is already open; ignoring.")
+                    return
+
+                self._channel_map[msg.recipient_channel] = msg.sender_channel
+
+                yield from self.channel_handler\
+                    .channel_opened(self, msg.recipient_channel)
+
             elif t == mnetpacket.SSH_MSG_CHANNEL_DATA:
+                log.info("P: Received CHANNEL_DATA recipient_channel=[{}].".format(msg.recipient_channel))
+
                 yield from self.channel_handler.data(self, packet)
 
     def _open_channel(self, req_msg):
         log.info("Accepting channel open request.")
 
+        local_cid = self._allocate_channel_id()
+
+        self._channel_map[local_cid] = req_msg.sender_channel
+        self._reverse_channel_map[req_msg.sender_channel] = local_cid
+
         cm = mnetpacket.SshChannelOpenConfirmationMessage()
         cm.set_recipient_channel(req_msg.sender_channel)
-        cm.set_sender_channel(self._allocate_channel_id())
+        cm.set_sender_channel(local_cid)
         cm.set_initial_window_size(65535)
         cm.set_maximum_packet_size(65535)
 
@@ -484,7 +526,7 @@ class SshProtocol(asyncio.Protocol):
 
         self.write_packet(cm)
 
-        return cm.sender_channel
+        return local_cid
 
     def _open_channel_reject(self, req_msg):
         log.info("Rejecting channel open request.")
@@ -822,7 +864,7 @@ class SshClientProtocol(SshProtocol):
 
 class ChannelHandler():
     @asyncio.coroutine
-    def open_channel(self, protocol, message):
+    def channel_opened(self, protocol, local_cid):
         pass
 
     @asyncio.coroutine
