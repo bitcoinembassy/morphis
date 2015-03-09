@@ -55,7 +55,7 @@ class Node():
             log.info("Clearing out connected state from Peer table.")
             with self.db.open_session() as sess:
                 sess.execute(update(db.Peer, bind=self.db.engine)\
-                    .values(connected=False))
+                    .values(connected=False, last_connect_attempt=None))
                 sess.commit()
 
         yield from self.loop.run_in_executor(None, dbcall)
