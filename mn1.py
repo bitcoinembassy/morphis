@@ -64,7 +64,7 @@ def _connectTaskCommon(protocol, server_mode):
     opobj.setCompressionAlgorithmsServerToClient("none")
     opobj.encode()
 
-    protocol.setLocalKexInitMessage(opobj.getBuf())
+    protocol.setLocalKexInitMessage(opobj.buf)
 
     protocol.write_packet(opobj)
 
@@ -504,6 +504,7 @@ class SshProtocol(asyncio.Protocol):
                     .channel_opened(self, msg.recipient_channel)
 
             elif t == mnetpacket.SSH_MSG_CHANNEL_DATA:
+                msg = mnetpacket.SshChannelDataMessage(packet)
                 log.info("P: Received CHANNEL_DATA recipient_channel=[{}].".format(msg.recipient_channel))
 
                 yield from self.channel_handler.data(self, packet)
@@ -637,21 +638,33 @@ class SshProtocol(asyncio.Protocol):
 
         return packet
 
-    def write_packet(self, packetObject):
-        if self.closed:
-            log.debug("ProtocolHandler closed, ignoring write_packet(..) call.")
-            return
-
-        length = len(packetObject.getBuf())
-
+    def write_packet(self, packet):
         if log.isEnabledFor(logging.DEBUG):
-            log.debug("Writing packetType=[{}] with [{}] bytes of data: [\n{}]".format(packetObject.getPacketType(), length, hex_dump(packetObject.getBuf())))
+            log.debug("Writing packetType=[{}] with [{}] bytes of data: [\n{}]".format(packet.getPacketType(), length, hex_dump(packet.buf)))
+
+        self.write_data([packet.buf])
+
+    def write_channel_data(self, local_cid, data):
+        msg = mnetpacket.SshChannelDataMessage()
+        msg.recipient_channel = self._channel_map[local_cid]
+        msg.encode()
+
+        self.write_data([msg.buf, data])
+
+    def write_data(self, datas):
+        if self.closed:
+            log.info("ProtocolHandler closed, ignoring write_data(..) call.")
+            return
 
         mod_size = None
         if self.outCipher == None:
             mod_size = 8 # RFC says 8 minimum.
         else:
             mod_size = 16 # bs of current cipher is 16.
+
+        length = 0
+        for data in datas:
+            length += len(data)
 
         extra = (length + 5) % mod_size;
         if extra != 0:
@@ -664,14 +677,16 @@ class SshProtocol(asyncio.Protocol):
         if self.outCipher == None:
             self.transport.write(struct.pack(">L", 1 + length + padding))
             self.transport.write(struct.pack("B", padding & 0xff))
-            self.transport.write(packetObject.buf)
+            for data in datas:
+                self.transport.write(data)
             for i in range(0, padding):
                 self.transport.write(struct.pack("B", 0))
         else:
             buf = bytearray()
             buf += struct.pack(">L", 1 + length + padding)
             buf += struct.pack("B", padding & 0xff)
-            buf += packetObject.buf
+            for data in datas:
+                buf += data
             buf += os.urandom(padding)
 
             if log.isEnabledFor(logging.DEBUG):

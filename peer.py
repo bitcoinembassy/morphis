@@ -129,4 +129,4 @@ class ChannelHandler():
     def data(self, protocol, packet):
         m = mnetpacket.SshChannelDataMessage(packet)
         if log.isEnabledFor(logging.DEBUG):
-            log.debug("Received data, recipient_channel=[{}], value=[\n{}].".format(m.get_recipient_channel(), hex_dump(m.get_data())))
+            log.debug("Received data, recipient_channel=[{}], value=[\n{}].".format(m.recipient_channel, hex_dump(m.data)))

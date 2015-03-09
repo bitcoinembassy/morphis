@@ -595,19 +595,10 @@ class SshChannelOpenFailureMessage(SshPacket):
 
 class SshChannelDataMessage(SshPacket):
     def __init__(self, buf = None):
+        self.recipient_channel = None
+        self.data = None
+
         super().__init__(SSH_MSG_CHANNEL_DATA, buf)
-
-    def get_recipient_channel(self):
-        return self.recipient_channel
-
-    def set_recipient_channel(self, value):
-        self.recipient_channel = value
-
-    def get_data(self):
-        return self.data
-
-    def set_data(self, value):
-        self.data = value
 
     def parse(self):
         super().parse()
@@ -622,6 +613,8 @@ class SshChannelDataMessage(SshPacket):
 
         nbuf += struct.pack("B", self.getPacketType() & 0xff)
         nbuf += struct.pack(">L", self.recipient_channel)
-        nbuf += self.data
+        if self.data:
+            # Allow data to be stored separately.
+            nbuf += self.data
 
         self.buf = nbuf
