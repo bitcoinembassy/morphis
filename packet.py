@@ -490,18 +490,6 @@ class SshChannelOpenMessage(SshPacket):
     def __init__(self, buf = None):
         super().__init__(SSH_MSG_CHANNEL_OPEN, buf)
 
-    def get_channel_type(self):
-        return self.channel_type
-
-    def get_sender_channel(self):
-        return self.sender_channel
-
-    def get_initial_window_size(self):
-        return self.initial_window_size
-
-    def get_maximum_packet_size(self):
-        return self.maximum_packet_size
-
     def parse(self):
         super().parse()
 

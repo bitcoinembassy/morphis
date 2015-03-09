@@ -260,6 +260,8 @@ class SshProtocol(asyncio.Protocol):
 
         self.address = None
 
+        self._next_channel_id = 0
+
         self.channel_handler = None
         self.connection_handler = None
 
@@ -310,6 +312,22 @@ class SshProtocol(asyncio.Protocol):
     def close(self):
         self.transport.close()
         self.closed = True
+
+    @asyncio.coroutine
+    def open_channel(self, channel_type):
+        msg = mnetpacket.SshChannelOpenMessage()
+        msg.channel_type = channel_type
+        msg.sender_channel = self._allocate_channel_id()
+        msg.initial_window_size = 65535
+        msg.maximum_packet_size = 65535
+        msg.encode()
+
+        self.write_packet(msg)
+
+    def _allocate_channel_id(self):
+        nid = self._next_channel_id
+        self._next_channel_id += 1
+        return nid
 
     @asyncio.coroutine
     def verify_server_key(self, key_data, sig):
@@ -781,11 +799,11 @@ class ChannelHandler():
     @asyncio.coroutine
     def open_channel(self, protocol, packet):
         m = mnetpacket.SshChannelOpenMessage(packet)
-        log.info("S: Received CHANNEL_OPEN: channel_type=[{}], sender_channel=[{}].".format(m.get_channel_type(), m.get_sender_channel()))
+        log.info("S: Received CHANNEL_OPEN: channel_type=[{}], sender_channel=[{}].".format(m.channel_type, m.sender_channel))
 
         cm = mnetpacket.SshChannelOpenConfirmationMessage()
         cm.set_recipient_channel(m.get_sender_channel())
-        cm.set_sender_channel(0)
+        cm.set_sender_channel(_allocate_channel_id())
         cm.set_initial_window_size(65535)
         cm.set_maximum_packet_size(65535)
 

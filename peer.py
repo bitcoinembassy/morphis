@@ -114,10 +114,10 @@ class ChannelHandler():
     @asyncio.coroutine
     def open_channel(self, protocol, packet):
         m = mnetpacket.SshChannelOpenMessage(packet)
-        log.info("S: Received CHANNEL_OPEN: channel_type=[{}], sender_channel=[{}].".format(m.get_channel_type(), m.get_sender_channel()))
+        log.info("S: Received CHANNEL_OPEN: channel_type=[{}], sender_channel=[{}].".format(m.channel_type, m.sender_channel))
 
         cm = mnetpacket.SshChannelOpenConfirmationMessage()
-        cm.set_recipient_channel(m.get_sender_channel())
+        cm.set_recipient_channel(m.sender_channel)
         cm.set_sender_channel(0)
         cm.set_initial_window_size(65535)
         cm.set_maximum_packet_size(65535)

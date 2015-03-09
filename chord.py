@@ -346,5 +346,13 @@ class ChordEngine():
 
     @asyncio.coroutine
     def connection_ready(self, peer):
+        server_mode = peer.protocol_handler.server_mode
+
         log.info("Connection to Peer (dbid={}, server_mode={}) is now ready."\
-            .format(peer.dbid, peer.protocol_handler.server_mode))
+            .format(peer.dbid, server_mode))
+
+        if server_mode:
+            # TODO: Do checks, limits, and stuff.
+            return;
+
+        yield from peer.protocol_handler.open_channel("mpeer")
