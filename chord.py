@@ -345,4 +345,5 @@ class ChordEngine():
         return True
 
     def connection_ready(self, peer):
-        log.info("Connection to Peer (dbid={}) is now ready.".format(peer.dbid))
+        log.info("Connection to Peer (dbid={}, server_mode={}) is now ready."\
+            .format(peer.dbid, peer.protocol_handler.server_mode))
