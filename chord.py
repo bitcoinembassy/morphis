@@ -157,9 +157,14 @@ class ChordEngine():
         distance = 512
 
         while distance > 0:
+            if distance < closestdistance:
+                log.info("No more available PeerS to connect.")
+                break
+
             peer_bucket = self.peer_buckets[distance - 1]
             bucket_needs = 2 - len(peer_bucket)
             if not bucket_needs:
+                distance -= 1
                 continue
 
             def dbcall():
@@ -202,10 +207,6 @@ class ChordEngine():
                     continue
 
             distance -= 1
-
-            if distance < closestdistance:
-                log.info("No more available PeerS to connect.")
-                break
 
     @asyncio.coroutine
     def _connect_peer(self, dbpeer):
@@ -368,6 +369,7 @@ class ChordEngine():
                             return False, None
 
                         dbpeer.address = peer.address
+
                         sess.add(dbpeer)
                     else:
                         # Known Peer has connected to us.
@@ -383,13 +385,11 @@ class ChordEngine():
                             return False, None
 
                         host, port = dbpeer.address.split(':')
-                        peer.address = "{}:{}".format(\
-                            peer.protocol.address[0],\
-                            port)
-
                         if host != peer.protocol.address[0]:
                             log.info("Remote Peer host has changed, updating our db record.")
-                            dbpeer.address = peer.address
+                            dbpeer.address = "{}:{}".format(\
+                            peer.protocol.address[0],\
+                            port)
 
                     dbpeer.connected = True
 
@@ -403,6 +403,9 @@ class ChordEngine():
 
             if not peer.dbid:
                 peer.dbid = dbid
+            else:
+                if peer.address != dbpeer.address:
+                    peer.address = dbpeer.address
 
         if add_to_peers:
             existing = self.peers.setdefault(peer.address, peer)
@@ -577,7 +580,7 @@ class ChordPeerList(ChordMessage):
             i += l
 #            l, peer.node_id = sshtype.parseBinary(self.buf[i:])
 #            i += l
-            l, peer.node_key = sshtype.parseBinary(self.buf[i:])
+            l, peer.pubkey = sshtype.parseBinary(self.buf[i:])
             i += l
 
             if not check_address(peer.address):
