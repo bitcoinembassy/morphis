@@ -279,7 +279,7 @@ class SshProtocol(asyncio.Protocol):
         self.waitingForNewKeys = False
 
         self.waiter = None
-        self.buf = b''
+        self.buf = bytearray()
         self.packet = None
         self.bpLength = None
 
@@ -640,11 +640,13 @@ class SshProtocol(asyncio.Protocol):
 
     def write_packet(self, packet):
         if log.isEnabledFor(logging.DEBUG):
-            log.debug("Writing packetType=[{}] with [{}] bytes of data: [\n{}]".format(packet.getPacketType(), length, hex_dump(packet.buf)))
+            log.debug("Writing packetType=[{}] with [{}] bytes of data: [\n{}]".format(packet.packetType, len(packet.buf), hex_dump(packet.buf)))
 
         self.write_data([packet.buf])
 
     def write_channel_data(self, local_cid, data):
+        log.info("Writing to channel {} with {} bytes of data.".format(local_cid, len(data)))
+
         msg = mnetpacket.SshChannelDataMessage()
         msg.recipient_channel = self._channel_map[local_cid]
         msg.encode()
@@ -716,51 +718,13 @@ class SshProtocol(asyncio.Protocol):
 
         assert self.binaryMode
 
-#        if self.encryption:
-#            raise NotImplementedError(errmsg)
+        self._process_encrypted_buffer()
 
-        blksize = 16
-
-        if self.inCipher != None:
-#            if len(self.buf) > 20: # max(blksize, 20): bs, hmacSize
-            if len(self.buf) < blksize:
-                return
-
-            offset = 0
-            if len(self.cbuf) == 0:
-                offset = blksize
-                out = self.inCipher.decrypt(self.buf[:offset])
-                if log.isEnabledFor(logging.DEBUG):
-                    log.debug("Decrypted [\n{}] to [\n{}].".format(hex_dump(self.buf[:offset]), hex_dump(out)))
-                self.cbuf += out
-                packet_length = struct.unpack(">L", out[:4])[0]
-                log.debug("packet_length=[{}].".format(packet_length))
-                if packet_length > 35000:
-                    log.warning("Illegal packet_length [{}] received.".format(packet_length))
-                    self.transport.close()
-                    return
-                self.bpLength = packet_length + 4 # Add size of packet_length as we leave it in buf.
-
-            if len(self.buf) < min(1024, self.bpLength - len(self.cbuf) + self.inHmacSize):
-                if offset:
-                    self.buf = self.buf[offset:]
-                return
-
-            l = min(len(self.buf) - self.inHmacSize, self.bpLength) - offset
-            bl = (l - l % blksize) + offset
-            blks = self.buf[offset:bl]
-            self.buf = self.buf[bl:]
-            out = self.inCipher.decrypt(blks)
-            self.cbuf += out
-
-            if log.isEnabledFor(logging.DEBUG):
-                log.debug("Decrypted [\n{}] to [\n{}].".format(hex_dump(blks), hex_dump(out)))
-                log.debug("len(cbuf)={}, cbuf=[\n{}]".format(len(self.cbuf), hex_dump(self.cbuf)))
-        else:
-            self.cbuf = self.buf
-
+        # cbuf is clear text buf.
         while True:
             if self.bpLength is None:
+                assert not self.inCipher
+
                 if len(self.cbuf) < 4:
                     return
 
@@ -814,7 +778,7 @@ class SshProtocol(asyncio.Protocol):
 
                 newbuf = self.cbuf[self.bpLength + self.inHmacSize:]
                 if self.cbuf == self.buf:
-                    self.cbuf = b''
+                    self.cbuf = bytearray()
                     self.buf = newbuf
                 else:
                     self.cbuf = newbuf
@@ -840,6 +804,54 @@ class SshProtocol(asyncio.Protocol):
                     self.waiter = None
 
                 break;
+
+    def _process_encrypted_buffer(self):
+        blksize = 16
+
+        if self.inCipher != None:
+#            if len(self.buf) > 20: # max(blksize, 20): bs, hmacSize
+            if len(self.buf) < blksize:
+                return
+
+            offset = 0
+            if len(self.cbuf) == 0:
+                offset = blksize
+                out = self.inCipher.decrypt(self.buf[:offset])
+                if log.isEnabledFor(logging.DEBUG):
+                    log.debug("Decrypted [\n{}] to [\n{}].".format(hex_dump(self.buf[:offset]), hex_dump(out)))
+                self.cbuf += out
+                packet_length = struct.unpack(">L", out[:4])[0]
+                log.debug("packet_length=[{}].".format(packet_length))
+                if packet_length > 35000:
+                    errmsg = "Illegal packet_length [{}] received.".format(packet_length)
+                    log.warning(errmsg)
+                    self.transport.close()
+                    raise SshException(errmsg)
+                self.bpLength = packet_length + 4 # Add size of packet_length as we leave it in buf.
+                if self.bpLength == blksize:
+                    self.buf = self.buf[offset:]
+                    return
+
+            if len(self.buf) - offset < min(1024, self.bpLength - len(self.cbuf) + self.inHmacSize):
+                if offset:
+                    self.buf = self.buf[offset:]
+                return
+
+            l = min(len(self.buf), self.bpLength - len(self.cbuf))
+            if not l:
+                return
+
+            bl = (l - l % blksize) + offset
+            blks = self.buf[offset:bl]
+            self.buf = self.buf[bl:]
+            out = self.inCipher.decrypt(blks)
+            self.cbuf += out
+
+            if log.isEnabledFor(logging.DEBUG):
+                log.debug("Decrypted [\n{}] to [\n{}].".format(hex_dump(blks), hex_dump(out)))
+                log.debug("len(cbuf)={}, cbuf=[\n{}]".format(len(self.cbuf), hex_dump(self.cbuf)))
+        else:
+            self.cbuf = self.buf
 
 class SshServerProtocol(SshProtocol):
     def __init__(self, loop):
