@@ -117,7 +117,7 @@ def __main():
     log.info("Launching node.")
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--nn", help="Node instance number.")
+    parser.add_argument("--nn", type=int, help="Node instance number.")
     parser.add_argument("--addpeer", help="Add a node to peer list.", action="append")
     parser.add_argument("--bind", help="Specify bind address (host:port).")
     parser.add_argument("--nodecount", type=int, help="Specify amount of nodes to start.")
