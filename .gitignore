@@ -9,3 +9,4 @@ client_key-rsa.mnk
 node_key-rsa*.mnk
 
 *.sqlite
+*.sqlite-journal
