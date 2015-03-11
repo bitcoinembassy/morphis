@@ -34,6 +34,7 @@ class Node():
 
         self.db = db.Db("sqlite:///morphis{}.sqlite".format(self.instance_postfix))
         self.bind_address = None
+        self.unsecured_transport = None
 
         self.chord_engine = chord.ChordEngine(self)
 
@@ -121,6 +122,7 @@ def __main():
     parser.add_argument("--addpeer", help="Add a node to peer list.", action="append")
     parser.add_argument("--bind", help="Specify bind address (host:port).")
     parser.add_argument("--nodecount", type=int, help="Specify amount of nodes to start.")
+    parser.add_argument("--cleartexttransport", type=bool, help="Clear text transport and no authentication.")
     args = parser.parse_args()
 
     addpeer = args.addpeer
@@ -133,6 +135,9 @@ def __main():
     nodecount = args.nodecount
     if nodecount == None:
         nodecount = 1
+    if args.cleartexttransport:
+        log.info("Enabling cleartext transport.")
+        mn1.enable_cleartext_transport()
 
     nodes = []
 
