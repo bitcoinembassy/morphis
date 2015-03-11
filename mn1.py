@@ -17,8 +17,6 @@ from sshexception import *
 from mutil import hex_dump
 import peer
 
-clientPipes = {} # task, [reader, writer]
-
 log = logging.getLogger(__name__)
 
 server_key = None
@@ -27,15 +25,6 @@ client_key = None
 # Returns True on success, False on failure.
 @asyncio.coroutine
 def connectTaskCommon(protocol, server_mode):
-#    try:
-    r = yield from _connectTaskCommon(protocol, server_mode)
-#    except:
-#        log.exception("_connectTaskCommon() threw:")
-
-    return r
-
-@asyncio.coroutine
-def _connectTaskCommon(protocol, server_mode):
     assert isinstance(server_mode, bool)
 
     log.info("X: Sending banner.")
