@@ -22,6 +22,8 @@ class Shell(cmd.Cmd):
         self.local_cid = local_cid
         self.queue = queue
 
+        self.out_buffer = bytearray()
+
     @asyncio.coroutine
     def cmdloop(self):
         self.preloop()
@@ -61,15 +63,15 @@ class Shell(cmd.Cmd):
             if not packet:
                 return None
 
-            msg = StringMessage(packet)
+            msg = BinaryMessage(packet)
 
             if log.isEnabledFor(logging.DEBUG):
-                log.debug("Received text:\n[{}].".format(hex_dump(msg.value.encode())))
+                log.debug("Received text:\n[{}].".format(hex_dump(msg.value)))
             else:
                 log.info("Received text [{}].".format(msg.value))
 
             if len(msg.value) == 1:
-                char = ord(msg.value[0])
+                char = msg.value[0]
                 if char == 0x7f:
                     rbuf = bytearray(7)
                     rbuf[0] = 0x1b
@@ -80,8 +82,8 @@ class Shell(cmd.Cmd):
                     rbuf[5] = 0x5b
                     rbuf[6] = 0x44
 
-                    rmsg = StringMessage()
-                    rmsg.value = rbuf.decode()
+                    rmsg = BinaryMessage()
+                    rmsg.value = rbuf
 
                     self.peer.protocol.write_channel_data(\
                         self.local_cid, rmsg.encode())
@@ -89,10 +91,10 @@ class Shell(cmd.Cmd):
                     buf = buf[:-1]
                     continue
 
-            buf += msg.value.encode()
+            buf += msg.value
 
-            rmsg = StringMessage()
-            rmsg.value = msg.value.replace('\n', "\r\n")
+            rmsg = BinaryMessage()
+            rmsg.value = msg.value.replace(b'\n', b"\r\n")
             self.peer.protocol.write_channel_data(self.local_cid, rmsg.encode())
 
             i = buf.find(b'\r')
@@ -109,12 +111,18 @@ class Shell(cmd.Cmd):
 
     def write(self, val):
         val = val.replace('\n', "\r\n")
-        rmsg = StringMessage()
-        rmsg.value = val
-        self.peer.protocol.write_channel_data(self.local_cid, rmsg.encode())
+
+        self.out_buffer += val.encode("UTF-8")
 
     def flush(self):
-        pass
+        if not self.out_buffer:
+            return
+
+        rmsg = BinaryMessage()
+        rmsg.value = self.out_buffer
+        self.peer.protocol.write_channel_data(self.local_cid, rmsg.encode())
+
+        self.out_buffer.clear()
 
     def do_test(self, arg):
         'Test thing'
@@ -127,7 +135,7 @@ class Shell(cmd.Cmd):
     def emptyline(self):
         pass
 
-class StringMessage():
+class BinaryMessage():
     def __init__(self, buf = None):
         self.buf = buf
 
@@ -139,10 +147,10 @@ class StringMessage():
     def encode(self):
         nbuf = bytearray()
 
-        nbuf += sshtype.encodeString(self.value)
+        nbuf += sshtype.encodeBinary(self.value)
 
         return nbuf
 
     def parse(self):
         i = 1
-        l, self.value = sshtype.parseString(self.buf)
+        l, self.value = sshtype.parseBinary(self.buf)
