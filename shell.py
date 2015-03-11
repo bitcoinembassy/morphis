@@ -177,8 +177,9 @@ class Shell(cmd.Cmd):
         try:
             r = eval(arg)
             if r:
-                self.writeln(r)
+                self.writeln(str(r))
         except Exception as e:
+            log.exception("eval")
             self.writeln("Exception: [{}].".format(e))
 
     def emptyline(self):
