@@ -90,6 +90,10 @@ class Shell(cmd.Cmd):
 
                     buf = buf[:-1]
                     continue
+                elif char == 0x04:
+                    self.writeln("quit")
+                    self.flush()
+                    return "quit"
             elif lenval == 3:
                 if msg.value == UP_ARROW:
                     if savedcmd == None:
