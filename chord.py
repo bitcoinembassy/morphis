@@ -466,17 +466,37 @@ class ChordEngine():
     def channel_opened(self, peer, local_cid):
         log.info("Channel [{}] opened!".format(local_cid))
 
+        assert len(peer.channel_queues) == local_cid
+
+        queue = asyncio.Queue(5)
+        peer.channel_queues.append(queue)
+
         if peer.protocol.server_mode:
+            asyncio.async(\
+                self._process_chord_packet(peer, local_cid, queue),\
+                loop=self.node.loop)
             return
 
+        # Client requests a GetPeers upon connection.
         msg = ChordGetPeers()
         host, port = self.bind_address.split(':')
         msg.sender_port = int(port)
 
         peer.protocol.write_channel_data(local_cid, msg.encode())
 
+        asyncio.async(\
+            self._process_chord_packet(peer, local_cid, queue),\
+            loop=self.node.loop)
+        return
+
     @asyncio.coroutine
     def channel_data(self, peer, local_cid, data):
+        yield from peer.channel_queues[local_cid].put(data)
+
+    @asyncio.coroutine
+    def _process_chord_packet(self, peer, local_cid, queue):
+        data = yield from queue.get()
+
         if log.isEnabledFor(logging.DEBUG):
             log.debug("data=\n[{}].".format(hex_dump(data)))
         msg = ChordMessage(None, data)
