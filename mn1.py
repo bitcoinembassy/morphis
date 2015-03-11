@@ -797,7 +797,8 @@ class SshProtocol(asyncio.Protocol):
                 if len(self.cbuf) < self.bpLength or len(self.buf) < self.inHmacSize:
                     return;
 
-                log.info("PACKET READ (bpLength={}, inHmacSize={}, len(self.cbuf)={}, len(self.buf)={})".format(self.bpLength, self.inHmacSize, len(self.cbuf), len(self.buf)))
+                if log.isEnabledFor(logging.DEBUG):
+                    log.debug("PACKET READ (bpLength={}, inHmacSize={}, len(self.cbuf)={}, len(self.buf)={})".format(self.bpLength, self.inHmacSize, len(self.cbuf), len(self.buf)))
 
                 padding_length = struct.unpack("B", self.cbuf[4:5])[0]
                 log.debug("padding_length=[{}].".format(padding_length))
