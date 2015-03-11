@@ -494,7 +494,7 @@ class ChordEngine():
                 return
             elif channel_type == "session":
                 nshell = shell.Shell(peer, local_cid, queue)
-                asyncio.async(nshell.run(), loop=self.node.loop)
+                asyncio.async(nshell.cmdloop(), loop=self.node.loop)
                 return
 
         # Client requests a GetPeers upon connection.
