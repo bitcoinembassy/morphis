@@ -16,7 +16,8 @@ RIGHT_ARROW = bytearray([0x1b, 0x5b, 0x43])
 LEFT_ARROW = bytearray([0x1b, 0x5b, 0x44])
 
 class Shell(cmd.Cmd):
-    intro = "Hello, test. Type help or ? to list commands."
+    intro = "Welcome to the Morphis Shell Socket."\
+        " Type help or ? to list commands."
     prompt = "(morphis) "
     use_rawinput = False
 
