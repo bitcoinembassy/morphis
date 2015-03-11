@@ -342,8 +342,8 @@ class SshProtocol(asyncio.Protocol):
 
         log.info("Signature validated correctly!")
 
-        if protocol.server_key:
-            if protocol.server_key.asbytes() != key_data:
+        if self.server_key:
+            if self.server_key.asbytes() != key_data:
                 raise SshException("Key provided by server differs from that which we were expecting.")
 
         self.server_key = key
