@@ -467,10 +467,11 @@ class ChordEngine():
 
     @asyncio.coroutine
     def request_open_channel(self, peer, req):
-        if req.channel_type != "mpeer":
-            return False
-
-        return True
+        if req.channel_type == "mpeer":
+            return True
+        elif req.channel_type == "session":
+            return True
+        return false
 
     @asyncio.coroutine
     def channel_opened(self, peer, local_cid):
