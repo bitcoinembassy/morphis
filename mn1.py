@@ -22,6 +22,59 @@ log = logging.getLogger(__name__)
 server_key = None
 client_key = None
 
+cleartext_transport_enabled = False
+
+def enable_cleartext_transport():
+    global cleartext_transport_enabled
+    cleartext_transport_enabled = True
+
+# Returns True on success, False on failure.
+@asyncio.coroutine
+def connectTaskInsecure(protocol, server_mode):
+    assert isinstance(server_mode, bool)
+
+    log.info("X: Sending banner.")
+    protocol.transport.write((protocol.getLocalBanner() + "\r\n").encode(encoding="UTF-8"))
+
+    # Read banner.
+    packet = yield from protocol.read_packet()
+    log.info("X: Received banner [{}].".format(packet))
+
+    protocol.setRemoteBanner(packet.decode(encoding="UTF-8"))
+
+    m = mnetpacket.SshKexdhReplyMessage()
+    if server_mode:
+        m.setHostKey(protocol.server_key.asbytes())
+    else:
+        m.setHostKey(protocol.client_key.asbytes())
+    m.setF(42)
+    m.setSignature(b"test")
+    m.encode()
+
+    protocol.write_packet(m)
+
+    pkt = yield from protocol.read_packet()
+    m = mnetpacket.SshKexdhReplyMessage(pkt)
+
+    if server_mode:
+        if protocol.client_key:
+            if protocol.client_key.asbytes() != m.getHostKey():
+                raise SshException("Key provided by client differs from that which we were expecting.")
+        protocol.client_key = rsakey.RsaKey(m.getHostKey())
+    else:
+        if protocol.server_key:
+            if protocol.server_key.asbytes() != m.getHostKey():
+                raise SshException("Key provided by server differs from that which we were expecting.")
+        protocol.server_key = rsakey.RsaKey(m.getHostKey())
+
+    r = yield from protocol.connection_handler.peer_authenticated(protocol)
+    if not r:
+        # Peer is rejected for some reason by higher level.
+        protocol.close()
+        return
+
+    return True
+
 # Returns True on success, False on failure.
 @asyncio.coroutine
 def connectTaskCommon(protocol, server_mode):
@@ -443,7 +496,10 @@ class SshProtocol(asyncio.Protocol):
 
     @asyncio.coroutine
     def _run(self):
-        r = yield from connectTaskCommon(self, self.server_mode)
+        if cleartext_transport_enabled:
+            r = yield from connectTaskInsecure(self, self.server_mode)
+        else:
+            r = yield from connectTaskCommon(self, self.server_mode)
 
         if not r:
             return r

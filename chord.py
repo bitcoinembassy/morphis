@@ -398,17 +398,18 @@ class ChordEngine():
 
                     sess.commit()
 
-                    return True, dbpeer.id
+                    fetch_id_in_thread = dbpeer.id
 
-            r, dbid = yield from self.node.loop.run_in_executor(None, dbcall)
+                    return True, dbpeer
+
+            r, dbpeer = yield from self.node.loop.run_in_executor(None, dbcall)
             if not r:
                 return False
 
-            if not peer.dbid:
-                peer.dbid = dbid
-            else:
-                if peer.address != dbpeer.address:
-                    peer.address = dbpeer.address
+            peer.dbid = dbpeer.id
+
+            if peer.address != dbpeer.address:
+                peer.address = dbpeer.address
 
         if add_to_peers:
             existing = self.peers.setdefault(peer.address, peer)
