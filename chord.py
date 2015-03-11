@@ -15,6 +15,7 @@ import packet as mnetpacket
 import rsakey
 import mn1
 import peer as mnpeer
+import shell
 import enc
 from db import Peer
 from mutil import hex_dump, log_base2_8bit
@@ -319,6 +320,9 @@ class ChordEngine():
     def _connection_lost(self, peer, exc):
         log.debug("connection_lost(): peer.id=[{}].".format(peer.dbid))
 
+        for queue in peer.channel_queues:
+            yield from queue.put(None)
+
         if peer.node_id:
             self.peers.pop(peer.address, None)
             self.peer_buckets[peer.distance - 1].pop(peer.address, None)
@@ -470,11 +474,11 @@ class ChordEngine():
         if req.channel_type == "mpeer":
             return True
         elif req.channel_type == "session":
-            return True
+            return peer.protocol.address[0] == "127.0.0.1"
         return false
 
     @asyncio.coroutine
-    def channel_opened(self, peer, local_cid):
+    def channel_opened(self, peer, channel_type, local_cid):
         log.info("Channel [{}] opened!".format(local_cid))
 
         assert len(peer.channel_queues) == local_cid
@@ -483,10 +487,15 @@ class ChordEngine():
         peer.channel_queues.append(queue)
 
         if peer.protocol.server_mode:
-            asyncio.async(\
-                self._process_chord_packet(peer, local_cid, queue),\
-                loop=self.node.loop)
-            return
+            if channel_type == "mpeer":
+                asyncio.async(\
+                    self._process_chord_packet(peer, local_cid, queue),\
+                    loop=self.node.loop)
+                return
+            elif channel_type == "session":
+                nshell = shell.Shell(peer, local_cid, queue)
+                asyncio.async(nshell.run(), loop=self.node.loop)
+                return
 
         # Client requests a GetPeers upon connection.
         msg = ChordGetPeers()
@@ -505,13 +514,15 @@ class ChordEngine():
 
     @asyncio.coroutine
     def _process_chord_packet(self, peer, local_cid, queue):
-        #FIXME: Replace queue since it has no cancel!
         while True:
-            yield from self.__process_chord_packet(peer, local_cid, queue)
+            packet = yield from queue.get()
+            if not packet:
+                break
+            self.__process_chord_packet(peer, local_cid, queue)
 
     @asyncio.coroutine
-    def __process_chord_packet(self, peer, local_cid, queue):
-        data = yield from queue.get()
+    def __process_chord_packet(self, peer, local_cid, packet):
+        data = packet
 
         if log.isEnabledFor(logging.DEBUG):
             log.debug("data=\n[{}].".format(hex_dump(data)))
@@ -573,6 +584,8 @@ class ChordEngine():
             log.info("Received CHORD_MSG_PEER_LIST message.")
             msg = ChordPeerList(data)
             yield from self.add_peers(msg.peers)
+        else:
+            log.warning("Ignoring unrecognized packet.")
 
 class ChordMessage(object):
     def __init__(self, packet_type = None, buf = None):

@@ -526,7 +526,7 @@ class SshProtocol(asyncio.Protocol):
                     local_cid = self._open_channel(msg)
 
                     yield from self.channel_handler\
-                            .channel_opened(self, local_cid)
+                            .channel_opened(self, msg.channel_type, local_cid)
                 else:
                     self._open_channel_reject(msg)
 
@@ -552,7 +552,7 @@ class SshProtocol(asyncio.Protocol):
                 self._channel_map[msg.recipient_channel] = msg.sender_channel
 
                 yield from self.channel_handler\
-                    .channel_opened(self, msg.recipient_channel)
+                    .channel_opened(self, None, msg.recipient_channel)
 
             elif t == mnetpacket.SSH_MSG_CHANNEL_DATA:
                 msg = mnetpacket.SshChannelDataMessage(packet)
@@ -943,7 +943,7 @@ class SshClientProtocol(SshProtocol):
 
 class ChannelHandler():
     @asyncio.coroutine
-    def channel_opened(self, protocol, local_cid):
+    def channel_opened(self, protocol, channel_type, local_cid):
         pass
 
     @asyncio.coroutine
