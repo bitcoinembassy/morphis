@@ -267,6 +267,9 @@ class ChordEngine():
         ph = mn1.SshClientProtocol(self.node.loop)
         ph.client_key = self.node.get_node_key()
 
+        if peer.node_key:
+            ph.server_key = peer.node_key
+
         peer.protocol = ph
 
 #        self.pending_connections.append(peer)
@@ -492,6 +495,7 @@ class ChordEngine():
 
                 msg = ChordPeerList()
                 msg.peers = pl[:min(25, cnt)]
+
                 peer.protocol.write_channel_data(local_cid, msg.encode())
 
                 if cnt <= 25:

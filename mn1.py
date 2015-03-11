@@ -188,6 +188,10 @@ def _connectTaskCommon(protocol, server_mode):
         if not r:
             raise SshException("Signature and key provided by client did not match.")
 
+        if protocol.client_key:
+            if protocol.client_key.asbytes() != m.get_public_key():
+                raise SshException("Key provided by client differs from that which we were expecting.")
+
         protocol.client_key = client_key
 
         r = yield from protocol.connection_handler.peer_authenticated(protocol)
@@ -337,6 +341,10 @@ class SshProtocol(asyncio.Protocol):
             raise SshException("Signature verification failed.")
 
         log.info("Signature validated correctly!")
+
+        if protocol.server_key:
+            if protocol.server_key.asbytes() != key_data:
+                raise SshException("Key provided by server differs from that which we were expecting.")
 
         self.server_key = key
 
