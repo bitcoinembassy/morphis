@@ -10,6 +10,11 @@ import sshtype
 
 log = logging.getLogger(__name__)
 
+UP_ARROW = bytearray([0x1b, 0x5b, 0x41])
+DOWN_ARROW = bytearray([0x1b, 0x5b, 0x42])
+RIGHT_ARROW = bytearray([0x1b, 0x5b, 0x43])
+LEFT_ARROW = bytearray([0x1b, 0x5b, 0x44])
+
 class Shell(cmd.Cmd):
     intro = "Hello, test. Type help or ? to list commands."
     prompt = "(morphis) "
@@ -57,6 +62,7 @@ class Shell(cmd.Cmd):
     @asyncio.coroutine
     def readline(self):
         buf = bytearray()
+        savedcmd = None
 
         while True:
             packet = yield from self.queue.get()
@@ -70,25 +76,32 @@ class Shell(cmd.Cmd):
             else:
                 log.info("Received text [{}].".format(msg.value))
 
-            if len(msg.value) == 1:
+            lenval = len(msg.value)
+            if lenval == 1:
                 char = msg.value[0]
                 if char == 0x7f:
-                    rbuf = bytearray(7)
-                    rbuf[0] = 0x1b
-                    rbuf[1] = 0x5b
-                    rbuf[2] = 0x44
-                    rbuf[3] = ord(' ')
-                    rbuf[4] = 0x1b
-                    rbuf[5] = 0x5b
-                    rbuf[6] = 0x44
+                    if not buf:
+                        continue
 
-                    rmsg = BinaryMessage()
-                    rmsg.value = rbuf
-
-                    self.peer.protocol.write_channel_data(\
-                        self.local_cid, rmsg.encode())
+                    self.write(LEFT_ARROW)
+                    self.write(b' ')
+                    self.write(LEFT_ARROW)
+                    self.flush()
 
                     buf = buf[:-1]
+                    continue
+            elif lenval == 3:
+                if msg.value == UP_ARROW:
+                    if savedcmd == None:
+                        savedcmd = buf.copy()
+
+                    self._replace_line(buf, self.lastcmd.encode("UTF-8"))
+
+                    continue
+                elif msg.value == DOWN_ARROW:
+                    if savedcmd != None:
+                        self._replace_line(buf, savedcmd)
+                        savedcmd = None
                     continue
 
             buf += msg.value
@@ -106,13 +119,35 @@ class Shell(cmd.Cmd):
 
             return line
 
+    def _replace_line(self, buf, newline):
+        lenbuf = len(buf)
+        for i in range(lenbuf):
+            self.write(LEFT_ARROW)
+
+        self.write(newline)
+
+        diff = lenbuf - len(newline)
+        if diff > 0:
+            for j in range(diff):
+                self.write(' ')
+            for j in range(diff):
+                self.write(LEFT_ARROW)
+
+        self.flush()
+
+        buf.clear()
+        buf += newline
+
     def writeln(self, val):
         self.write(val + "\n")
 
     def write(self, val):
-        val = val.replace('\n', "\r\n")
-
-        self.out_buffer += val.encode("UTF-8")
+        if isinstance(val, bytearray) or isinstance(val, bytes):
+            val = val.replace(b'\n', b"\r\n")
+            self.out_buffer += val
+        else:
+            val = val.replace('\n', "\r\n")
+            self.out_buffer += val.encode("UTF-8")
 
     def flush(self):
         if not self.out_buffer:
