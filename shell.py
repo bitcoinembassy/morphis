@@ -29,15 +29,15 @@ class Shell(cmd.Cmd):
         self.preloop()
         
         if self.intro:
-            self.stdout.write(str(self.intro) + '\n')
+            self.write(str(self.intro) + '\n')
 
         assert not self.cmdqueue
         assert not self.use_rawinput
 
         stop = None
         while not stop:
-            self.stdout.write(self.prompt)
-            self.stdout.flush()
+            self.write(self.prompt)
+            self.flush()
 
             line = yield from self.readline()
 
@@ -125,12 +125,22 @@ class Shell(cmd.Cmd):
         self.out_buffer.clear()
 
     def do_test(self, arg):
-        'Test thing'
-        self.stdout.writeln("Hello, I received your test.")
+        "Test thing."
+        self.writeln("Hello, I received your test.")
 
     def do_quit(self, arg):
+        "Close this shell connection."
         self.peer.protocol.transport.close()
         return True
+
+    def do_shell(self, arg):
+        "Execute python code."
+        try:
+            r = eval(arg)
+            if r:
+                self.writeln(r)
+        except Exception as e:
+            self.writeln("Exception: [{}].".format(e))
 
     def emptyline(self):
         pass
