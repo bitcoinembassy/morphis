@@ -46,6 +46,9 @@ class ChordEngine():
 
         self._next_request_id = 0
 
+        self._process_connection_count_handle = None
+        self._last_process_connection_count = datetime(1, 1, 1)
+
     @asyncio.coroutine
     def add_peer(self, addr):
         log.info("Adding peer (addr=[{}]).".format(addr))
@@ -107,11 +110,28 @@ class ChordEngine():
     def stop(self):
         self.server.close()
 
+    def _async_process_connection_count(self):
+        asyncio.async(self._process_connection_count())
+
     @asyncio.coroutine
     def _process_connection_count(self):
         cnt = len(self.pending_connections) + len(self.peers)
         if cnt >= self.maximum_connections:
             return
+
+        now = datetime.today()
+        diff = now - self._last_process_connection_count
+        if diff < timedelta(seconds=15):
+            return
+
+        self._last_process_connection_count = now
+
+        if self._process_connection_count_handle:
+            self._process_connection_count_handle.cancel()
+
+        self._process_connection_count_handle =\
+            self.node.loop.call_later(\
+                60, self._async_process_connection_count)
 
         needed = self.maximum_connections - cnt
 
@@ -119,6 +139,8 @@ class ChordEngine():
 
     @asyncio.coroutine
     def __process_connection_count(self, needed):
+        log.info("Processing connection count.")
+
         # First connect to any unconnected PeerS that are in the database with
         # a null node_id. Such entries had to be added manually; thus we should
         # listen to the user and try them out.
@@ -163,7 +185,7 @@ class ChordEngine():
 
             peer_bucket = self.peer_buckets[distance - 1]
             bucket_needs = 2 - len(peer_bucket)
-            if not bucket_needs:
+            if bucket_needs <= 0:
                 distance -= 1
                 continue
 
@@ -176,9 +198,9 @@ class ChordEngine():
                             Peer.connected == False,\
                             or_(Peer.last_connect_attempt == None,\
                                 Peer.last_connect_attempt < grace))\
-                        .order_by(desc(Peer.direction), Peer.node_id)
+                        .order_by(desc(Peer.direction), Peer.node_id)\
+                        .limit(min(needed, bucket_needs))
 
-                    np = q.limit(min(needed, bucket_needs))
                     return q.all()
 
             np = yield from self.node.loop.run_in_executor(None, dbcall)
@@ -202,6 +224,7 @@ class ChordEngine():
 
                 if not needed:
                     break
+                assert needed > 0
 
                 if bucket_needs:
                     continue
