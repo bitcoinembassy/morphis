@@ -31,8 +31,6 @@ class ChordEngine():
         self.node = node
         self.node_id = enc.generate_ID(node.node_key.asbytes())
 
-        self.bind_address = None
-
         self.running = False
         self.server = None #Task.
         self.server_protocol = None
@@ -44,10 +42,22 @@ class ChordEngine():
         self.minimum_connections = 1#10
         self.maximum_connections = 64
 
+        self._bind_address = None
+        self._bind_port = None
+
         self._next_request_id = 0
 
         self._process_connection_count_handle = None
         self._last_process_connection_count = datetime(1, 1, 1)
+
+    @property
+    def bind_address(self):
+        return self._bind_address
+
+    @bind_address.setter
+    def bind_address(self, value):
+        self._bind_address = value
+        self._bind_port = int(value.split(':')[1])
 
     @asyncio.coroutine
     def add_peer(self, addr):
@@ -95,7 +105,7 @@ class ChordEngine():
     def start(self):
         self.running = True
 
-        host, port = self.bind_address.split(':')
+        host, port = self._bind_address.split(':')
         self.server = self.node.loop.create_server(\
             self._create_server_protocol, host, port)
 
@@ -479,8 +489,7 @@ class ChordEngine():
 
         # Client requests a GetPeers upon connection.
         msg = ChordGetPeers()
-        host, port = self.bind_address.split(':')
-        msg.sender_port = int(port)
+        msg.sender_port = self._bind_port
 
         peer.protocol.write_channel_data(local_cid, msg.encode())
 
@@ -495,6 +504,12 @@ class ChordEngine():
 
     @asyncio.coroutine
     def _process_chord_packet(self, peer, local_cid, queue):
+        #FIXME: Replace queue since it has no cancel!
+        while True:
+            yield from self.__process_chord_packet(peer, local_cid, queue)
+
+    @asyncio.coroutine
+    def __process_chord_packet(self, peer, local_cid, queue):
         data = yield from queue.get()
 
         if log.isEnabledFor(logging.DEBUG):
@@ -510,6 +525,12 @@ class ChordEngine():
         elif msg.packet_type == CHORD_MSG_GET_PEERS:
             log.info("Received CHORD_MSG_GET_PEERS message.")
             msg = ChordGetPeers(data)
+
+            if peer.protocol.server_mode:
+                omsg = ChordGetPeers()
+                omsg.sender_port = self._bind_port
+
+                peer.protocol.write_channel_data(local_cid, omsg.encode())
 
             host, port = peer.address.split(':')
 
