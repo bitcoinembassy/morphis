@@ -510,20 +510,22 @@ class ChordEngine():
 
     @asyncio.coroutine
     def channel_data(self, peer, local_cid, data):
+        log.info("Adding Peer (dbid={}) channel [{}] data to queue.".format(peer.dbid, local_cid))
+
         yield from peer.channel_queues[local_cid].put(data)
 
     @asyncio.coroutine
     def _process_chord_packet(self, peer, local_cid, queue):
         while True:
+            log.info("Waiting for chord packet.")
             packet = yield from queue.get()
             if not packet:
                 break
-            self.__process_chord_packet(peer, local_cid, queue)
+            log.info("Processing chord packet.")
+            yield from self.__process_chord_packet(peer, local_cid, packet)
 
     @asyncio.coroutine
-    def __process_chord_packet(self, peer, local_cid, packet):
-        data = packet
-
+    def __process_chord_packet(self, peer, local_cid, data):
         if log.isEnabledFor(logging.DEBUG):
             log.debug("data=\n[{}].".format(hex_dump(data)))
         msg = ChordMessage(None, data)
