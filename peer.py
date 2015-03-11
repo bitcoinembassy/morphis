@@ -31,6 +31,8 @@ class Peer():
 
         if dbpeer:
             self.dbid = dbpeer.id
+            self.node_key = rsakey.RsaKey(dbpeer.pubkey)
+            self.node_id = dbpeer.node_id
             self.distance = dbpeer.distance
             self.direction = dbpeer.direction
 
