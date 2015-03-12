@@ -9,7 +9,7 @@ import struct
 from functools import partial
 from datetime import datetime, timedelta
 
-from sqlalchemy import func, desc, or_
+from sqlalchemy import Integer, String, text, func, desc, or_
 
 import packet as mnetpacket
 import rsakey
@@ -532,11 +532,7 @@ class ChordEngine():
 
         log.info("packet_type=[{}].".format(msg.packet_type))
 
-        if msg.packet_type == CHORD_MSG_FIND_NODE:
-            log.info("Received CHORD_MSG_FIND_NODE message.")
-            msg = ChordFindNode(data)
-
-        elif msg.packet_type == CHORD_MSG_GET_PEERS:
+        if msg.packet_type == CHORD_MSG_GET_PEERS:
             log.info("Received CHORD_MSG_GET_PEERS message.")
             msg = ChordGetPeers(data)
 
@@ -586,6 +582,28 @@ class ChordEngine():
             log.info("Received CHORD_MSG_PEER_LIST message.")
             msg = ChordPeerList(data)
             yield from self.add_peers(msg.peers)
+        elif msg.packet_type == CHORD_MSG_FIND_NODE:
+            log.info("Received CHORD_MSG_FIND_NODE message.")
+            msg = ChordFindNode(data)
+
+# Example of non-working db code. Sqlite seems to break when order by contains
+# any bitwise operations. (It just returns the rows in order of id.)
+#            def dbcall():
+#                with self.node.db.open_session() as sess:
+#                    t = text(\
+#                        "SELECT id, address FROM peer ORDER BY"\
+#                        " (~(node_id&:r_id))&(node_id|:r2_id) DESC"\
+#                        " LIMIT 2")
+#
+#                    st = t.bindparams(r_id = msg.node_id, r2_id = msg.node_id)\
+#                        .columns(id=Integer, address=String)
+#
+#                    rs = sess.connection().execute(st)
+#
+#                    for r in rs:
+#                        log.info("nn: {} FOUND: {} {}".format(self.node.instance, r.id, r.address))
+#
+#            yield from self.node.loop.run_in_executor(None, dbcall)
         else:
             log.warning("Ignoring unrecognized packet.")
 

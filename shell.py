@@ -6,6 +6,7 @@ import logging
 import queue as tqueue
 
 from mutil import hex_dump
+import chord
 import sshtype
 
 log = logging.getLogger(__name__)
@@ -187,6 +188,19 @@ class Shell(cmd.Cmd):
         for peer in self.peer.engine.peers.values():
             self.writeln(\
                 "Peer: (id={} addr={}).".format(peer.dbid, peer.address))
+
+    def do_findnode(self, arg):
+        "[id] find the node with id."
+
+        msg = chord.ChordFindNode()
+        msg.node_id = arg.encode()
+
+        for peer in self.peer.engine.peers.values():
+            if not peer.protocol.remote_banner.startswith("SSH-2.0-mNet_"):
+                log.info("Skipping non morphis connection.")
+                continue
+            log.info("Sending FindNode to peer [{}].".format(peer.address))
+            peer.protocol.write_channel_data(self.local_cid, msg.encode())
 
     def emptyline(self):
         pass

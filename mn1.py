@@ -40,7 +40,7 @@ def connectTaskCommon(protocol, server_mode):
     packet = yield from protocol.read_packet()
     log.info("X: Received banner [{}].".format(packet))
 
-    protocol.setRemoteBanner(packet.decode(encoding="UTF-8"))
+    protocol.remote_banner = packet.decode(encoding="UTF-8")
 
 # Returns True on success, False on failure.
 @asyncio.coroutine
@@ -324,7 +324,7 @@ class SshProtocol(asyncio.Protocol):
         self.inPacketId = 0
         self.outPacketId = 0
 
-        self.remoteBanner = None
+        self.remote_banner = None
         self.localKexInitMessage = None
         self.remoteKexInitMessage = None
 
@@ -395,12 +395,6 @@ class SshProtocol(asyncio.Protocol):
 
     def set_inbound_enabled(self, val):
         self.inboundEnabled = val
-
-    def getRemoteBanner(self):
-        return self.remoteBanner
-
-    def setRemoteBanner(self, val):
-        self.remoteBanner = val
 
     def getLocalBanner(self):
         if cleartext_transport_enabled:
@@ -494,7 +488,7 @@ class SshProtocol(asyncio.Protocol):
         yield from connectTaskCommon(self, self.server_mode)
 
         if cleartext_transport_enabled\
-                and self.getRemoteBanner().endswith("+cleartext"):
+                and self.remote_banner.endswith("+cleartext"):
             r = yield from connectTaskInsecure(self, self.server_mode)
         else:
             r = yield from connectTaskSecure(self, self.server_mode)
