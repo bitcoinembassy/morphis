@@ -30,7 +30,7 @@ def enable_cleartext_transport():
 
 # Returns True on success, False on failure.
 @asyncio.coroutine
-def connectTaskInsecure(protocol, server_mode):
+def connectTaskCommon(protocol, server_mode):
     assert isinstance(server_mode, bool)
 
     log.info("X: Sending banner.")
@@ -42,6 +42,9 @@ def connectTaskInsecure(protocol, server_mode):
 
     protocol.setRemoteBanner(packet.decode(encoding="UTF-8"))
 
+# Returns True on success, False on failure.
+@asyncio.coroutine
+def connectTaskInsecure(protocol, server_mode):
     m = mnetpacket.SshKexdhReplyMessage()
     if server_mode:
         m.setHostKey(protocol.server_key.asbytes())
@@ -77,18 +80,7 @@ def connectTaskInsecure(protocol, server_mode):
 
 # Returns True on success, False on failure.
 @asyncio.coroutine
-def connectTaskCommon(protocol, server_mode):
-    assert isinstance(server_mode, bool)
-
-    log.info("X: Sending banner.")
-    protocol.transport.write((protocol.getLocalBanner() + "\r\n").encode(encoding="UTF-8"))
-
-    # Read banner.
-    packet = yield from protocol.read_packet()
-    log.info("X: Received banner [{}].".format(packet))
-
-    protocol.setRemoteBanner(packet.decode(encoding="UTF-8"))
-
+def connectTaskSecure(protocol, server_mode):
     # Send KexInit packet.
     opobj = mnetpacket.SshKexInitMessage()
     opobj.setCookie(os.urandom(16))
@@ -411,7 +403,10 @@ class SshProtocol(asyncio.Protocol):
         self.remoteBanner = val
 
     def getLocalBanner(self):
-        return "SSH-2.0-mNet_0.0.1"
+        if cleartext_transport_enabled:
+            return "SSH-2.0-mNet_0.0.1+cleartext"
+        else:
+            return "SSH-2.0-mNet_0.0.1"
 
     def getLocalKexInitMessage(self):
         return self.localKexInitMessage
@@ -496,10 +491,13 @@ class SshProtocol(asyncio.Protocol):
 
     @asyncio.coroutine
     def _run(self):
-        if cleartext_transport_enabled:
+        yield from connectTaskCommon(self, self.server_mode)
+
+        if cleartext_transport_enabled\
+                and self.getRemoteBanner().endswith("+cleartext"):
             r = yield from connectTaskInsecure(self, self.server_mode)
         else:
-            r = yield from connectTaskCommon(self, self.server_mode)
+            r = yield from connectTaskSecure(self, self.server_mode)
 
         if not r:
             return r
@@ -528,7 +526,7 @@ class SshProtocol(asyncio.Protocol):
                     local_cid = self._open_channel(msg)
 
                     yield from self.channel_handler\
-                            .channel_opened(self, local_cid)
+                            .channel_opened(self, msg.channel_type, local_cid)
                 else:
                     self._open_channel_reject(msg)
 
@@ -554,7 +552,7 @@ class SshProtocol(asyncio.Protocol):
                 self._channel_map[msg.recipient_channel] = msg.sender_channel
 
                 yield from self.channel_handler\
-                    .channel_opened(self, msg.recipient_channel)
+                    .channel_opened(self, None, msg.recipient_channel)
 
             elif t == mnetpacket.SSH_MSG_CHANNEL_DATA:
                 msg = mnetpacket.SshChannelDataMessage(packet)
@@ -799,7 +797,8 @@ class SshProtocol(asyncio.Protocol):
                 if len(self.cbuf) < self.bpLength or len(self.buf) < self.inHmacSize:
                     return;
 
-                log.info("PACKET READ (bpLength={}, inHmacSize={}, len(self.cbuf)={}, len(self.buf)={})".format(self.bpLength, self.inHmacSize, len(self.cbuf), len(self.buf)))
+                if log.isEnabledFor(logging.DEBUG):
+                    log.debug("PACKET READ (bpLength={}, inHmacSize={}, len(self.cbuf)={}, len(self.buf)={})".format(self.bpLength, self.inHmacSize, len(self.cbuf), len(self.buf)))
 
                 padding_length = struct.unpack("B", self.cbuf[4:5])[0]
                 log.debug("padding_length=[{}].".format(padding_length))
@@ -944,7 +943,7 @@ class SshClientProtocol(SshProtocol):
 
 class ChannelHandler():
     @asyncio.coroutine
-    def channel_opened(self, protocol, local_cid):
+    def channel_opened(self, protocol, channel_type, local_cid):
         pass
 
     @asyncio.coroutine
