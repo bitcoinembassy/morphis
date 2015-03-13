@@ -19,7 +19,7 @@ import peer as mnpeer
 import shell
 import enc
 from db import Peer
-from mutil import hex_dump, log_base2_8bit
+from mutil import hex_dump, log_base2_8bit, hex_string
 
 # Chord Message Types.
 CHORD_MSG_GET_PEERS = 110
@@ -602,7 +602,7 @@ class ChordEngine():
                 if not r:
                     continue;
 
-                log.debug("nn: {} FOUND: {:04} {:22} {}...".format(self.node.instance, r.dbid, r.address, int.from_bytes([x ^ y for x, y in zip(r.node_id[:8], msg.node_id[:8])], "big")))
+                log.debug("nn: {} FOUND: {:04} {:22} node_id=[{}]".format(self.node.instance, r.dbid, r.address, hex_string([x ^ y for x, y in zip(r.node_id, msg.node_id)])))
                 cnt -= 1
                 if not cnt:
                     break
