@@ -61,3 +61,16 @@ def log_base2_8bit(val):
             r |= bc_shifts[i]
 
     return r
+
+def hex_string(val):
+    if not val:
+        return None
+
+    buf = ""
+
+    for b in val:
+        if b <= 0x0F:
+            buf += '0'
+        buf += hex(b)
+
+    return buf
