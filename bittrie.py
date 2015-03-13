@@ -1,6 +1,6 @@
 class BitTrie(object):
     def __init__(self):
-        self.trie = [None, None]
+        self.trie = [None] * 0x10
 
     def get(self, key, default=None):
         r = self._get(key)
@@ -23,8 +23,8 @@ class BitTrie(object):
         keylen = len(key)
         for i in range(keylen):
             char = key[i]
-            for j in range(7, -1, -1):
-                bit = (char >> j) & 0x01
+            for j in range(4, -1, -4):
+                bit = (char >> j) & 0x0F
                 next_node = node[bit]
 
                 if not next_node:
@@ -41,11 +41,11 @@ class BitTrie(object):
                             node[bit] = TrieLeaf(key, value)
                             return other.value
 
-                        next_o_bit = (o_key[i+1] >> 7) & 0x01
+                        next_o_bit = (o_key[ii] >> 4) & 0x0F
                     else:
-                        next_o_bit = (o_key[i] >> (j-1)) & 0x01
+                        next_o_bit = (o_key[i] >> (j-4)) & 0x0F
 
-                    next_node = [None, None]
+                    next_node = [None] * 0x10
                     next_node[next_o_bit] = other
 
                     node[bit] = next_node
@@ -62,20 +62,24 @@ class BitTrie(object):
 
         for i in range(len(key)):
             char = key[i]
-            for j in range(7, -1, -1):
-                bit = (char >> j) & 0x01
+            for j in range(4, -1, -4):
+                bit = (char >> j) & 0x0F
                 next_node = node[bit]
 
                 if not next_node:
                     return None
 
                 if type(next_node) is TrieLeaf:
-                    other_bit = bit ^ 0x01
-                    if node[other_bit]:
-                        node[bit] = None
-                    else:
-                        if prev_node:
-                            prev_node[prev_node_bit] = None
+                    node[bit] = None
+
+                    empty = True
+                    for n in node:
+                        if n:
+                            empty = False
+                            break;
+
+                    if empty and prev_node:
+                        prev_node[prev_node_bit] = None
 
                     return next_node.value
 
@@ -90,8 +94,8 @@ class BitTrie(object):
 
         for i in range(len(key)):
             char = key[i]
-            for j in range(7, -1, -1):
-                bit = (char >> j) & 0x01
+            for j in range(4, -1, -4):
+                bit = (char >> j) & 0x0F
                 next_node = node[bit]
 
                 if not next_node:
@@ -107,8 +111,8 @@ class BitTrie(object):
 
                 node = next_node
 
-    def _find(self, key):
-        "Generator."
+    def find(self, key):
+        "Generator. First element can be None sometimes when no exact match."
         branches = []
         node = self.trie
 
@@ -116,17 +120,16 @@ class BitTrie(object):
         i = 0
         while i < key_len:
             char = key[i]
-            j = 7
+            j = 4
             while j >= 0:
-                bit = (char >> j) & 0x01
+                bit = (char >> j) & 0x0F
 
-                if not bit:
-                    other = node[1]
-                    if other != None:
+                for obit in range(0x0F, bit, -1):
+                    other = node[obit]
+                    if other:
                         branches.append(other)
-                    next_node = node[0]
-                else:
-                    next_node = node[1]
+
+                next_node = node[bit]
 
                 if not next_node:
                     yield None
@@ -135,15 +138,31 @@ class BitTrie(object):
                     return None
 
                 if type(next_node) is TrieLeaf:
-                    yield next_node.value
+                    nnk = next_node.key
+                    while True:
+                        if nnk[i] > key[i]:
+                            yield None
+                            yield next_node.value
+                            break
+
+                        if nnk[i] < key[i]:
+                            yield None
+                            break
+
+                        i = i + 1
+                        if i == key_len:
+                            yield next_node.value
+                            break;
+
                     for r in self._iterate_next(branches):
                         yield r
+
                     return None
 
                 assert type(next_node) is list
 
                 node = next_node
-                j = j - 1
+                j = j - 4
 
             i = i + 1
 
@@ -154,20 +173,13 @@ class BitTrie(object):
 
             node = branches.pop()
 
-            while True:
-                if type(node) is TrieLeaf:
-                    yield node.value
-                    break
+            if type(node) is TrieLeaf:
+                yield node.value
+                continue
 
-                assert type(node) is list
+            assert type(node) is list
 
-                obj = node[0]
-                if obj:
-                    if node[1]:
-                        branches.append(node[1])
-                    node = obj
-                else:
-                    node = node[1]
+            branches.extend(reversed([x for x in node if x]))
 
 class TrieLeaf(object):
     def __init__(self, key, value):
@@ -189,45 +201,80 @@ import random
 import os
 from datetime import datetime
 
-print("HI")
-
-bt = BitTrie()
+def _speed_test():
+    bt = BitTrie()
 #bt = {}
 
-rval = os.urandom(512>>3)
+    rval = os.urandom(512>>3)
 
-for i in range(50000):
-    val = os.urandom(512>>3)
+    for i in range(500000):
+        val = os.urandom(512>>3)
 
-    xval = [rvalc ^ valc for rvalc, valc in zip(rval, val)]
-    xiv = int.from_bytes(xval, "big")
+        xval = [rvalc ^ valc for rvalc, valc in zip(rval, val)]
+        xiv = int.from_bytes(xval, "big")
 
-    k = XorKey(rval, val)
+        k = XorKey(rval, val)
+
+        now = datetime.today()
+        #r = bt.put(k, xiv)
+        r = bt[k] = xiv
+        if not i % 5000:
+            print("put took: {}".format(datetime.today() - now))
+
+    n = XorKey(os.urandom(512>>3), os.urandom(512>>3))
+    bt[n] = int.from_bytes(n, "big")
 
     now = datetime.today()
-    #r = bt.put(k, xiv)
-    r = bt[k] = xiv
-    if not i % 5000:
-        print("put took: {}".format(datetime.today() - now))
-#    if r:
-#        print("dup")
-
-n = XorKey(os.urandom(512>>3), os.urandom(512>>3))
-bt.put(n, int.from_bytes(n, "big"))
-
-now = datetime.today()
-print("get: {}".format(bt.get(int(0).to_bytes(512>>3, "big"))))
-print("took: {}".format(datetime.today() - now))
-now = datetime.today()
-print("get: {}".format(bt.get(int(42).to_bytes(512>>3, "big"))))
-print("took: {}".format(datetime.today() - now))
-
-cnt = 42
-now = datetime.today()
-for i in bt._find(int(100).to_bytes(512>>3, "big")):
-    print("find: {}".format(i))
+    print("get: {}".format(bt.get(int(0).to_bytes(512>>3, "big"))))
     print("took: {}".format(datetime.today() - now))
-    cnt -= 1
-    if not cnt:
-        break
     now = datetime.today()
+    print("get: {}".format(bt.get(int(42).to_bytes(512>>3, "big"))))
+    print("took: {}".format(datetime.today() - now))
+    now = datetime.today()
+    print("get: {}".format(bt.get(int(88).to_bytes(512>>3, "big"))))
+    print("took: {}".format(datetime.today() - now))
+
+    cnt = 42
+    now = datetime.today()
+    for i in bt.find(int(100).to_bytes(512>>3, "big")):
+        print("find: {}".format(i))
+        print("took: {}".format(datetime.today() - now))
+        cnt -= 1
+        if not cnt:
+            break
+        now = datetime.today()
+
+def _validity_test():
+    bt = BitTrie()
+    #bt = {}
+
+    for i in range(10):
+        ri = random.randint(0, 100)
+        k = ri.to_bytes(1, "big")
+
+        now = datetime.today()
+        r = bt[k] = ri
+        print("put took: {}".format(datetime.today() - now))
+
+    now = datetime.today()
+    print("get: {}".format(bt.get(int(0).to_bytes(1, "big"))))
+    print("took: {}".format(datetime.today() - now))
+    now = datetime.today()
+    print("get: {}".format(bt.get(int(42).to_bytes(1, "big"))))
+    print("took: {}".format(datetime.today() - now))
+    now = datetime.today()
+    print("get: {}".format(bt.get(int(88).to_bytes(1, "big"))))
+    print("took: {}".format(datetime.today() - now))
+
+    cnt = 42
+    now = datetime.today()
+    for i in bt.find(int(42).to_bytes(1, "big")):
+        print("find: {}".format(i))
+#        print("took: {}".format(datetime.today() - now))
+        cnt -= 1
+        if not cnt:
+            break
+        now = datetime.today()
+
+_validity_test()
+_speed_test()
