@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 
 from sqlalchemy import Integer, String, text, func, desc, or_
 
+import bittrie
 import packet as mnetpacket
 import rsakey
 import mn1
@@ -24,6 +25,8 @@ from mutil import hex_dump, log_base2_8bit
 CHORD_MSG_GET_PEERS = 110
 CHORD_MSG_PEER_LIST = 111
 CHORD_MSG_FIND_NODE = 150
+
+ZERO_MEM_512_BIT = bytearray(512>>3)
 
 log = logging.getLogger(__name__)
 
@@ -587,6 +590,22 @@ class ChordEngine():
         elif msg.packet_type == CHORD_MSG_FIND_NODE:
             log.info("Received CHORD_MSG_FIND_NODE message.")
             msg = ChordFindNode(data)
+
+            pt = bittrie.BitTrie()
+
+            for peer in self.peers.values():
+                ki = bittrie.XorKey(peer.node_id, msg.node_id)
+                pt[ki] = peer
+
+            cnt = 10
+            for r in pt.find(ZERO_MEM_512_BIT):
+                if not r:
+                    continue;
+
+                log.debug("nn: {} FOUND: {:04} {:22} {}...".format(self.node.instance, r.dbid, r.address, int.from_bytes([x ^ y for x, y in zip(r.node_id[:8], msg.node_id[:8])], "big")))
+                cnt -= 1
+                if not cnt:
+                    break
 
 # Example of non-working db code. Sqlite seems to break when order by contains
 # any bitwise operations. (It just returns the rows in order of id.)
