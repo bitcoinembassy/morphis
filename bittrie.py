@@ -174,7 +174,19 @@ class TrieLeaf(object):
         self.key = key
         self.value = value
 
+class XorKey(object):
+    def __init__(self, key1, key2):
+        self.key1 = key1
+        self.key2 = key2
+
+    def __getitem__(self, idx):
+        return self.key1[idx] ^ self.key2[idx]
+
+    def __len__(self):
+        return len(self.key1)
+
 import random
+import os
 from datetime import datetime
 
 print("HI")
@@ -182,29 +194,37 @@ print("HI")
 bt = BitTrie()
 #bt = {}
 
-for i in range(50000):
-    val = random.randint(0, pow(2, 512)-1)
+rval = os.urandom(512>>3)
 
-    ib = val.to_bytes(512, "big")
+for i in range(50000):
+    val = os.urandom(512>>3)
+
+    xval = [rvalc ^ valc for rvalc, valc in zip(rval, val)]
+    xiv = int.from_bytes(xval, "big")
+
+    k = XorKey(rval, val)
 
     now = datetime.today()
-    r = bt.put(ib, val)
-    #r = bt[val] = val
+    #r = bt.put(k, xiv)
+    r = bt[k] = xiv
     if not i % 5000:
         print("put took: {}".format(datetime.today() - now))
 #    if r:
 #        print("dup")
 
+n = XorKey(os.urandom(512>>3), os.urandom(512>>3))
+bt.put(n, int.from_bytes(n, "big"))
+
 now = datetime.today()
-print("get: {}".format(bt.get(int(0).to_bytes(512, "big"))))
+print("get: {}".format(bt.get(int(0).to_bytes(512>>3, "big"))))
 print("took: {}".format(datetime.today() - now))
 now = datetime.today()
-print("get: {}".format(bt.get(int(42).to_bytes(512, "big"))))
+print("get: {}".format(bt.get(int(42).to_bytes(512>>3, "big"))))
 print("took: {}".format(datetime.today() - now))
 
 cnt = 42
 now = datetime.today()
-for i in bt._find(int(100).to_bytes(512, "big")):
+for i in bt._find(int(100).to_bytes(512>>3, "big")):
     print("find: {}".format(i))
     print("took: {}".format(datetime.today() - now))
     cnt -= 1
