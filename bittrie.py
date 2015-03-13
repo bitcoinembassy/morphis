@@ -276,5 +276,9 @@ def _validity_test():
             break
         now = datetime.today()
 
-_validity_test()
-_speed_test()
+def main():
+    _validity_test()
+    _speed_test()
+
+if __name__ == "__main__":
+    main()
