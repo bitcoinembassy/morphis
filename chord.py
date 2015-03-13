@@ -480,7 +480,7 @@ class ChordEngine():
             return True
         elif req.channel_type == "session":
             return peer.protocol.address[0] == "127.0.0.1"
-        return false
+        return False
 
     @asyncio.coroutine
     def channel_opened(self, peer, channel_type, local_cid):
