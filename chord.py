@@ -220,6 +220,8 @@ class ChordEngine():
                 bucket_needs = len(np)
 
                 for dbp in np:
+                    assert dbp.node_id != None
+
                     peer = yield from self._connect_peer(dbp)
 
                     if not peer:
