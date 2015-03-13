@@ -71,6 +71,6 @@ def hex_string(val):
     for b in val:
         if b <= 0x0F:
             buf += '0'
-        buf += hex(b)
+        buf += hex(b)[2:]
 
     return buf
