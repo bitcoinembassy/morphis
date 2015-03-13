@@ -193,7 +193,7 @@ class Shell(cmd.Cmd):
         "[id] find the node with id."
 
         msg = chord.ChordFindNode()
-        msg.node_id = arg.encode()
+        msg.node_id = int(arg).to_bytes(512>>3, "big")
 
         for peer in self.peer.engine.peers.values():
             if not peer.protocol.remote_banner.startswith("SSH-2.0-mNet_"):
