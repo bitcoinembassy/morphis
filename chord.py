@@ -601,13 +601,19 @@ class ChordEngine():
                 ki = bittrie.XorKey(cp.node_id, msg.node_id)
                 pt[ki] = cp
 
+            pt[bittrie.XorKey(self.node_id, msg.node_id)] = True
+
             cnt = int(sqrt(len(self.peers)))
-            log.info("Relaying to {} nodes.".format(cnt))
+            log.info("Relaying to upto {} nodes.".format(cnt))
             rlist = []
 
             for r in pt.find(ZERO_MEM_512_BIT):
                 if not r:
                     continue;
+
+                if r is True:
+                    log.info("No more nodes closer than ourselves.")
+                    break
 
                 log.debug("nn: {} FOUND: {:04} {:22} diff=[{}]".format(self.node.instance, r.dbid, r.address, hex_string([x ^ y for x, y in zip(r.node_id, msg.node_id)])))
 
@@ -616,6 +622,10 @@ class ChordEngine():
                 cnt -= 1
                 if not cnt:
                     break
+
+            if not rlist:
+                #FIXME: Close channel.
+                return
 
             rmsg = ChordPeerList()
             rmsg.peers = rlist
