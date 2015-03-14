@@ -29,7 +29,7 @@ class Peer():
         self.channel_handler = ChannelHandler(self)
         self.connection_handler = ConnectionHandler(self)
 
-        self.channel_queues = []
+        self.channel_queues = {}
 
         if dbpeer:
             self.dbid = dbpeer.id
@@ -58,7 +58,8 @@ class Peer():
 
         local_cid = yield from self.protocol.open_channel(channel_type)
 
-        queue = self._ensure_channel_queues(local_cid)
+        queue = self._create_channel_queue()
+        self.channel_queues[local_cid] = queue
 
         if block:
             r = yield from queue.get()
@@ -69,18 +70,6 @@ class Peer():
             assert r == True
 
         return local_cid, queue
-
-    def _ensure_channel_queues(self, local_cid):
-        queue = None
-        needed = local_cid - len(self.channel_queues) + 1
-        if needed > 0:
-            for i in range(needed):
-                queue = self._create_channel_queue()
-                self.channel_queues.append(queue)
-        else:
-            queue = self._create_channel_queue()
-            self.channel_queues[local_cid] = queue
-        return queue
 
     def _create_channel_queue(self):
         return asyncio.Queue(5)
@@ -139,7 +128,8 @@ class ChannelHandler():
 
         if channel_type is not None:
             # Other end initiated.
-            self.peer._ensure_channel_queues(local_cid)
+            self.peer.channel_queues[local_cid]\
+                = self.peer._create_channel_queue()
         else:
             # We initiated it.
             # First 'packet' is a True, signaling the channel is open to those
@@ -148,6 +138,10 @@ class ChannelHandler():
 
         yield from\
             self.peer.engine.channel_opened(self.peer, channel_type, local_cid)
+
+    @asyncio.coroutine
+    def channel_closed(self, local_cid):
+        del self.peer._channel_map[local_cid]
 
     @asyncio.coroutine
     def channel_data(self, protocol, packet):

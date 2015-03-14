@@ -364,6 +364,14 @@ class SshProtocol(asyncio.Protocol):
 
         return local_cid
 
+    @asyncio.coroutine
+    def close_channel(self, local_cid):
+        msg = mnetpacket.SshChannelCloseMessage()
+        msg.recipient_channel = self._channel_map[local_cid]
+        msg.encode()
+
+        self.write_packet(msg)
+
     def _allocate_channel_id(self):
         nid = self._next_channel_id
         self._next_channel_id += 1
@@ -555,6 +563,12 @@ class SshProtocol(asyncio.Protocol):
                 log.info("P: Received CHANNEL_DATA recipient_channel=[{}].".format(msg.recipient_channel))
 
                 yield from self.channel_handler.channel_data(self, packet)
+            elif t == mnetpacket.SSH_MSG_CHANNEL_CLOSE:
+                msg = mnetpacket.SshChannelCloseMessage(packet)
+                log.info("P: Received CHANNEL_CLOSE recipient_channel=[{}]".format(msg.recipient_channel))
+
+                yield from self.channel_handler.channel_closed(self, msg.recipient_channel)
+                self._close_channel(msg.recipient_channel)
 
     def _open_channel(self, req_msg):
         log.info("Accepting channel open request.")
@@ -589,6 +603,11 @@ class SshProtocol(asyncio.Protocol):
 
         self.write_packet(fm)
 
+    def _close_channel(self, local_cid):
+        if log.isEnabledFor(logging.INFO):
+            log.info("Closing channel [{}].".format(local_cid))
+
+        del self._channel_map[local_cid]
 
     def data_received(self, data):
         try:

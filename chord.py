@@ -233,7 +233,10 @@ class ChordEngine():
 
                     existing = self.peers.setdefault(dbp.address, peer)
                     if existing is not peer:
-                        log.error("Somehow we are trying to connect to an address [{}] already connected! [{}][{}]".format(dbp.address, existing, peer))
+                        log.warning("Somehow we are trying to connect to an address [{}] already connected! [{}][{}]".format(dbp.address, existing, peer))
+                        peer.transport.close()
+                        continue
+
                     peer_bucket[dbp.address] = peer
 
                     needed -= 1
@@ -326,7 +329,7 @@ class ChordEngine():
     def _connection_lost(self, peer, exc):
         log.info("connection_lost(): peer.id=[{}].".format(peer.dbid))
 
-        for queue in peer.channel_queues:
+        for queue in peer.channel_queues.values():
             yield from queue.put(None)
 
         if peer.node_id:

@@ -593,6 +593,25 @@ class SshChannelOpenFailureMessage(SshPacket):
 
         self.buf = nbuf
 
+class SshChannelCloseMessage(SshPacket):
+    def __init__(self, buf = None):
+        self.recipient_channel = None
+
+        super().__init__(SSH_MSG_CHANNEL_CLOSE, buf)
+
+    def parse(self):
+        super().parse()
+
+        i = 1
+        self.recipient_channel = struct.unpack(">L", self.buf[i:i+4])[0]
+
+    def encode(self):
+        nbuf = bytearray()
+
+        nbuf += struct.pack(">L", self.recipient_channel)
+
+        self.buf = nbuf
+
 class SshChannelDataMessage(SshPacket):
     def __init__(self, buf = None):
         self.recipient_channel = None
