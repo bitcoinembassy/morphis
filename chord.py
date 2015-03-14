@@ -596,9 +596,9 @@ class ChordEngine():
 
             pt = bittrie.BitTrie()
 
-            for peer in self.peers.values():
-                ki = bittrie.XorKey(peer.node_id, msg.node_id)
-                pt[ki] = peer
+            for cp in self.peers.values():
+                ki = bittrie.XorKey(cp.node_id, msg.node_id)
+                pt[ki] = cp
 
             rlist = []
 
