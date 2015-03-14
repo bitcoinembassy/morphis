@@ -124,8 +124,10 @@ class ChannelHandler():
         log.info("Channel [{}] opened!".format(local_cid))
 
         if len(self.peer.channel_queues) <= local_cid:
+            assert channel_type
             self.peer.channel_queues.append(self.peer._create_channel_queue())
         else:
+            assert channel_type is None # We initiated it.
             # First 'packet' is a True, signaling the channel is open to those
             # yielding from the queue.
             yield from self.peer.channel_queues[local_cid].put(True)
