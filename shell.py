@@ -190,10 +190,11 @@ class Shell(cmd.Cmd):
                 "Peer: (id={} addr={}).".format(peer.dbid, peer.address))
 
     def do_findnode(self, arg):
-        "[id] find the node with id."
+        "[id] find the node with hex encoded id."
 
         msg = chord.ChordFindNode()
-        msg.node_id = int(arg).to_bytes(512>>3, "big")
+        #msg.node_id = int(arg).to_bytes(512>>3, "big")
+        msg.node_id = int(arg, 16).to_bytes(512>>3, "big")
 
         for peer in self.peer.engine.peers.values():
             if not peer.protocol.remote_banner.startswith("SSH-2.0-mNet_"):
