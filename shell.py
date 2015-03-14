@@ -23,9 +23,10 @@ class Shell(cmd.Cmd):
     prompt = "(morphis) "
     use_rawinput = False
 
-    def __init__(self, peer, local_cid, queue):
+    def __init__(self, loop, peer, local_cid, queue):
         super().__init__(stdin=None, stdout=self)
 
+        self.loop = loop
         self.peer = peer
         self.local_cid = local_cid
         self.queue = queue
@@ -226,6 +227,8 @@ class Shell(cmd.Cmd):
         #msg.node_id = int(arg).to_bytes(512>>3, "big")
         msg.node_id = int(arg, 16).to_bytes(512>>3, "big")
 
+        tasks = []
+
         for peer in self.peer.engine.peers.values():
             if not peer.protocol.remote_banner.startswith("SSH-2.0-mNet_"):
                 log.info("Skipping non morphis connection.")
@@ -236,23 +239,28 @@ class Shell(cmd.Cmd):
             cid, queue = yield from peer.open_channel("mpeer", True)
             peer.protocol.write_channel_data(cid, msg.encode())
 
-            while True:
-                pkt = yield from queue.get()
-                if not pkt:
-                    self.writeln("<EOF>")
-                    return
+            @asyncio.coroutine
+            def _run():
+                while True:
+                    pkt = yield from queue.get()
+                    if not pkt:
+                        self.writeln("<EOF>")
+                        return
 
-                pmsg = chord.ChordPeerList(pkt)
+                    pmsg = chord.ChordPeerList(pkt)
 
-                for r in pmsg.peers:
-                    r.node_id = enc.generate_ID(r.pubkey)
+                    for r in pmsg.peers:
+                        r.node_id = enc.generate_ID(r.pubkey)
 
-                    self.writeln("nid[{}] FOUND: {:22} diff=[{}]".format(peer.dbid, r.address, hex_string([x ^ y for x, y in zip(r.node_id, msg.node_id)])))
-#                    self.writeln("nid[{}] FOUND: {}".format(peer.dbid, r.id))
+                        self.writeln("nid[{}] FOUND: {:22} diff=[{}]".format(peer.dbid, r.address, hex_string([x ^ y for x, y in zip(r.node_id, msg.node_id)])))
+                        self.flush()
 
-                break
+                    break
 
+            tasks.append(asyncio.async(_run(), loop=self.loop))
             #FIXME: Close channel.
+
+        yield from asyncio.wait(tasks, loop=self.loop)
 
     def emptyline(self):
         pass
