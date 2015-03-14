@@ -626,6 +626,11 @@ class ChordEngine():
                     break
 
             if not rlist:
+                rmsg = ChordPeerList()
+                rmsg.peers = []
+
+                peer.protocol.write_channel_data(local_cid, rmsg.encode())
+
                 #FIXME: Close channel.
                 return
 
