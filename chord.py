@@ -324,7 +324,7 @@ class ChordEngine():
 
     @asyncio.coroutine
     def _connection_lost(self, peer, exc):
-        log.debug("connection_lost(): peer.id=[{}].".format(peer.dbid))
+        log.info("connection_lost(): peer.id=[{}].".format(peer.dbid))
 
         for queue in peer.channel_queues:
             yield from queue.put(None)
