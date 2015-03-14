@@ -602,7 +602,7 @@ class ChordEngine():
                 if not r:
                     continue;
 
-                log.debug("nn: {} FOUND: {:04} {:22} node_id=[{}]".format(self.node.instance, r.dbid, r.address, hex_string([x ^ y for x, y in zip(r.node_id, msg.node_id)])))
+                log.debug("nn: {} FOUND: {:04} {:22} diff=[{}]".format(self.node.instance, r.dbid, r.address, hex_string([x ^ y for x, y in zip(r.node_id, msg.node_id)])))
                 cnt -= 1
                 if not cnt:
                     break
