@@ -600,15 +600,25 @@ class ChordEngine():
                 ki = bittrie.XorKey(peer.node_id, msg.node_id)
                 pt[ki] = peer
 
+            rlist = []
+
             cnt = 10
             for r in pt.find(ZERO_MEM_512_BIT):
                 if not r:
                     continue;
 
                 log.debug("nn: {} FOUND: {:04} {:22} diff=[{}]".format(self.node.instance, r.dbid, r.address, hex_string([x ^ y for x, y in zip(r.node_id, msg.node_id)])))
+
+                rlist.append(r)
+
                 cnt -= 1
                 if not cnt:
                     break
+
+            rmsg = ChordPeerList()
+            rmsg.peers = rlist
+
+            peer.protocol.write_channel_data(local_cid, rmsg.encode())
 
 # Example of non-working db code. Sqlite seems to break when order by contains
 # any bitwise operations. (It just returns the rows in order of id.)

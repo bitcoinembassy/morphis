@@ -2,10 +2,11 @@ import llog
 
 import asyncio
 import cmd
+import enc
 import logging
 import queue as tqueue
 
-from mutil import hex_dump
+from mutil import hex_dump, hex_string
 import chord
 import sshtype
 
@@ -56,10 +57,37 @@ class Shell(cmd.Cmd):
             log.info("Processing command line: [{}].".format(line))
 
             line = self.precmd(line)
-            stop = self.onecmd(line)
+            stop = yield from self.onecmd(line)
             stop = self.postcmd(stop, line)
 
         self.postloop()
+
+    @asyncio.coroutine
+    def onecmd(self, line):
+        cmd, arg, line = self.parseline(line)
+
+        if not line:
+            return self.emptyline()
+        if cmd is None:
+            return self.default(line)
+        if line == "EOF":
+            self.lastcmd = ""
+        else:
+            self.lastcmd = line
+
+        if cmd == "":
+            return self.default(line)
+
+        try:
+            func = getattr(self, "do_" + cmd)
+        except AttributeError:
+            return self.default(line)
+
+        if asyncio.iscoroutinefunction(func):
+            r = yield from func(arg)
+            return r
+        else:
+            return func(arg)
 
     @asyncio.coroutine
     def readline(self):
@@ -190,6 +218,7 @@ class Shell(cmd.Cmd):
             self.writeln(\
                 "Peer: (id={} addr={}).".format(peer.dbid, peer.address))
 
+    @asyncio.coroutine
     def do_findnode(self, arg):
         "[id] find the node with hex encoded id."
 
@@ -204,8 +233,26 @@ class Shell(cmd.Cmd):
 
             log.info("Sending FindNode to peer [{}].".format(peer.address))
 
-            yield from peer.open_channel("mpeer", True)
-            peer.protocol.write_channel_data(self.local_cid, msg.encode())
+            cid, queue = yield from peer.open_channel("mpeer", True)
+            peer.protocol.write_channel_data(cid, msg.encode())
+
+            while True:
+                pkt = yield from queue.get()
+                if not pkt:
+                    self.writeln("<EOF>")
+                    return
+
+                pmsg = chord.ChordPeerList(pkt)
+
+                for r in pmsg.peers:
+                    r.node_id = enc.generate_ID(r.pubkey)
+
+                    self.writeln("nid[{}] FOUND: {:22} diff=[{}]".format(peer.dbid, r.address, hex_string([x ^ y for x, y in zip(r.node_id, msg.node_id)])))
+#                    self.writeln("nid[{}] FOUND: {}".format(peer.dbid, r.id))
+
+                break
+
+            #FIXME: Close channel.
 
     def emptyline(self):
         pass
