@@ -362,6 +362,8 @@ class SshProtocol(asyncio.Protocol):
 
         self._channel_map[local_cid] = -1
 
+        return local_cid
+
     def _allocate_channel_id(self):
         nid = self._next_channel_id
         self._next_channel_id += 1

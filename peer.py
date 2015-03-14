@@ -52,6 +52,24 @@ class Peer():
         self._protocol.set_channel_handler(self.channel_handler)
         self._protocol.set_connection_handler(self.connection_handler)
 
+    @asyncio.coroutine
+    def open_channel(self, channel_type, block=False):
+        "Returns the Peer's channel queue for the new channel."
+
+        queue = self._create_channel_queue()
+        self.channel_queues.append(queue)
+
+        local_cid = yield from self.protocol.open_channel(channel_type)
+        assert (local_cid + 1) == len(self.channel_queues)
+
+        if block:
+            r = yield from queue.get()
+            assert r == True
+
+        return local_cid, queue
+
+    def _create_channel_queue(self):
+        return asyncio.Queue(5)
 
     def _peer_authenticated(self, key):
         self.node_key = key
@@ -103,6 +121,15 @@ class ChannelHandler():
 
     @asyncio.coroutine
     def channel_opened(self, protocol, channel_type, local_cid):
+        log.info("Channel [{}] opened!".format(local_cid))
+
+        if len(self.peer.channel_queues) <= local_cid:
+            self.peer.channel_queues.append(self.peer._create_channel_queue())
+        else:
+            # First 'packet' is a True, signaling the channel is open to those
+            # yielding from the queue.
+            yield from self.peer.channel_queues[local_cid].put(True)
+
         yield from\
             self.peer.engine.channel_opened(self.peer, channel_type, local_cid)
 
@@ -111,8 +138,15 @@ class ChannelHandler():
         m = mnetpacket.SshChannelDataMessage(packet)
 #        if log.isEnabledFor(logging.DEBUG):
 #            log.debug("Received data, recipient_channel=[{}], value=[\n{}].".format(m.recipient_channel, hex_dump(m.data)))
-        yield from self.peer.engine.channel_data(\
+
+        log.info("Adding Peer (dbid={}) channel [{}] data to queue."\
+            .format(self.peer.dbid, m.recipient_channel))
+
+        r = yield from self.peer.engine.channel_data(\
             self.peer, m.recipient_channel, m.data)
+        if not r:
+            yield from self.peer.channel_queues[m.recipient_channel].put(m.data)
+
 
 # This works on peer.Peer as well as db.Peer.
 def update_distance(node_id, peer):

@@ -472,37 +472,13 @@ class ChordEngine():
             # TODO: Do checks, limits, and stuff.
             return;
 
-        yield from peer.protocol.open_channel("mpeer")
-
-    @asyncio.coroutine
-    def request_open_channel(self, peer, req):
-        if req.channel_type == "mpeer":
-            return True
-        elif req.channel_type == "session":
-            return peer.protocol.address[0] == "127.0.0.1"
-        return False
-
-    @asyncio.coroutine
-    def channel_opened(self, peer, channel_type, local_cid):
-        log.info("Channel [{}] opened!".format(local_cid))
-
-        assert len(peer.channel_queues) == local_cid
-
-        queue = asyncio.Queue(5)
-        peer.channel_queues.append(queue)
-
-        if peer.protocol.server_mode:
-            if channel_type == "mpeer":
-                asyncio.async(\
-                    self._process_chord_packet(peer, local_cid, queue),\
-                    loop=self.node.loop)
-                return
-            elif channel_type == "session":
-                nshell = shell.Shell(peer, local_cid, queue)
-                asyncio.async(nshell.cmdloop(), loop=self.node.loop)
-                return
-
         # Client requests a GetPeers upon connection.
+        asyncio.async(self._send_get_peers(peer), loop=self.node.loop)
+
+    @asyncio.coroutine
+    def _send_get_peers(self, peer):
+        local_cid, queue = yield from peer.open_channel("mpeer", True)
+
         msg = ChordGetPeers()
         msg.sender_port = self._bind_port
 
@@ -514,10 +490,32 @@ class ChordEngine():
         return
 
     @asyncio.coroutine
-    def channel_data(self, peer, local_cid, data):
-        log.info("Adding Peer (dbid={}) channel [{}] data to queue.".format(peer.dbid, local_cid))
+    def request_open_channel(self, peer, req):
+        if req.channel_type == "mpeer":
+            return True
+        elif req.channel_type == "session":
+            return peer.protocol.address[0] == "127.0.0.1"
+        return False
 
-        yield from peer.channel_queues[local_cid].put(data)
+    @asyncio.coroutine
+    def channel_opened(self, peer, channel_type, local_cid):
+        if peer.protocol.server_mode:
+            queue = peer.channel_queues[local_cid]
+
+            if channel_type == "mpeer":
+                asyncio.async(\
+                    self._process_chord_packet(peer, local_cid, queue),\
+                    loop=self.node.loop)
+                return
+            elif channel_type == "session":
+                nshell = shell.Shell(peer, local_cid, queue)
+                asyncio.async(nshell.cmdloop(), loop=self.node.loop)
+                return
+
+    @asyncio.coroutine
+    def channel_data(self, peer, local_cid, data):
+        # Return False means to let data go into channel queue.
+        return False
 
     @asyncio.coroutine
     def _process_chord_packet(self, peer, local_cid, queue):
