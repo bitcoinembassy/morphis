@@ -236,12 +236,12 @@ class Shell(cmd.Cmd):
 
             log.info("Sending FindNode to peer [{}].".format(peer.address))
 
-            cid, queue = yield from peer.open_channel("mpeer", True)
-            peer.protocol.write_channel_data(cid, msg.encode())
-
             @asyncio.coroutine
-            def _run():
+            def _run(peer):
                 while True:
+                    cid, queue = yield from peer.open_channel("mpeer", True)
+                    peer.protocol.write_channel_data(cid, msg.encode())
+
                     pkt = yield from queue.get()
                     if not pkt:
                         self.writeln("<EOF>")
@@ -257,7 +257,7 @@ class Shell(cmd.Cmd):
 
                     break
 
-            tasks.append(asyncio.async(_run(), loop=self.loop))
+            tasks.append(asyncio.async(_run(peer), loop=self.loop))
             #FIXME: Close channel.
 
         yield from asyncio.wait(tasks, loop=self.loop)
