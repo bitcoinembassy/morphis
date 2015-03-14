@@ -2,6 +2,7 @@ import llog
 
 import asyncio
 import logging
+from math import sqrt
 import os
 import random
 import sshtype
@@ -600,9 +601,10 @@ class ChordEngine():
                 ki = bittrie.XorKey(cp.node_id, msg.node_id)
                 pt[ki] = cp
 
+            cnt = int(sqrt(len(self.peers)))
+            log.info("Relaying to {} nodes.".format(cnt))
             rlist = []
 
-            cnt = 10
             for r in pt.find(ZERO_MEM_512_BIT):
                 if not r:
                     continue;
@@ -619,6 +621,34 @@ class ChordEngine():
             rmsg.peers = rlist
 
             peer.protocol.write_channel_data(local_cid, rmsg.encode())
+
+            tasks = []
+
+            for r in rlist:
+                @asyncio.coroutine
+                def _run(r):
+                    while True:
+                        cid, queue = yield from r.open_channel("mpeer", True)
+                        r.protocol.write_channel_data(cid, data)
+
+                        pkt = yield from queue.get()
+                        if not pkt:
+                            self.writeln("<EOF>")
+                            return
+
+                        # Test is valid.
+                        try:
+                            chord.ChordPeerList(pkt)
+                        except:
+                            break
+
+                        peer.protocol.write_channel_data(local_cid, pkt)
+
+                        break
+
+                tasks.append(asyncio.async(_run(r), loop=self.node.loop))
+
+            yield from asyncio.wait(tasks, loop=self.node.loop)
 
 # Example of non-working db code. Sqlite seems to break when order by contains
 # any bitwise operations. (It just returns the rows in order of id.)

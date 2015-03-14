@@ -56,17 +56,29 @@ class Peer():
     def open_channel(self, channel_type, block=False):
         "Returns the Peer's channel queue for the new channel."
 
-        queue = self._create_channel_queue()
-        self.channel_queues.append(queue)
-
         local_cid = yield from self.protocol.open_channel(channel_type)
-        assert (local_cid + 1) == len(self.channel_queues)
+
+        queue = self._ensure_channel_queues(local_cid)
 
         if block:
             r = yield from queue.get()
+            if r != True:
+                log.warning("r=[{}]!".format(r))
             assert r == True
 
         return local_cid, queue
+
+    def _ensure_channel_queues(self, local_cid):
+        queue = None
+        needed = local_cid - len(self.channel_queues) + 1
+        if needed > 0:
+            for i in range(needed):
+                queue = self._create_channel_queue()
+                self.channel_queues.append(queue)
+        else:
+            queue = self._create_channel_queue()
+            self.channel_queues[local_cid] = queue
+        return queue
 
     def _create_channel_queue(self):
         return asyncio.Queue(5)
@@ -123,14 +135,11 @@ class ChannelHandler():
     def channel_opened(self, protocol, channel_type, local_cid):
         log.info("Channel [{}] opened!".format(local_cid))
 
-        if len(self.peer.channel_queues) <= local_cid:
+        if channel_type is not None:
             # Other end initiated.
-            assert channel_type
-            assert len(self.peer.channel_queues) == local_cid
-            self.peer.channel_queues.append(self.peer._create_channel_queue())
+            self.peer._ensure_channel_queues(local_cid)
         else:
-            assert channel_type is None # We initiated it.
-            assert len(self.peer.channel_queues) == local_cid + 1
+            # We initiated it.
             # First 'packet' is a True, signaling the channel is open to those
             # yielding from the queue.
             yield from self.peer.channel_queues[local_cid].put(True)
