@@ -63,6 +63,8 @@ class Peer():
         if block:
             r = yield from queue.get()
             if r != True:
+                if r is None:
+                    return local_cid, None
                 log.warning("r=[{}]!".format(r))
             assert r == True
 

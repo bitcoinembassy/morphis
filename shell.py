@@ -240,6 +240,9 @@ class Shell(cmd.Cmd):
             def _run(peer):
                 while True:
                     cid, queue = yield from peer.open_channel("mpeer", True)
+                    if not queue:
+                        return
+
                     peer.protocol.write_channel_data(cid, msg.encode())
 
                     pkt = yield from queue.get()

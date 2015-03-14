@@ -479,6 +479,8 @@ class ChordEngine():
     @asyncio.coroutine
     def _send_get_peers(self, peer):
         local_cid, queue = yield from peer.open_channel("mpeer", True)
+        if not queue:
+            return
 
         msg = ChordGetPeers()
         msg.sender_port = self._bind_port
@@ -639,6 +641,9 @@ class ChordEngine():
                 def _run(r):
                     while True:
                         cid, queue = yield from r.open_channel("mpeer", True)
+                        if not queue:
+                            return
+
                         r.protocol.write_channel_data(cid, data)
 
                         pkt = yield from queue.get()
