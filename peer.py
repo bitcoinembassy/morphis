@@ -138,17 +138,15 @@ class ChannelHandler():
     @asyncio.coroutine
     def channel_data(self, protocol, packet):
         m = mnetpacket.SshChannelDataMessage(packet)
-#        if log.isEnabledFor(logging.DEBUG):
-#            log.debug("Received data, recipient_channel=[{}], value=[\n{}].".format(m.recipient_channel, hex_dump(m.data)))
-
-        log.info("Adding Peer (dbid={}) channel [{}] data to queue."\
-            .format(self.peer.dbid, m.recipient_channel))
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("Received data, recipient_channel=[{}], value=[\n{}].".format(m.recipient_channel, hex_dump(m.data)))
 
         r = yield from self.peer.engine.channel_data(\
             self.peer, m.recipient_channel, m.data)
         if not r:
+            log.info("Adding Peer (dbid={}) channel [{}] data to queue."\
+                .format(self.peer.dbid, m.recipient_channel))
             yield from self.peer.channel_queues[m.recipient_channel].put(m.data)
-
 
 # This works on peer.Peer as well as db.Peer.
 def update_distance(node_id, peer):

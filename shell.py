@@ -69,6 +69,7 @@ class Shell(cmd.Cmd):
         while True:
             packet = yield from self.queue.get()
             if not packet:
+                log.info("Shell shutting down.")
                 return None
 
             msg = BinaryMessage(packet)
@@ -200,7 +201,10 @@ class Shell(cmd.Cmd):
             if not peer.protocol.remote_banner.startswith("SSH-2.0-mNet_"):
                 log.info("Skipping non morphis connection.")
                 continue
+
             log.info("Sending FindNode to peer [{}].".format(peer.address))
+
+            yield from peer.open_channel("mpeer", True)
             peer.protocol.write_channel_data(self.local_cid, msg.encode())
 
     def emptyline(self):

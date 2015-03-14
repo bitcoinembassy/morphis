@@ -484,6 +484,8 @@ class ChordEngine():
 
         peer.protocol.write_channel_data(local_cid, msg.encode())
 
+        #TODO: With lightweight channels, we should just close this channel
+        # instead.
         asyncio.async(\
             self._process_chord_packet(peer, local_cid, queue),\
             loop=self.node.loop)
@@ -499,18 +501,21 @@ class ChordEngine():
 
     @asyncio.coroutine
     def channel_opened(self, peer, channel_type, local_cid):
-        if peer.protocol.server_mode:
-            queue = peer.channel_queues[local_cid]
+        if not channel_type:
+            # channel_type is None when the we initiated the channel.
+            return
 
-            if channel_type == "mpeer":
-                asyncio.async(\
-                    self._process_chord_packet(peer, local_cid, queue),\
-                    loop=self.node.loop)
-                return
-            elif channel_type == "session":
-                nshell = shell.Shell(peer, local_cid, queue)
-                asyncio.async(nshell.cmdloop(), loop=self.node.loop)
-                return
+        queue = peer.channel_queues[local_cid]
+
+        if channel_type == "mpeer":
+            asyncio.async(\
+                self._process_chord_packet(peer, local_cid, queue),\
+                loop=self.node.loop)
+            return
+        elif channel_type == "session":
+            nshell = shell.Shell(peer, local_cid, queue)
+            asyncio.async(nshell.cmdloop(), loop=self.node.loop)
+            return
 
     @asyncio.coroutine
     def channel_data(self, peer, local_cid, data):
