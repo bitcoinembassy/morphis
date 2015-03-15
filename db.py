@@ -5,7 +5,7 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import create_engine
 from sqlalchemy import Column, ForeignKey, Integer, String
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.types import BINARY, Boolean, DateTime
+from sqlalchemy.types import LargeBinary, Boolean, DateTime
 
 Base = declarative_base()
 
@@ -15,8 +15,8 @@ class Peer(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String(48), nullable=True)
 
-    node_id = Column(BINARY, nullable=True)
-    pubkey = Column(BINARY, nullable=True)
+    node_id = Column(LargeBinary, nullable=True)
+    pubkey = Column(LargeBinary, nullable=True)
 
     distance = Column(Integer, nullable=True)
     direction = Column(Integer, nullable=True)
@@ -33,6 +33,8 @@ class Db():
         self.Session = None
 
         self.engine = None
+
+        self.sqlite_lock = None
 
         self._init_db()
 
