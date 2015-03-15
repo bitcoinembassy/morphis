@@ -164,9 +164,13 @@ class ChordEngine():
         # listen to the user and try them out.
         def dbcall():
             with self.node.db.open_session() as sess:
-                return sess.query(Peer)\
+                r = sess.query(Peer)\
                     .filter(Peer.node_id == None, Peer.connected == False)\
                     .limit(needed).all()
+
+                sess.expunge_all()
+
+                return r
 
         np = yield from self.loop.run_in_executor(None, dbcall)
 
