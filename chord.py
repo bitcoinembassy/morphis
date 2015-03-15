@@ -81,17 +81,22 @@ class ChordEngine():
 
         def dbcall():
             with self.node.db.open_session() as sess:
-                self.node.db.lock_table(sess, Peer)
+                tlocked = False
 
                 for peer in peers:
+                    if not tlocked:
+                        self.node.db.lock_table(sess, Peer)
+                        tlocked = True
+
                     q = sess.query(func.count("*"))
 
                     if peer.pubkey:
-                        assert not peer.node_id
+                        assert peer.node_id is None
                         peer.node_id = enc.generate_ID(peer.pubkey)
                         mnpeer.update_distance(self.node_id, peer)
                         q = q.filter(Peer.node_id == peer.node_id)
                     elif peer.address:
+                        assert peer.node_id is None
                         q = q.filter(Peer.address == peer.address)
 
                     if q.scalar() > 0:
@@ -103,6 +108,7 @@ class ChordEngine():
 
                     sess.add(peer)
                     sess.commit()
+                    tlocked = False
 
                 return True
 
