@@ -36,6 +36,8 @@ class ChordEngine():
         self.node = node
         self.node_id = enc.generate_ID(node.node_key.asbytes())
 
+        self.loop = node.loop
+
         self.running = False
         self.server = None #Task.
         self.server_protocol = None
@@ -101,7 +103,7 @@ class ChordEngine():
 
                 return True
 
-        r = yield from self.node.loop.run_in_executor(None, dbcall)
+        r = yield from self.loop.run_in_executor(None, dbcall)
 
         if r and self.running:
             yield from self._process_connection_count()
@@ -111,11 +113,11 @@ class ChordEngine():
         self.running = True
 
         host, port = self._bind_address.split(':')
-        self.server = self.node.loop.create_server(\
+        self.server = self.loop.create_server(\
             self._create_server_protocol, host, port)
 
-#        self.node.loop.run_until_complete(self.server)
-#        asyncio.async(self.server, loop=self.node.loop)
+#        self.loop.run_until_complete(self.server)
+#        asyncio.async(self.server, loop=self.loop)
         yield from self.server
 
         log.info("Node listening on [{}:{}].".format(host, port))
@@ -146,7 +148,7 @@ class ChordEngine():
             self._process_connection_count_handle.cancel()
 
         self._process_connection_count_handle =\
-            self.node.loop.call_later(\
+            self.loop.call_later(\
                 60, self._async_process_connection_count)
 
         needed = self.maximum_connections - cnt
@@ -166,7 +168,7 @@ class ChordEngine():
                     .filter(Peer.node_id == None, Peer.connected == False)\
                     .limit(needed).all()
 
-        np = yield from self.node.loop.run_in_executor(None, dbcall)
+        np = yield from self.loop.run_in_executor(None, dbcall)
 
         for dbp in np:
             peer = yield from self._connect_peer(dbp)
@@ -187,7 +189,7 @@ class ChordEngine():
                     .scalar()
 
         closestdistance =\
-            yield from self.node.loop.run_in_executor(None, dbcall)
+            yield from self.loop.run_in_executor(None, dbcall)
 
         if not closestdistance:
             return
@@ -224,7 +226,7 @@ class ChordEngine():
                     return r
 
 
-            np = yield from self.node.loop.run_in_executor(None, dbcall)
+            np = yield from self.loop.run_in_executor(None, dbcall)
 
             if len(np):
                 bucket_needs = len(np)
@@ -264,11 +266,9 @@ class ChordEngine():
 
         host, port = dbpeer.address.split(':')
 
-        loop = self.node.loop
-
         peer = mnpeer.Peer(self, dbpeer)
 
-        client = loop.create_connection(\
+        client = self.loop.create_connection(\
             partial(self._create_client_protocol, peer),\
             host, port)
 
@@ -279,7 +279,7 @@ class ChordEngine():
                 dbpeer.last_connect_attempt = datetime.today()
                 sess.commit()
 
-        yield from self.node.loop.run_in_executor(None, dbcall, dbpeer)
+        yield from self.loop.run_in_executor(None, dbcall, dbpeer)
 
         try:
             yield from client
@@ -295,14 +295,14 @@ class ChordEngine():
 
                     sess.commit()
 
-            yield from self.node.loop.run_in_executor(None, dbcall, dbpeer)
+            yield from self.loop.run_in_executor(None, dbcall, dbpeer)
 
             return None
 
         return peer
 
     def _create_server_protocol(self):
-        ph = mn1.SshServerProtocol(self.node.loop)
+        ph = mn1.SshServerProtocol(self.loop)
         ph.server_key = self.node.get_node_key()
 
         p = mnpeer.Peer(self)
@@ -313,7 +313,7 @@ class ChordEngine():
         return ph
 
     def _create_client_protocol(self, peer):
-        ph = mn1.SshClientProtocol(self.node.loop)
+        ph = mn1.SshClientProtocol(self.loop)
         ph.client_key = self.node.get_node_key()
 
         if peer.node_key:
@@ -329,7 +329,7 @@ class ChordEngine():
         pass
 
     def connection_lost(self, peer, exc):
-        asyncio.async(self._connection_lost(peer, exc), loop=self.node.loop)
+        asyncio.async(self._connection_lost(peer, exc), loop=self.loop)
 
     @asyncio.coroutine
     def _connection_lost(self, peer, exc):
@@ -349,7 +349,7 @@ class ChordEngine():
                 dbpeer.connected = False
                 sess.commit()
 
-        yield from self.node.loop.run_in_executor(None, dbcall)
+        yield from self.loop.run_in_executor(None, dbcall)
 
     @asyncio.coroutine
     def peer_authenticated(self, peer):
@@ -394,7 +394,7 @@ class ChordEngine():
                         sess.expunge(dbpeer)
                         return True, False # We already did when connecting.
 
-            r, r2 = yield from self.node.loop.run_in_executor(None, dbcall)
+            r, r2 = yield from self.loop.run_in_executor(None, dbcall)
             if not r:
                 return False
 
@@ -453,7 +453,7 @@ class ChordEngine():
 
                     return True, dbpeer
 
-            r, dbpeer = yield from self.node.loop.run_in_executor(None, dbcall)
+            r, dbpeer = yield from self.loop.run_in_executor(None, dbcall)
             if not r:
                 return False
 
@@ -482,7 +482,7 @@ class ChordEngine():
             return;
 
         # Client requests a GetPeers upon connection.
-        asyncio.async(self._send_get_peers(peer), loop=self.node.loop)
+        asyncio.async(self._send_get_peers(peer), loop=self.loop)
 
     @asyncio.coroutine
     def _send_get_peers(self, peer):
@@ -499,7 +499,7 @@ class ChordEngine():
         # instead.
         asyncio.async(\
             self._process_chord_packet(peer, local_cid, queue),\
-            loop=self.node.loop)
+            loop=self.loop)
         return
 
     @asyncio.coroutine
@@ -521,11 +521,11 @@ class ChordEngine():
         if channel_type == "mpeer":
             asyncio.async(\
                 self._process_chord_packet(peer, local_cid, queue),\
-                loop=self.node.loop)
+                loop=self.loop)
             return
         elif channel_type == "session":
-            nshell = shell.Shell(self.node.loop, peer, local_cid, queue)
-            asyncio.async(nshell.cmdloop(), loop=self.node.loop)
+            nshell = shell.Shell(self.loop, peer, local_cid, queue)
+            asyncio.async(nshell.cmdloop(), loop=self.loop)
             return
 
     @asyncio.coroutine
@@ -585,7 +585,7 @@ class ChordEngine():
                         dbp.address = peer.address
                         sess.commit()
 
-                yield from self.node.loop.run_in_executor(None, dbcall)
+                yield from self.loop.run_in_executor(None, dbcall)
 
             pl = list(self.peers.values())
             while True:
@@ -675,9 +675,9 @@ class ChordEngine():
 
                         peer.protocol.write_channel_data(local_cid, pkt)
 
-                tasks.append(asyncio.async(_run(r), loop=self.node.loop))
+                tasks.append(asyncio.async(_run(r), loop=self.loop))
 
-            yield from asyncio.wait(tasks, loop=self.node.loop)
+            yield from asyncio.wait(tasks, loop=self.loop)
 
             peer.protocol.close_channel(local_cid)
 
@@ -698,7 +698,7 @@ class ChordEngine():
 #                    for r in rs:
 #                        log.info("nn: {} FOUND: {} {}".format(self.node.instance, r.id, r.address))
 #
-#            yield from self.node.loop.run_in_executor(None, dbcall)
+#            yield from self.loop.run_in_executor(None, dbcall)
         else:
             log.warning("Ignoring unrecognized packet.")
 
