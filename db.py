@@ -5,6 +5,7 @@ import logging
 from contextlib import contextmanager
 
 from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.schema import Index
 from sqlalchemy import create_engine, text, event, MetaData
 from sqlalchemy import Column, ForeignKey, Integer, String
 from sqlalchemy.exc import ProgrammingError
@@ -35,6 +36,11 @@ def _init_daos(Base, d):
         connected = Column(Boolean, nullable=False)
 
         last_connect_attempt = Column(DateTime, nullable=True)
+
+    Index("node_id", Peer.node_id)
+    Index("distance", Peer.distance)
+    Index("connected", Peer.connected)
+    Index("address", Peer.address)
 
     d.Peer = Peer
 
