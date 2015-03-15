@@ -33,27 +33,19 @@ class Node():
         self.node_key = self._load_key()
 
         if dburl:
-            self.db = db.Db(dburl, 'n' + str(instance_id))
+            self.db = db.Db(loop, dburl, 'n' + str(instance_id))
         else:
             dburl = "sqlite:///morphis{}.sqlite".format(self.instance_postfix)
-            self.db = db.Db(dburl)
+            self.db = db.Db(loop, dburl)
 
         self.bind_address = None
         self.unsecured_transport = None
 
         self.chord_engine = chord.ChordEngine(self)
 
-    def get_loop(self):
-        return self.loop
-
-    def get_db(self):
-        return self.db
-
-    def get_node_key(self):
-        return self.node_key
-
-    def set_bind_address(self, value):
-        self.bind_address = value
+    @asyncio.coroutine
+    def create_schema(self):
+        yield from self.db.create_all()
 
     @asyncio.coroutine
     def start(self):
@@ -151,11 +143,12 @@ def __main():
 
     while True:
         node = Node(loop, instance, dburl)
+        yield from node.create_schema()
         nodes.append(node)
 
         if bindaddr:
             bindaddr.split(':') # Just to preemptively test.
-            node.set_bind_address(bindaddr)
+            node.bind_address = bindaddr
         if addpeer != None:
             for peer in addpeer:
                 yield from node.chord_engine.add_peer(peer)

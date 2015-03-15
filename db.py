@@ -1,5 +1,6 @@
 import llog
 
+import asyncio
 import threading
 import logging
 from contextlib import contextmanager
@@ -47,7 +48,8 @@ def _init_daos(Base, d):
     return d
 
 class Db():
-    def __init__(self, url, schema=None):
+    def __init__(self, loop, url, schema=None):
+        self.loop = loop
         self.url = url
         self.Session = None
 
@@ -119,8 +121,11 @@ class Db():
 
         self.Session = sessionmaker(bind=self.engine)
 
-        # This next line uses a connection, so make sure all event handlers are
-        # connected and such before we run this line.
+    @asyncio.coroutine
+    def create_all(self):
+        yield from self.loop.run_in_executor(None, self._create_all)
+
+    def _create_all(self):
         log.info("Checking/creating schema.")
         if self._schema:
             tmp_Base = declarative_base()
