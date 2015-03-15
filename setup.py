@@ -2,7 +2,6 @@ from distutils.core import setup
 from Cython.Build import cythonize
 
 modules = [\
-    "db",
     "llog",
     "bittrie",
     "enc",
