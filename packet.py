@@ -608,6 +608,7 @@ class SshChannelCloseMessage(SshPacket):
     def encode(self):
         nbuf = bytearray()
 
+        nbuf += struct.pack("B", self.getPacketType() & 0xff)
         nbuf += struct.pack(">L", self.recipient_channel)
 
         self.buf = nbuf

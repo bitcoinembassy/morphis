@@ -365,6 +365,8 @@ class SshProtocol(asyncio.Protocol):
         return local_cid
 
     def close_channel(self, local_cid):
+        log.info("Closing channel {}.".format(local_cid))
+
         msg = mnetpacket.SshChannelCloseMessage()
         msg.recipient_channel = self._channel_map[local_cid]
         msg.encode()
@@ -570,6 +572,8 @@ class SshProtocol(asyncio.Protocol):
 
                 self._close_channel(msg.recipient_channel)
                 yield from self.channel_handler.channel_closed(self, msg.recipient_channel)
+            else:
+                log.warning("Unhandled packet of type [{}].".format(t))
 
     def _open_channel(self, req_msg):
         log.info("Accepting channel open request.")

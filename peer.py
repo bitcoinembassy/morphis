@@ -149,7 +149,7 @@ class ChannelHandler():
             self.peer.engine.channel_opened(self.peer, channel_type, local_cid)
 
     @asyncio.coroutine
-    def channel_closed(self, local_cid):
+    def channel_closed(self, protocol, local_cid):
         queue = self.peer.channel_queues.pop(local_cid)
         yield from queue.put(None)
 
