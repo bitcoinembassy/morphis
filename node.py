@@ -32,9 +32,11 @@ class Node():
 
         self.node_key = self._load_key()
 
-        if not dburl:
+        if dburl:
+            self.db = db.Db(dburl, 'n' + str(instance_id))
+        else:
             dburl = "sqlite:///morphis{}.sqlite".format(self.instance_postfix)
-        self.db = db.Db(dburl)
+            self.db = db.Db(dburl)
 
         self.bind_address = None
         self.unsecured_transport = None
