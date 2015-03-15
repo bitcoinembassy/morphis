@@ -2,7 +2,7 @@ import threading
 from contextlib import contextmanager
 
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy import Column, ForeignKey, Integer, String
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.types import LargeBinary, Boolean, DateTime
@@ -63,6 +63,14 @@ class Db():
         finally:
             if self.sqlite_lock:
                 self.sqlite_lock.release()
+
+    def lock_table(self, sess, tableobj):
+        if self.sqlite_lock:
+            return
+
+        t = text("LOCK \"{}\" IN SHARE ROW EXCLUSIVE MODE"\
+            .format(tableobj.__table__.name))
+        sess.connection().execute(t)
 
     def _init_db(self):
         self.engine = create_engine(self.url, echo=False)

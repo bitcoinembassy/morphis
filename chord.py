@@ -81,8 +81,11 @@ class ChordEngine():
 
         def dbcall():
             with self.node.db.open_session() as sess:
+                self.node.db.lock_table(sess, Peer)
+
                 for peer in peers:
                     q = sess.query(func.count("*"))
+
                     if peer.pubkey:
                         assert not peer.node_id
                         peer.node_id = enc.generate_ID(peer.pubkey)
@@ -408,6 +411,7 @@ class ChordEngine():
             # This would be an incoming connection.
             def dbcall():
                 with self.node.db.open_session() as sess:
+                    self.node.db.lock_table(sess, Peer)
                     dbpeer = sess.query(Peer)\
                         .filter(Peer.node_id == peer.node_id).first()
 
