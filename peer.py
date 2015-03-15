@@ -29,7 +29,7 @@ class Peer():
         self.channel_handler = ChannelHandler(self)
         self.connection_handler = ConnectionHandler(self)
 
-        self.channel_queues = []
+        self.channel_queues = {}
 
         if dbpeer:
             self.dbid = dbpeer.id
@@ -52,6 +52,27 @@ class Peer():
         self._protocol.set_channel_handler(self.channel_handler)
         self._protocol.set_connection_handler(self.connection_handler)
 
+    @asyncio.coroutine
+    def open_channel(self, channel_type, block=False):
+        "Returns the Peer's channel queue for the new channel."
+
+        local_cid = yield from self.protocol.open_channel(channel_type)
+
+        queue = self._create_channel_queue()
+        self.channel_queues[local_cid] = queue
+
+        if block:
+            r = yield from queue.get()
+            if r != True:
+                if r is None:
+                    return local_cid, None
+                log.warning("r=[{}]!".format(r))
+            assert r == True
+
+        return local_cid, queue
+
+    def _create_channel_queue(self):
+        return asyncio.Queue(5)
 
     def _peer_authenticated(self, key):
         self.node_key = key
@@ -74,6 +95,15 @@ class ConnectionHandler():
         pass
 
     def connection_lost(self, protocol, exc):
+        log.info("connection_lost(): peer.id=[{}].".format(self.peer.dbid))
+
+        @asyncio.coroutine
+        def _call():
+            for queue in self.peer.channel_queues.values():
+                yield from queue.put(None)
+
+        asyncio.async(_call(), loop=self.peer.engine.loop)
+
         self.peer.engine.connection_lost(self.peer, exc)
 
     @asyncio.coroutine
@@ -103,16 +133,40 @@ class ChannelHandler():
 
     @asyncio.coroutine
     def channel_opened(self, protocol, channel_type, local_cid):
+        log.info("Channel [{}] opened!".format(local_cid))
+
+        if channel_type is not None:
+            # Other end initiated.
+            self.peer.channel_queues[local_cid]\
+                = self.peer._create_channel_queue()
+        else:
+            # We initiated it.
+            # First 'packet' is a True, signaling the channel is open to those
+            # yielding from the queue.
+            yield from self.peer.channel_queues[local_cid].put(True)
+
         yield from\
             self.peer.engine.channel_opened(self.peer, channel_type, local_cid)
 
     @asyncio.coroutine
+    def channel_closed(self, protocol, local_cid):
+        queue = self.peer.channel_queues.pop(local_cid)
+        yield from queue.put(None)
+
+        yield from self.peer.engine.channel_closed(self.peer, local_cid)
+
+    @asyncio.coroutine
     def channel_data(self, protocol, packet):
         m = mnetpacket.SshChannelDataMessage(packet)
-#        if log.isEnabledFor(logging.DEBUG):
-#            log.debug("Received data, recipient_channel=[{}], value=[\n{}].".format(m.recipient_channel, hex_dump(m.data)))
-        yield from self.peer.engine.channel_data(\
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("Received data, recipient_channel=[{}], value=[\n{}].".format(m.recipient_channel, hex_dump(m.data)))
+
+        r = yield from self.peer.engine.channel_data(\
             self.peer, m.recipient_channel, m.data)
+        if not r:
+            log.info("Adding Peer (dbid={}) channel [{}] data to queue."\
+                .format(self.peer.dbid, m.recipient_channel))
+            yield from self.peer.channel_queues[m.recipient_channel].put(m.data)
 
 # This works on peer.Peer as well as db.Peer.
 def update_distance(node_id, peer):

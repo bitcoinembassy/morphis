@@ -40,7 +40,7 @@ def connectTaskCommon(protocol, server_mode):
     packet = yield from protocol.read_packet()
     log.info("X: Received banner [{}].".format(packet))
 
-    protocol.setRemoteBanner(packet.decode(encoding="UTF-8"))
+    protocol.remote_banner = packet.decode(encoding="UTF-8")
 
 # Returns True on success, False on failure.
 @asyncio.coroutine
@@ -324,7 +324,7 @@ class SshProtocol(asyncio.Protocol):
         self.inPacketId = 0
         self.outPacketId = 0
 
-        self.remoteBanner = None
+        self.remote_banner = None
         self.localKexInitMessage = None
         self.remoteKexInitMessage = None
 
@@ -362,6 +362,19 @@ class SshProtocol(asyncio.Protocol):
 
         self._channel_map[local_cid] = -1
 
+        return local_cid
+
+    def close_channel(self, local_cid):
+        log.info("Closing channel {}.".format(local_cid))
+
+        msg = mnetpacket.SshChannelCloseMessage()
+        msg.recipient_channel = self._channel_map[local_cid]
+        msg.encode()
+
+        self.write_packet(msg)
+
+        self._channel_map[local_cid] = -2
+
     def _allocate_channel_id(self):
         nid = self._next_channel_id
         self._next_channel_id += 1
@@ -395,12 +408,6 @@ class SshProtocol(asyncio.Protocol):
 
     def set_inbound_enabled(self, val):
         self.inboundEnabled = val
-
-    def getRemoteBanner(self):
-        return self.remoteBanner
-
-    def setRemoteBanner(self, val):
-        self.remoteBanner = val
 
     def getLocalBanner(self):
         if cleartext_transport_enabled:
@@ -494,7 +501,7 @@ class SshProtocol(asyncio.Protocol):
         yield from connectTaskCommon(self, self.server_mode)
 
         if cleartext_transport_enabled\
-                and self.getRemoteBanner().endswith("+cleartext"):
+                and self.remote_banner.endswith("+cleartext"):
             r = yield from connectTaskInsecure(self, self.server_mode)
         else:
             r = yield from connectTaskSecure(self, self.server_mode)
@@ -559,6 +566,14 @@ class SshProtocol(asyncio.Protocol):
                 log.info("P: Received CHANNEL_DATA recipient_channel=[{}].".format(msg.recipient_channel))
 
                 yield from self.channel_handler.channel_data(self, packet)
+            elif t == mnetpacket.SSH_MSG_CHANNEL_CLOSE:
+                msg = mnetpacket.SshChannelCloseMessage(packet)
+                log.info("P: Received CHANNEL_CLOSE recipient_channel=[{}]".format(msg.recipient_channel))
+
+                self._close_channel(msg.recipient_channel)
+                yield from self.channel_handler.channel_closed(self, msg.recipient_channel)
+            else:
+                log.warning("Unhandled packet of type [{}].".format(t))
 
     def _open_channel(self, req_msg):
         log.info("Accepting channel open request.")
@@ -593,6 +608,11 @@ class SshProtocol(asyncio.Protocol):
 
         self.write_packet(fm)
 
+    def _close_channel(self, local_cid):
+        del self._channel_map[local_cid]
+
+        if log.isEnabledFor(logging.INFO):
+            log.info("Channel [{}] closed.".format(local_cid))
 
     def data_received(self, data):
         try:

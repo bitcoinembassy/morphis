@@ -21,7 +21,7 @@ loop = None
 nodes = []
 
 class Node():
-    def __init__(self, loop, instance_id=None):
+    def __init__(self, loop, instance_id=None, dburl=None):
         self.loop = loop
 
         self.instance = instance_id
@@ -32,7 +32,12 @@ class Node():
 
         self.node_key = self._load_key()
 
-        self.db = db.Db("sqlite:///morphis{}.sqlite".format(self.instance_postfix))
+        if dburl:
+            self.db = db.Db(dburl, 'n' + str(instance_id))
+        else:
+            dburl = "sqlite:///morphis{}.sqlite".format(self.instance_postfix)
+            self.db = db.Db(dburl)
+
         self.bind_address = None
         self.unsecured_transport = None
 
@@ -123,6 +128,7 @@ def __main():
     parser.add_argument("--bind", help="Specify bind address (host:port).")
     parser.add_argument("--nodecount", type=int, help="Specify amount of nodes to start.")
     parser.add_argument("--cleartexttransport", type=bool, help="Clear text transport and no authentication.")
+    parser.add_argument("--dburl", help="Specify the database url to use.")
     args = parser.parse_args()
 
     addpeer = args.addpeer
@@ -138,11 +144,12 @@ def __main():
     if args.cleartexttransport:
         log.info("Enabling cleartext transport.")
         mn1.enable_cleartext_transport()
+    dburl = args.dburl
 
     nodes = []
 
     while True:
-        node = Node(loop, instance)
+        node = Node(loop, instance, dburl)
         nodes.append(node)
 
         if bindaddr:
