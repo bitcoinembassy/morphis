@@ -83,6 +83,8 @@ class ChordEngine():
             with self.node.db.open_session() as sess:
                 tlocked = False
 
+                batched = 0
+
                 for peer in peers:
                     if not tlocked:
                         self.node.db.lock_table(sess, Peer)
@@ -107,8 +109,15 @@ class ChordEngine():
                     peer.connected = False
 
                     sess.add(peer)
+
+                    batched += 1
+                    if batched == 10:
+                        sess.commit()
+                        tlocked = False
+                        batched = 0
+
+                if tlocked:
                     sess.commit()
-                    tlocked = False
 
                 return True
 
