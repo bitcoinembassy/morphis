@@ -95,6 +95,11 @@ class ConnectionHandler():
         pass
 
     def connection_lost(self, protocol, exc):
+        log.info("connection_lost(): peer.id=[{}].".format(peer.dbid))
+
+        for queue in self.peer.channel_queues.values():
+            yield from queue.put(None)
+
         self.peer.engine.connection_lost(self.peer, exc)
 
     @asyncio.coroutine
@@ -141,7 +146,10 @@ class ChannelHandler():
 
     @asyncio.coroutine
     def channel_closed(self, local_cid):
-        del self.peer._channel_map[local_cid]
+        queue = self.peer.channel_queues.pop(local_cid)
+        yield from queue.put(None)
+
+        yield from self.peer.engine.channel_closed(self.peer, local_cid)
 
     @asyncio.coroutine
     def channel_data(self, protocol, packet):

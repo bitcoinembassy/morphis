@@ -234,7 +234,7 @@ class ChordEngine():
                     existing = self.peers.setdefault(dbp.address, peer)
                     if existing is not peer:
                         log.warning("Somehow we are trying to connect to an address [{}] already connected! [{}][{}]".format(dbp.address, existing, peer))
-                        peer.transport.close()
+                        peer.protocol.transport.close()
                         continue
 
                     peer_bucket[dbp.address] = peer
@@ -327,11 +327,6 @@ class ChordEngine():
 
     @asyncio.coroutine
     def _connection_lost(self, peer, exc):
-        log.info("connection_lost(): peer.id=[{}].".format(peer.dbid))
-
-        for queue in peer.channel_queues.values():
-            yield from queue.put(None)
-
         if peer.node_id:
             self.peers.pop(peer.address, None)
             self.peer_buckets[peer.distance - 1].pop(peer.address, None)
@@ -524,6 +519,10 @@ class ChordEngine():
             return
 
     @asyncio.coroutine
+    def channel_closed(self, peer, local_cid):
+        pass
+
+    @asyncio.coroutine
     def channel_data(self, peer, local_cid, data):
         # Return False means to let data go into channel queue.
         return False
@@ -633,8 +632,8 @@ class ChordEngine():
                 rmsg.peers = []
 
                 peer.protocol.write_channel_data(local_cid, rmsg.encode())
+                peer.protocol.close_channel(local_cid)
 
-                #FIXME: Close channel.
                 return
 
             rmsg = ChordPeerList()
@@ -647,19 +646,18 @@ class ChordEngine():
             for r in rlist:
                 @asyncio.coroutine
                 def _run(r):
+                    cid, queue = yield from r.open_channel("mpeer", True)
+                    if not queue:
+                        return
+
+                    r.protocol.write_channel_data(cid, data)
+
                     while True:
-                        cid, queue = yield from r.open_channel("mpeer", True)
-                        if not queue:
-                            return
-
-                        r.protocol.write_channel_data(cid, data)
-
                         pkt = yield from queue.get()
                         if not pkt:
-                            self.writeln("<EOF>")
                             return
 
-                        # Test is valid.
+                        # Test that it is valid.
                         try:
                             chord.ChordPeerList(pkt)
                         except:
@@ -667,11 +665,11 @@ class ChordEngine():
 
                         peer.protocol.write_channel_data(local_cid, pkt)
 
-                        break
-
                 tasks.append(asyncio.async(_run(r), loop=self.node.loop))
 
             yield from asyncio.wait(tasks, loop=self.node.loop)
+
+            peer.protocol.close_channel(local_cid)
 
 # Example of non-working db code. Sqlite seems to break when order by contains
 # any bitwise operations. (It just returns the rows in order of id.)

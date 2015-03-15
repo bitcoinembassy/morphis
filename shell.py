@@ -238,16 +238,16 @@ class Shell(cmd.Cmd):
 
             @asyncio.coroutine
             def _run(peer):
+                cid, queue = yield from peer.open_channel("mpeer", True)
+                if not queue:
+                    return
+
+                peer.protocol.write_channel_data(cid, msg.encode())
+
                 while True:
-                    cid, queue = yield from peer.open_channel("mpeer", True)
-                    if not queue:
-                        return
-
-                    peer.protocol.write_channel_data(cid, msg.encode())
-
                     pkt = yield from queue.get()
                     if not pkt:
-                        self.writeln("<EOF>")
+                        self.writeln("nid=[{}] EOF.".format(peer.dbid))
                         return
 
                     pmsg = chord.ChordPeerList(pkt)
@@ -258,10 +258,7 @@ class Shell(cmd.Cmd):
                         self.writeln("nid[{}] FOUND: {:22} diff=[{}]".format(peer.dbid, r.address, hex_string([x ^ y for x, y in zip(r.node_id, msg.node_id)])))
                         self.flush()
 
-                    break
-
             tasks.append(asyncio.async(_run(peer), loop=self.loop))
-            #FIXME: Close channel.
 
         yield from asyncio.wait(tasks, loop=self.loop)
 
