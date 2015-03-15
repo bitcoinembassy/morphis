@@ -13,7 +13,9 @@ def init():
         return
 
 #    print("Reading in logging.ini.")
-    logging.config.fileConfig("logging.ini")
+    config_file = "logging.ini" if sys.argv[1] != "-l" else sys.argv[2]
+
+    logging.config.fileConfig(config_file)
     logger = logging.getLogger(__name__)
 #    logger.info("Logger initialized.")
     logging_initialized = True

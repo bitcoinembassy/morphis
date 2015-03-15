@@ -129,6 +129,7 @@ def __main():
     parser.add_argument("--nodecount", type=int, help="Specify amount of nodes to start.")
     parser.add_argument("--cleartexttransport", type=bool, help="Clear text transport and no authentication.")
     parser.add_argument("--dburl", help="Specify the database url to use.")
+    parser.add_argument("-l", dest="logconf", help="Specify alternate logging.ini [IF SPECIFIED, THIS MUST BE THE FIRST PARAMETER!].")
     args = parser.parse_args()
 
     addpeer = args.addpeer
