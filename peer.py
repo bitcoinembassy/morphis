@@ -95,10 +95,14 @@ class ConnectionHandler():
         pass
 
     def connection_lost(self, protocol, exc):
-        log.info("connection_lost(): peer.id=[{}].".format(peer.dbid))
+        log.info("connection_lost(): peer.id=[{}].".format(self.peer.dbid))
 
-        for queue in self.peer.channel_queues.values():
-            yield from queue.put(None)
+        @asyncio.coroutine
+        def _call():
+            for queue in self.peer.channel_queues.values():
+                yield from queue.put(None)
+
+        asyncio.async(_call(), loop=self.peer.engine.loop)
 
         self.peer.engine.connection_lost(self.peer, exc)
 
