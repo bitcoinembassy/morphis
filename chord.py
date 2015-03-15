@@ -123,7 +123,8 @@ class ChordEngine():
         yield from self._process_connection_count()
 
     def stop(self):
-        self.server.close()
+        if self.server:
+            self.server.close()
 
     def _async_process_connection_count(self):
         asyncio.async(self._process_connection_count())
@@ -216,7 +217,12 @@ class ChordEngine():
                         .order_by(desc(Peer.direction), Peer.node_id)\
                         .limit(min(needed, bucket_needs))
 
-                    return q.all()
+                    r = q.all()
+
+                    sess.expunge_all()
+
+                    return r
+
 
             np = yield from self.node.loop.run_in_executor(None, dbcall)
 
@@ -374,6 +380,8 @@ class ChordEngine():
                             return False, False
 
                         sess.commit()
+                        sess.expunge(dbpeer)
+                        return True, True
                     else:
                         # Then we were trying to connect to a specific node_id.
                         if dbpeer.node_id != peer.node_id:
@@ -382,9 +390,9 @@ class ChordEngine():
                             dbpeer.connected = False
                             sess.commit()
                             return False, False
-                        return True, False # We already did when connecting.
 
-                    return True, True
+                        sess.expunge(dbpeer)
+                        return True, False # We already did when connecting.
 
             r, r2 = yield from self.node.loop.run_in_executor(None, dbcall)
             if not r:
@@ -440,6 +448,8 @@ class ChordEngine():
                     sess.commit()
 
                     fetch_id_in_thread = dbpeer.id
+
+                    sess.expunge(dbpeer)
 
                     return True, dbpeer
 

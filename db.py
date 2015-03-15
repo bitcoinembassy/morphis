@@ -1,3 +1,4 @@
+import threading
 from contextlib import contextmanager
 
 from sqlalchemy.ext.declarative import declarative_base
@@ -40,17 +41,32 @@ class Db():
 
     @contextmanager
     def open_session(self):
-        session = self.Session()
+        if self.sqlite_lock:
+            self.sqlite_lock.acquire()
+
         try:
-            yield session
-        except:
-            session.rollback()
-            raise
+            session = self.Session()
+            try:
+                yield session
+                session.rollback()
+            except:
+                try:
+                    session.rollback()
+                except:
+                    pass
+
+                raise
+            finally:
+                session.close()
         finally:
-            session.close()
+            if self.sqlite_lock:
+                self.sqlite_lock.release()
 
     def _init_db(self):
         self.engine = create_engine(self.url, echo=False)
         Base.metadata.create_all(self.engine)
 
         self.Session = sessionmaker(bind=self.engine)
+
+        if self.url.startswith("sqlite:"):
+            self.sqlite_lock = threading.Lock()
