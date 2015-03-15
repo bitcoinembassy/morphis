@@ -316,7 +316,7 @@ class ChordEngine():
 
     def _create_server_protocol(self):
         ph = mn1.SshServerProtocol(self.loop)
-        ph.server_key = self.node.get_node_key()
+        ph.server_key = self.node.node_key
 
         p = mnpeer.Peer(self)
         p.protocol = ph
@@ -327,7 +327,7 @@ class ChordEngine():
 
     def _create_client_protocol(self, peer):
         ph = mn1.SshClientProtocol(self.loop)
-        ph.client_key = self.node.get_node_key()
+        ph.client_key = self.node.node_key
 
         if peer.node_key:
             ph.server_key = peer.node_key
