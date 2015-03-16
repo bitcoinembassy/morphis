@@ -41,6 +41,7 @@ def _init_daos(Base, d):
     Index("node_id", Peer.node_id)
     Index("distance", Peer.distance)
     Index("connected", Peer.connected)
+    Index("connected_distance", Peer.connected, Peer.distance)
     Index("address", Peer.address)
 
     d.Peer = Peer
