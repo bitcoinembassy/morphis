@@ -309,7 +309,7 @@ class ChordEngine():
 
                 needed -= len(connected)
 
-                if needed < 0:
+                if needed <= 0:
                     log.info("Connected to requested amount of PeerS.")
 
                     done.set()
@@ -338,11 +338,22 @@ class ChordEngine():
         def dbcall(dbpeer):
             with self.node.db.open_session() as sess:
                 dbpeer = sess.query(Peer).get(dbpeer.id)
+                if dbpeer.connected:
+                    if log.isEnabledFor(logging.DEBUG):
+                        log.debug(\
+                            "Peer [{}] connected to us in the mean time."\
+                            .format(dbpeer.id))
+                    return False
+
                 dbpeer.connected = True
                 dbpeer.last_connect_attempt = datetime.today()
                 sess.commit()
+                return True
 
-        yield from self.loop.run_in_executor(None, dbcall, dbpeer)
+        r = yield from self.loop.run_in_executor(None, dbcall, dbpeer)
+
+        if not r:
+            return
 
         try:
             yield from client
