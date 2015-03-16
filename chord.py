@@ -50,8 +50,9 @@ class ChordEngine():
         self.peer_buckets = [{} for i in range(512)] # [{addr: Peer}]
         self.peer_trie = bittrie.BitTrie() # {node_id, Peer}
 
-        self.minimum_connections = 1#10
+        self.minimum_connections = 10
         self.maximum_connections = 64
+        self.hard_maximum_connections = self.maximum_connections * 2
 
         self._bind_address = None
         self._bind_port = None
@@ -594,6 +595,18 @@ class ChordEngine():
 
     @asyncio.coroutine
     def is_peer_connection_desirable(self, peer):
+        peercnt = len(self.peers)
+
+        if peer.protocol.address[0].startswith("127."):
+            if peer.protocol.remote_banner.startswith("SSH-2.0-OpenSSH"):
+                return True
+
+        if peercnt >= self.hard_maximum_connections:
+            return False
+
+        if peer.protocol.server_mode:
+            return True
+
         bucket = self.peer_buckets[peer.distance - 1]
 
         if len(bucket) < BUCKET_SIZE:
