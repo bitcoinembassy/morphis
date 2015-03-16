@@ -165,10 +165,11 @@ class ChordEngine():
         if cnt >= self.maximum_connections:
             return
 
-        now = datetime.today()
-        diff = now - self._last_process_connection_count
-        if diff < timedelta(seconds=15):
-            return
+        if cnt >= self.minimum_connections:
+            now = datetime.today()
+            diff = now - self._last_process_connection_count
+            if diff < timedelta(seconds=15):
+                return
 
         self._last_process_connection_count = now
 
