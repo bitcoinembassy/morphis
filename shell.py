@@ -215,9 +215,11 @@ class Shell(cmd.Cmd):
             self.writeln("Exception: [{}].".format(e))
 
     def do_listpeers(self, arg):
-        for peer in self.peer.engine.peers.values():
+        peers = self.peer.engine.peers.values()
+        for peer in peers:
             self.writeln(\
                 "Peer: (id={} addr={}).".format(peer.dbid, peer.address))
+        self.writeln("Count: {}.".format(len(peers)))
 
     @asyncio.coroutine
     def do_findnode(self, arg):
