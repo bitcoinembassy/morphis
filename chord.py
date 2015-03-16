@@ -1,6 +1,7 @@
 import llog
 
 import asyncio
+from concurrent import futures
 import logging
 from math import sqrt
 import os
@@ -216,70 +217,110 @@ class ChordEngine():
         if not closestdistance:
             return
 
-        distance = 512
+        distance = closestdistance
 
-        while distance > 0:
-            if distance < closestdistance:
-                log.info("No more available PeerS to connect.")
-                break
+        connect_queues = asyncio.Queue()
+        queue_empty = asyncio.Event()
+        done = asyncio.Event()
 
-            peer_bucket = self.peer_buckets[distance - 1]
-            bucket_needs = 2 - len(peer_bucket)
-            if bucket_needs <= 0:
-                distance -= 1
-                continue
+        asyncio.async(\
+            self._process_connect_queues(\
+                needed, connect_queues, queue_empty, done),\
+            loop=self.loop)
 
-            def dbcall():
-                with self.node.db.open_session() as sess:
-                    grace = datetime.today() - timedelta(minutes=5)
+        for distance in range(closestdistance, 512 + 1):
+            connect_queue = asyncio.Queue()
+            yield from connect_queues.put(connect_queue)
 
-                    q = sess.query(Peer)\
-                        .filter(Peer.distance == distance,\
-                            Peer.connected == False,\
-                            or_(Peer.last_connect_attempt == None,\
-                                Peer.last_connect_attempt < grace))\
-                        .order_by(desc(Peer.direction), Peer.node_id)\
-                        .limit(min(needed, bucket_needs))
-
-                    r = q.all()
-
-                    sess.expunge_all()
-
-                    return r
-
-
-            np = yield from self.loop.run_in_executor(None, dbcall)
-
-            if len(np):
-                bucket_needs = len(np)
-
-                for dbp in np:
-                    assert dbp.node_id != None
-
-                    peer = yield from self._connect_peer(dbp)
-
-                    if not peer:
-                        continue
-
-                    existing = self.peers.setdefault(dbp.address, peer)
-                    if existing is not peer:
-                        log.warning("Somehow we are trying to connect to an address [{}] already connected! [{}][{}]".format(dbp.address, existing, peer))
-                        peer.protocol.transport.close()
-                        continue
-
-                    peer_bucket[dbp.address] = peer
-
-                    needed -= 1
-                    bucket_needs -= 1
-
-                if not needed:
+            while True:
+                peer_bucket = self.peer_buckets[distance - 1]
+                bucket_needs = 2 - len(peer_bucket)
+                if bucket_needs <= 0:
+                    yield from connect_queue.put(None)
                     break
-                assert needed > 0
 
-                if bucket_needs:
+                def dbcall():
+                    with self.node.db.open_session() as sess:
+                        grace = datetime.today() - timedelta(minutes=5)
+
+                        q = sess.query(Peer)\
+                            .filter(Peer.distance == distance,\
+                                Peer.connected == False,\
+                                or_(Peer.last_connect_attempt == None,\
+                                    Peer.last_connect_attempt < grace))\
+                            .order_by(desc(Peer.direction), Peer.node_id)\
+                            .limit(10)
+
+                        r = q.all()
+
+                        sess.expunge_all()
+
+                        return r
+
+                rs = yield from self.loop.run_in_executor(None, dbcall)
+
+                if not len(rs):
+                    yield from connect_queue.put(None)
+                    break
+
+                queue_empty.clear()
+
+                for dbpeer in rs:
+                    yield from connect_queue.put(dbpeer)
+
+                yield from queue_empty.wait()
+                if done.is_set():
+                    return
+
+        log.info("No more available PeerS to fetch.")
+
+    @asyncio.coroutine
+    def _process_connect_queues(\
+            self, needed, connect_queues, queue_empty, done):
+        connect_futures = []
+
+        while True:
+            queue = yield from connect_queues.get()
+            if not queue:
+                break;
+
+            while True:
+                if queue.empty():
+                    queue_empty.set()
+                dbpeer = yield from queue.get()
+                if not dbpeer:
+                    break;
+
+                assert dbpeer.node_id != None
+
+                connect_c =\
+                    asyncio.async(self._connect_peer(dbpeer), loop=self.loop)
+
+                connect_futures.append(connect_c)
+
+                if len(connect_futures) < 7:
                     continue
 
-            distance -= 1
+                connected, pending = yield from asyncio.wait(\
+                    connect_futures, loop=self.loop,\
+                    return_when=futures.FIRST_COMPLETED)
+
+                connect_futures = list(pending)
+
+                needed -= len(connected)
+
+                if needed < 0:
+                    log.info("Connected to requested amount of PeerS.")
+
+                    done.set()
+                    queue_empty.set() # Wake the db fetch coroutine.
+
+                    yield from asyncio.wait(connect_futures, loop=self.loop)
+                    log.info("Finished connecting.")
+                    return
+
+        yield from asyncio.wait(connect_futures, loop=self.loop)
+        log.info("Finished connecting all PeerS we could find.")
 
     @asyncio.coroutine
     def _connect_peer(self, dbpeer):
@@ -320,6 +361,16 @@ class ChordEngine():
             yield from self.loop.run_in_executor(None, dbcall, dbpeer)
 
             return None
+
+        if dbpeer.node_id:
+            existing = self.peers.setdefault(dbpeer.address, peer)
+            if existing is not peer:
+                log.warning("Somehow we are trying to connect to an address [{}] already connected! [{}][{}]".format(dbpeer.address, existing, peer))
+                peer.protocol.transport.close()
+                return None
+
+            peer_bucket = self.peer_buckets[dbpeer.distance - 1]
+            peer_bucket[dbpeer.address] = peer
 
         return peer
 
