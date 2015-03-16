@@ -151,7 +151,7 @@ def __main():
             node.bind_address = bindaddr
         if addpeer != None:
             for peer in addpeer:
-                yield from node.chord_engine.add_peer(peer)
+                yield from node.chord_engine.add_peer(peer, True)
 
         yield from node.start()
 

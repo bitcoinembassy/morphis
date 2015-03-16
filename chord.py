@@ -45,6 +45,7 @@ class ChordEngine():
         self.server = None #Task.
         self.server_protocol = None
 
+        self.forced_connects = {} # {id, Peer}
         self.pending_connections = {} # {Task, Peer->dbid}
         self.peers = {} # {address: Peer}.
         self.peer_buckets = [{} for i in range(512)] # [{addr: Peer}]
@@ -72,16 +73,16 @@ class ChordEngine():
         self._bind_port = int(value.split(':')[1])
 
     @asyncio.coroutine
-    def add_peer(self, addr):
+    def add_peer(self, addr, force=False):
         log.info("Adding peer (addr=[{}]).".format(addr))
 
         peer = Peer()
         peer.address = addr
 
-        yield from self.add_peers([peer])
+        yield from self.add_peers([peer], force)
 
     @asyncio.coroutine
-    def add_peers(self, peers):
+    def add_peers(self, peers, force=False):
         log.info("Adding {} peers.".format(len(peers)))
 
         def dbcall():
@@ -114,6 +115,8 @@ class ChordEngine():
                     peer.connected = False
 
                     sess.add(peer)
+                    if force:
+                        self.forced_connects[peer.id] = peer
 
                     batched += 1
                     if batched == 10:
@@ -182,22 +185,8 @@ class ChordEngine():
     def __process_connection_count(self, needed):
         log.info("Processing connection count.")
 
-        # First connect to any unconnected PeerS that are in the database with
-        # a null node_id. Such entries had to be added manually; thus we should
-        # listen to the user and try them out.
-        def dbcall():
-            with self.node.db.open_session() as sess:
-                r = sess.query(Peer)\
-                    .filter(Peer.node_id == None, Peer.connected == False)\
-                    .limit(needed).all()
-
-                sess.expunge_all()
-
-                return r
-
-        np = yield from self.loop.run_in_executor(None, dbcall)
-
-        for dbp in np:
+        # Process any manually requested connects.
+        for dbp in self.forced_connects.values():
             peer = yield from self._connect_peer(dbp)
             if peer:
                 needed -= 1
@@ -564,10 +553,12 @@ class ChordEngine():
             if peer.address != dbpeer.address:
                 peer.address = dbpeer.address
 
-        r = yield from self.is_peer_connection_desirable(peer)
+        r = self.forced_connects.pop(peer.dbid, None)
         if not r:
-            log.info("Peer connection unwanted, disconnecting.")
-            return False
+            r = yield from self.is_peer_connection_desirable(peer)
+            if not r:
+                log.info("Peer connection unwanted, disconnecting.")
+                return False
 
         if add_to_peers:
             return self.add_to_peers(peer)
