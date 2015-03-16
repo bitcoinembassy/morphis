@@ -28,6 +28,8 @@ CHORD_MSG_GET_PEERS = 110
 CHORD_MSG_PEER_LIST = 111
 CHORD_MSG_FIND_NODE = 150
 
+BUCKET_SIZE = 2
+
 ZERO_MEM_512_BIT = bytearray(512>>3)
 
 log = logging.getLogger(__name__)
@@ -46,6 +48,7 @@ class ChordEngine():
         self.pending_connections = {} # {Task, Peer->dbid}
         self.peers = {} # {address: Peer}.
         self.peer_buckets = [{} for i in range(512)] # [{addr: Peer}]
+        self.peer_trie = bittrie.BitTrie() # {node_id, Peer}
 
         self.minimum_connections = 1#10
         self.maximum_connections = 64
@@ -234,7 +237,7 @@ class ChordEngine():
 
             while True:
                 peer_bucket = self.peer_buckets[distance - 1]
-                bucket_needs = 2 - len(peer_bucket)
+                bucket_needs = BUCKET_SIZE - len(peer_bucket)
                 if bucket_needs <= 0:
                     yield from connect_queue.put(None)
                     break
@@ -374,14 +377,9 @@ class ChordEngine():
             return None
 
         if dbpeer.node_id:
-            existing = self.peers.setdefault(dbpeer.address, peer)
-            if existing is not peer:
-                log.warning("Somehow we are trying to connect to an address [{}] already connected! [{}][{}]".format(dbpeer.address, existing, peer))
+            if not self.add_to_peers(peer):
                 peer.protocol.transport.close()
                 return None
-
-            peer_bucket = self.peer_buckets[dbpeer.distance - 1]
-            peer_bucket[dbpeer.address] = peer
 
         return peer
 
@@ -418,8 +416,7 @@ class ChordEngine():
     @asyncio.coroutine
     def _connection_lost(self, peer, exc):
         if peer.node_id:
-            self.peers.pop(peer.address, None)
-            self.peer_buckets[peer.distance - 1].pop(peer.address, None)
+            self.remove_from_peers(peer)
 
         if not peer.dbid:
             return
@@ -547,13 +544,65 @@ class ChordEngine():
             if peer.address != dbpeer.address:
                 peer.address = dbpeer.address
 
+        r = yield from self.is_peer_connection_desirable(peer)
+        if not r:
+            log.info("Peer connection unwanted, disconnecting.")
+            return False
+
         if add_to_peers:
-            existing = self.peers.setdefault(peer.address, peer)
-            if existing is not peer:
-                log.error("Somehow we are trying to connect to an address [{}] already connected!".format(peer.address))
-            self.peer_buckets[peer.distance - 1][peer.address] = peer
+            return self.add_to_peers(peer)
 
         return True
+
+    def add_to_peers(self, peer):
+        existing = self.peers.setdefault(peer.address, peer)
+        if existing is not peer:
+            log.error("Somehow we are trying to connect to an address [{}] already connected!".format(peer.address))
+            return False
+        self.peer_buckets[peer.distance - 1][peer.address] = peer
+
+        xorkey = bittrie.XorKey(self.node_id, peer.node_id)
+        self.peer_trie[xorkey] = peer
+
+        return True
+
+    def remove_from_peers(self, peer):
+        self.peers.pop(peer.address, None)
+        self.peer_buckets[peer.distance - 1].pop(peer.address, None)
+
+        xorkey = bittrie.XorKey(self.node_id, peer.node_id)
+        del self.peer_trie[xorkey]
+
+    @asyncio.coroutine
+    def is_peer_connection_desirable(self, peer):
+        bucket = self.peer_buckets[peer.distance - 1]
+
+        if len(bucket) < BUCKET_SIZE:
+            return True
+
+        # Otherwise check that the node_id is closer than all others.
+        xorkey = bittrie.XorKey(self.node_id, peer.node_id)
+
+        cnt = 0
+        none_started = False
+        for closer_node in self.peer_trie.find(xorkey, False):
+            if not closer_node:
+                none_started = True
+                continue
+            elif not none_started:
+                log.info("Peer already connected, undesirable.")
+                return False
+
+            if closer_node.distance != peer.distance:
+                # No more closer ones.
+                return True
+
+            cnt += 1
+            if cnt == BUCKET_SIZE:
+                log.info(\
+                    "Peer is further than BUCKET_SIZE connected PeerS,"\
+                    " undesirable.")
+                return False
 
     @asyncio.coroutine
     def connection_ready(self, peer):
@@ -773,9 +822,10 @@ class ChordEngine():
 #                    t = text(\
 #                        "SELECT id, address FROM peer ORDER BY"\
 #                        " (~(node_id&:r_id))&(node_id|:r2_id) DESC"\
-#                        " LIMIT 2")
+#                        " LIMIT :lim")
 #
-#                    st = t.bindparams(r_id = msg.node_id, r2_id = msg.node_id)\
+#                    st = t.bindparams(r_id = msg.node_id, r2_id = msg.node_id,\
+#                            lim = BUCKET_SIZE)\
 #                        .columns(id=Integer, address=String)
 #
 #                    rs = sess.connection().execute(st)
