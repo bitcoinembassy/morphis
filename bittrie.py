@@ -17,6 +17,33 @@ class BitTrie(object):
             raise KeyError()
         return r
 
+    def __str__(self):
+        buf = "["
+
+        for x in self.find(ZeroKey()):
+            if not x:
+                continue
+            buf += str(x)
+            buf += ", "
+
+        buf += "]"
+
+        return buf
+
+    def __delitem__(self, key):
+        self._del(key)
+
+    def pop(self, key, default):
+        r = self._del(key)
+
+        if r:
+            return r
+
+        if default:
+            return default
+
+        raise KeyError()
+
     def put(self, key, value):
         node = self.trie
 
@@ -146,6 +173,7 @@ class BitTrie(object):
 
                 if type(next_node) is TrieLeaf:
                     nnk = next_node.key
+                    kl = min(len(nnk), key_len)
                     while True:
                         if nnk[i] != key[i]:
                             greater = nnk[i] > key[i]
@@ -158,7 +186,7 @@ class BitTrie(object):
                             break
 
                         i = i + 1
-                        if i == key_len:
+                        if i == kl:
                             yield next_node.value
                             break
 
@@ -223,9 +251,43 @@ class XorKey(object):
     def __len__(self):
         return len(self.key1)
 
+class ZeroKey(object):
+    def __init__(self):
+        pass
+
+    def __getitem__(self, idx):
+        return 0x00
+
+    def __len__(self):
+        return 0xFFFFFFFF
+
 import random
 import os
 from datetime import datetime
+
+def _del_test():
+    print("del..")
+
+    bt = BitTrie()
+
+    dels = []
+
+    for i in range(10):
+        ri = random.randint(0, 100)
+        k = ri.to_bytes(1, "big")
+
+        r = bt[k] = ri
+
+        if i % 3:
+            print("DEL: {}".format(ri))
+            dels.append(k)
+
+    print(bt)
+
+    for del_ in dels:
+        del bt[del_]
+
+    print(bt)
 
 def _speed_test():
     bt = BitTrie()
@@ -313,6 +375,7 @@ def _validity_test():
         now = datetime.today()
 
 def main():
+    _del_test()
     _validity_test()
     _speed_test()
 
