@@ -56,6 +56,7 @@ class BitTrie(object):
                 node = next_node
 
     def _del(self, key):
+        #FIXME: Make this code prune empty trees more than one deep.
         prev_node = None
         prev_node_bit = None
         node = self.trie
@@ -111,7 +112,7 @@ class BitTrie(object):
 
                 node = next_node
 
-    def find(self, key):
+    def find(self, key, forward=True):
         "Generator. First element can be None sometimes when no exact match."
         branches = []
         node = self.trie
@@ -124,7 +125,9 @@ class BitTrie(object):
             while j >= 0:
                 bit = (char >> j) & 0x0F
 
-                for obit in range(0x0F, bit, -1):
+                rng = range(0x0F, bit, -1) if forward else range(0, bit)
+
+                for obit in rng:
                     other = node[obit]
                     if other:
                         branches.append(other)
@@ -133,28 +136,36 @@ class BitTrie(object):
 
                 if not next_node:
                     yield None
-                    for r in self._iterate_next(branches):
+
+                    func = self._iterate_next(branches) if forward\
+                        else self._iterate_prev(branches)
+
+                    for r in func:
                         yield r
                     return None
 
                 if type(next_node) is TrieLeaf:
                     nnk = next_node.key
                     while True:
-                        if nnk[i] > key[i]:
-                            yield None
-                            yield next_node.value
-                            break
+                        if nnk[i] != key[i]:
+                            greater = nnk[i] > key[i]
 
-                        if nnk[i] < key[i]:
                             yield None
+
+                            if greater ^ (not forward):
+                                yield next_node.value
+
                             break
 
                         i = i + 1
                         if i == key_len:
                             yield next_node.value
-                            break;
+                            break
 
-                    for r in self._iterate_next(branches):
+                    func = self._iterate_next(branches) if forward\
+                        else self._iterate_prev(branches)
+
+                    for r in func:
                         yield r
 
                     return None
@@ -180,6 +191,21 @@ class BitTrie(object):
             assert type(node) is list
 
             branches.extend(reversed([x for x in node if x]))
+
+    def _iterate_prev(self, branches):
+        while True:
+            if not branches:
+                return None
+
+            node = branches.pop()
+
+            if type(node) is TrieLeaf:
+                yield node.value
+                continue
+
+            assert type(node) is list
+
+            branches.extend([x for x in node if x])
 
 class TrieLeaf(object):
     def __init__(self, key, value):
@@ -269,6 +295,16 @@ def _validity_test():
     cnt = 42
     now = datetime.today()
     for i in bt.find(int(42).to_bytes(1, "big")):
+        print("find: {}".format(i))
+#        print("took: {}".format(datetime.today() - now))
+        cnt -= 1
+        if not cnt:
+            break
+        now = datetime.today()
+
+    print("<>")
+
+    for i in bt.find(int(42).to_bytes(1, "big"), False):
         print("find: {}".format(i))
 #        print("took: {}".format(datetime.today() - now))
         cnt -= 1
