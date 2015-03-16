@@ -90,6 +90,7 @@ class ChordEngine():
                 tlocked = False
 
                 batched = 0
+                added = False
 
                 for peer in peers:
                     if not tlocked:
@@ -115,6 +116,7 @@ class ChordEngine():
                     peer.connected = False
 
                     sess.add(peer)
+                    added = True
                     if force:
                         self.forced_connects[peer.id] = peer
 
@@ -124,14 +126,14 @@ class ChordEngine():
                         tlocked = False
                         batched = 0
 
-                if tlocked:
+                if added and tlocked:
                     sess.commit()
 
-                return True
+                return added
 
-        r = yield from self.loop.run_in_executor(None, dbcall)
+        added = yield from self.loop.run_in_executor(None, dbcall)
 
-        if r and self.running:
+        if added and self.running:
             yield from self._process_connection_count()
 
     @asyncio.coroutine
