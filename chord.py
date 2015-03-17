@@ -310,6 +310,9 @@ class ChordEngine():
                 peer_bucket = self.peer_buckets[dbpeer.distance - 1]
                 bucket_needs = BUCKET_SIZE - len(peer_bucket)
                 if bucket_needs <= 0:
+                    # Other coop-thread does the same check when it wake from
+                    # waiting on queue_empty and will do the right thing.
+                    queue_empty.set()
                     break
 
                 connect_c =\
