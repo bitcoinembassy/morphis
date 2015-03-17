@@ -226,10 +226,12 @@ class ChordEngine():
         distance = closestdistance
         while True:
             if distance >= 512 + 1:
+                yield from connect_queue.put(None)
                 if fetched:
-                    distance = closestdistance
                     fetched = False
+                    distance = closestdistance
                     continue
+                yield from connect_queues.put(None)
                 break
 
             connect_queue = asyncio.Queue()
@@ -238,8 +240,8 @@ class ChordEngine():
             peer_bucket = self.peer_buckets[distance - 1]
             bucket_needs = BUCKET_SIZE - len(peer_bucket)
             if bucket_needs <= 0:
-                yield from connect_queue.put(None)
                 distance += 1
+                yield from connect_queue.put(None)
                 continue
 
             def dbcall():
@@ -263,8 +265,8 @@ class ChordEngine():
             rs = yield from self.loop.run_in_executor(None, dbcall)
 
             if not len(rs):
-                yield from connect_queue.put(None)
                 distance += 1
+                yield from connect_queue.put(None)
                 continue
 
             fetched = True
@@ -280,8 +282,8 @@ class ChordEngine():
             if done.is_set():
                 return
 
-            yield from connect_queue.put(None)
             distance += 1
+            yield from connect_queue.put(None)
 
         log.info("No more available PeerS to fetch.")
 
@@ -332,11 +334,13 @@ class ChordEngine():
                     done.set()
                     queue_empty.set() # Wake the db fetch coroutine.
 
-                    yield from asyncio.wait(connect_futures, loop=self.loop)
+                    if connect_futures:
+                        yield from asyncio.wait(connect_futures, loop=self.loop)
                     log.info("Finished connecting.")
                     return
 
-        yield from asyncio.wait(connect_futures, loop=self.loop)
+        if connect_futures:
+            yield from asyncio.wait(connect_futures, loop=self.loop)
         log.info("Finished connecting all PeerS we could find.")
 
     @asyncio.coroutine
