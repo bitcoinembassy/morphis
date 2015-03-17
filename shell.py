@@ -264,6 +264,15 @@ class Shell(cmd.Cmd):
 
         yield from asyncio.wait(tasks, loop=self.loop)
 
+    @asyncio.coroutine
+    def do_st(self, arg):
+        try:
+            for task in asyncio.Task.all_tasks(loop=self.loop):
+                self.writeln("Task [{}]:".format(task))
+                task.print_stack(file=self)
+        except:
+            log.exception("Task")
+
     def emptyline(self):
         pass
 
