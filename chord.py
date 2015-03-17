@@ -274,6 +274,8 @@ class ChordEngine():
             for dbpeer in rs:
                 yield from connect_queue.put(dbpeer)
 
+            if done.is_set():
+                return
             yield from queue_empty.wait()
             if done.is_set():
                 return
@@ -616,6 +618,7 @@ class ChordEngine():
                 none_started = True
                 continue
             elif not none_started:
+                # Outgoing connections are expected to be in the peer_trie.
                 log.info("Peer already connected, undesirable.")
                 return False
 
