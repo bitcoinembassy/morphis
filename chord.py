@@ -774,7 +774,7 @@ class ChordEngine():
 
             for r in rlist:
                 @asyncio.coroutine
-                def _run(r):
+                def _run_find_node(r):
                     cid, queue = yield from r.open_channel("mpeer", True)
                     if not queue:
                         return
@@ -794,7 +794,7 @@ class ChordEngine():
 
                         peer.protocol.write_channel_data(local_cid, pkt)
 
-                tasks.append(asyncio.async(_run(r), loop=self.loop))
+                tasks.append(asyncio.async(_run_find_node(r), loop=self.loop))
 
             yield from asyncio.wait(tasks, loop=self.loop)
 

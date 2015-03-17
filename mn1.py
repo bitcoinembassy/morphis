@@ -494,10 +494,10 @@ class SshProtocol(asyncio.Protocol):
 
         self.connection_handler.connection_made(self)
 
-        asyncio.async(self._run(), loop=self.loop)
+        asyncio.async(self._process_ssh_protocol(), loop=self.loop)
 
     @asyncio.coroutine
-    def _run(self):
+    def _process_ssh_protocol(self):
         yield from connectTaskCommon(self, self.server_mode)
 
         if cleartext_transport_enabled\

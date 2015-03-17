@@ -239,7 +239,7 @@ class Shell(cmd.Cmd):
             log.info("Sending FindNode to peer [{}].".format(peer.address))
 
             @asyncio.coroutine
-            def _run(peer):
+            def _run_find_node(peer):
                 cid, queue = yield from peer.open_channel("mpeer", True)
                 if not queue:
                     return
@@ -260,7 +260,7 @@ class Shell(cmd.Cmd):
                         self.writeln("nid[{}] FOUND: {:22} diff=[{}]".format(peer.dbid, r.address, hex_string([x ^ y for x, y in zip(r.node_id, msg.node_id)])))
                         self.flush()
 
-            tasks.append(asyncio.async(_run(peer), loop=self.loop))
+            tasks.append(asyncio.async(_run_find_node(peer), loop=self.loop))
 
         yield from asyncio.wait(tasks, loop=self.loop)
 

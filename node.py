@@ -89,6 +89,13 @@ def main():
         loop.run_forever()
     except KeyboardInterrupt:
         log.info("Got KeyboardInterrupt; shutting down.")
+        if True or log.isEnabledFor(logging.DEBUG):
+            try:
+                for task in asyncio.Task.all_tasks(loop=loop):
+                    print("Task [{}]:".format(task))
+                    task.print_stack()
+            except:
+                log.exception("Task")
     except:
         log.exception("loop.run_forever() threw:")
 
@@ -154,6 +161,8 @@ def __main():
                 yield from node.chord_engine.add_peer(peer, True)
 
         yield from node.start()
+
+        log.info("Started Instance #{}.".format(instance))
 
         nodecount -= 1
         if not nodecount:
