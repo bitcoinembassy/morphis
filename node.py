@@ -157,12 +157,16 @@ def __main():
             bindaddr.split(':') # Just to preemptively test.
             node.bind_address = bindaddr
 
-        yield from node.start()
+        @asyncio.coroutine
+        def _start_node(node):
+            yield from node.start()
 
-        if addpeer != None:
-            for peer in addpeer:
+            if addpeer != None:
                 for peer in addpeer:
-                    yield from node.chord_engine.connect_peer(peer)
+                    for peer in addpeer:
+                        yield from node.chord_engine.connect_peer(peer)
+
+        asyncio.async(_start_node(node), loop=loop)
 
         log.info("Started Instance #{}.".format(instance))
 
