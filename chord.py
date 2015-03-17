@@ -279,7 +279,9 @@ class ChordEngine():
 
             connect_futures = list(pending)
 
-            needed -= len(connected)
+            for task in connected:
+                if task.result():
+                    needed -= 1
 
             if needed <= 0:
                 log.info("Connected to requested amount of PeerS.")
@@ -516,9 +518,10 @@ class ChordEngine():
 
         r = self.forced_connects.pop(peer.dbid, None)
         if not r:
-            r = yield from self.is_peer_connection_desirable(peer)
+            r = self.is_peer_connection_desirable(peer)
             if not r:
-                log.info("Peer connection unwanted, disconnecting.")
+                log.info("Peer [dbid={}] connection unwanted, disconnecting."\
+                    .format(peer.dbid))
                 return False
 
         if add_to_peers:
@@ -545,7 +548,6 @@ class ChordEngine():
         xorkey = bittrie.XorKey(self.node_id, peer.node_id)
         del self.peer_trie[xorkey]
 
-    @asyncio.coroutine
     def is_peer_connection_desirable(self, peer):
         peercnt = len(self.peers)
 
