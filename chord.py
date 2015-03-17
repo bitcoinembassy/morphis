@@ -630,6 +630,10 @@ class ChordEngine():
         return False
 
     @asyncio.coroutine
+    def channel_open_failed(self, msg):
+        pass
+
+    @asyncio.coroutine
     def channel_opened(self, peer, channel_type, local_cid, queue):
         if not channel_type:
             # channel_type is None when the we initiated the channel.

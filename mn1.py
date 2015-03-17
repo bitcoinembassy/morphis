@@ -359,11 +359,10 @@ class SshProtocol(asyncio.Protocol):
 
         if block:
             r = yield from queue.get()
-            if r != True:
-                if r is None:
-                    return local_cid, None
-                log.warning("r=[{}]!".format(r))
-            assert r == True
+            if not r:
+                # Could be None for disconnect or False for rejected.
+                return local_cid, r
+            assert r == True, "r=[{}]!".format(r)
 
         return local_cid, queue
 
@@ -597,6 +596,15 @@ class SshProtocol(asyncio.Protocol):
 
                 yield from self.channel_handler\
                     .channel_opened(self, None, msg.recipient_channel, queue)
+
+            elif t == mnetpacket.SSH_MSG_CHANNEL_OPEN_FAILURE:
+                msg = mnetpacket.SshChannelOpenFailureMessage(packet)
+                log.info("P: Received CHANNEL_OPEN_FAILURE recipient_channel=[{}].".format(msg.recipient_channel))
+
+                yield from queue.put(False)
+                self._close_channel(msg.recipient_channel)
+
+                yield from self.channel_handler.channel_open_failed(self, msg)
 
             elif t == mnetpacket.SSH_MSG_CHANNEL_DATA:
                 msg = mnetpacket.SshChannelDataMessage(packet)
