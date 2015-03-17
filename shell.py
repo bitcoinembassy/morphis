@@ -214,6 +214,9 @@ class Shell(cmd.Cmd):
             log.exception("eval")
             self.writeln("Exception: [{}].".format(e))
 
+    def do_lp(self, arg):
+        return self.do_listpeers(arg)
+
     def do_listpeers(self, arg):
         peers = self.peer.engine.peers.values()
         for peer in peers:
