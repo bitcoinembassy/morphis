@@ -553,7 +553,7 @@ class SshProtocol(asyncio.Protocol):
                     self.channel_handler.request_open_channel(self, msg)
 
                 if r:
-                    local_cid = self._open_channel(msg)
+                    local_cid = self._accept_channel_open(msg)
 
                     log.info("Channel [{}] opened.".format(local_cid))
 
@@ -588,11 +588,11 @@ class SshProtocol(asyncio.Protocol):
 
                 self._channel_map[msg.recipient_channel] = msg.sender_channel
 
-                log.info("Channel [{}] opened.".format(local_cid))
+                log.info("Channel [{}] opened.".format(msg.recipient_channel))
 
                 # First 'packet' is a True, signaling the channel is open to
                 # those yielding from the queue.
-                queue = self.channel_queues[local_cid]
+                queue = self.channel_queues[msg.recipient_channel]
                 yield from queue.put(True)
 
                 yield from self.channel_handler\
@@ -620,7 +620,7 @@ class SshProtocol(asyncio.Protocol):
             else:
                 log.warning("Unhandled packet of type [{}].".format(t))
 
-    def _open_channel(self, req_msg):
+    def _accept_channel_open(self, req_msg):
         log.info("Accepting channel open request.")
 
         local_cid = self._allocate_channel_id()

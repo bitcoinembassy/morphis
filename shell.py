@@ -240,7 +240,7 @@ class Shell(cmd.Cmd):
 
             @asyncio.coroutine
             def _run_find_node(peer):
-                cid, queue = yield from peer.open_channel("mpeer", True)
+                cid, queue = yield from peer.protocol.open_channel("mpeer", True)
                 if not queue:
                     return
 

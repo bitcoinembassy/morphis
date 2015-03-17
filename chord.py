@@ -605,7 +605,7 @@ class ChordEngine():
 
     @asyncio.coroutine
     def _send_get_peers(self, peer):
-        local_cid, queue = yield from peer.open_channel("mpeer", True)
+        local_cid, queue = yield from peer.protocol.open_channel("mpeer", True)
         if not queue:
             return
 
@@ -773,7 +773,9 @@ class ChordEngine():
             for r in rlist:
                 @asyncio.coroutine
                 def _run_find_node(r):
-                    cid, queue = yield from r.open_channel("mpeer", True)
+                    cid, queue =\
+                        yield from r.protocol.open_channel("mpeer", True)
+
                     if not queue:
                         return
 
