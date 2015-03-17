@@ -73,16 +73,46 @@ class ChordEngine():
         self._bind_port = int(value.split(':')[1])
 
     @asyncio.coroutine
-    def add_peer(self, addr, force=False):
+    def connect_peer(self, addr):
+        "Returns Peer connected to, or dbpeer of already connected Peer."
+        dbpeer = yield from self.add_peer(addr)
+
+        if not dbpeer:
+            def dbcall():
+                with self.node.db.open_session() as sess:
+                    nonlocal addr
+                    dbpeer = sess.query(Peer).filter(Peer.address == addr)\
+                        .first()
+
+                    sess.expunge(dbpeer)
+
+                    return dbpeer
+
+            dbpeer = yield from self.loop.run_in_executor(None, dbcall)
+
+        if dbpeer.connected:
+            return dbpeer
+
+        self.forced_connects[dbpeer.id] = dbpeer
+
+        r = yield from self._connect_peer(dbpeer)
+
+        return r
+
+    @asyncio.coroutine
+    def add_peer(self, addr):
         log.info("Adding peer (addr=[{}]).".format(addr))
 
         peer = Peer()
         peer.address = addr
 
-        yield from self.add_peers([peer], force)
+        r = yield from self.add_peers([peer])
+
+        if r:
+            return r[0]
 
     @asyncio.coroutine
-    def add_peers(self, peers, force=False):
+    def add_peers(self, peers):
         log.info("Adding {} peers.".format(len(peers)))
 
         def dbcall():
@@ -90,7 +120,7 @@ class ChordEngine():
                 tlocked = False
 
                 batched = 0
-                added = False
+                added = []
 
                 for peer in peers:
                     if not tlocked:
@@ -116,9 +146,7 @@ class ChordEngine():
                     peer.connected = False
 
                     sess.add(peer)
-                    added = True
-                    if force:
-                        self.forced_connects[peer.id] = peer
+                    added.append(peer)
 
                     batched += 1
                     if batched == 10:
@@ -135,6 +163,8 @@ class ChordEngine():
 
         if added and self.running:
             yield from self._process_connection_count()
+
+        return added
 
     @asyncio.coroutine
     def start(self):
@@ -187,17 +217,6 @@ class ChordEngine():
     @asyncio.coroutine
     def __process_connection_count(self, needed):
         log.info("Processing connection count.")
-
-        # Process any manually requested connects.
-        for dbp in self.forced_connects.values():
-            peer = yield from self._connect_peer(dbp)
-            if peer:
-                needed -= 1
-
-        if needed <= 0:
-            return
-
-        # If we still need PeerS, then we now use our Chord algorithm.
 
         def dbcall():
             with self.node.db.open_session() as sess:
@@ -312,6 +331,7 @@ class ChordEngine():
 
         def dbcall(dbpeer):
             with self.node.db.open_session() as sess:
+                self.node.db.lock_table(sess, Peer)
                 dbpeer = sess.query(Peer).get(dbpeer.id)
                 if dbpeer.connected:
                     if log.isEnabledFor(logging.DEBUG):
@@ -420,11 +440,35 @@ class ChordEngine():
                     if not dbpeer.node_id:
                         # Then it was a manually initiated connection (and no
                         # public key was specified).
-                        dbpeer.node_id = peer.node_id
-                        dbpeer.pubkey = peer.node_key.asbytes()
+                        self.node.db.lock_table(sess, Peer)
+                        odbpeer = sess.query(Peer)\
+                            .filter(Peer.node_id == peer.node_id).first()
 
-                        dbpeer.distance = peer.distance
-                        dbpeer.direction = peer.direction
+                        if odbpeer:
+                            sess.delete(dbpeer)
+
+                            if odbpeer.connected:
+                                log.info("We were already connected to"\
+                                    " Peer (id={}), dropping manual"\
+                                    " Peer (id={}) connection."\
+                                    .format(odbpeer.id, dbpeer.id))
+                                sess.commit()
+                                sess.expunge(dbpeer)
+                                return False, False
+                            else:
+                                odbpeer.connected = True
+
+                            log.info("We already knew (id={}) about"\
+                                " manual added peer (id={})."\
+                                .format(odbpeer.id, dbpeer.id))
+                            dbpeer = odbpeer
+                            peer.dbid = dbpeer.id
+                        else:
+                            dbpeer.node_id = peer.node_id
+                            dbpeer.pubkey = peer.node_key.asbytes()
+
+                            dbpeer.distance = peer.distance
+                            dbpeer.direction = peer.direction
 
                         if dbpeer.distance == 0:
                             log.info("Peer is us! (Has the same ID!)")
@@ -483,6 +527,7 @@ class ChordEngine():
                             log.warning("Found ourselves in the Peer table!")
                             log.info("Peer is us! (Has the same ID!)")
                             dbpeer.connected = False
+                            sess.delete(dbpeer)
                             sess.commit()
                             return False, None
 

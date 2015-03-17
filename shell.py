@@ -2,12 +2,13 @@ import llog
 
 import asyncio
 import cmd
-import enc
 import logging
 import queue as tqueue
 
-from mutil import hex_dump, hex_string
 import chord
+import db
+import enc
+from mutil import hex_dump, hex_string
 import sshtype
 
 log = logging.getLogger(__name__)
@@ -266,6 +267,10 @@ class Shell(cmd.Cmd):
             tasks.append(asyncio.async(_run_find_node(peer), loop=self.loop))
 
         yield from asyncio.wait(tasks, loop=self.loop)
+
+    @asyncio.coroutine
+    def do_conn(self, arg):
+        self.peer.engine.connect_peer(arg)
 
     @asyncio.coroutine
     def do_st(self, arg):

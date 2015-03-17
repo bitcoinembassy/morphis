@@ -156,11 +156,13 @@ def __main():
         if bindaddr:
             bindaddr.split(':') # Just to preemptively test.
             node.bind_address = bindaddr
-        if addpeer != None:
-            for peer in addpeer:
-                yield from node.chord_engine.add_peer(peer, True)
 
         yield from node.start()
+
+        if addpeer != None:
+            for peer in addpeer:
+                for peer in addpeer:
+                    yield from node.chord_engine.connect_peer(peer)
 
         log.info("Started Instance #{}.".format(instance))
 
