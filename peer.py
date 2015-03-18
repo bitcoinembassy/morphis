@@ -73,7 +73,8 @@ class ConnectionHandler():
         pass
 
     def connection_lost(self, protocol, exc):
-        log.info("connection_lost(): peer.id=[{}].".format(self.peer.dbid))
+        log.info("connection_lost(): peer (id=[{}], address=[{}])."\
+            .format(self.peer.dbid, self.peer.address))
 
         self.peer.engine.connection_lost(self.peer, exc)
 
