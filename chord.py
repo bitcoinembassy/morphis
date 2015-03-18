@@ -2,6 +2,7 @@ import llog
 
 import asyncio
 from concurrent import futures
+import ipaddress
 import logging
 from math import sqrt
 import os
@@ -74,7 +75,12 @@ class ChordEngine():
 
     @asyncio.coroutine
     def connect_peer(self, addr):
-        "Returns Peer connected to, or dbpeer of already connected Peer."
+        "Returns Peer connected to, or dbpeer of already connected Peer,"
+        "or None on connection error or invalid address."
+        if not check_address(addr):
+            log.info("Invalid address [{}], ignoring.".format(addr))
+            return None
+
         dbpeer = yield from self.add_peer(addr, False)
 
         if not dbpeer:
@@ -1020,4 +1026,9 @@ class ChordFindNode(ChordMessage):
         self.node_id = self.buf[i:]
 
 def check_address(address):
-    return True
+    try:
+        host, port = address.split(':')
+        ipaddress.ip_address(host)
+        return True
+    except:
+        return False
