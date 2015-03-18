@@ -124,16 +124,17 @@ def __main():
     log.info("Launching node.")
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--nn", type=int, help="Node instance number.")
+    parser.add_argument("--nn", type=int,\
+        help="Node instance number.")
     parser.add_argument("--addpeer",\
         help="Add a node to peer list.", action="append")
     parser.add_argument("--bind",\
         help="Specify bind address (host:port).")
     parser.add_argument("--nodecount", type=int,\
         help="Specify amount of nodes to start.")
-    parser.add_argument("--parallellaunch", type=bool,\
+    parser.add_argument("--parallellaunch", action="store_true",\
         help="Enable parallel launch of the nodecount nodes.")
-    parser.add_argument("--cleartexttransport", type=bool,\
+    parser.add_argument("--cleartexttransport", action="store_true",\
         help="Clear text transport and no authentication.")
     parser.add_argument("--dburl",\
         help="Specify the database url to use.")
