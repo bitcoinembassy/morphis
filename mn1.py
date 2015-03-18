@@ -602,7 +602,7 @@ class SshProtocol(asyncio.Protocol):
                 log.info("P: Received CHANNEL_OPEN_FAILURE recipient_channel=[{}].".format(msg.recipient_channel))
 
                 yield from queue.put(False)
-                self._close_channel(msg.recipient_channel)
+                yield from self._close_channel(msg.recipient_channel)
 
                 yield from self.channel_handler.channel_open_failed(self, msg)
 
@@ -623,7 +623,7 @@ class SshProtocol(asyncio.Protocol):
                 log.info("P: Received CHANNEL_CLOSE recipient_channel=[{}]"\
                     .format(msg.recipient_channel))
 
-                self._close_channel(msg.recipient_channel)
+                yield from self._close_channel(msg.recipient_channel)
                 yield from self.channel_handler.channel_closed(self, msg.recipient_channel)
             else:
                 log.warning("Unhandled packet of type [{}].".format(t))
@@ -661,6 +661,7 @@ class SshProtocol(asyncio.Protocol):
 
         self.write_packet(fm)
 
+    @asyncio.coroutine
     def _close_channel(self, local_cid):
         del self._channel_map[local_cid]
 
