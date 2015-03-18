@@ -33,13 +33,15 @@ class BitTrie(object):
     def __delitem__(self, key):
         self._del(key)
 
-    def pop(self, key, default):
+    default_default = object()
+
+    def pop(self, key, default=default_default):
         r = self._del(key)
 
         if r:
             return r
 
-        if default:
+        if default is not self.default_default:
             return default
 
         raise KeyError()
