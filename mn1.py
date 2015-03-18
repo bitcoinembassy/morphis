@@ -691,6 +691,8 @@ class SshProtocol(asyncio.Protocol):
 
         self.closed = True
 
+        self._channel_map.clear()
+
         @asyncio.coroutine
         def _close_queues():
             for queue in self.channel_queues.values():
@@ -794,10 +796,13 @@ class SshProtocol(asyncio.Protocol):
         log.info("Writing to channel {} with {} bytes of data.".format(local_cid, len(data)))
 
         msg = mnetpacket.SshChannelDataMessage()
-        msg.recipient_channel = self._channel_map[local_cid]
+        msg.recipient_channel = self._channel_map.get(local_cid)
+        if msg.recipient_channel == None:
+            return False
         msg.encode()
 
         self.write_data([msg.buf, data])
+        return True
 
     def write_data(self, datas):
         if self.closed:
