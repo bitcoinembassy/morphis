@@ -78,6 +78,8 @@ class ChordEngine():
         dbpeer = yield from self.add_peer(addr)
 
         if not dbpeer:
+            log.debug("Already connected, fetching real row.")
+
             def dbcall():
                 with self.node.db.open_session() as sess:
                     nonlocal addr
@@ -89,9 +91,11 @@ class ChordEngine():
                     return dbpeer
 
             dbpeer = yield from self.loop.run_in_executor(None, dbcall)
-
-        if dbpeer.connected:
+            # add_peer returns None if the item was already in the list.
+            assert dbpeer.connected
             return dbpeer
+
+        assert not dbpeer.connected
 
         self.forced_connects[dbpeer.id] = dbpeer
 
@@ -156,6 +160,7 @@ class ChordEngine():
 
                 if added and tlocked:
                     sess.commit()
+                    sess.expunge_all()
 
                 return added
 
@@ -370,6 +375,7 @@ class ChordEngine():
 
         if dbpeer.node_id:
             if not self.add_to_peers(peer):
+                log.info("Already connected to Peer (id={}).".format(peer.dbid))
                 peer.protocol.transport.close()
                 return None
 
