@@ -219,7 +219,18 @@ class Shell(cmd.Cmd):
         return self.do_listpeers(arg)
 
     def do_listpeers(self, arg):
-        peers = self.peer.engine.peers.values()
+        peers = self.peer.engine.peers
+        if arg:
+            if arg == 'i':
+                peers = sorted(peers.values(), key=\
+                    lambda peer: peer.dbid)
+            elif arg == 'p':
+                peers = sorted(peers.values(), key=\
+                    lambda peer: peer.address.split(':')[1])
+        else:
+            peers = peers.values()
+
+        
         for peer in peers:
             self.writeln(\
                 "Peer: (id={} addr={}).".format(peer.dbid, peer.address))
