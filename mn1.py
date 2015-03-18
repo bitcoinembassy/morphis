@@ -601,6 +601,7 @@ class SshProtocol(asyncio.Protocol):
                 msg = mnetpacket.SshChannelOpenFailureMessage(packet)
                 log.info("P: Received CHANNEL_OPEN_FAILURE recipient_channel=[{}].".format(msg.recipient_channel))
 
+                queue = self.channel_queues[msg.recipient_channel]
                 yield from queue.put(False)
                 yield from self._close_channel(msg.recipient_channel)
 

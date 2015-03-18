@@ -285,7 +285,7 @@ class ChordEngine():
                     distance += 1
                     continue
 
-            while len(connect_futures) < 5:
+            while len(connect_futures) < 7:
                 dbpeer = pbuffer.pop()
                 connect_c =\
                     asyncio.async(self._connect_peer(dbpeer), loop=self.loop)
@@ -677,7 +677,7 @@ class ChordEngine():
         return False
 
     @asyncio.coroutine
-    def channel_open_failed(self, msg):
+    def channel_open_failed(self, peer, msg):
         pass
 
     @asyncio.coroutine

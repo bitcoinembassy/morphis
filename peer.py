@@ -101,9 +101,9 @@ class ChannelHandler():
         return r
 
     @asyncio.coroutine
-    def channel_open_failed(self, msg):
+    def channel_open_failed(self, protocol, msg):
         r = yield from\
-            self.peer.engine.channel_open_failed(self.peer, message)
+            self.peer.engine.channel_open_failed(self.peer, msg)
         return r
 
     @asyncio.coroutine
