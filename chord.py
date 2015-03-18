@@ -443,7 +443,7 @@ class ChordEngine():
         finally:
             peer.connection_coop_lock.release()
 
-        if not r or peer.procotol.closed:
+        if not r or peer.protocol.closed:
             return False
 
         if add_to_peers:
