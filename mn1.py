@@ -387,8 +387,12 @@ class SshProtocol(asyncio.Protocol):
     def close_channel(self, local_cid):
         log.info("Closing channel {}.".format(local_cid))
 
+        remote_cid = self._channel_map.get(local_cid)
+        if remote_cid == None or remote_cid == -2:
+            return False
+
         msg = mnetpacket.SshChannelCloseMessage()
-        msg.recipient_channel = self._channel_map[local_cid]
+        msg.recipient_channel = remote_cid
         msg.encode()
 
         self.write_packet(msg)
@@ -578,6 +582,9 @@ class SshProtocol(asyncio.Protocol):
                 rcid = self._channel_map.get(msg.recipient_channel)
                 if rcid == None:
                     log.warning("Received a CHANNEL_OPEN_CONFIRMATION for a local channel that was not started; ignoring.")
+                    return
+                if rcid == -2:
+                    log.warning("Received a CHANNEL_OPEN_CONFIRMATION for a local channel that was closed; ignoring.")
                     return
                 if rcid != -1:
                     log.warning("Received a CHANNEL_OPEN_CONFIRMATION for a local channel that was already open; ignoring.")
@@ -797,10 +804,12 @@ class SshProtocol(asyncio.Protocol):
     def write_channel_data(self, local_cid, data):
         log.info("Writing to channel {} with {} bytes of data.".format(local_cid, len(data)))
 
-        msg = mnetpacket.SshChannelDataMessage()
-        msg.recipient_channel = self._channel_map.get(local_cid)
-        if msg.recipient_channel == None:
+        remote_cid = self._channel_map.get(local_cid)
+        if remote_cid == None:
             return False
+
+        msg = mnetpacket.SshChannelDataMessage()
+        msg.recipient_channel = remote_cid
         msg.encode()
 
         self.write_data([msg.buf, data])
