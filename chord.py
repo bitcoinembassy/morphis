@@ -660,6 +660,8 @@ class ChordEngine():
                     " undesirable.")
                 return False
 
+        return True
+
     @asyncio.coroutine
     def connection_ready(self, peer):
         server_mode = peer.protocol.server_mode
