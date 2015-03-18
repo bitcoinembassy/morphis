@@ -17,6 +17,8 @@ from sshexception import *
 from mutil import hex_dump
 import peer
 
+MAX_PACKET_LENGTH = 35000
+
 log = logging.getLogger(__name__)
 
 server_key = None
@@ -887,7 +889,7 @@ class SshProtocol(asyncio.Protocol):
                 if log.isEnabledFor(logging.DEBUG):
                     log.debug("packet_length=[{}].".format(packet_length))
 
-                if packet_length > 35000:
+                if packet_length > MAX_PACKET_LENGTH:
                     log.warning("Illegal packet_length [{}] received.".format(packet_length))
                     self.close()
                     return
@@ -974,7 +976,7 @@ class SshProtocol(asyncio.Protocol):
                 self.cbuf += out
                 packet_length = struct.unpack(">L", out[:4])[0]
                 log.debug("packet_length=[{}].".format(packet_length))
-                if packet_length > 35000:
+                if packet_length > MAX_PACKET_LENGTH:
                     errmsg = "Illegal packet_length [{}] received.".format(packet_length)
                     log.warning(errmsg)
                     self.close()

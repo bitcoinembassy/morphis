@@ -8,6 +8,7 @@ import queue as tqueue
 import chord
 import db
 import enc
+import mn1
 from mutil import hex_dump, hex_string
 import sshtype
 
@@ -143,6 +144,7 @@ class Shell(cmd.Cmd):
 
             buf += msg.value
 
+            # Echo back their input.
             rmsg = BinaryMessage()
             rmsg.value = msg.value.replace(b'\n', b"\r\n")
             self.peer.protocol.write_channel_data(self.local_cid, rmsg.encode())
@@ -179,6 +181,9 @@ class Shell(cmd.Cmd):
         self.write(val + "\n")
 
     def write(self, val):
+        if len(val) + len(self.out_buffer) > mn1.MAX_PACKET_LENGTH:
+            self.flush()
+
         if isinstance(val, bytearray) or isinstance(val, bytes):
             val = val.replace(b'\n', b"\r\n")
             self.out_buffer += val
