@@ -178,9 +178,16 @@ class Shell(cmd.Cmd):
         buf += newline
 
     def writeln(self, val):
-        self.write(val + "\n")
+        self.write(val)
+        self._write('\n')
 
     def write(self, val):
+        try:
+            self._write(val)
+        except:
+            self._write(str(val))
+
+    def _write(self, val):
         if len(val) + len(self.out_buffer) > mn1.MAX_PACKET_LENGTH:
             self.flush()
 
