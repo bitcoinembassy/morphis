@@ -126,6 +126,7 @@ def __main():
     parser.add_argument("--addpeer", help="Add a node to peer list.", action="append")
     parser.add_argument("--bind", help="Specify bind address (host:port).")
     parser.add_argument("--nodecount", type=int, help="Specify amount of nodes to start.")
+    parser.add_argument("--parallellaunch", type=bool, help="Enable parallel launch of the nodecount nodes.")
     parser.add_argument("--cleartexttransport", type=bool, help="Clear text transport and no authentication.")
     parser.add_argument("--dburl", help="Specify the database url to use.")
     parser.add_argument("-l", dest="logconf", help="Specify alternate logging.ini [IF SPECIFIED, THIS MUST BE THE FIRST PARAMETER!].")
@@ -141,6 +142,7 @@ def __main():
     nodecount = args.nodecount
     if nodecount == None:
         nodecount = 1
+    parallel_launch = args.parallellaunch
     if args.cleartexttransport:
         log.info("Enabling cleartext transport.")
         mn1.enable_cleartext_transport()
@@ -166,7 +168,10 @@ def __main():
                     for peer in addpeer:
                         yield from node.chord_engine.connect_peer(peer)
 
-        asyncio.async(_start_node(node), loop=loop)
+        start_task = asyncio.async(_start_node(node), loop=loop)
+
+        if not parallel_launch:
+            yield from start_task
 
         log.info("Started Instance #{}.".format(instance))
 
