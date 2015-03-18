@@ -221,8 +221,7 @@ class Shell(cmd.Cmd):
         "Execute python code."
         try:
             r = eval(arg)
-            if r:
-                self.writeln(str(r))
+            self.writeln(r)
         except Exception as e:
             log.exception("eval")
             self.writeln("Exception: [{}].".format(e))
