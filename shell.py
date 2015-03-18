@@ -266,6 +266,9 @@ class Shell(cmd.Cmd):
 
             tasks.append(asyncio.async(_run_find_node(peer), loop=self.loop))
 
+        if not tasks:
+            return
+
         yield from asyncio.wait(tasks, loop=self.loop)
 
     @asyncio.coroutine
