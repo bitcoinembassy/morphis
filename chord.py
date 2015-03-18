@@ -707,8 +707,9 @@ class ChordEngine():
         if not queue:
             return
 
-        msg = ChordGetPeers()
+        msg = ChordFindNode()
         msg.sender_port = self._bind_port
+        msg.node_id = self.node_id
 
         peer.protocol.write_channel_data(local_cid, msg.encode())
 
@@ -784,27 +785,7 @@ class ChordEngine():
 
                 peer.protocol.write_channel_data(local_cid, omsg.encode())
 
-            host, port = peer.address.split(':')
-
-            if int(port) != msg.sender_port:
-                log.info(\
-                    "Remote Peer said port [{}] has changed, updating our records [{}].".format(msg.sender_port, port))
-
-                self.peers.pop(peer.address, None)
-                self.peer_buckets[peer.distance - 1].pop(peer.address, None)
-
-                peer.address = "{}:{}".format(host, msg.sender_port)
-
-                self.peers[peer.address] = peer
-                self.peer_buckets[peer.distance - 1][peer.address] = peer
-
-                def dbcall():
-                    with self.node.db.open_session() as sess:
-                        dbp = sess.query(Peer).get(peer.dbid);
-                        dbp.address = peer.address
-                        sess.commit()
-
-                yield from self.loop.run_in_executor(None, dbcall)
+            self._check_update_remote_port(msg, peer)
 
             pl = list(self.peers.values())
             while True:
@@ -823,21 +804,29 @@ class ChordEngine():
         elif msg.packet_type == CHORD_MSG_PEER_LIST:
             log.info("Received CHORD_MSG_PEER_LIST message.")
             msg = ChordPeerList(data)
+            if not msg.peers:
+                log.debug("Ignoring empty PeerList.")
+                return
             yield from self.add_peers(msg.peers)
         elif msg.packet_type == CHORD_MSG_FIND_NODE:
             log.info("Received CHORD_MSG_FIND_NODE message.")
             msg = ChordFindNode(data)
 
+            self._check_update_remote_port(msg, peer)
+
             pt = bittrie.BitTrie()
 
             for cp in self.peers.values():
+                if cp == peer:
+                    continue
+
                 ki = bittrie.XorKey(cp.node_id, msg.node_id)
                 pt[ki] = cp
 
             pt[bittrie.XorKey(self.node_id, msg.node_id)] = True
 
             cnt = int(sqrt(len(self.peers)))
-            log.info("Relaying to upto {} nodes.".format(cnt))
+            log.info("Limiting relay to upto {} nodes.".format(cnt))
             rlist = []
 
             for r in pt.find(ZERO_MEM_512_BIT):
@@ -923,6 +912,30 @@ class ChordEngine():
 #            yield from self.loop.run_in_executor(None, dbcall)
         else:
             log.warning("Ignoring unrecognized packet.")
+
+    def _check_update_remote_port(self, msg, peer):
+        host, port = peer.address.split(':')
+
+        if int(port) != msg.sender_port:
+            log.info(\
+                "Remote Peer said port [{}] has changed, updating our records"\
+                " [{}].".format(msg.sender_port, port))
+
+            self.peers.pop(peer.address, None)
+            self.peer_buckets[peer.distance - 1].pop(peer.address, None)
+
+            peer.address = "{}:{}".format(host, msg.sender_port)
+
+            self.peers[peer.address] = peer
+            self.peer_buckets[peer.distance - 1][peer.address] = peer
+
+            def dbcall():
+                with self.node.db.open_session() as sess:
+                    dbp = sess.query(Peer).get(peer.dbid);
+                    dbp.address = peer.address
+                    sess.commit()
+
+            yield from self.loop.run_in_executor(None, dbcall)
 
 class ChordMessage(object):
     def __init__(self, packet_type = None, buf = None):
@@ -1010,12 +1023,14 @@ class ChordPeerList(ChordMessage):
 
 class ChordFindNode(ChordMessage):
     def __init__(self, buf = None):
+        self.sender_port = 0
         self.node_id = None
 
         super().__init__(CHORD_MSG_FIND_NODE, buf)
 
     def encode(self):
         nbuf = super().encode()
+        nbuf += struct.pack(">L", self.sender_port)
         nbuf += self.node_id
 
         return nbuf
@@ -1023,6 +1038,8 @@ class ChordFindNode(ChordMessage):
     def parse(self):
         super().parse()
         i = 1
+        self.sender_port = struct.unpack(">L", self.buf[i:i+4])
+        i += 4
         self.node_id = self.buf[i:]
 
 def check_address(address):
