@@ -610,10 +610,12 @@ class ChordEngine():
 
     def remove_from_peers(self, peer):
         self.peers.pop(peer.address, None)
-        self.peer_buckets[peer.distance - 1].pop(peer.address, None)
+        if peer.distance:
+            self.peer_buckets[peer.distance - 1].pop(peer.address, None)
 
-        xorkey = bittrie.XorKey(self.node_id, peer.node_id)
-        self.peer_trie.pop(xorkey, None)
+        if peer.node_id:
+            xorkey = bittrie.XorKey(self.node_id, peer.node_id)
+            self.peer_trie.pop(xorkey, None)
 
     def is_peer_connection_desirable(self, peer):
         peercnt = len(self.peers)
