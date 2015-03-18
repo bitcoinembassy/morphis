@@ -20,6 +20,8 @@ log = logging.getLogger(__name__)
 loop = None
 nodes = []
 
+dumptasksonexit = False
+
 class Node():
     def __init__(self, loop, instance_id=None, dburl=None):
         self.loop = loop
@@ -78,7 +80,7 @@ class Node():
             return node_key
 
 def main():
-    global loop, nodes
+    global loop, nodes, dumptasksonexit
 
     loop = asyncio.get_event_loop()
 
@@ -89,7 +91,7 @@ def main():
         loop.run_forever()
     except KeyboardInterrupt:
         log.info("Got KeyboardInterrupt; shutting down.")
-        if True or log.isEnabledFor(logging.DEBUG):
+        if dumptasksonexit or log.isEnabledFor(logging.DEBUG):
             try:
                 for task in asyncio.Task.all_tasks(loop=loop):
                     print("Task [{}]:".format(task))
@@ -116,20 +118,30 @@ def _main():
 
 @asyncio.coroutine
 def __main():
-    global loop, nodes
+    global loop, nodes, dumptasksonexit
 
     print("Launching node.")
     log.info("Launching node.")
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--nn", type=int, help="Node instance number.")
-    parser.add_argument("--addpeer", help="Add a node to peer list.", action="append")
-    parser.add_argument("--bind", help="Specify bind address (host:port).")
-    parser.add_argument("--nodecount", type=int, help="Specify amount of nodes to start.")
-    parser.add_argument("--parallellaunch", type=bool, help="Enable parallel launch of the nodecount nodes.")
-    parser.add_argument("--cleartexttransport", type=bool, help="Clear text transport and no authentication.")
-    parser.add_argument("--dburl", help="Specify the database url to use.")
-    parser.add_argument("-l", dest="logconf", help="Specify alternate logging.ini [IF SPECIFIED, THIS MUST BE THE FIRST PARAMETER!].")
+    parser.add_argument("--addpeer",\
+        help="Add a node to peer list.", action="append")
+    parser.add_argument("--bind",\
+        help="Specify bind address (host:port).")
+    parser.add_argument("--nodecount", type=int,\
+        help="Specify amount of nodes to start.")
+    parser.add_argument("--parallellaunch", type=bool,\
+        help="Enable parallel launch of the nodecount nodes.")
+    parser.add_argument("--cleartexttransport", type=bool,\
+        help="Clear text transport and no authentication.")
+    parser.add_argument("--dburl",\
+        help="Specify the database url to use.")
+    parser.add_argument("--dumptasksonexit", action="store_true",\
+        help="Dump async task list on exit.")
+    parser.add_argument("-l", dest="logconf",\
+        help="Specify alternate logging.ini [IF SPECIFIED, THIS MUST BE THE"\
+            " FIRST PARAMETER!].")
     args = parser.parse_args()
 
     addpeer = args.addpeer
@@ -147,6 +159,7 @@ def __main():
         log.info("Enabling cleartext transport.")
         mn1.enable_cleartext_transport()
     dburl = args.dburl
+    dumptasksonexit = args.dumptasksonexit
 
     nodes = []
 
