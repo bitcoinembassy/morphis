@@ -407,8 +407,7 @@ class ChordEngine():
 
     @asyncio.coroutine
     def _connection_lost(self, peer, exc):
-        if peer.node_id:
-            self.remove_from_peers(peer)
+        self.remove_from_peers(peer)
 
         if not peer.dbid:
             return
@@ -422,12 +421,38 @@ class ChordEngine():
                 dbpeer.connected = False
                 sess.commit()
 
-        yield from self.loop.run_in_executor(None, dbcall)
+        yield from peer.connection_coop_lock.acquire()
+        try:
+            yield from self.loop.run_in_executor(None, dbcall)
+        finally:
+            peer.connection_coop_lock.release()
 
     @asyncio.coroutine
     def peer_authenticated(self, peer):
         log.info("Peer (dbid={}) has authenticated.".format(peer.dbid))
 
+        if peer.protocol.closed:
+            log.info("Peer disconnected.")
+            return False
+
+        add_to_peers = None
+
+        yield from peer.connection_coop_lock.acquire()
+        try:
+            r, add_to_peers = yield from self._peer_authenticated(peer)
+        finally:
+            peer.connection_coop_lock.release()
+
+        if not r or peer.procotol.closed:
+            return False
+
+        if add_to_peers:
+            return self.add_to_peers(peer)
+
+        return True
+
+    @asyncio.coroutine
+    def _peer_authenticated(self, peer):
         add_to_peers = True
 
         if peer.dbid:
@@ -493,7 +518,7 @@ class ChordEngine():
 
             r, r2 = yield from self.loop.run_in_executor(None, dbcall)
             if not r:
-                return False
+                return False, False
 
             if not r2:
                 add_to_peers = False
@@ -554,7 +579,7 @@ class ChordEngine():
 
             r, dbpeer = yield from self.loop.run_in_executor(None, dbcall)
             if not r:
-                return False
+                return False, False
 
             peer.dbid = dbpeer.id
 
@@ -567,12 +592,9 @@ class ChordEngine():
             if not r:
                 log.info("Peer [dbid={}] connection unwanted, disconnecting."\
                     .format(peer.dbid))
-                return False
+                return False, False
 
-        if add_to_peers:
-            return self.add_to_peers(peer)
-
-        return True
+        return True, add_to_peers
 
     def add_to_peers(self, peer):
         existing = self.peers.setdefault(peer.address, peer)
@@ -591,7 +613,7 @@ class ChordEngine():
         self.peer_buckets[peer.distance - 1].pop(peer.address, None)
 
         xorkey = bittrie.XorKey(self.node_id, peer.node_id)
-        del self.peer_trie[xorkey]
+        self.peer_trie.pop(xorkey, None)
 
     def is_peer_connection_desirable(self, peer):
         peercnt = len(self.peers)

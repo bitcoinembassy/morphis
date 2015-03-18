@@ -29,6 +29,8 @@ class Peer():
         self.channel_handler = ChannelHandler(self)
         self.connection_handler = ConnectionHandler(self)
 
+        self.connection_coop_lock = asyncio.Lock()
+
         if dbpeer:
             self.dbid = dbpeer.id
             if dbpeer.pubkey:
