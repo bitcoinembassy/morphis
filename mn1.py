@@ -535,7 +535,10 @@ class SshProtocol(asyncio.Protocol):
         yield from self.connection_handler.connection_ready()
 
         while True:
-            packet = yield from self.read_packet()
+            packet = yield from self.read_packet(False)
+            if not packet:
+                return
+
             m = mnetpacket.SshPacket(None, packet)
 
             t = m.getPacketType()
@@ -686,6 +689,8 @@ class SshProtocol(asyncio.Protocol):
     def connection_lost(self, exc):
         log.info("X: Connection lost to [{}].".format(self.address))
 
+        self.closed = True
+
         @asyncio.coroutine
         def _close_queues():
             for queue in self.channel_queues.values():
@@ -743,9 +748,9 @@ class SshProtocol(asyncio.Protocol):
             self.waiter = None
 
     @asyncio.coroutine
-    def read_packet(self):
-        if self.closed:
-            errstr = "ProtocolHandler closed, cannot read_packet(..)!"
+    def read_packet(self, require_connected=True):
+        if require_connected and self.closed:
+            errstr = "ProtocolHandler closed, refusing read_packet(..)!"
             log.debug(errstr)
             raise SshException(errstr)
 
@@ -760,6 +765,9 @@ class SshProtocol(asyncio.Protocol):
                 self.process_buffer()
 
             return packet
+
+        if self.closed:
+            return None
 
         log.info("P: Waiting for packet.")
         yield from self.do_wait()
