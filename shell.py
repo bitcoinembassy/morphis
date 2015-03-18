@@ -302,7 +302,8 @@ class Shell(cmd.Cmd):
 
     @asyncio.coroutine
     def do_conn(self, arg):
-        self.peer.engine.connect_peer(arg)
+        r = yield from self.peer.engine.connect_peer(arg)
+        self.writeln(r)
 
     @asyncio.coroutine
     def do_st(self, arg):
