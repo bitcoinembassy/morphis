@@ -74,7 +74,7 @@ def connectTaskInsecure(protocol, server_mode):
     if not r:
         # Peer is rejected for some reason by higher level.
         protocol.close()
-        return
+        return False
 
     return True
 
@@ -113,7 +113,7 @@ def connectTaskSecure(protocol, server_mode):
 
     if packet_type != 20:
         log.warning("Peer sent unexpected packet_type[{}], disconnecting.".format(packet_type))
-        protocol.transport.close()
+        protocol.close()
         return False
 
     protocol.setRemoteKexInitMessage(packet)
@@ -132,7 +132,7 @@ def connectTaskSecure(protocol, server_mode):
     if not r:
         # Client is rejected for some reason by higher level.
         protocol.close()
-        return
+        return False
 
     # Setup encryption now that keys are exchanged.
     protocol.init_outbound_encryption()
@@ -232,7 +232,7 @@ def connectTaskSecure(protocol, server_mode):
         if not r:
             # Client is rejected for some reason by higher level.
             protocol.close()
-            return
+            return False
 
         mr = mnetpacket.SshUserauthSuccessMessage()
         mr.encode()
@@ -281,7 +281,7 @@ def connectTaskSecure(protocol, server_mode):
     log.info("Connect task done (server={}).".format(server_mode))
 
 #    if not server_mode:
-#        protocol.transport.close()
+#        protocol.close()
 
     return True
 
@@ -876,7 +876,7 @@ class SshProtocol(asyncio.Protocol):
 
                 if packet_length > 35000:
                     log.warning("Illegal packet_length [{}] received.".format(packet_length))
-                    self.transport.close()
+                    self.close()
                     return
 
                 self.bpLength = packet_length + 4 # Add size of packet_length as we leave it in buf.
@@ -964,7 +964,7 @@ class SshProtocol(asyncio.Protocol):
                 if packet_length > 35000:
                     errmsg = "Illegal packet_length [{}] received.".format(packet_length)
                     log.warning(errmsg)
-                    self.transport.close()
+                    self.close()
                     raise SshException(errmsg)
                 self.bpLength = packet_length + 4 # Add size of packet_length as we leave it in buf.
                 if self.bpLength == blksize:
