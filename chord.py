@@ -53,7 +53,7 @@ class ChordEngine():
         self.peer_trie = bittrie.BitTrie() # {node_id, Peer}
 
         self.minimum_connections = 10
-        self.maximum_connections = 64
+        self.maximum_connections = 72
         self.hard_maximum_connections = self.maximum_connections * 2
 
         self._bind_address = None
