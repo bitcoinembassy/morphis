@@ -283,12 +283,34 @@ class Shell(cmd.Cmd):
 
     @asyncio.coroutine
     def do_st(self, arg):
+        cnt = 0
+        try:
+            for task in asyncio.Task.all_tasks(loop=self.loop):
+                task_str = str(task)
+                if "_process_ssh_protocol" in task_str\
+                        or "_process_chord_packet" in task_str\
+                        or "cmdloop" in task_str:
+                    continue
+                self.writeln("Task [{}]:".format(task))
+                task.print_stack(file=self)
+                cnt += 1
+        except:
+            log.exception("Task")
+
+        self.writeln("Count: {}.".format(cnt))
+
+    @asyncio.coroutine
+    def do_sta(self, arg):
+        cnt = 0
         try:
             for task in asyncio.Task.all_tasks(loop=self.loop):
                 self.writeln("Task [{}]:".format(task))
                 task.print_stack(file=self)
+                cnt += 1
         except:
             log.exception("Task")
+
+        self.writeln("Count: {}.".format(cnt))
 
     def emptyline(self):
         pass
