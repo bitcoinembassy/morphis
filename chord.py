@@ -446,6 +446,14 @@ class ChordEngine():
         if not r or peer.protocol.closed:
             return False
 
+        r = self.forced_connects.pop(peer.dbid, None)
+        if not r:
+            r = self.is_peer_connection_desirable(peer)
+            if not r:
+                log.info("Peer [dbid={}] connection unwanted, disconnecting."\
+                    .format(peer.dbid))
+                return False, False
+
         if add_to_peers:
             return self.add_to_peers(peer)
 
@@ -585,14 +593,6 @@ class ChordEngine():
 
             if peer.address != dbpeer.address:
                 peer.address = dbpeer.address
-
-        r = self.forced_connects.pop(peer.dbid, None)
-        if not r:
-            r = self.is_peer_connection_desirable(peer)
-            if not r:
-                log.info("Peer [dbid={}] connection unwanted, disconnecting."\
-                    .format(peer.dbid))
-                return False, False
 
         return True, add_to_peers
 
