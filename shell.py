@@ -233,7 +233,29 @@ class Shell(cmd.Cmd):
         #msg.node_id = int(arg).to_bytes(512>>3, "big")
         msg.node_id = int(arg, 16).to_bytes(512>>3, "big")
 
-        tasks = []
+        @asyncio.coroutine
+        def _run_find_node(peer):
+            cid, queue = yield from peer.protocol.open_channel("mpeer", True)
+            if not queue:
+                return
+
+            peer.protocol.write_channel_data(cid, msg.encode())
+
+            while True:
+                pkt = yield from queue.get()
+                if not pkt:
+                    self.writeln("nid=[{}] EOF.".format(peer.dbid))
+                    return
+
+                pmsg = chord.ChordPeerList(pkt)
+
+                for r in pmsg.peers:
+                    r.node_id = enc.generate_ID(r.pubkey)
+
+                    self.writeln("nid[{}] FOUND: {:22} diff=[{}]".format(peer.dbid, r.address, hex_string([x ^ y for x, y in zip(r.node_id, msg.node_id)])))
+                    self.flush()
+
+        tasks = {} # {Task, Peer}
 
         for peer in self.peer.engine.peers.values():
             if not peer.protocol.remote_banner.startswith("SSH-2.0-mNet_"):
@@ -242,34 +264,18 @@ class Shell(cmd.Cmd):
 
             log.info("Sending FindNode to peer [{}].".format(peer.address))
 
-            @asyncio.coroutine
-            def _run_find_node(peer):
-                cid, queue = yield from peer.protocol.open_channel("mpeer", True)
-                if not queue:
-                    return
-
-                peer.protocol.write_channel_data(cid, msg.encode())
-
-                while True:
-                    pkt = yield from queue.get()
-                    if not pkt:
-                        self.writeln("nid=[{}] EOF.".format(peer.dbid))
-                        return
-
-                    pmsg = chord.ChordPeerList(pkt)
-
-                    for r in pmsg.peers:
-                        r.node_id = enc.generate_ID(r.pubkey)
-
-                        self.writeln("nid[{}] FOUND: {:22} diff=[{}]".format(peer.dbid, r.address, hex_string([x ^ y for x, y in zip(r.node_id, msg.node_id)])))
-                        self.flush()
-
-            tasks.append(asyncio.async(_run_find_node(peer), loop=self.loop))
+            task = asyncio.async(_run_find_node(peer), loop=self.loop)
+            tasks[task] = peer
 
         if not tasks:
             return
 
-        yield from asyncio.wait(tasks, loop=self.loop)
+        done, pending = yield from asyncio.wait(\
+            tasks.keys(), loop=self.loop, timeout=2)
+
+        for pend in pending:
+            self.writeln("note: Peer (id={}) didn't finish by timeout."\
+                .format(tasks[pend].dbid))
 
     @asyncio.coroutine
     def do_conn(self, arg):
