@@ -642,10 +642,10 @@ class ChordEngine():
             if not closer_node:
                 none_started = True
                 continue
-            elif not none_started:
-                # Outgoing connections are expected to be in the peer_trie.
-                log.info("Peer already connected, undesirable.")
-                return False
+#            elif not none_started and peer.protocol.server_mode:
+#                # Outgoing connections are expected to be in the peer_trie.
+#                log.info("Peer already connected, undesirable.")
+#                return False
 
             if closer_node.distance != peer.distance:
                 # No more closer ones.
