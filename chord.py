@@ -75,10 +75,13 @@ class ChordEngine():
     @asyncio.coroutine
     def connect_peer(self, addr):
         "Returns Peer connected to, or dbpeer of already connected Peer."
-        dbpeer = yield from self.add_peer(addr)
+        dbpeer = yield from self.add_peer(addr, False)
 
         if not dbpeer:
-            log.debug("Already connected, fetching real row.")
+            # add_peer returns None if the item was already in our db.
+            if log.isEnabledFor(logging.INFO):
+                log.info("Found [{}] in our database; fetching."\
+                    .format(addr))
 
             def dbcall():
                 with self.node.db.open_session() as sess:
@@ -91,9 +94,12 @@ class ChordEngine():
                     return dbpeer
 
             dbpeer = yield from self.loop.run_in_executor(None, dbcall)
-            # add_peer returns None if the item was already in the list.
-            assert dbpeer.connected
-            return dbpeer
+
+            if dbpeer.connected:
+                log.info("Not connecting to allready connected Peer ("\
+                "id={}, addr=[{}])."
+                    .format(dbpeer.id, dbpeer.address))
+                return dbpeer
 
         assert not dbpeer.connected
 
@@ -104,20 +110,22 @@ class ChordEngine():
         return r
 
     @asyncio.coroutine
-    def add_peer(self, addr):
+    def add_peer(self, addr, check_connections=True):
         log.info("Adding peer (addr=[{}]).".format(addr))
 
         peer = Peer()
         peer.address = addr
 
-        r = yield from self.add_peers([peer])
+        added = yield from self.add_peers([peer], check_connections)
 
-        if r:
-            return r[0]
+        if added:
+            return added[0]
 
     @asyncio.coroutine
-    def add_peers(self, peers):
-        log.info("Adding {} peers.".format(len(peers)))
+    def add_peers(self, peers, check_connections=True):
+        assert type(peers[0]) is Peer
+
+        log.info("Adding upto {} peers.".format(len(peers)))
 
         def dbcall():
             with self.node.db.open_session() as sess:
@@ -143,8 +151,8 @@ class ChordEngine():
                         q = q.filter(Peer.address == peer.address)
 
                     if q.scalar() > 0:
-                        if log.isEnabledFor(logging.DEBUG):
-                            log.debug("Peer [{}] already in list.".format(peer.address))
+                        if log.isEnabledFor(logging.INFO):
+                            log.info("Peer [{}] already in list.".format(peer.address))
                         continue
 
                     peer.connected = False
@@ -155,6 +163,7 @@ class ChordEngine():
                     batched += 1
                     if batched == 10:
                         sess.commit()
+                        sess.expunge_all()
                         tlocked = False
                         batched = 0
 
@@ -166,7 +175,7 @@ class ChordEngine():
 
         added = yield from self.loop.run_in_executor(None, dbcall)
 
-        if added and self.running:
+        if check_connections and added and self.running:
             yield from self._process_connection_count()
 
         return added
