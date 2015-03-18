@@ -157,6 +157,8 @@ class ChordEngine():
 
                     peer.connected = False
 
+                    if log.isEnabledFor(logging.INFO):
+                        log.info("Adding Peer [{}].".format(peer.address))
                     sess.add(peer)
                     added.append(peer)
 
@@ -169,6 +171,8 @@ class ChordEngine():
 
                 if added and tlocked:
                     sess.commit()
+                    for dbpeer in added:
+                        fetch_id_in_thread = dbpeer.id
                     sess.expunge_all()
 
                 return added
