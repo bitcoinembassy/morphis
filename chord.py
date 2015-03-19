@@ -825,7 +825,7 @@ class ChordEngine():
 
             pt[bittrie.XorKey(self.node_id, msg.node_id)] = True
 
-            cnt = int(sqrt(len(self.peers)))
+            cnt = 3
             log.info("Limiting relay to upto {} nodes.".format(cnt))
             rlist = []
 
