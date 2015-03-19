@@ -354,6 +354,9 @@ class SshProtocol(asyncio.Protocol):
     def open_channel(self, channel_type, block=False):
         "Returns the channel queue for the new channel."
 
+        if self.closed:
+            return None, None
+
         local_cid = self._open_channel(channel_type)
 
         queue = self._create_channel_queue()
@@ -384,6 +387,7 @@ class SshProtocol(asyncio.Protocol):
 
         return local_cid
 
+    @asyncio.coroutine
     def close_channel(self, local_cid):
         log.info("Closing channel {}.".format(local_cid))
 
@@ -398,7 +402,7 @@ class SshProtocol(asyncio.Protocol):
         self.write_packet(msg)
 
         self._channel_map[local_cid] = -2
-        self.channel_queues.pop(local_cid).put(None)
+        yield from self.channel_queues.pop(local_cid).put(None)
 
     def _create_channel_queue(self):
         return asyncio.Queue(5)
@@ -702,14 +706,14 @@ class SshProtocol(asyncio.Protocol):
 
         self._channel_map.clear()
 
-        @asyncio.coroutine
-        def _close_queues():
-            for queue in self.channel_queues.values():
-                yield from queue.put(None)
-
-        asyncio.async(_close_queues(), loop=self.loop)
+        asyncio.async(self._close_queues(), loop=self.loop)
 
         self.connection_handler.connection_lost(self, exc)
+
+    @asyncio.coroutine
+    def _close_queues(self):
+        for queue in self.channel_queues.values():
+            yield from queue.put(None)
 
     def _data_received(self, data):
         if log.isEnabledFor(logging.DEBUG):

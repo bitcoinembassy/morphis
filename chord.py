@@ -850,7 +850,7 @@ class ChordEngine():
                 rmsg.peers = []
 
                 peer.protocol.write_channel_data(local_cid, rmsg.encode())
-                peer.protocol.close_channel(local_cid)
+                yield from peer.protocol.close_channel(local_cid)
 
                 return
 
@@ -889,7 +889,7 @@ class ChordEngine():
 
             yield from asyncio.wait(tasks, loop=self.loop)
 
-            peer.protocol.close_channel(local_cid)
+            yield from peer.protocol.close_channel(local_cid)
 
 # Example of non-working db code. Sqlite seems to break when order by contains
 # any bitwise operations. (It just returns the rows in order of id.)
