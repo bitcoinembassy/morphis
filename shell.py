@@ -232,8 +232,7 @@ class Shell(cmd.Cmd):
     def do_shell(self, arg):
         "Execute python code."
         try:
-            r = exec(arg, globals(), self.shell_locals)
-            self.writeln(r)
+            exec(arg, globals(), self.shell_locals)
         except Exception as e:
             log.exception("eval")
             self.writeln("Exception: [{}].".format(e))
