@@ -347,7 +347,8 @@ class SshProtocol(asyncio.Protocol):
         return self.sessionId
 
     def close(self):
-        self.transport.close()
+        if self.transport:
+            self.transport.close()
         self.closed = True
 
     @asyncio.coroutine
@@ -391,6 +392,9 @@ class SshProtocol(asyncio.Protocol):
     def close_channel(self, local_cid):
         log.info("Closing channel {}.".format(local_cid))
 
+        if self.closed:
+            return False
+
         remote_cid = self._channel_map.get(local_cid)
         if remote_cid == None or remote_cid == -2:
             return False
@@ -405,7 +409,7 @@ class SshProtocol(asyncio.Protocol):
         yield from self.channel_queues.pop(local_cid).put(None)
 
     def _create_channel_queue(self):
-        return asyncio.Queue(5)
+        return asyncio.Queue()
 
     def _allocate_channel_id(self):
         nid = self._next_channel_id

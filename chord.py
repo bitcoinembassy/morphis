@@ -390,12 +390,15 @@ class ChordEngine():
 
             yield from self.loop.run_in_executor(None, dbcall, dbpeer)
 
+            if peer.protocol:
+                peer.protocol.close()
+
             return None
 
         if dbpeer.node_id:
             if not self.add_to_peers(peer):
                 log.info("Already connected to Peer (id={}).".format(peer.dbid))
-                peer.protocol.transport.close()
+                peer.protocol.close()
                 return None
 
         return peer

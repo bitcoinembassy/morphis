@@ -214,7 +214,7 @@ class Shell(cmd.Cmd):
 
     def do_quit(self, arg):
         "Close this shell connection."
-        self.peer.protocol.transport.close()
+        self.peer.protocol.close()
         return True
 
     def do_shell(self, arg):
