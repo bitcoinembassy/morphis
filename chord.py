@@ -882,7 +882,7 @@ class ChordEngine():
 
                         # Test that it is valid.
                         try:
-                            chord.ChordPeerList(pkt)
+                            ChordPeerList(pkt)
                         except:
                             break
 
