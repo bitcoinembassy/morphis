@@ -45,6 +45,11 @@ class Node():
 
         self.chord_engine = chord.ChordEngine(self)
 
+    @property
+    def all_nodes(self):
+        global nodes
+        return nodes
+
     @asyncio.coroutine
     def create_schema(self):
         yield from self.db.create_all()
