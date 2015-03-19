@@ -396,7 +396,10 @@ class SshProtocol(asyncio.Protocol):
             return False
 
         remote_cid = self._channel_map.get(local_cid)
-        if remote_cid == None or remote_cid == -2:
+        if remote_cid == -1 or remote_cid == -2:
+            if log.isEnabledFor(logging.INFO):
+                log.info("close_channel(..) called on channel in state [{}]."\
+                    .format(remote_cid))
             return False
 
         msg = mnetpacket.SshChannelCloseMessage()
@@ -624,7 +627,6 @@ class SshProtocol(asyncio.Protocol):
                 queue = self.channel_queues[msg.recipient_channel]
                 yield from queue.put(False)
                 yield from self._close_channel(msg.recipient_channel)
-
                 yield from self.channel_handler.channel_open_failed(self, msg)
 
             elif t == mnetpacket.SSH_MSG_CHANNEL_DATA:
@@ -684,7 +686,14 @@ class SshProtocol(asyncio.Protocol):
 
     @asyncio.coroutine
     def _close_channel(self, local_cid):
-        del self._channel_map[local_cid]
+        remote_cid = self._channel_map.pop(local_cid)
+
+        if remote_cid != -1 and remote_cid != -2:
+            assert remote_cid >= 0, "remote_cid=[{}].".format(remote_cid)
+            msg = mnetpacket.SshChannelCloseMessage()
+            msg.recipient_channel = remote_cid
+            msg.encode()
+            self.write_packet(msg)
 
         queue = self.channel_queues.pop(local_cid, None)
         if queue:
