@@ -59,7 +59,7 @@ class KexGroup14():
             pkt = yield from self.protocol.read_packet()
             m = mnetpacket.SshKexdhInitMessage(pkt)
             if log.isEnabledFor(logging.DEBUG):
-                log.debug("Client sent e=[{}].".format(m.getE()))
+                log.debug("Client sent e=[{}].".format(m.e))
             self._parse_kexdh_init(m)
 
 #            pkt = yield from self.protocol.read_packet()
@@ -74,7 +74,7 @@ class KexGroup14():
         # compute e = g^x mod p (where g=2), and send it
         self.e = pow(self.G, self.x, self.P)
         m = mnetpacket.SshKexdhInitMessage()
-        m.setE(self.e)
+        m.e = self.e
         m.encode()
         self.protocol.write_packet(m)
 
@@ -117,20 +117,20 @@ class KexGroup14():
     @asyncio.coroutine
     def _parse_kexdh_reply(self, m):
         # client mode
-        host_key = m.getHostKey()
-        self.f = m.getF()
+        host_key = m.host_key
+        self.f = m.f
         if (self.f < 1) or (self.f > self.P - 1):
             raise SshException('Server kex "f" is out of range')
-        sig = m.getSignature()
+        sig = m.signature
         K = pow(self.f, self.x, self.P)
         if log.isEnabledFor(logging.DEBUG):
             log.debug("K=[{}].".format(K))
         # okay, build up the hash H of (V_C || V_S || I_C || I_S || K_S || e || f || K)
         hm = bytearray()
-        hm += sshtype.encodeString(self.protocol.getLocalBanner())
+        hm += sshtype.encodeString(self.protocol.local_banner)
         hm += sshtype.encodeString(self.protocol.remote_banner)
-        hm += sshtype.encodeBinary(self.protocol.getLocalKexInitMessage())
-        hm += sshtype.encodeBinary(self.protocol.getRemoteKexInitMessage())
+        hm += sshtype.encodeBinary(self.protocol.local_kex_init_message)
+        hm += sshtype.encodeBinary(self.protocol.remote_kex_init_message)
         hm += sshtype.encodeBinary(host_key)
         hm += sshtype.encodeMpint(self.e)
         hm += sshtype.encodeMpint(self.f)
@@ -147,7 +147,7 @@ class KexGroup14():
 
     def _parse_kexdh_init(self, m):
         # server mode
-        self.e = m.getE()
+        self.e = m.e
         if (self.e < 1) or (self.e > self.P - 1):
             raise SshException('Client kex "e" is out of range')
         K = pow(self.e, self.x, self.P)
@@ -157,9 +157,9 @@ class KexGroup14():
         # okay, build up the hash H of (V_C || V_S || I_C || I_S || K_S || e || f || K)
         hm = bytearray()
         hm += sshtype.encodeString(self.protocol.remote_banner)
-        hm += sshtype.encodeString(self.protocol.getLocalBanner())
-        hm += sshtype.encodeBinary(self.protocol.getRemoteKexInitMessage())
-        hm += sshtype.encodeBinary(self.protocol.getLocalKexInitMessage())
+        hm += sshtype.encodeString(self.protocol.local_banner)
+        hm += sshtype.encodeBinary(self.protocol.remote_kex_init_message)
+        hm += sshtype.encodeBinary(self.protocol.local_kex_init_message)
         hm += sshtype.encodeBinary(key)
         hm += sshtype.encodeMpint(self.e)
         hm += sshtype.encodeMpint(self.f)
@@ -173,9 +173,9 @@ class KexGroup14():
         sig = self.protocol.server_key.sign_ssh_data(H)
         # send reply
         m = mnetpacket.SshKexdhReplyMessage()
-        m.setHostKey(key)
-        m.setF(self.f)
-        m.setSignature(sig)
+        m.host_key = key
+        m.f = self.f
+        m.signature = sig
         m.encode()
 
         self.protocol.write_packet(m)

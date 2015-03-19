@@ -36,7 +36,7 @@ def connectTaskCommon(protocol, server_mode):
     assert isinstance(server_mode, bool)
 
     log.info("X: Sending banner.")
-    protocol.transport.write((protocol.getLocalBanner() + "\r\n").encode(encoding="UTF-8"))
+    protocol.transport.write((protocol.local_banner + "\r\n").encode(encoding="UTF-8"))
 
     # Read banner.
     packet = yield from protocol.read_packet()
@@ -49,11 +49,11 @@ def connectTaskCommon(protocol, server_mode):
 def connectTaskInsecure(protocol, server_mode):
     m = mnetpacket.SshKexdhReplyMessage()
     if server_mode:
-        m.setHostKey(protocol.server_key.asbytes())
+        m.host_key = protocol.server_key.asbytes()
     else:
-        m.setHostKey(protocol.client_key.asbytes())
-    m.setF(42)
-    m.setSignature(b"test")
+        m.host_key = protocol.client_key.asbytes()
+    m.f = 42
+    m.signature = b"test"
     m.encode()
 
     protocol.write_packet(m)
@@ -63,14 +63,14 @@ def connectTaskInsecure(protocol, server_mode):
 
     if server_mode:
         if protocol.client_key:
-            if protocol.client_key.asbytes() != m.getHostKey():
+            if protocol.client_key.asbytes() != m.host_key:
                 raise SshException("Key provided by client differs from that which we were expecting.")
-        protocol.client_key = rsakey.RsaKey(m.getHostKey())
+        protocol.client_key = rsakey.RsaKey(m.host_key)
     else:
         if protocol.server_key:
-            if protocol.server_key.asbytes() != m.getHostKey():
+            if protocol.server_key.asbytes() != m.host_key:
                 raise SshException("Key provided by server differs from that which we were expecting.")
-        protocol.server_key = rsakey.RsaKey(m.getHostKey())
+        protocol.server_key = rsakey.RsaKey(m.host_key)
 
     r = yield from protocol.connection_handler.peer_authenticated(protocol)
     if not r:
@@ -85,22 +85,21 @@ def connectTaskInsecure(protocol, server_mode):
 def connectTaskSecure(protocol, server_mode):
     # Send KexInit packet.
     opobj = mnetpacket.SshKexInitMessage()
-    opobj.setCookie(os.urandom(16))
-#    opobj.setServerHostKeyAlgorithms("ssh-dss")
-    opobj.setServerHostKeyAlgorithms("ssh-rsa")
-#    opobj.setKeyExchangeAlgorithms("diffie-hellman-group-exchange-sha256")
-    opobj.setKeyExchangeAlgorithms("diffie-hellman-group14-sha1")
-    opobj.setEncryptionAlgorithmsClientToServer("aes256-cbc")
-    opobj.setEncryptionAlgorithmsServerToClient("aes256-cbc")
-#    opobj.setMacAlgorithmsClientToServer("hmac-sha2-512")
-#    opobj.setMacAlgorithmsServerToClient("hmac-sha2-512")
-    opobj.setMacAlgorithmsClientToServer("hmac-sha1")
-    opobj.setMacAlgorithmsServerToClient("hmac-sha1")
-    opobj.setCompressionAlgorithmsClientToServer("none")
-    opobj.setCompressionAlgorithmsServerToClient("none")
+    opobj.cookie = os.urandom(16)
+#    opobj.kex_algorithms = "diffie-hellman-group-exchange-sha256"
+    opobj.kex_algorithms = "diffie-hellman-group14-sha1"
+    opobj.server_host_key_algorithms = "ssh-rsa"
+    opobj.encryption_algorithms_client_to_server = "aes256-cbc"
+    opobj.encryption_algorithms_server_to_client = "aes256-cbc"
+#    opobj.mac_algorithms_client_to_server = "hmac-sha2-512"
+#    opobj.mac_algorithms_server_to_client = "hmac-sha2-512"
+    opobj.mac_algorithms_client_to_server = "hmac-sha1"
+    opobj.mac_algorithms_server_to_client = "hmac-sha1"
+    opobj.compression_algorithms_client_to_server = "none"
+    opobj.compression_algorithms_server_to_client = "none"
     opobj.encode()
 
-    protocol.setLocalKexInitMessage(opobj.buf)
+    protocol.local_kex_init_message = opobj.buf
 
     protocol.write_packet(opobj)
 
@@ -110,7 +109,7 @@ def connectTaskSecure(protocol, server_mode):
         log.debug("X: Received packet [{}].".format(hex_dump(packet)))
 
     pobj = mnetpacket.SshPacket(None, packet)
-    packet_type = pobj.getPacketType()
+    packet_type = pobj.packet_type
     log.info("packet_type=[{}].".format(packet_type))
 
     if packet_type != 20:
@@ -118,12 +117,12 @@ def connectTaskSecure(protocol, server_mode):
         protocol.close()
         return False
 
-    protocol.setRemoteKexInitMessage(packet)
+    protocol.remote_kex_init_message = packet
 
     pobj = mnetpacket.SshKexInitMessage(packet)
     if log.isEnabledFor(logging.DEBUG):
-        log.debug("cookie=[{}].".format(pobj.getCookie()))
-    log.info("keyExchangeAlgorithms=[{}].".format(pobj.getKeyExchangeAlgorithms()))
+        log.debug("cookie=[{}].".format(pobj.cookie))
+    log.info("keyExchangeAlgorithms=[{}].".format(pobj.kex_algorithms))
 
     protocol.waitingForNewKeys = True
 
@@ -155,69 +154,69 @@ def connectTaskSecure(protocol, server_mode):
     if protocol.server_mode:
         packet = yield from protocol.read_packet()
 #        m = mnetpacket.SshPacket(None, packet)
-#        log.info("X: Received packet (type={}) [{}].".format(m.getPacketType(), packet))
+#        log.info("X: Received packet (type={}) [{}].".format(m.packet_type, packet))
         m = mnetpacket.SshServiceRequestMessage(packet)
-        log.info("Service requested [{}].".format(m.get_service_name()))
+        log.info("Service requested [{}].".format(m.service_name))
 
-        if m.get_service_name() != "ssh-userauth":
-            raise SshException("Remote end requested unexpected service (name=[{}]).".format(m.get_service_name()))
+        if m.service_name != "ssh-userauth":
+            raise SshException("Remote end requested unexpected service (name=[{}]).".format(m.service_name))
 
         mr = mnetpacket.SshServiceAcceptMessage()
-        mr.set_service_name("ssh-userauth")
+        mr.service_name = "ssh-userauth"
         mr.encode()
 
         protocol.write_packet(mr)
 
         packet = yield from protocol.read_packet()
         m = mnetpacket.SshUserauthRequestMessage(packet)
-        log.info("Userauth requested with method=[{}].".format(m.get_method_name()))
+        log.info("Userauth requested with method=[{}].".format(m.method_name))
 
-        if m.get_method_name() == "none":
+        if m.method_name == "none":
             mr = mnetpacket.SshUserauthFailureMessage()
-            mr.set_auths("publickey")
-            mr.set_partial_success(False)
+            mr.auths = "publickey"
+            mr.partial_success = False
             mr.encode()
 
             protocol.write_packet(mr)
 
             packet = yield from protocol.read_packet()
             m = mnetpacket.SshUserauthRequestMessage(packet)
-            log.info("Userauth requested with method=[{}].".format(m.get_method_name()))
+            log.info("Userauth requested with method=[{}].".format(m.method_name))
 
-        if m.get_method_name() != "publickey":
-            raise SshException("Unhandled client auth method [{}].".format(m.get_method_name()))
-        if m.get_algorithm_name() != "ssh-rsa":
-            raise SshException("Unhandled client auth algorithm [{}].".format(m.get_algorithm_name()))
+        if m.method_name != "publickey":
+            raise SshException("Unhandled client auth method [{}].".format(m.method_name))
+        if m.algorithm_name != "ssh-rsa":
+            raise SshException("Unhandled client auth algorithm [{}].".format(m.algorithm_name))
 
-        log.debug("m.signature_present()={}.".format(m.get_signature_present()))
+        log.debug("m.signature_present()={}.".format(m.signature_present))
 
-        if not m.get_signature_present():
+        if not m.signature_present:
             mr = mnetpacket.SshUserauthPkOkMessage()
-            mr.set_algorithm_name(m.get_algorithm_name())
-            mr.set_public_key(m.get_public_key())
+            mr.algorithm_name = m.algorithm_name
+            mr.public_key = m.public_key
             mr.encode()
 
             protocol.write_packet(mr)
 
             packet = yield from protocol.read_packet()
             m = mnetpacket.SshUserauthRequestMessage(packet)
-            log.info("Userauth requested with method=[{}].".format(m.get_method_name()))
+            log.info("Userauth requested with method=[{}].".format(m.method_name))
 
-            if m.get_method_name() != "publickey":
-                raise SshException("Unhandled client auth method [{}].".format(m.get_method_name()))
-            if m.get_algorithm_name() != "ssh-rsa":
-                raise SshException("Unhandled client auth algorithm [{}].".format(m.get_algorithm_name()))
+            if m.method_name != "publickey":
+                raise SshException("Unhandled client auth method [{}].".format(m.method_name))
+            if m.algorithm_name != "ssh-rsa":
+                raise SshException("Unhandled client auth algorithm [{}].".format(m.algorithm_name))
 
         if log.isEnabledFor(logging.DEBUG):
-            log.debug("signature=[{}].".format(hex_dump(m.get_signature())))
+            log.debug("signature=[{}].".format(hex_dump(m.signature)))
 
-        signature = m.get_signature()
+        signature = m.signature
 
         buf = bytearray()
-        buf += sshtype.encodeBinary(protocol.get_session_id())
-        buf += packet[:-m.get_signature_length()]
+        buf += sshtype.encodeBinary(protocol.session_id)
+        buf += packet[:-m.signature_length]
 
-        client_key = rsakey.RsaKey(m.get_public_key())
+        client_key = rsakey.RsaKey(m.public_key)
         r = client_key.verify_ssh_sig(buf, signature)
 
         log.info("Userauth signature check result: [{}].".format(r))
@@ -225,7 +224,7 @@ def connectTaskSecure(protocol, server_mode):
             raise SshException("Signature and key provided by client did not match.")
 
         if protocol.client_key:
-            if protocol.client_key.asbytes() != m.get_public_key():
+            if protocol.client_key.asbytes() != m.public_key:
                 raise SshException("Key provided by client differs from that which we were expecting.")
 
         protocol.client_key = client_key
@@ -243,34 +242,34 @@ def connectTaskSecure(protocol, server_mode):
     else:
         # client mode.
         m = mnetpacket.SshServiceRequestMessage()
-        m.set_service_name("ssh-userauth")
+        m.service_name = "ssh-userauth"
         m.encode()
 
         protocol.write_packet(m)
 
         packet = yield from protocol.read_packet()
         m = mnetpacket.SshServiceAcceptMessage(packet)
-        log.info("Service request accepted [{}].".format(m.get_service_name()))
+        log.info("Service request accepted [{}].".format(m.service_name))
 
         mr = mnetpacket.SshUserauthRequestMessage()
-        mr.set_user_name("dev")
-        mr.set_service_name("ssh-connection")
-        mr.set_method_name("publickey")
-        mr.set_signature_present(True)
-        mr.set_algorithm_name("ssh-rsa")
+        mr.user_name = "dev"
+        mr.service_name = "ssh-connection"
+        mr.method_name = "publickey"
+        mr.signature_present = True
+        mr.algorithm_name = "ssh-rsa"
 
         ckey = protocol.client_key
-        mr.set_public_key(ckey.asbytes())
+        mr.public_key = ckey.asbytes()
 
         mr.encode()
 
         mrb = bytearray()
-        mrb += sshtype.encodeBinary(protocol.get_session_id())
-        mrb += mr.get_buf()
+        mrb += sshtype.encodeBinary(protocol.session_id)
+        mrb += mr.buf
 
         sig = sshtype.encodeBinary(ckey.sign_ssh_data(mrb))
 
-        mrb = mr.get_buf()
+        mrb = mr.buf
         assert mr.buf == mrb
         mrb += sig
 
@@ -310,7 +309,7 @@ class SshProtocol(asyncio.Protocol):
         self.client_key = client_key
         self.k = None
         self.h = None
-        self.sessionId = None
+        self.session_id = None
         self.inCipher = None
         self.outCipher = None
         self.inHmacKey = None
@@ -328,8 +327,8 @@ class SshProtocol(asyncio.Protocol):
         self.outPacketId = 0
 
         self.remote_banner = None
-        self.localKexInitMessage = None
-        self.remoteKexInitMessage = None
+        self.local_kex_init_message = None
+        self.remote_kex_init_message = None
 
         self._channel_map = {} # {local_cid, remote_cid}
         self._reverse_channel_map = {} # {remote_cid, local_cid}
@@ -342,9 +341,6 @@ class SshProtocol(asyncio.Protocol):
 
     def get_transport(self):
         return self.transport
-
-    def get_session_id(self):
-        return self.sessionId
 
     def close(self):
         if self.transport:
@@ -444,29 +440,18 @@ class SshProtocol(asyncio.Protocol):
         self.k = k
         self.h = h
 
-        if self.sessionId == None:
-            self.sessionId = h
+        if self.session_id == None:
+            self.session_id = h
 
     def set_inbound_enabled(self, val):
         self.inboundEnabled = val
 
-    def getLocalBanner(self):
+    @property
+    def local_banner(self):
         if cleartext_transport_enabled:
             return "SSH-2.0-mNet_0.0.1+cleartext"
         else:
             return "SSH-2.0-mNet_0.0.1"
-
-    def getLocalKexInitMessage(self):
-        return self.localKexInitMessage
-
-    def setLocalKexInitMessage(self, val):
-        self.localKexInitMessage = val
-
-    def getRemoteKexInitMessage(self):
-        return self.remoteKexInitMessage
-
-    def setRemoteKexInitMessage(self, val):
-        self.remoteKexInitMessage = val
 
     def init_outbound_encryption(self):
         log.info("Initializing outbound encryption.")
@@ -513,7 +498,7 @@ class SshProtocol(asyncio.Protocol):
         buf += sshtype.encodeMpint(self.k)
         buf += self.h
         buf += extra
-        buf += self.sessionId
+        buf += self.session_id
 
         r = sha1(buf).digest()
 
@@ -560,7 +545,7 @@ class SshProtocol(asyncio.Protocol):
 
             m = mnetpacket.SshPacket(None, packet)
 
-            t = m.getPacketType()
+            t = m.packet_type
             log.info("Received packet, type=[{}].".format(t))
             if t == mnetpacket.SSH_MSG_CHANNEL_OPEN:
                 msg = mnetpacket.SshChannelOpenMessage(packet)
@@ -666,10 +651,10 @@ class SshProtocol(asyncio.Protocol):
         self._reverse_channel_map[req_msg.sender_channel] = local_cid
 
         cm = mnetpacket.SshChannelOpenConfirmationMessage()
-        cm.set_recipient_channel(req_msg.sender_channel)
-        cm.set_sender_channel(local_cid)
-        cm.set_initial_window_size(65535)
-        cm.set_maximum_packet_size(65535)
+        cm.recipient_channel = req_msg.sender_channel
+        cm.sender_channel = local_cid
+        cm.initial_window_size = 65535
+        cm.maximum_packet_size = 65535
 
         cm.encode()
 
@@ -821,7 +806,7 @@ class SshProtocol(asyncio.Protocol):
 
     def write_packet(self, packet):
         if log.isEnabledFor(logging.DEBUG):
-            log.debug("Writing packetType=[{}] with [{}] bytes of data: [\n{}]".format(packet.packetType, len(packet.buf), hex_dump(packet.buf)))
+            log.debug("Writing packet_type=[{}] with [{}] bytes of data: [\n{}]".format(packet.packet_type, len(packet.buf), hex_dump(packet.buf)))
 
         self.write_data([packet.buf])
 
@@ -972,7 +957,7 @@ class SshProtocol(asyncio.Protocol):
 
                 if self.waitingForNewKeys:
                     tp = mnetpacket.SshPacket(None, payload)
-                    if tp.getPacketType() == mnetpacket.SSH_MSG_NEWKEYS:
+                    if tp.packet_type == mnetpacket.SSH_MSG_NEWKEYS:
                         if self.server_mode:
                             self.init_inbound_encryption()
                         else:
@@ -1085,7 +1070,7 @@ class ChannelHandler():
     def channel_data(self, protocol, packet):
         m = mnetpacket.SshChannelDataMessage(packet)
         if log.isEnabledFor(logging.DEBUG):
-            log.debug("Received data, recipient_channel=[{}], value=[\n{}].".format(m.get_recipient_channel(), hex_dump(m.get_data())))
+            log.debug("Received data, recipient_channel=[{}], value=[\n{}].".format(m.recipient_channel, hex_dump(m.data)))
 
 def main():
     global log, server_key, client_key
