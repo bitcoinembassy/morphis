@@ -35,6 +35,9 @@ class Shell(cmd.Cmd):
 
         self.out_buffer = bytearray()
 
+        self.shell_locals = {}
+        self.shell_locals["self"] = self
+
     @asyncio.coroutine
     def cmdloop(self):
         self.preloop()
@@ -217,10 +220,19 @@ class Shell(cmd.Cmd):
         self.peer.protocol.close()
         return True
 
+    def do_eval(self, arg):
+        "Execute python code."
+        try:
+            r = eval(arg, globals(), self.shell_locals)
+            self.writeln(r)
+        except Exception as e:
+            log.exception("eval")
+            self.writeln("Exception: [{}].".format(e))
+
     def do_shell(self, arg):
         "Execute python code."
         try:
-            r = eval(arg)
+            r = exec(arg, globals(), self.shell_locals)
             self.writeln(r)
         except Exception as e:
             log.exception("eval")
