@@ -145,6 +145,8 @@ def __main():
         help="Specify the database url to use.")
     parser.add_argument("--dumptasksonexit", action="store_true",\
         help="Dump async task list on exit.")
+    parser.add_argument("--instanceoffset", type=int,\
+        help="Debug option to increment node instance and bind port.")
     parser.add_argument("-l", dest="logconf",\
         help="Specify alternate logging.ini [IF SPECIFIED, THIS MUST BE THE"\
             " FIRST PARAMETER!].")
@@ -157,6 +159,12 @@ def __main():
     bindaddr = args.bind
     if bindaddr == None:
         bindaddr = "127.0.0.1:5555"
+    instanceoffset = args.instanceoffset
+    if instanceoffset:
+        instance += instanceoffset
+        host, port = bindaddr.split(':')
+        port = int(port) + instanceoffset
+        bindaddr = "{}:{}".format(host, port)
     nodecount = args.nodecount
     if nodecount == None:
         nodecount = 1
