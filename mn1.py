@@ -390,7 +390,9 @@ class SshProtocol(asyncio.Protocol):
 
     @asyncio.coroutine
     def close_channel(self, local_cid):
-        log.info("Closing channel {}.".format(local_cid))
+        if log.isEnabledFor(logging.INFO):
+            log.info("Closing channel {} (address=[{}])."\
+                .format(local_cid, self.address))
 
         if self.closed:
             return False
@@ -574,7 +576,9 @@ class SshProtocol(asyncio.Protocol):
                 if r:
                     local_cid = self._accept_channel_open(msg)
 
-                    log.info("Channel [{}] opened.".format(local_cid))
+                    if log.isEnabledFor(logging.INFO):
+                        log.info("Channel [{}] opened (address=[{}])."\
+                            .format(local_cid, self.address))
 
                     queue = self._create_channel_queue()
                     self.channel_queues[local_cid] = queue
@@ -610,7 +614,9 @@ class SshProtocol(asyncio.Protocol):
 
                 self._channel_map[msg.recipient_channel] = msg.sender_channel
 
-                log.info("Channel [{}] opened.".format(msg.recipient_channel))
+                if log.isEnabledFor(logging.INFO):
+                    log.info("Channel [{}] opened (address=[{}])."\
+                        .format(msg.recipient_channel, self.address))
 
                 # First 'packet' is a True, signaling the channel is open to
                 # those yielding from the queue.
@@ -700,7 +706,8 @@ class SshProtocol(asyncio.Protocol):
             yield from queue.put(None)
 
         if log.isEnabledFor(logging.INFO):
-            log.info("Channel [{}] closed.".format(local_cid))
+            log.info("Channel [{}] closed (address=[{}])."\
+                .format(local_cid, self.address))
 
     def data_received(self, data):
         try:
