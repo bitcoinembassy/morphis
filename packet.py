@@ -50,7 +50,7 @@ class SshPacket():
 
         if packet_type and self.packet_type != packet_type:
             raise Exception("Expecting packet type [{}] but got [{}]."\
-                .format(packet_type, self.getPacketType()))
+                .format(packet_type, self.packet_type))
 
     def parse(self):
         self.packet_type = struct.unpack("B", self.buf[0:1])[0]

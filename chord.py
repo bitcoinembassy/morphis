@@ -458,6 +458,10 @@ class ChordEngine():
             peer.connection_coop_lock.release()
 
     @asyncio.coroutine
+    def peer_disconnected(self, peer, msg):
+        pass
+
+    @asyncio.coroutine
     def peer_authenticated(self, peer):
         log.info("Peer (dbid={}) has authenticated.".format(peer.dbid))
 

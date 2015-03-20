@@ -79,6 +79,10 @@ class ConnectionHandler():
         self.peer.engine.connection_lost(self.peer, exc)
 
     @asyncio.coroutine
+    def peer_disconnected(self, protocol, msg):
+        self.peer.engine.peer_disconnected(self.peer, msg)
+
+    @asyncio.coroutine
     def peer_authenticated(self, protocol):
         if protocol.server_mode:
             self.peer._peer_authenticated(self.peer.protocol.client_key)

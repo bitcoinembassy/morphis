@@ -304,6 +304,7 @@ class SshProtocol(asyncio.Protocol):
         self.inboundEnabled = True
 
         self.closed = False
+        self.disconnected = False
 
         self.server_key = server_key
         self.client_key = client_key
@@ -778,6 +779,9 @@ class SshProtocol(asyncio.Protocol):
 
     @asyncio.coroutine
     def read_packet(self, require_connected=True):
+        if self.disconnected:
+            return None
+
         if require_connected and self.closed:
             errstr = "ProtocolHandler closed, refusing read_packet(..)!"
             log.debug(errstr)
@@ -785,8 +789,15 @@ class SshProtocol(asyncio.Protocol):
 
         if self.packet != None:
             packet = self.packet
-            log.info("P: Returning next packet.")
             self.packet = None
+
+            if packet[0] == 0x01:
+                yield from\
+                    self._peer_disconnected(\
+                        mnetpacket.SshDisconnectMessage(packet))
+                return None
+
+            log.info("P: Returning next packet.")
 
             #asyncio.call_soon(self.process_buffer())
             # For now, call process_buffer in this event.
@@ -805,13 +816,30 @@ class SshProtocol(asyncio.Protocol):
         packet = self.packet
         self.packet = None
 
+        log.info("P: Notified of packet.")
+
+        if packet[0] == 0x01:
+            yield from\
+                self._peer_disconnected(\
+                    mnetpacket.SshDisconnectMessage(packet))
+            return None
+
         # For now, call process_buffer in this event.
         if len(self.buf) > 0:
             self.process_buffer()
 
-        log.info("P: Returning packet.")
-
         return packet
+
+    def _peer_disconnected(self, msg):
+        if log.isEnabledFor(logging.INFO):
+            log.info("Remote end (address=[{}]) send Disconnect message"\
+                " (reason_code={}, description=[{}])."\
+                    .format(self.address, msg.reason_code, msg.description))
+
+        self.closed = True
+        self.disconnected = True
+
+        yield from self.connection_handler.peer_disconnected(self, msg)
 
     def write_packet(self, packet):
         if log.isEnabledFor(logging.DEBUG):
