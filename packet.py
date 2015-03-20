@@ -478,3 +478,30 @@ class SshChannelDataMessage(SshPacket):
             nbuf += self.data
 
         return nbuf
+
+class SshChannelRequest(SshPacket):
+    def __init__(self, buf = None):
+        self.recipient_channel = None
+        self.request_type = None
+        self.want_reply = False
+
+        super().__init__(SSH_MSG_CHANNEL_REQUEST, buf)
+
+    def parse(self):
+        super().parse()
+
+        i = 1
+        self.recipient_channel = struct.unpack(">L", self.buf[i:i+4])[0]
+        i += 4
+        l, self.request_type = sshtype.parseString(self.buf[i:])
+        i += l
+        self.want_reply = struct.unpack("?", self.buf[i:i+1])[0]
+
+    def encode(self):
+        nbuf = super().encode()
+
+        nbuf += struct.pack(">L", self.recipient_channel)
+        nbuf += sshtype.encodeString(self.request_type)
+        nbuf += struct.pack("?", self.first_kex_packet_follows)
+
+        return nbuf

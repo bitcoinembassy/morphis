@@ -639,6 +639,14 @@ class SshProtocol(asyncio.Protocol):
 
                 yield from self._close_channel(msg.recipient_channel)
                 yield from self.channel_handler.channel_closed(self, msg.recipient_channel)
+            elif t == mnetpacket.SSH_MSG_CHANNEL_REQUEST:
+                msg = mnetpacket.SshChannelRequest(packet)
+                if log.isEnabledFor(logging.INFO):
+                    log.info("Received SSH_MSG_CHANNEL_REQUEST:"\
+                    " recipient_channel=[{}], request_type=[{}],"\
+                    " want_reply=[{}]."\
+                        .format(msg.recipient_channel, msg.request_type,\
+                            msg.want_reply))
             else:
                 log.warning("Unhandled packet of type [{}].".format(t))
 
