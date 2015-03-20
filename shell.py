@@ -332,6 +332,7 @@ class Shell(cmd.Cmd):
                 if "_process_ssh_protocol" in task_str\
                         or "_process_chord_packet" in task_str\
                         or "_shell_exec" in task_str\
+                        or "_connection_lost" in task_str\
                         or "cmdloop" in task_str:
                     continue
                 self.writeln("Task [{}]:".format(task))
