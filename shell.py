@@ -61,8 +61,6 @@ class Shell(cmd.Cmd):
 
             self.writeln("")
 
-            log.info("Processing command line: [{}].".format(line))
-
             line = self.precmd(line)
             stop = yield from self.onecmd(line)
             stop = self.postcmd(stop, line)
@@ -74,6 +72,8 @@ class Shell(cmd.Cmd):
 
     @asyncio.coroutine
     def onecmd(self, line):
+        log.info("Processing command line: [{}].".format(line))
+
         cmd, arg, line = self.parseline(line)
 
         if not line:
@@ -112,10 +112,13 @@ class Shell(cmd.Cmd):
 
             msg = BinaryMessage(packet)
 
-            if log.isEnabledFor(logging.DEBUG):
-                log.debug("Received text:\n[{}].".format(hex_dump(msg.value)))
-            else:
-                log.info("Received text [{}].".format(msg.value))
+            if log.isEnabledFor(logging.DEBUG+1):
+                if log.isEnabledFor(logging.DEBUG):
+                    log.debug("Received text:\n[{}]."\
+                        .format(hex_dump(msg.value)))
+                else:
+                    log.log(logging.DEBUG+1, "Received text [{}]."\
+                        .format(msg.value))
 
             lenval = len(msg.value)
             if lenval == 1:
