@@ -484,6 +484,7 @@ class SshChannelRequest(SshPacket):
         self.recipient_channel = None
         self.request_type = None
         self.want_reply = False
+        self.payload = None
 
         super().__init__(SSH_MSG_CHANNEL_REQUEST, buf)
 
@@ -496,6 +497,10 @@ class SshChannelRequest(SshPacket):
         l, self.request_type = sshtype.parseString(self.buf[i:])
         i += l
         self.want_reply = struct.unpack("?", self.buf[i:i+1])[0]
+        i += 1
+        if i == len(self.buf):
+            return
+        self.payload = self.buf[i:]
 
     def encode(self):
         nbuf = super().encode()
@@ -503,5 +508,7 @@ class SshChannelRequest(SshPacket):
         nbuf += struct.pack(">L", self.recipient_channel)
         nbuf += sshtype.encodeString(self.request_type)
         nbuf += struct.pack("?", self.first_kex_packet_follows)
+        if self.payload:
+            nbuf += self.payload
 
         return nbuf

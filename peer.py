@@ -120,6 +120,10 @@ class ChannelHandler():
         yield from self.peer.engine.channel_closed(self.peer, local_cid)
 
     @asyncio.coroutine
+    def channel_request(self, protocol, msg):
+        yield from self.peer.engine.channel_request(self.peer, msg)
+
+    @asyncio.coroutine
     def channel_data(self, protocol, packet):
         m = mnetpacket.SshChannelDataMessage(packet)
         if log.isEnabledFor(logging.DEBUG):

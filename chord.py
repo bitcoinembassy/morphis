@@ -46,6 +46,8 @@ class ChordEngine():
         self.server = None #Task.
         self.server_protocol = None
 
+        self.shells = {}
+
         self.forced_connects = {} # {id, Peer}
         self.pending_connections = {} # {Task, Peer->dbid}
         self.peers = {} # {address: Peer}.
@@ -747,13 +749,35 @@ class ChordEngine():
                 loop=self.loop)
             return
         elif channel_type == "session":
-            nshell = shell.Shell(self.loop, peer, local_cid, queue)
-            asyncio.async(nshell.cmdloop(), loop=self.loop)
+            self.shells[local_cid] =\
+                shell.Shell(self.loop, peer, local_cid, queue)
             return
 
     @asyncio.coroutine
     def channel_closed(self, peer, local_cid):
+        self.shells.pop(local_cid, None)
+
         pass
+
+    @asyncio.coroutine
+    def channel_request(self, peer, msg):
+        if msg.request_type == "shell":
+            shell = self.shells[msg.recipient_channel]
+            if not shell:
+                return
+            asyncio.async(shell.cmdloop(), loop=self.loop)
+        elif msg.request_type == "exec":
+            shell = self.shells[msg.recipient_channel]
+            if not shell:
+                return
+            l, cmd = sshtype.parseString(msg.payload)
+            asyncio.async(self._shell_exec(shell, cmd), loop=self.loop)
+
+    @asyncio.coroutine
+    def _shell_exec(self, shell, cmd):
+        result = yield from shell.onecmd(cmd)
+        shell.flush()
+        yield from shell.peer.protocol.close_channel(shell.local_cid)
 
     @asyncio.coroutine
     def channel_data(self, peer, local_cid, data):

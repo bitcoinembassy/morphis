@@ -48,7 +48,7 @@ class Shell(cmd.Cmd):
         assert not self.cmdqueue
         assert not self.use_rawinput
 
-        stop = None
+        exit = stop = None
         while not stop:
             self.write(self.prompt)
             self.flush()
@@ -57,6 +57,7 @@ class Shell(cmd.Cmd):
 
             if line == None:
                 line = "EOF"
+                exit = True
 
             self.writeln("")
 
@@ -65,6 +66,9 @@ class Shell(cmd.Cmd):
             line = self.precmd(line)
             stop = yield from self.onecmd(line)
             stop = self.postcmd(stop, line)
+
+            if exit:
+                break
 
         self.postloop()
 
@@ -215,9 +219,10 @@ class Shell(cmd.Cmd):
         "Test thing."
         self.writeln("Hello, I received your test.")
 
+    @asyncio.coroutine
     def do_quit(self, arg):
         "Close this shell connection."
-        self.peer.protocol.close()
+        yield from self.peer.protocol.close_channel(self.local_cid)
         return True
 
     def do_eval(self, arg):
@@ -323,6 +328,7 @@ class Shell(cmd.Cmd):
                 task_str = str(task)
                 if "_process_ssh_protocol" in task_str\
                         or "_process_chord_packet" in task_str\
+                        or "_shell_exec" in task_str\
                         or "cmdloop" in task_str:
                     continue
                 self.writeln("Task [{}]:".format(task))

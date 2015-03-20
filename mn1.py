@@ -647,6 +647,7 @@ class SshProtocol(asyncio.Protocol):
                     " want_reply=[{}]."\
                         .format(msg.recipient_channel, msg.request_type,\
                             msg.want_reply))
+                yield from self.channel_handler.channel_request(self, msg)
             else:
                 log.warning("Unhandled packet of type [{}].".format(t))
 
