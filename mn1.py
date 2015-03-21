@@ -742,7 +742,7 @@ class SshProtocol(asyncio.Protocol):
 
         if self.binaryMode:
             self.buf += data
-            if self.inboundEnabled:
+            if not self.packet and self.inboundEnabled:
                 self.process_buffer()
             log.debug("data_received(..): end (binaryMode).")
             return
