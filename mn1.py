@@ -358,10 +358,6 @@ class SshProtocol(asyncio.Protocol):
 
         local_cid = self._open_channel(channel_type)
 
-        if log.isEnabledFor(logging.INFO):
-            log.info("Opening channel [{}] (address=[{}])."\
-                .format(local_cid, self.address))
-
         queue = self._create_channel_queue()
         self.channel_queues[local_cid] = queue
 
@@ -376,6 +372,10 @@ class SshProtocol(asyncio.Protocol):
 
     def _open_channel(self, channel_type):
         local_cid = self._allocate_channel_id()
+
+        if log.isEnabledFor(logging.INFO):
+            log.info("Opening channel [{}] (address=[{}])."\
+                .format(local_cid, self.address))
 
         msg = mnetpacket.SshChannelOpenMessage()
         msg.channel_type = channel_type
@@ -847,8 +847,11 @@ class SshProtocol(asyncio.Protocol):
         yield from self.connection_handler.peer_disconnected(self, msg)
 
     def write_packet(self, packet):
-        if log.isEnabledFor(logging.DEBUG):
-            log.debug("Writing packet_type=[{}] with [{}] bytes of data: [\n{}]".format(packet.packet_type, len(packet.buf), hex_dump(packet.buf)))
+        if log.isEnabledFor(logging.INFO):
+            log.info("Writing packet_type=[{}] ({} bytes) to address=[{}]."
+                .format(packet.packet_type, len(packet.buf), self.address))
+            if log.isEnabledFor(logging.DEBUG):
+                log.debug("data=[\n{}].".format(hex_dump(packet.buf)))
 
         self.write_data([packet.buf])
 
@@ -880,6 +883,10 @@ class SshProtocol(asyncio.Protocol):
         length = 0
         for data in datas:
             length += len(data)
+
+        if log.isEnabledFor(logging.INFO):
+            log.info("Writing {} bytes of data to connection (address=[{}])."\
+                .format(length, self.address))
 
         extra = (length + 5) % mod_size;
         if extra != 0:
