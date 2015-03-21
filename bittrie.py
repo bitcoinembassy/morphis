@@ -30,6 +30,12 @@ class BitTrie(object):
 
         return buf
 
+    def __iter__(self):
+        for item in self.find(ZeroKey()):
+            if not item:
+                continue
+            yield item
+
     def __delitem__(self, key):
         self._del(key)
 
@@ -46,7 +52,13 @@ class BitTrie(object):
 
         raise KeyError()
 
-    def put(self, key, value):
+    def setdefault(self, key, default):
+        r = self.put(key, default, False)
+        if not r:
+            return default
+        return r
+
+    def put(self, key, value, replace=True):
         node = self.trie
 
         keylen = len(key)
@@ -67,7 +79,8 @@ class BitTrie(object):
                     if j == 0:
                         ii = i + 1
                         if ii == keylen:
-                            node[bit] = TrieLeaf(key, value)
+                            if replace:
+                                node[bit] = TrieLeaf(key, value)
                             return other.value
 
                         next_o_bit = (o_key[ii] >> 4) & 0x0F
