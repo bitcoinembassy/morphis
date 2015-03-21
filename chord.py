@@ -465,7 +465,7 @@ class ChordEngine():
     def peer_authenticated(self, peer):
         log.info("Peer (dbid={}) has authenticated.".format(peer.dbid))
 
-        if peer.protocol.closed:
+        if peer.protocol.status is not mn1.Status.new:
             log.info("Peer disconnected.")
             return False
 
@@ -477,7 +477,7 @@ class ChordEngine():
         finally:
             peer.connection_coop_lock.release()
 
-        if not r or peer.protocol.closed:
+        if not r or peer.protocol.status is not mn1.Status.new:
             return False
 
         r = self.forced_connects.pop(peer.dbid, None)

@@ -1,6 +1,7 @@
 import llog
 
 import asyncio
+from enum import Enum
 import struct
 import logging
 import os
@@ -286,6 +287,12 @@ def connectTaskSecure(protocol, server_mode):
 
     return True
 
+class Status(Enum):
+    new = 0
+    ready = 10
+    closed = 20
+    disconnected = 30
+
 class SshProtocol(asyncio.Protocol):
     def __init__(self, loop):
         self.loop = loop
@@ -303,8 +310,7 @@ class SshProtocol(asyncio.Protocol):
         self.binaryMode = False
         self.inboundEnabled = True
 
-        self.closed = False
-        self.disconnected = False
+        self.status = Status.new
 
         self.server_key = server_key
         self.client_key = client_key
@@ -320,6 +326,7 @@ class SshProtocol(asyncio.Protocol):
         self.waitingForNewKeys = False
 
         self.waiter = None
+        self.ready_waiter = None
         self.buf = bytearray()
         self.packet = None
         self.bpLength = None
@@ -346,12 +353,25 @@ class SshProtocol(asyncio.Protocol):
     def close(self):
         if self.transport:
             self.transport.close()
-        self.closed = True
+        self.status = Status.closed
 
     @asyncio.coroutine
     def open_channel(self, channel_type, block=False):
         "Returns the channel queue for the new channel."
-        if self.closed:
+
+        if self.status is Status.new:
+            if not block:
+                raise SshException("Connection is not ready yet.")
+
+            assert not self.ready_waiter
+            self.ready_waiter = asyncio.futures.Future(loop=self.loop)
+
+            try:
+                yield from self.ready_waiter
+            finally:
+                self.waiter = None
+        elif self.status is not Status.ready:
+            # Ignore if it is closed or disconnected.
             if log.isEnabledFor(logging.INFO):
                 log.info("open_channel(..) called on a closed connection.")
             return None, None
@@ -396,7 +416,9 @@ class SshProtocol(asyncio.Protocol):
             log.info("Closing channel {} (address=[{}])."\
                 .format(local_cid, self.address))
 
-        if self.closed:
+        if self.status is not Status.ready:
+            # Ignore this call if we are closed or disconnected.
+            assert self.status is not Status.new
             return False
 
         remote_cid = self._channel_map.get(local_cid)
@@ -542,6 +564,10 @@ class SshProtocol(asyncio.Protocol):
             return r
 
         # Connected and fully authenticated at this point.
+        self.status = Status.ready
+        if self.ready_waiter != None:
+            self.ready_waiter.set_result(False)
+            self.ready_waiter = None
         yield from self.connection_handler.connection_ready()
 
         while True:
@@ -722,7 +748,7 @@ class SshProtocol(asyncio.Protocol):
     def connection_lost(self, exc):
         log.info("X: Connection lost to [{}].".format(self.address))
 
-        self.closed = True
+        self.status = Status.closed
 
         self._channel_map.clear()
 
@@ -784,10 +810,10 @@ class SshProtocol(asyncio.Protocol):
 
     @asyncio.coroutine
     def read_packet(self, require_connected=True):
-        if self.disconnected:
+        if self.status is Status.disconnected:
             return None
 
-        if require_connected and self.closed:
+        if require_connected and self.status is Status.closed:
             errstr = "ProtocolHandler closed, refusing read_packet(..)!"
             log.debug(errstr)
             raise SshException(errstr)
@@ -811,7 +837,7 @@ class SshProtocol(asyncio.Protocol):
 
             return packet
 
-        if self.closed:
+        if self.status is Status.closed:
             return None
 
         log.info("P: Waiting for packet.")
@@ -841,8 +867,7 @@ class SshProtocol(asyncio.Protocol):
                 " (reason_code={}, description=[{}])."\
                     .format(self.address, msg.reason_code, msg.description))
 
-        self.closed = True
-        self.disconnected = True
+        self.status = Status.disconnected
 
         yield from self.connection_handler.peer_disconnected(self, msg)
 
@@ -870,7 +895,7 @@ class SshProtocol(asyncio.Protocol):
         return True
 
     def write_data(self, datas):
-        if self.closed:
+        if self.status in [Status.closed, Status.disconnected]:
             log.info("ProtocolHandler closed, ignoring write_data(..) call.")
             return
 
