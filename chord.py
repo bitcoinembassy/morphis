@@ -708,10 +708,10 @@ class ChordEngine():
             return;
 
         # Client requests a GetPeers upon connection.
-        asyncio.async(self._send_get_peers(peer), loop=self.loop)
+        asyncio.async(self._send_find_node(peer), loop=self.loop)
 
     @asyncio.coroutine
-    def _send_get_peers(self, peer):
+    def _send_find_node(self, peer):
         local_cid, queue = yield from peer.protocol.open_channel("mpeer", True)
         if not queue:
             return
