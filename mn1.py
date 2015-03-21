@@ -31,262 +31,6 @@ def enable_cleartext_transport():
     global cleartext_transport_enabled
     cleartext_transport_enabled = True
 
-# Returns True on success, False on failure.
-@asyncio.coroutine
-def connectTaskCommon(protocol, server_mode):
-    assert isinstance(server_mode, bool)
-
-    log.info("X: Sending banner.")
-    protocol.transport.write((protocol.local_banner + "\r\n").encode(encoding="UTF-8"))
-
-    # Read banner.
-    packet = yield from protocol.read_packet()
-    log.info("X: Received banner [{}].".format(packet))
-
-    protocol.remote_banner = packet.decode(encoding="UTF-8")
-
-# Returns True on success, False on failure.
-@asyncio.coroutine
-def connectTaskInsecure(protocol, server_mode):
-    m = mnetpacket.SshKexdhReplyMessage()
-    if server_mode:
-        m.host_key = protocol.server_key.asbytes()
-    else:
-        m.host_key = protocol.client_key.asbytes()
-    m.f = 42
-    m.signature = b"test"
-    m.encode()
-
-    protocol.write_packet(m)
-
-    pkt = yield from protocol.read_packet()
-    m = mnetpacket.SshKexdhReplyMessage(pkt)
-
-    if server_mode:
-        if protocol.client_key:
-            if protocol.client_key.asbytes() != m.host_key:
-                raise SshException("Key provided by client differs from that which we were expecting.")
-        protocol.client_key = rsakey.RsaKey(m.host_key)
-    else:
-        if protocol.server_key:
-            if protocol.server_key.asbytes() != m.host_key:
-                raise SshException("Key provided by server differs from that which we were expecting.")
-        protocol.server_key = rsakey.RsaKey(m.host_key)
-
-    r = yield from protocol.connection_handler.peer_authenticated(protocol)
-    if not r:
-        # Peer is rejected for some reason by higher level.
-        protocol.close()
-        return False
-
-    return True
-
-# Returns True on success, False on failure.
-@asyncio.coroutine
-def connectTaskSecure(protocol, server_mode):
-    # Send KexInit packet.
-    opobj = mnetpacket.SshKexInitMessage()
-    opobj.cookie = os.urandom(16)
-#    opobj.kex_algorithms = "diffie-hellman-group-exchange-sha256"
-    opobj.kex_algorithms = "diffie-hellman-group14-sha1"
-    opobj.server_host_key_algorithms = "ssh-rsa"
-    opobj.encryption_algorithms_client_to_server = "aes256-cbc"
-    opobj.encryption_algorithms_server_to_client = "aes256-cbc"
-#    opobj.mac_algorithms_client_to_server = "hmac-sha2-512"
-#    opobj.mac_algorithms_server_to_client = "hmac-sha2-512"
-    opobj.mac_algorithms_client_to_server = "hmac-sha1"
-    opobj.mac_algorithms_server_to_client = "hmac-sha1"
-    opobj.compression_algorithms_client_to_server = "none"
-    opobj.compression_algorithms_server_to_client = "none"
-    opobj.encode()
-
-    protocol.local_kex_init_message = opobj.buf
-
-    protocol.write_packet(opobj)
-
-    # Read KexInit packet.
-    packet = yield from protocol.read_packet()
-    if log.isEnabledFor(logging.DEBUG):
-        log.debug("X: Received packet [{}].".format(hex_dump(packet)))
-
-    pobj = mnetpacket.SshPacket(None, packet)
-    packet_type = pobj.packet_type
-    log.info("packet_type=[{}].".format(packet_type))
-
-    if packet_type != 20:
-        log.warning("Peer sent unexpected packet_type[{}], disconnecting.".format(packet_type))
-        protocol.close()
-        return False
-
-    protocol.remote_kex_init_message = packet
-
-    pobj = mnetpacket.SshKexInitMessage(packet)
-    if log.isEnabledFor(logging.DEBUG):
-        log.debug("cookie=[{}].".format(pobj.cookie))
-    log.info("keyExchangeAlgorithms=[{}].".format(pobj.kex_algorithms))
-
-    protocol.waitingForNewKeys = True
-
-    ke = kex.KexGroup14(protocol)
-    log.info("Calling start_kex()...")
-    r = yield from ke.do_kex()
-
-    if not r:
-        # Client is rejected for some reason by higher level.
-        protocol.close()
-        return False
-
-    # Setup encryption now that keys are exchanged.
-    protocol.init_outbound_encryption()
-
-    if not protocol.server_mode:
-        """ Server gets done automatically since parameters are always there
-            before NEWKEYS is received, but client the parameters and NEWKEYS
-            message may come in the same tcppacket, so the auto part just turns
-            off inbound processing and waits for us to call
-            init_inbound_encryption when we have the parameters ready. """
-        protocol.init_inbound_encryption()
-        protocol.set_inbound_enabled(True)
-
-    packet = yield from protocol.read_packet()
-    m = mnetpacket.SshNewKeysMessage(packet)
-    log.debug("Received SSH_MSG_NEWKEYS.")
-
-    if protocol.server_mode:
-        packet = yield from protocol.read_packet()
-#        m = mnetpacket.SshPacket(None, packet)
-#        log.info("X: Received packet (type={}) [{}].".format(m.packet_type, packet))
-        m = mnetpacket.SshServiceRequestMessage(packet)
-        log.info("Service requested [{}].".format(m.service_name))
-
-        if m.service_name != "ssh-userauth":
-            raise SshException("Remote end requested unexpected service (name=[{}]).".format(m.service_name))
-
-        mr = mnetpacket.SshServiceAcceptMessage()
-        mr.service_name = "ssh-userauth"
-        mr.encode()
-
-        protocol.write_packet(mr)
-
-        packet = yield from protocol.read_packet()
-        m = mnetpacket.SshUserauthRequestMessage(packet)
-        log.info("Userauth requested with method=[{}].".format(m.method_name))
-
-        if m.method_name == "none":
-            mr = mnetpacket.SshUserauthFailureMessage()
-            mr.auths = "publickey"
-            mr.partial_success = False
-            mr.encode()
-
-            protocol.write_packet(mr)
-
-            packet = yield from protocol.read_packet()
-            m = mnetpacket.SshUserauthRequestMessage(packet)
-            log.info("Userauth requested with method=[{}].".format(m.method_name))
-
-        if m.method_name != "publickey":
-            raise SshException("Unhandled client auth method [{}].".format(m.method_name))
-        if m.algorithm_name != "ssh-rsa":
-            raise SshException("Unhandled client auth algorithm [{}].".format(m.algorithm_name))
-
-        log.debug("m.signature_present()={}.".format(m.signature_present))
-
-        if not m.signature_present:
-            mr = mnetpacket.SshUserauthPkOkMessage()
-            mr.algorithm_name = m.algorithm_name
-            mr.public_key = m.public_key
-            mr.encode()
-
-            protocol.write_packet(mr)
-
-            packet = yield from protocol.read_packet()
-            m = mnetpacket.SshUserauthRequestMessage(packet)
-            log.info("Userauth requested with method=[{}].".format(m.method_name))
-
-            if m.method_name != "publickey":
-                raise SshException("Unhandled client auth method [{}].".format(m.method_name))
-            if m.algorithm_name != "ssh-rsa":
-                raise SshException("Unhandled client auth algorithm [{}].".format(m.algorithm_name))
-
-        if log.isEnabledFor(logging.DEBUG):
-            log.debug("signature=[{}].".format(hex_dump(m.signature)))
-
-        signature = m.signature
-
-        buf = bytearray()
-        buf += sshtype.encodeBinary(protocol.session_id)
-        buf += packet[:-m.signature_length]
-
-        client_key = rsakey.RsaKey(m.public_key)
-        r = client_key.verify_ssh_sig(buf, signature)
-
-        log.info("Userauth signature check result: [{}].".format(r))
-        if not r:
-            raise SshException("Signature and key provided by client did not match.")
-
-        if protocol.client_key:
-            if protocol.client_key.asbytes() != m.public_key:
-                raise SshException("Key provided by client differs from that which we were expecting.")
-
-        protocol.client_key = client_key
-
-        r = yield from protocol.connection_handler.peer_authenticated(protocol)
-        if not r:
-            # Client is rejected for some reason by higher level.
-            protocol.close()
-            return False
-
-        mr = mnetpacket.SshUserauthSuccessMessage()
-        mr.encode()
-
-        protocol.write_packet(mr)
-    else:
-        # client mode.
-        m = mnetpacket.SshServiceRequestMessage()
-        m.service_name = "ssh-userauth"
-        m.encode()
-
-        protocol.write_packet(m)
-
-        packet = yield from protocol.read_packet()
-        m = mnetpacket.SshServiceAcceptMessage(packet)
-        log.info("Service request accepted [{}].".format(m.service_name))
-
-        mr = mnetpacket.SshUserauthRequestMessage()
-        mr.user_name = "dev"
-        mr.service_name = "ssh-connection"
-        mr.method_name = "publickey"
-        mr.signature_present = True
-        mr.algorithm_name = "ssh-rsa"
-
-        ckey = protocol.client_key
-        mr.public_key = ckey.asbytes()
-
-        mr.encode()
-
-        mrb = bytearray()
-        mrb += sshtype.encodeBinary(protocol.session_id)
-        mrb += mr.buf
-
-        sig = sshtype.encodeBinary(ckey.sign_ssh_data(mrb))
-
-        mrb = mr.buf
-        assert mr.buf == mrb
-        mrb += sig
-
-        protocol.write_packet(mr)
-
-        packet = yield from protocol.read_packet()
-        m = mnetpacket.SshUserauthSuccessMessage(packet)
-        log.info("Userauth accepted.")
-
-    log.info("Connect task done (server={}).".format(server_mode))
-
-#    if not server_mode:
-#        protocol.close()
-
-    return True
-
 class Status(Enum):
     new = 0
     ready = 10
@@ -1134,6 +878,262 @@ class SshClientProtocol(SshProtocol):
 
     def connection_lost(self, exc):
         super().connection_lost(exc)
+
+# Returns True on success, False on failure.
+@asyncio.coroutine
+def connectTaskCommon(protocol, server_mode):
+    assert isinstance(server_mode, bool)
+
+    log.info("X: Sending banner.")
+    protocol.transport.write((protocol.local_banner + "\r\n").encode(encoding="UTF-8"))
+
+    # Read banner.
+    packet = yield from protocol.read_packet()
+    log.info("X: Received banner [{}].".format(packet))
+
+    protocol.remote_banner = packet.decode(encoding="UTF-8")
+
+# Returns True on success, False on failure.
+@asyncio.coroutine
+def connectTaskInsecure(protocol, server_mode):
+    m = mnetpacket.SshKexdhReplyMessage()
+    if server_mode:
+        m.host_key = protocol.server_key.asbytes()
+    else:
+        m.host_key = protocol.client_key.asbytes()
+    m.f = 42
+    m.signature = b"test"
+    m.encode()
+
+    protocol.write_packet(m)
+
+    pkt = yield from protocol.read_packet()
+    m = mnetpacket.SshKexdhReplyMessage(pkt)
+
+    if server_mode:
+        if protocol.client_key:
+            if protocol.client_key.asbytes() != m.host_key:
+                raise SshException("Key provided by client differs from that which we were expecting.")
+        protocol.client_key = rsakey.RsaKey(m.host_key)
+    else:
+        if protocol.server_key:
+            if protocol.server_key.asbytes() != m.host_key:
+                raise SshException("Key provided by server differs from that which we were expecting.")
+        protocol.server_key = rsakey.RsaKey(m.host_key)
+
+    r = yield from protocol.connection_handler.peer_authenticated(protocol)
+    if not r:
+        # Peer is rejected for some reason by higher level.
+        protocol.close()
+        return False
+
+    return True
+
+# Returns True on success, False on failure.
+@asyncio.coroutine
+def connectTaskSecure(protocol, server_mode):
+    # Send KexInit packet.
+    opobj = mnetpacket.SshKexInitMessage()
+    opobj.cookie = os.urandom(16)
+#    opobj.kex_algorithms = "diffie-hellman-group-exchange-sha256"
+    opobj.kex_algorithms = "diffie-hellman-group14-sha1"
+    opobj.server_host_key_algorithms = "ssh-rsa"
+    opobj.encryption_algorithms_client_to_server = "aes256-cbc"
+    opobj.encryption_algorithms_server_to_client = "aes256-cbc"
+#    opobj.mac_algorithms_client_to_server = "hmac-sha2-512"
+#    opobj.mac_algorithms_server_to_client = "hmac-sha2-512"
+    opobj.mac_algorithms_client_to_server = "hmac-sha1"
+    opobj.mac_algorithms_server_to_client = "hmac-sha1"
+    opobj.compression_algorithms_client_to_server = "none"
+    opobj.compression_algorithms_server_to_client = "none"
+    opobj.encode()
+
+    protocol.local_kex_init_message = opobj.buf
+
+    protocol.write_packet(opobj)
+
+    # Read KexInit packet.
+    packet = yield from protocol.read_packet()
+    if log.isEnabledFor(logging.DEBUG):
+        log.debug("X: Received packet [{}].".format(hex_dump(packet)))
+
+    pobj = mnetpacket.SshPacket(None, packet)
+    packet_type = pobj.packet_type
+    log.info("packet_type=[{}].".format(packet_type))
+
+    if packet_type != 20:
+        log.warning("Peer sent unexpected packet_type[{}], disconnecting.".format(packet_type))
+        protocol.close()
+        return False
+
+    protocol.remote_kex_init_message = packet
+
+    pobj = mnetpacket.SshKexInitMessage(packet)
+    if log.isEnabledFor(logging.DEBUG):
+        log.debug("cookie=[{}].".format(pobj.cookie))
+    log.info("keyExchangeAlgorithms=[{}].".format(pobj.kex_algorithms))
+
+    protocol.waitingForNewKeys = True
+
+    ke = kex.KexGroup14(protocol)
+    log.info("Calling start_kex()...")
+    r = yield from ke.do_kex()
+
+    if not r:
+        # Client is rejected for some reason by higher level.
+        protocol.close()
+        return False
+
+    # Setup encryption now that keys are exchanged.
+    protocol.init_outbound_encryption()
+
+    if not protocol.server_mode:
+        """ Server gets done automatically since parameters are always there
+            before NEWKEYS is received, but client the parameters and NEWKEYS
+            message may come in the same tcppacket, so the auto part just turns
+            off inbound processing and waits for us to call
+            init_inbound_encryption when we have the parameters ready. """
+        protocol.init_inbound_encryption()
+        protocol.set_inbound_enabled(True)
+
+    packet = yield from protocol.read_packet()
+    m = mnetpacket.SshNewKeysMessage(packet)
+    log.debug("Received SSH_MSG_NEWKEYS.")
+
+    if protocol.server_mode:
+        packet = yield from protocol.read_packet()
+#        m = mnetpacket.SshPacket(None, packet)
+#        log.info("X: Received packet (type={}) [{}].".format(m.packet_type, packet))
+        m = mnetpacket.SshServiceRequestMessage(packet)
+        log.info("Service requested [{}].".format(m.service_name))
+
+        if m.service_name != "ssh-userauth":
+            raise SshException("Remote end requested unexpected service (name=[{}]).".format(m.service_name))
+
+        mr = mnetpacket.SshServiceAcceptMessage()
+        mr.service_name = "ssh-userauth"
+        mr.encode()
+
+        protocol.write_packet(mr)
+
+        packet = yield from protocol.read_packet()
+        m = mnetpacket.SshUserauthRequestMessage(packet)
+        log.info("Userauth requested with method=[{}].".format(m.method_name))
+
+        if m.method_name == "none":
+            mr = mnetpacket.SshUserauthFailureMessage()
+            mr.auths = "publickey"
+            mr.partial_success = False
+            mr.encode()
+
+            protocol.write_packet(mr)
+
+            packet = yield from protocol.read_packet()
+            m = mnetpacket.SshUserauthRequestMessage(packet)
+            log.info("Userauth requested with method=[{}].".format(m.method_name))
+
+        if m.method_name != "publickey":
+            raise SshException("Unhandled client auth method [{}].".format(m.method_name))
+        if m.algorithm_name != "ssh-rsa":
+            raise SshException("Unhandled client auth algorithm [{}].".format(m.algorithm_name))
+
+        log.debug("m.signature_present()={}.".format(m.signature_present))
+
+        if not m.signature_present:
+            mr = mnetpacket.SshUserauthPkOkMessage()
+            mr.algorithm_name = m.algorithm_name
+            mr.public_key = m.public_key
+            mr.encode()
+
+            protocol.write_packet(mr)
+
+            packet = yield from protocol.read_packet()
+            m = mnetpacket.SshUserauthRequestMessage(packet)
+            log.info("Userauth requested with method=[{}].".format(m.method_name))
+
+            if m.method_name != "publickey":
+                raise SshException("Unhandled client auth method [{}].".format(m.method_name))
+            if m.algorithm_name != "ssh-rsa":
+                raise SshException("Unhandled client auth algorithm [{}].".format(m.algorithm_name))
+
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("signature=[{}].".format(hex_dump(m.signature)))
+
+        signature = m.signature
+
+        buf = bytearray()
+        buf += sshtype.encodeBinary(protocol.session_id)
+        buf += packet[:-m.signature_length]
+
+        client_key = rsakey.RsaKey(m.public_key)
+        r = client_key.verify_ssh_sig(buf, signature)
+
+        log.info("Userauth signature check result: [{}].".format(r))
+        if not r:
+            raise SshException("Signature and key provided by client did not match.")
+
+        if protocol.client_key:
+            if protocol.client_key.asbytes() != m.public_key:
+                raise SshException("Key provided by client differs from that which we were expecting.")
+
+        protocol.client_key = client_key
+
+        r = yield from protocol.connection_handler.peer_authenticated(protocol)
+        if not r:
+            # Client is rejected for some reason by higher level.
+            protocol.close()
+            return False
+
+        mr = mnetpacket.SshUserauthSuccessMessage()
+        mr.encode()
+
+        protocol.write_packet(mr)
+    else:
+        # client mode.
+        m = mnetpacket.SshServiceRequestMessage()
+        m.service_name = "ssh-userauth"
+        m.encode()
+
+        protocol.write_packet(m)
+
+        packet = yield from protocol.read_packet()
+        m = mnetpacket.SshServiceAcceptMessage(packet)
+        log.info("Service request accepted [{}].".format(m.service_name))
+
+        mr = mnetpacket.SshUserauthRequestMessage()
+        mr.user_name = "dev"
+        mr.service_name = "ssh-connection"
+        mr.method_name = "publickey"
+        mr.signature_present = True
+        mr.algorithm_name = "ssh-rsa"
+
+        ckey = protocol.client_key
+        mr.public_key = ckey.asbytes()
+
+        mr.encode()
+
+        mrb = bytearray()
+        mrb += sshtype.encodeBinary(protocol.session_id)
+        mrb += mr.buf
+
+        sig = sshtype.encodeBinary(ckey.sign_ssh_data(mrb))
+
+        mrb = mr.buf
+        assert mr.buf == mrb
+        mrb += sig
+
+        protocol.write_packet(mr)
+
+        packet = yield from protocol.read_packet()
+        m = mnetpacket.SshUserauthSuccessMessage(packet)
+        log.info("Userauth accepted.")
+
+    log.info("Connect task done (server={}).".format(server_mode))
+
+#    if not server_mode:
+#        protocol.close()
+
+    return True
 
 class ChannelHandler():
     @asyncio.coroutine
