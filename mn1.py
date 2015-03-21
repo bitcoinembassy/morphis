@@ -351,11 +351,16 @@ class SshProtocol(asyncio.Protocol):
     @asyncio.coroutine
     def open_channel(self, channel_type, block=False):
         "Returns the channel queue for the new channel."
-
         if self.closed:
+            if log.isEnabledFor(logging.INFO):
+                log.info("open_channel(..) called on a closed connection.")
             return None, None
 
         local_cid = self._open_channel(channel_type)
+
+        if log.isEnabledFor(logging.INFO):
+            log.info("Opening channel [{}] (address=[{}])."\
+                .format(local_cid, self.address))
 
         queue = self._create_channel_queue()
         self.channel_queues[local_cid] = queue
