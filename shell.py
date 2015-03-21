@@ -356,6 +356,13 @@ class Shell(cmd.Cmd):
 
         self.writeln("Count: {}.".format(cnt))
 
+    @asyncio.coroutine
+    def do_listchans(self, arg):
+        "List the open channels of all connected PeerS."
+
+        code = "list(filter(lambda x: x[1], map(lambda node: [node.bind_address, list(filter(lambda x: x[1], map(lambda peer: [peer.address, list(peer.protocol._channel_map.items())], node.chord_engine.peers.values())))], self.peer.engine.node.all_nodes)))"
+        return self.do_eval(code)
+
     def emptyline(self):
         pass
 
