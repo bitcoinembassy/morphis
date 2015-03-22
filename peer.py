@@ -52,6 +52,9 @@ class Peer():
         self._protocol.set_channel_handler(self.channel_handler)
         self._protocol.set_connection_handler(self.connection_handler)
 
+    def ready(self):
+        return self._protocol.status == mn1.Status.ready
+
     def _peer_authenticated(self, key):
         self.node_key = key
         self.node_id = enc.generate_ID(self.node_key.asbytes())
