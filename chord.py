@@ -487,7 +487,12 @@ class ChordEngine():
                 return False, False
 
         if add_to_peers:
-            return self.add_to_peers(peer)
+            r = self.add_to_peers(peer)
+            if not r:
+                return False
+
+        # Do any init that we delay until after auth to save cpu/mem/Etc.
+        self.tasks = ct.ChordTasks(self)
 
         return True
 
@@ -706,26 +711,7 @@ class ChordEngine():
             return;
 
         # Client requests a GetPeers upon connection.
-        asyncio.async(self._send_find_node(peer), loop=self.loop)
-
-    @asyncio.coroutine
-    def _send_find_node(self, peer):
-        local_cid, queue = yield from peer.protocol.open_channel("mpeer", True)
-        if not queue:
-            return
-
-        msg = ChordFindNode()
-        msg.sender_port = self._bind_port
-        msg.node_id = self.node_id
-
-        peer.protocol.write_channel_data(local_cid, msg.encode())
-
-        #TODO: With lightweight channels, we should just close this channel
-        # instead.
-        asyncio.async(\
-            self._process_chord_packet(peer, local_cid, queue),\
-            loop=self.loop)
-        return
+        asyncio.async(self._do_stabilize(), loop=self.loop)
 
     @asyncio.coroutine
     def request_open_channel(self, peer, req):
