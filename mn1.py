@@ -166,6 +166,11 @@ class SshProtocol(asyncio.Protocol):
             return False
 
         remote_cid = self._channel_map.get(local_cid)
+        if remote_cid is None:
+            if log.isEnabledFor(logging.INFO):
+                log.info("close_channel(..) called on unmapped channel [{}]."\
+                    .format(local_cid))
+            return False
         if remote_cid == -1 or remote_cid == -2:
             if log.isEnabledFor(logging.INFO):
                 log.info("close_channel(..) called on channel in state [{}]."\
