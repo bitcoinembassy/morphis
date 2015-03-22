@@ -2,14 +2,11 @@ import llog
 
 import asyncio
 import logging
-import os
 
-import packet as mnetpacket
+import packet as mnpacket
 import rsakey
 import mn1
 from mutil import hex_dump, log_base2_8bit
-import chord
-import peer
 import enc
 
 log = logging.getLogger(__name__)
@@ -132,7 +129,7 @@ class ChannelHandler():
 
     @asyncio.coroutine
     def channel_data(self, protocol, packet):
-        m = mnetpacket.SshChannelDataMessage(packet)
+        m = mnpacket.SshChannelDataMessage(packet)
         if log.isEnabledFor(logging.DEBUG):
             log.debug("Received data, recipient_channel=[{}], value=[\n{}]."\
                 .format(m.recipient_channel, hex_dump(m.data)))
