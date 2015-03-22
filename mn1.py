@@ -635,7 +635,7 @@ class SshProtocol(asyncio.Protocol):
         msg.recipient_channel = remote_cid
         msg.encode()
 
-        self.write_data([msg.buf, data])
+        self.write_data((msg.buf, data))
         return True
 
     def write_data(self, datas):
