@@ -369,7 +369,7 @@ class SshProtocol(asyncio.Protocol):
                 lcid = self._reverse_channel_map\
                     .setdefault(msg.sender_channel, msg.recipient_channel)
 
-                if lcid != msg.recipient_channel:
+                if lcid is not msg.recipient_channel:
                     log.warning("Received a CHANNEL_OPEN_CONFIRMATION for a remote channel that is already open; ignoring.")
                     return
 
