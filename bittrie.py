@@ -19,12 +19,16 @@ class BitTrie(object):
 
     def __str__(self):
         buf = "["
+        first = True
 
         for x in self.find(ZeroKey()):
             if not x:
                 continue
+            if not first:
+                buf += ", "
+            else:
+                first = False
             buf += str(x)
-            buf += ", "
 
         buf += "]"
 
