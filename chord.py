@@ -15,6 +15,8 @@ from datetime import datetime, timedelta
 from sqlalchemy import Integer, String, text, func, desc, or_
 
 import bittrie
+import chord_packet as cp
+import chord_task as ct
 import packet as mnetpacket
 import rsakey
 import mn1
@@ -24,10 +26,6 @@ import enc
 from db import Peer
 from mutil import hex_dump, log_base2_8bit, hex_string
 
-# Chord Message Types.
-CHORD_MSG_GET_PEERS = 110
-CHORD_MSG_PEER_LIST = 111
-CHORD_MSG_FIND_NODE = 150
 
 BUCKET_SIZE = 2
 
@@ -802,16 +800,16 @@ class ChordEngine():
     def __process_chord_packet(self, peer, local_cid, data):
         if log.isEnabledFor(logging.DEBUG):
             log.debug("data=\n[{}].".format(hex_dump(data)))
-        msg = ChordMessage(None, data)
+        msg = cp.ChordMessage(None, data)
 
         log.info("packet_type=[{}].".format(msg.packet_type))
 
-        if msg.packet_type == CHORD_MSG_GET_PEERS:
-            log.info("Received CHORD_MSG_GET_PEERS message.")
-            msg = ChordGetPeers(data)
+        if msg.packet_type == cp.CHORD_MSG_GET_PEERS:
+            log.info("Received cp.CHORD_MSG_GET_PEERS message.")
+            msg = cp.ChordGetPeers(data)
 
             if peer.protocol.server_mode:
-                omsg = ChordGetPeers()
+                omsg = cp.ChordGetPeers()
                 omsg.sender_port = self._bind_port
 
                 peer.protocol.write_channel_data(local_cid, omsg.encode())
@@ -822,7 +820,7 @@ class ChordEngine():
             while True:
                 cnt = len(pl)
 
-                msg = ChordPeerList()
+                msg = cp.ChordPeerList()
                 msg.peers = pl[:min(25, cnt)]
 
                 peer.protocol.write_channel_data(local_cid, msg.encode())
@@ -832,27 +830,27 @@ class ChordEngine():
 
                 pl = pl[25:]
 
-        elif msg.packet_type == CHORD_MSG_PEER_LIST:
-            log.info("Received CHORD_MSG_PEER_LIST message.")
-            msg = ChordPeerList(data)
+        elif msg.packet_type == cp.CHORD_MSG_PEER_LIST:
+            log.info("Received cp.CHORD_MSG_PEER_LIST message.")
+            msg = cp.ChordPeerList(data)
             if not msg.peers:
                 log.debug("Ignoring empty PeerList.")
                 return
             yield from self.add_peers(msg.peers)
-        elif msg.packet_type == CHORD_MSG_FIND_NODE:
-            log.info("Received CHORD_MSG_FIND_NODE message.")
-            msg = ChordFindNode(data)
+        elif msg.packet_type == cp.CHORD_MSG_FIND_NODE:
+            log.info("Received cp.CHORD_MSG_FIND_NODE message.")
+            msg = cp.ChordFindNode(data)
 
             self._check_update_remote_port(msg, peer)
 
             pt = bittrie.BitTrie()
 
-            for cp in self.peers.values():
-                if cp == peer:
+            for cpeer in self.peers.values():
+                if cpeer == peer:
                     continue
 
-                ki = bittrie.XorKey(cp.node_id, msg.node_id)
-                pt[ki] = cp
+                ki = bittrie.XorKey(cpeer.node_id, msg.node_id)
+                pt[ki] = cpeer
 
             pt[bittrie.XorKey(self.node_id, msg.node_id)] = True
 
@@ -877,7 +875,7 @@ class ChordEngine():
                     break
 
             if not rlist:
-                rmsg = ChordPeerList()
+                rmsg = cp.ChordPeerList()
                 rmsg.peers = []
 
                 peer.protocol.write_channel_data(local_cid, rmsg.encode())
@@ -885,7 +883,7 @@ class ChordEngine():
 
                 return
 
-            rmsg = ChordPeerList()
+            rmsg = cp.ChordPeerList()
             rmsg.peers = rlist
 
             peer.protocol.write_channel_data(local_cid, rmsg.encode())
@@ -910,7 +908,7 @@ class ChordEngine():
 
                         # Test that it is valid.
                         try:
-                            ChordPeerList(pkt)
+                            cp.ChordPeerList(pkt)
                         except:
                             break
 
@@ -967,111 +965,6 @@ class ChordEngine():
                     sess.commit()
 
             yield from self.loop.run_in_executor(None, dbcall)
-
-class ChordMessage(object):
-    def __init__(self, packet_type = None, buf = None):
-        self.buf = buf
-        self.packet_type = packet_type
-
-        if not buf:
-            return
-
-        self.parse()
-
-        if packet_type and self.packet_type != packet_type:
-            raise Exception("Expecting packet type [{}] but got [{}].".format(packet_type, self.packet_type))
-
-    def parse(self):
-        self.packet_type = struct.unpack("B", self.buf[0:1])[0]
-
-    def encode(self):
-        nbuf = bytearray()
-        nbuf += struct.pack("B", self.packet_type & 0xff)
-
-        self.buf = nbuf
-
-        return nbuf
-
-class ChordGetPeers(ChordMessage):
-    def __init__(self, buf = None):
-        self.sender_port = None
-
-        super().__init__(CHORD_MSG_GET_PEERS, buf)
-
-    def encode(self):
-        nbuf = super().encode()
-
-        nbuf += struct.pack(">L", self.sender_port)
-
-        return nbuf
-
-    def parse(self):
-        super().parse()
-
-        i = 1
-        self.sender_port = struct.unpack(">L", self.buf[i:i+4])[0]
-
-class ChordPeerList(ChordMessage):
-    def __init__(self, buf = None):
-        self.peers = [] # [Peer]
-
-        super().__init__(CHORD_MSG_PEER_LIST, buf)
-
-    def encode(self):
-        nbuf = super().encode()
-        nbuf += struct.pack(">L", len(self.peers))
-        for peer in self.peers:
-            nbuf += sshtype.encodeString(peer.address)
-#            nbuf += sshtype.encodeBinary(peer.node_id)
-            if type(peer) is mnpeer.Peer:
-                nbuf += sshtype.encodeBinary(peer.node_key.asbytes())
-            else:
-                assert type(peer) is Peer
-                nbuf += sshtype.encodeBinary(peer.pubkey)
-
-        return nbuf
-
-    def parse(self):
-        super().parse()
-        i = 1
-        pcnt = struct.unpack(">L", self.buf[i:i+4])[0]
-        i += 4
-        self.peers = []
-        for n in range(pcnt):
-            log.debug("Reading record {}.".format(n))
-            peer = Peer()
-            l, peer.address = sshtype.parseString(self.buf[i:])
-            i += l
-#            l, peer.node_id = sshtype.parseBinary(self.buf[i:])
-#            i += l
-            l, peer.pubkey = sshtype.parseBinary(self.buf[i:])
-            i += l
-
-            if not check_address(peer.address):
-                continue
-
-            self.peers.append(peer)
-
-class ChordFindNode(ChordMessage):
-    def __init__(self, buf = None):
-        self.sender_port = 0
-        self.node_id = None
-
-        super().__init__(CHORD_MSG_FIND_NODE, buf)
-
-    def encode(self):
-        nbuf = super().encode()
-        nbuf += struct.pack(">L", self.sender_port)
-        nbuf += self.node_id
-
-        return nbuf
-
-    def parse(self):
-        super().parse()
-        i = 1
-        self.sender_port = struct.unpack(">L", self.buf[i:i+4])
-        i += 4
-        self.node_id = self.buf[i:]
 
 def check_address(address):
     try:
