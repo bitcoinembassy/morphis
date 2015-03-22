@@ -16,7 +16,7 @@ from sqlalchemy import Integer, String, text, func, desc, or_
 
 import bittrie
 import chord_packet as cp
-import chord_task as ct
+import chord_tasks as ct
 import packet as mnetpacket
 import rsakey
 import mn1
@@ -116,19 +116,19 @@ class ChordEngine():
         return r
 
     @asyncio.coroutine
-    def add_peer(self, addr, check_connections=True):
+    def add_peer(self, addr, process_check_connections=True):
         log.info("Adding peer (addr=[{}]).".format(addr))
 
         peer = Peer()
         peer.address = addr
 
-        added = yield from self.add_peers([peer], check_connections)
+        added = yield from self.add_peers([peer], process_check_connections)
 
         if added:
             return added[0]
 
     @asyncio.coroutine
-    def add_peers(self, peers, check_connections=True):
+    def add_peers(self, peers, process_check_connections=True):
         assert type(peers[0]) is Peer
 
         log.info("Adding upto {} peers.".format(len(peers)))
@@ -141,6 +141,9 @@ class ChordEngine():
                 added = []
 
                 for peer in peers:
+                    if not check_address(peer.address):
+                        continue
+
                     if not tlocked:
                         self.node.db.lock_table(sess, Peer)
                         tlocked = True
@@ -185,7 +188,7 @@ class ChordEngine():
 
         added = yield from self.loop.run_in_executor(None, dbcall)
 
-        if check_connections and added and self.running:
+        if process_check_connections and added and self.running:
             yield from self._process_connection_count()
 
         return added
@@ -711,7 +714,7 @@ class ChordEngine():
             return;
 
         # Client requests a GetPeers upon connection.
-        asyncio.async(self._do_stabilize(), loop=self.loop)
+        #asyncio.async(self.tasks._do_stabilize(), loop=self.loop)
 
     @asyncio.coroutine
     def request_open_channel(self, peer, req):
@@ -958,4 +961,6 @@ def check_address(address):
         ipaddress.ip_address(host)
         return True
     except:
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("Address [{}] is not acceptable.".format(address))
         return False

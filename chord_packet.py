@@ -3,6 +3,8 @@ import llog
 import logging
 import struct
 
+from chordexception import ChordException
+from db import Peer
 import peer as mnpeer
 import sshtype
 
@@ -28,7 +30,7 @@ class ChordMessage(object):
         self.parse()
 
         if packet_type and self.packet_type != packet_type:
-            raise Exception("Expecting packet type [{}] but got [{}].".format(packet_type, self.packet_type))
+            raise ChordException("Expecting packet type [{}] but got [{}].".format(packet_type, self.packet_type))
 
     def parse(self):
         self.packet_type = struct.unpack("B", self.buf[0:1])[0]
@@ -96,9 +98,6 @@ class ChordPeerList(ChordMessage):
             l, peer.pubkey = sshtype.parseBinary(self.buf[i:])
             i += l
 
-            if not check_address(peer.address):
-                continue
-
             self.peers.append(peer)
 
 class ChordFindNode(ChordMessage):
@@ -129,7 +128,7 @@ class ChordRelay(ChordMessage):
 
     def encode(self):
         nbuf = super().encode()
-        nbuf += struct.pack(">L", self.buf[i:i+4])
+        nbuf += struct.pack(">L", self.index)
         if self.packet:
             nbuf += self.packet
 

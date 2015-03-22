@@ -2,15 +2,16 @@ from distutils.core import setup
 from Cython.Build import cythonize
 
 modules = [\
-    "llog",
+    "asymkey",
     "bittrie",
+    "chord_packet",
     "enc",
+    "llog",
     "mutil",
     "putil",
     "packet",
-    "sshtype",
-    "asymkey",
-    "rsakey"\
+    "rsakey",
+    "sshtype"\
 ]
 
 setup(

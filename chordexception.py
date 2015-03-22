@@ -1,0 +1,2 @@
+class ChordException(Exception):
+    pass
