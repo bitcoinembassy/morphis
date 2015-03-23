@@ -46,7 +46,7 @@ class ChordTasks(object):
         conn_nodes = yield from\
             self.send_find_node(self.engine.node_id, self.engine.peer_trie)
 
-        self.engine.add_peers(conn_nodes)
+        yield from self.engine.add_peers(conn_nodes)
 
     @asyncio.coroutine
     def send_find_node(self, node_id, input_trie=None):
@@ -167,7 +167,7 @@ class ChordTasks(object):
         if log.isEnabledFor(logging.INFO):
             for vpeer in result_trie:
                 if not vpeer.path:
-                    break
+                    continue
                 log.info("Found closer Peer (address={})."\
                     .format(vpeer.peer.address))
 
