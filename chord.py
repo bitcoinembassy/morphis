@@ -714,7 +714,7 @@ class ChordEngine():
             return;
 
         # Client requests a GetPeers upon connection.
-        #asyncio.async(self.tasks._do_stabilize(), loop=self.loop)
+        asyncio.async(self.tasks._do_stabilize(), loop=self.loop)
 
     @asyncio.coroutine
     def request_open_channel(self, peer, req):
@@ -779,22 +779,27 @@ class ChordEngine():
     def _process_chord_packet(self, peer, local_cid, queue):
         while True:
             log.info("Waiting for chord packet.")
-            packet = yield from queue.get()
-            if not packet:
+            r = yield from\
+                self.__process_chord_packet(peer, queue, local_cid)
+            if not r:
                 break
-            log.info("Processing chord packet.")
-            yield from self.__process_chord_packet(peer, local_cid, packet)
 
     @asyncio.coroutine
-    def __process_chord_packet(self, peer, local_cid, data):
+    def __process_chord_packet(self, peer, queue, local_cid):
+        "Returns True to stop processing the queue."
+
+        data = yield from queue.get()
+        if not data:
+            return True
+
+        log.info("Processing chord packet.")
+
         if log.isEnabledFor(logging.DEBUG):
             log.debug("data=\n[{}].".format(hex_dump(data)))
-        msg = cp.ChordMessage(None, data)
 
-        log.info("packet_type=[{}].".format(msg.packet_type))
-
-        if msg.packet_type == cp.CHORD_MSG_GET_PEERS:
-            log.info("Received cp.CHORD_MSG_GET_PEERS message.")
+        packet_type = cp.ChordMessage.parse_type(data)
+        if packet_type == cp.CHORD_MSG_GET_PEERS:
+            log.info("Received CHORD_MSG_GET_PEERS message.")
             msg = cp.ChordGetPeers(data)
 
             if peer.protocol.server_mode:
@@ -819,95 +824,24 @@ class ChordEngine():
 
                 pl = pl[25:]
 
-        elif msg.packet_type == cp.CHORD_MSG_PEER_LIST:
-            log.info("Received cp.CHORD_MSG_PEER_LIST message.")
+        elif packet_type == cp.CHORD_MSG_PEER_LIST:
+            log.info("Received CHORD_MSG_PEER_LIST message.")
             msg = cp.ChordPeerList(data)
             if not msg.peers:
                 log.debug("Ignoring empty PeerList.")
                 return
             yield from self.add_peers(msg.peers)
-        elif msg.packet_type == cp.CHORD_MSG_FIND_NODE:
-            log.info("Received cp.CHORD_MSG_FIND_NODE message.")
+        elif packet_type == cp.CHORD_MSG_FIND_NODE:
+            log.info("Received CHORD_MSG_FIND_NODE message.")
             msg = cp.ChordFindNode(data)
 
             self._check_update_remote_port(msg, peer)
 
-            pt = bittrie.BitTrie()
+            r = yield from\
+                self.tasks.process_find_node_request(\
+                    msg, data, peer, queue, local_cid)
 
-            for cpeer in self.peers.values():
-                if cpeer == peer:
-                    continue
-
-                ki = bittrie.XorKey(cpeer.node_id, msg.node_id)
-                pt[ki] = cpeer
-
-            pt[bittrie.XorKey(self.node_id, msg.node_id)] = True
-
-            cnt = 3
-            log.info("Limiting relay to upto {} nodes.".format(cnt))
-            rlist = []
-
-            for r in pt.find(ZERO_MEM_512_BIT):
-                if not r:
-                    continue;
-
-                if r is True:
-                    log.info("No more nodes closer than ourselves.")
-                    break
-
-                log.debug("nn: {} FOUND: {:04} {:22} diff=[{}]".format(self.node.instance, r.dbid, r.address, hex_string([x ^ y for x, y in zip(r.node_id, msg.node_id)])))
-
-                rlist.append(r)
-
-                cnt -= 1
-                if not cnt:
-                    break
-
-            if not rlist:
-                rmsg = cp.ChordPeerList()
-                rmsg.peers = []
-
-                peer.protocol.write_channel_data(local_cid, rmsg.encode())
-                yield from peer.protocol.close_channel(local_cid)
-
-                return
-
-            rmsg = cp.ChordPeerList()
-            rmsg.peers = rlist
-
-            peer.protocol.write_channel_data(local_cid, rmsg.encode())
-
-            tasks = []
-
-            for r in rlist:
-                @asyncio.coroutine
-                def _run_find_node(r):
-                    cid, queue =\
-                        yield from r.protocol.open_channel("mpeer", True)
-
-                    if not queue:
-                        return
-
-                    r.protocol.write_channel_data(cid, data)
-
-                    while True:
-                        pkt = yield from queue.get()
-                        if not pkt:
-                            return
-
-                        # Test that it is valid.
-                        try:
-                            cp.ChordPeerList(pkt)
-                        except:
-                            break
-
-                        peer.protocol.write_channel_data(local_cid, pkt)
-
-                tasks.append(asyncio.async(_run_find_node(r), loop=self.loop))
-
-            yield from asyncio.wait(tasks, loop=self.loop)
-
-            yield from peer.protocol.close_channel(local_cid)
+            return True
 
 # Example of non-working db code. Sqlite seems to break when order by contains
 # any bitwise operations. (It just returns the rows in order of id.)
@@ -929,9 +863,14 @@ class ChordEngine():
 #
 #            yield from self.loop.run_in_executor(None, dbcall)
         else:
-            log.warning("Ignoring unrecognized packet.")
+            log.warning("Ignoring unrecognized packet (packet_type=[{}])."\
+                .format(packet_type))
 
+    @asyncio.coroutine
     def _check_update_remote_port(self, msg, peer):
+        if not msg.sender_port:
+            return
+
         host, port = peer.address.split(':')
 
         if int(port) != msg.sender_port:

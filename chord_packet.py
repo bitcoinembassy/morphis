@@ -63,8 +63,8 @@ class ChordGetPeers(ChordMessage):
         self.sender_port = struct.unpack(">L", self.buf[i:i+4])[0]
 
 class ChordPeerList(ChordMessage):
-    def __init__(self, buf = None):
-        self.peers = [] # [peer.Peer or db.Peer]
+    def __init__(self, buf=None, peers=None):
+        self.peers = peers # [peer.Peer or db.Peer]
 
         super().__init__(CHORD_MSG_PEER_LIST, buf)
 
