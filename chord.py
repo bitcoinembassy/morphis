@@ -714,7 +714,7 @@ class ChordEngine():
             return;
 
         # Client requests a GetPeers upon connection.
-        asyncio.async(self.tasks._do_stabilize(), loop=self.loop)
+        asyncio.async(self.tasks.do_stabilize(), loop=self.loop)
 
     @asyncio.coroutine
     def request_open_channel(self, peer, req):

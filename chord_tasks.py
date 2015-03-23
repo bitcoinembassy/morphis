@@ -42,7 +42,20 @@ class ChordTasks(object):
         self.loop = engine.loop
 
     @asyncio.coroutine
-    def _do_stabilize(self):
+    def do_stabilize(self):
+        conn_nodes = yield from\
+            self.send_find_node(self.engine.node_id, self.engine.peer_trie)
+
+        self.engine.add_peers(conn_nodes)
+
+    @asyncio.coroutine
+    def send_find_node(self, node_id, input_trie=None):
+        if not input_trie:
+            input_trie = bittrie.BitTrie()
+            for peer in self.engine.peer_trie:
+                key = bittrie.XorKey(node_id, peer.node_id)
+                input_trie[key] = peer
+
         max_concurrent_queries = 3
 
         def dbcall():
@@ -63,8 +76,8 @@ class ChordTasks(object):
         tasks = []
         used_peers = []
 
-        for peer in self.engine.peer_trie:
-            key = bittrie.XorKey(self.engine.node_id, peer.node_id)
+        for peer in input_trie:
+            key = bittrie.XorKey(node_id, peer.node_id)
             new_nodes[key] = VPeer(peer)
 
             if len(tasks) == max_concurrent_queries:
@@ -75,7 +88,8 @@ class ChordTasks(object):
             tun_meta = TunnelMeta(peer, 0)
             used_peers.append(tun_meta)
 
-            tasks.append(self._send_find_node(peer, new_nodes, tun_meta))
+            tasks.append(self._send_find_node(\
+                peer, node_id, new_nodes, tun_meta))
 
         if not tasks:
             log.info("Cannot perform FindNode, as we know no closer nodes.")
@@ -127,7 +141,7 @@ class ChordTasks(object):
                     # If this is the first relay, then start a process task.
                     asyncio.async(\
                         self._process_find_node_relay(\
-                            tun_meta, query_cntr, done_all,\
+                            node_id, tun_meta, query_cntr, done_all,\
                             task_cntr, new_nodes))
 
                 if query_cntr.value == max_concurrent_queries:
@@ -157,11 +171,12 @@ class ChordTasks(object):
                 log.info("Found closer Peer (address={})."\
                     .format(vpeer.peer.address))
 
-        conn_nodes = [vpeer.peer for vpeer in new_nodes if vpeer.path]
-        self.engine.add_peers(conn_nodes)
+        rnodes = [vpeer.peer for vpeer in new_nodes if vpeer.path]
+
+        return rnodes
 
     @asyncio.coroutine
-    def _send_find_node(self, peer, result_trie, tun_meta):
+    def _send_find_node(self, peer, node_id, result_trie, tun_meta):
         local_cid, queue =\
             yield from peer.protocol.open_channel("mpeer", True)
         if not queue:
@@ -169,7 +184,7 @@ class ChordTasks(object):
 
         msg = cp.ChordFindNode()
         msg.sender_port = self.engine._bind_port #FIXME: Put elsewhere.
-        msg.node_id = self.engine.node_id
+        msg.node_id = node_id
 
         peer.protocol.write_channel_data(local_cid, msg.encode())
 
@@ -184,13 +199,14 @@ class ChordTasks(object):
 
         idx = 0
         for rpeer in msg.peers:
-            key = bittrie.XorKey(self.engine.node_id, peer.node_id)
+            key = bittrie.XorKey(node_id, peer.node_id)
             result_trie.setdefault(key, VPeer(rpeer, [idx], tun_meta))
             idx += 1
 
     @asyncio.coroutine
     def _process_find_node_relay(\
-            self, tun_meta, query_cntr, done_all, exited_tasks, result_trie):
+            self, node_id, tun_meta, query_cntr, done_all, exited_tasks,
+            result_trie):
         while True:
             pkt = yield from tun_meta.queue.get()
             if not pkt:
@@ -208,7 +224,7 @@ class ChordTasks(object):
             pmsg = cp.ChordPeerList(pkt)
 
             for rpeer in pmsg.peers:
-                key = bittrie.XorKey(self.engine.node_id, rpeer.node_id)
+                key = bittrie.XorKey(node_id, rpeer.node_id)
                 result_trie.setdefault(key, [rpeer, path, tun_meta])
 
             if not tun_meta.jobs:
