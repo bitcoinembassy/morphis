@@ -32,7 +32,7 @@ class Node():
         else:
             self.instance_postfix = ""
 
-        self.node_key = self._load_key()
+        self.node_key = None
 
         if dburl:
             self.db = db.Db(loop, dburl, 'n' + str(instance_id))
@@ -42,8 +42,6 @@ class Node():
 
         self.bind_address = None
         self.unsecured_transport = None
-
-        self.chord_engine = chord.ChordEngine(self)
 
     @property
     def all_nodes(self):
@@ -72,6 +70,9 @@ class Node():
     def stop(self):
         self.chord_engine.stop()
 
+    def load_key(self):
+        self.node_key = self._load_key()
+
     def _load_key(self):
         key_filename = "node_key-rsa{}.mnk".format(self.instance_postfix)
 
@@ -83,6 +84,9 @@ class Node():
             node_key = rsakey.RsaKey.generate(bits=4096)
             node_key.write_private_key_file(key_filename)
             return node_key
+
+    def init_chord(self):
+        self.chord_engine = chord.ChordEngine(self)
 
 def main():
     global loop, nodes, dumptasksonexit
@@ -188,6 +192,8 @@ def __main():
 
         @asyncio.coroutine
         def _start_node(node):
+            yield from loop.run_in_executor(None, node.load_key)
+            node.init_chord()
             yield from node.start()
 
             if addpeer != None:
