@@ -487,7 +487,7 @@ class ChordEngine():
             if not r:
                 log.info("Peer [dbid={}] connection unwanted, disconnecting."\
                     .format(peer.dbid))
-                return False, False
+                return False
 
         if add_to_peers:
             r = self.add_to_peers(peer)
