@@ -869,18 +869,18 @@ class ChordEngine():
 
     @asyncio.coroutine
     def _check_update_remote_address(self, msg, peer):
-        if not msg.address:
+        if not msg.sender_address:
             return
 
-        if msg.address != peer.address:
+        if msg.sender_address != peer.address:
             log.info(\
                 "Remote Peer said address [{}] has changed, updating our"\
-                " record [{}].".format(msg.address, peer.address))
+                " record [{}].".format(msg.sender_address, peer.address))
 
             self.peers.pop(peer.address, None)
             self.peer_buckets[peer.distance - 1].pop(peer.address, None)
 
-            peer.address = msg.address
+            peer.address = msg.sender_address
 
             self.peers[peer.address] = peer
             self.peer_buckets[peer.distance - 1][peer.address] = peer
