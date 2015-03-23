@@ -186,7 +186,7 @@ class ChordTasks(object):
             return
 
         msg = cp.ChordFindNode()
-        msg.address = self.engine._bind_address #FIXME: Put elsewhere.
+        msg.sender_address = self.engine._bind_address #FIXME: Put elsewhere.
         msg.node_id = node_id
 
         peer.protocol.write_channel_data(local_cid, msg.encode())
@@ -254,8 +254,8 @@ class ChordTasks(object):
 
     @asyncio.coroutine
     def process_find_node_request(self, fnmsg, fndata, peer, queue, local_cid):
-        if fnmsg.address:
-            fnmsg.address = ""
+        if fnmsg.sender_address:
+            fnmsg.sender_address = ""
             fndata = fnmsg.encode()
 
         pt = bittrie.BitTrie()
