@@ -353,7 +353,9 @@ class ChordTasks(object):
         if not tun_meta.queue:
             tun_cntr.value -= 1
             tun_meta.jobs = None
-            self._close_find_node_tunnel(rpeer, rlocal_cid, index, tun_meta)
+            yield from\
+                self._close_find_node_tunnel(\
+                    rpeer, rlocal_cid, index, tun_meta)
             return
 
         req_cntr = Counter(0)

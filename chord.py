@@ -836,7 +836,7 @@ class ChordEngine():
             log.info("Received CHORD_MSG_FIND_NODE message.")
             msg = cp.ChordFindNode(data)
 
-            self._check_update_remote_address(msg, peer)
+            yield from self._check_update_remote_address(msg, peer)
 
             r = yield from\
                 self.tasks.process_find_node_request(\
