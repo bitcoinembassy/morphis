@@ -5,7 +5,6 @@ import cmd
 import logging
 import queue as tqueue
 
-import chord
 import db
 import enc
 import mn1
@@ -270,53 +269,15 @@ class Shell(cmd.Cmd):
     def do_findnode(self, arg):
         "[id] find the node with hex encoded id."
 
-        msg = chord.ChordFindNode()
-        #msg.node_id = int(arg).to_bytes(512>>3, "big")
-        msg.node_id = int(arg, 16).to_bytes(512>>3, "big")
+        node_id = int(arg, 16).to_bytes(512>>3, "big")
 
-        @asyncio.coroutine
-        def _run_find_node(peer):
-            cid, queue = yield from peer.protocol.open_channel("mpeer", True)
-            if not queue:
-                return
+        result = yield from self.peer.engine.tasks.send_find_node(node_id)
 
-            peer.protocol.write_channel_data(cid, msg.encode())
-
-            while True:
-                pkt = yield from queue.get()
-                if not pkt:
-                    self.writeln("nid=[{}] EOF.".format(peer.dbid))
-                    return
-
-                pmsg = chord.ChordPeerList(pkt)
-
-                for r in pmsg.peers:
-                    r.node_id = enc.generate_ID(r.pubkey)
-
-                    self.writeln("nid[{}] FOUND: {:22} diff=[{}]".format(peer.dbid, r.address, hex_string([x ^ y for x, y in zip(r.node_id, msg.node_id)])))
-                    self.flush()
-
-        tasks = {} # {Task, Peer}
-
-        for peer in self.peer.engine.peers.values():
-            if not peer.protocol.remote_banner.startswith("SSH-2.0-mNet_"):
-                log.info("Skipping non morphis connection.")
-                continue
-
-            log.info("Sending FindNode to peer [{}].".format(peer.address))
-
-            task = asyncio.async(_run_find_node(peer), loop=self.loop)
-            tasks[task] = peer
-
-        if not tasks:
-            return
-
-        done, pending = yield from asyncio.wait(\
-            tasks.keys(), loop=self.loop, timeout=2)
-
-        for pend in pending:
-            self.writeln("note: Peer (id={}) didn't finish by timeout."\
-                .format(tasks[pend].dbid))
+        for r in result:
+            self.writeln("nid[{}] FOUND: {:22} diff=[{}]"\
+                .format(peer.dbid, r.address,\
+                    hex_string(\
+                        [x ^ y for x, y in zip(r.node_id, node_id)])))
 
     @asyncio.coroutine
     def do_conn(self, arg):
