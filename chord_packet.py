@@ -12,6 +12,7 @@ import sshtype
 CHORD_MSG_GET_PEERS = 110
 CHORD_MSG_PEER_LIST = 111
 CHORD_MSG_FIND_NODE = 150
+CHORD_MSG_RELAY = 160
 
 log = logging.getLogger(__name__)
 
@@ -125,6 +126,8 @@ class ChordRelay(ChordMessage):
     def __init__(self, buf = None):
         self.index = None
         self.packet = None
+
+        super().__init__(CHORD_MSG_RELAY, buf)
 
     def encode(self):
         nbuf = super().encode()

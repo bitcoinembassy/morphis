@@ -71,14 +71,14 @@ class ChordTasks(object):
             log.info("Performing FindNode to a max depth of [{}]."\
                 .format(maximum_depth))
 
-        new_nodes = bittrie.BitTrie()
+        result_trie = bittrie.BitTrie()
 
         tasks = []
         used_peers = []
 
         for peer in input_trie:
             key = bittrie.XorKey(node_id, peer.node_id)
-            new_nodes[key] = VPeer(peer)
+            result_trie[key] = VPeer(peer)
 
             if len(tasks) == max_concurrent_queries:
                 continue
@@ -89,7 +89,7 @@ class ChordTasks(object):
             used_peers.append(tun_meta)
 
             tasks.append(self._send_find_node(\
-                peer, node_id, new_nodes, tun_meta))
+                peer, node_id, result_trie, tun_meta))
 
         if not tasks:
             log.info("Cannot perform FindNode, as we know no closer nodes.")
@@ -103,7 +103,7 @@ class ChordTasks(object):
 
         for depth in range(1, maximum_depth):
             direct_peers_lower = 0
-            for row in new_nodes:
+            for row in result_trie:
                 if row.path is None:
                     # Already asked direct peers, and only asking ones we
                     # haven't asked before.
@@ -142,7 +142,7 @@ class ChordTasks(object):
                     asyncio.async(\
                         self._process_find_node_relay(\
                             node_id, tun_meta, query_cntr, done_all,\
-                            task_cntr, new_nodes))
+                            task_cntr, result_trie))
 
                 if query_cntr.value == max_concurrent_queries:
                     break
@@ -165,13 +165,16 @@ class ChordTasks(object):
         yield from asyncio.wait(tasks)
 
         if log.isEnabledFor(logging.INFO):
-            for vpeer in new_nodes:
+            for vpeer in result_trie:
                 if not vpeer.path:
                     break
                 log.info("Found closer Peer (address={})."\
                     .format(vpeer.peer.address))
 
-        rnodes = [vpeer.peer for vpeer in new_nodes if vpeer.path]
+        rnodes = [vpeer.peer for vpeer in result_trie if vpeer.path]
+
+        if log.isEnabledFor(logging.INFO):
+            log.info("FindNode found [{}] Peers.".format(len(rnodes)))
 
         return rnodes
 
@@ -199,7 +202,7 @@ class ChordTasks(object):
 
         idx = 0
         for rpeer in msg.peers:
-            key = bittrie.XorKey(node_id, peer.node_id)
+            key = bittrie.XorKey(node_id, rpeer.node_id)
             result_trie.setdefault(key, VPeer(rpeer, [idx], tun_meta))
             idx += 1
 
@@ -225,7 +228,7 @@ class ChordTasks(object):
 
             for rpeer in pmsg.peers:
                 key = bittrie.XorKey(node_id, rpeer.node_id)
-                result_trie.setdefault(key, [rpeer, path, tun_meta])
+                result_trie.setdefault(key, VPeer(rpeer, path, tun_meta))
 
             if not tun_meta.jobs:
                 log.info(\
@@ -380,10 +383,7 @@ class ChordTasks(object):
             if not tun_meta.jobs:
                 return
             if not pkt:
-                jobs = tun_meta.jobs
-                tun_meta.jobs = None
-                yield from jobs.put(None)
-                return
+                break
 
             if cp.ChordMessage.parse_type(pkt) != cp.CHORD_MSG_PEER_LIST:
                 log.info("Skipping unexpected non PeerList packet (type=[{}])."\
@@ -399,17 +399,21 @@ class ChordTasks(object):
             msg.index = index
             msg.packet = pkt
 
-            rpeer.protocol.write_channel_data(rlocal_cid, pkt)
+            rpeer.protocol.write_channel_data(rlocal_cid, msg.encode())
 
             req_cntr.value -= 1
+
+        jobs = tun_meta.jobs
+        tun_meta.jobs = None
+        yield from jobs.put(None)
 
     @asyncio.coroutine
     def _close_find_node_tunnel(self, rpeer, rlocal_cid, index, req_cntr):
         for _ in range(req_cntr.value):
             # Signal the query finished with no results.
             rmsg = cp.ChordRelay()
-            cp.index = index
-            cp.packet = EMPTY_PEER_LIST_PACKET
+            rmsg.index = index
+            rmsg.packet = EMPTY_PEER_LIST_PACKET
 
             rpeer.protocol.write_channel_data(rlocal_cid, rmsg.encode())
 
