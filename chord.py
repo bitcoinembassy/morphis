@@ -608,12 +608,12 @@ class ChordEngine():
                             log.info("Already connected to Peer, disconnecting redundant connection.")
                             return False, None
 
-                        host, port = dbpeer.address.split(':')
-                        if host != peer.protocol.address[0]:
-                            log.info("Remote Peer host has changed, updating our db record.")
-                            dbpeer.address = "{}:{}".format(\
-                            peer.protocol.address[0],\
-                            port)
+#                        host, port = dbpeer.address.split(':')
+#                        if host != peer.protocol.address[0]:
+#                            log.info("Remote Peer host has changed, updating our db record.")
+#                            dbpeer.address = "{}:{}".format(\
+#                            peer.protocol.address[0],\
+#                            port)
 
                     dbpeer.connected = True
 
@@ -802,27 +802,28 @@ class ChordEngine():
             log.info("Received CHORD_MSG_GET_PEERS message.")
             msg = cp.ChordGetPeers(data)
 
-            if peer.protocol.server_mode:
-                omsg = cp.ChordGetPeers()
-                omsg.sender_port = self._bind_port
-
-                peer.protocol.write_channel_data(local_cid, omsg.encode())
-
-            self._check_update_remote_port(msg, peer)
-
-            pl = list(self.peers.values())
-            while True:
-                cnt = len(pl)
-
-                msg = cp.ChordPeerList()
-                msg.peers = pl[:min(25, cnt)]
-
-                peer.protocol.write_channel_data(local_cid, msg.encode())
-
-                if cnt <= 25:
-                    break;
-
-                pl = pl[25:]
+            raise Exception()
+#            if peer.protocol.server_mode:
+#                omsg = cp.ChordGetPeers()
+#                omsg.sender_port = self._bind_port
+#
+#                peer.protocol.write_channel_data(local_cid, omsg.encode())
+#
+#            self._check_update_remote_address(msg, peer)
+#
+#            pl = list(self.peers.values())
+#            while True:
+#                cnt = len(pl)
+#
+#                msg = cp.ChordPeerList()
+#                msg.peers = pl[:min(25, cnt)]
+#
+#                peer.protocol.write_channel_data(local_cid, msg.encode())
+#
+#                if cnt <= 25:
+#                    break;
+#
+#                pl = pl[25:]
 
         elif packet_type == cp.CHORD_MSG_PEER_LIST:
             log.info("Received CHORD_MSG_PEER_LIST message.")
@@ -835,7 +836,7 @@ class ChordEngine():
             log.info("Received CHORD_MSG_FIND_NODE message.")
             msg = cp.ChordFindNode(data)
 
-            self._check_update_remote_port(msg, peer)
+            self._check_update_remote_address(msg, peer)
 
             r = yield from\
                 self.tasks.process_find_node_request(\
@@ -867,21 +868,19 @@ class ChordEngine():
                 .format(packet_type))
 
     @asyncio.coroutine
-    def _check_update_remote_port(self, msg, peer):
-        if not msg.sender_port:
+    def _check_update_remote_address(self, msg, peer):
+        if not msg.address:
             return
 
-        host, port = peer.address.split(':')
-
-        if int(port) != msg.sender_port:
+        if msg.address != peer.address:
             log.info(\
-                "Remote Peer said port [{}] has changed, updating our records"\
-                " [{}].".format(msg.sender_port, port))
+                "Remote Peer said address [{}] has changed, updating our"\
+                " record [{}].".format(msg.address, peer.address))
 
             self.peers.pop(peer.address, None)
             self.peer_buckets[peer.distance - 1].pop(peer.address, None)
 
-            peer.address = "{}:{}".format(host, msg.sender_port)
+            peer.address = msg.address
 
             self.peers[peer.address] = peer
             self.peer_buckets[peer.distance - 1][peer.address] = peer

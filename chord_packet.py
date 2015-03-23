@@ -103,14 +103,14 @@ class ChordPeerList(ChordMessage):
 
 class ChordFindNode(ChordMessage):
     def __init__(self, buf = None):
-        self.sender_port = 0
+        self.sender_address = ""
         self.node_id = None
 
         super().__init__(CHORD_MSG_FIND_NODE, buf)
 
     def encode(self):
         nbuf = super().encode()
-        nbuf += struct.pack(">L", self.sender_port)
+        nbuf += sshtype.encodeString(self.sender_address)
         nbuf += self.node_id
 
         return nbuf
@@ -118,8 +118,8 @@ class ChordFindNode(ChordMessage):
     def parse(self):
         super().parse()
         i = 1
-        self.sender_port = struct.unpack(">L", self.buf[i:i+4])[0]
-        i += 4
+        l, self.sender_address = sshtype.parseString(self.buf[i:])
+        i += l
         self.node_id = self.buf[i:]
 
 class ChordRelay(ChordMessage):
