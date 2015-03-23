@@ -77,6 +77,10 @@ class ChordTasks(object):
 
             tasks.append(self._send_find_node(peer, new_nodes, tun_meta))
 
+        if not tasks:
+            log.info("Cannot perform FindNode, as we know no closer nodes.")
+            return
+
         done, pending = yield from asyncio.wait(tasks, loop=self.loop)
 
         query_cntr = Counter(0)
