@@ -135,10 +135,10 @@ class ChordTasks(object):
                 row.used = True
                 query_cntr.value += 1
                 tun_meta.jobs += 1
-                task_cntr.value += 1
 
                 if tun_meta.jobs == 1:
                     # If this is the first relay, then start a process task.
+                    task_cntr.value += 1
                     asyncio.async(\
                         self._process_find_node_relay(\
                             node_id, tun_meta, query_cntr, done_all,\
@@ -205,7 +205,7 @@ class ChordTasks(object):
 
     @asyncio.coroutine
     def _process_find_node_relay(\
-            self, node_id, tun_meta, query_cntr, done_all, exited_tasks,
+            self, node_id, tun_meta, query_cntr, done_all, task_cntr,
             result_trie):
         while True:
             pkt = yield from tun_meta.queue.get()
@@ -247,7 +247,7 @@ class ChordTasks(object):
         tun_meta.queue = None
         tun_meta.local_cid = None
 
-        exited_tasks.value += 1
+        task_cntr.value -= 1
 
     @asyncio.coroutine
     def process_find_node_request(self, fnmsg, fndata, peer, queue, local_cid):
