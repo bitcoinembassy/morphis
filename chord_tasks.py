@@ -355,7 +355,7 @@ class ChordTasks(object):
             tun_meta.jobs = None
             yield from\
                 self._close_find_node_tunnel(\
-                    rpeer, rlocal_cid, index, tun_meta)
+                    rpeer, rlocal_cid, index, tun_meta.value)
             return
 
         req_cntr = Counter(0)
@@ -365,8 +365,9 @@ class ChordTasks(object):
                 rpeer, rlocal_cid, index, tun_meta, req_cntr),
             loop=self.loop)
 
+        jobs = tun_meta.jobs
         while True:
-            pkt = yield from tun_meta.jobs.get()
+            pkt = yield from jobs.get()
             if not pkt or not tun_meta.jobs:
                 tun_cntr.value -= 1
                 yield from\
@@ -390,6 +391,7 @@ class ChordTasks(object):
             if cp.ChordMessage.parse_type(pkt) != cp.CHORD_MSG_PEER_LIST:
                 log.info("Skipping unexpected non PeerList packet (type=[{}])."\
                     .format(cp.ChordMessage.parse_type(pkt)))
+                continue
 
             # Test that it is valid.
             try:
@@ -405,13 +407,15 @@ class ChordTasks(object):
 
             req_cntr.value -= 1
 
+        yield from self._close_find_node_tunnel(rpeer, rlocal_cid, index, 1)
+
         jobs = tun_meta.jobs
         tun_meta.jobs = None
         yield from jobs.put(None)
 
     @asyncio.coroutine
-    def _close_find_node_tunnel(self, rpeer, rlocal_cid, index, req_cntr):
-        for _ in range(req_cntr.value):
+    def _close_find_node_tunnel(self, rpeer, rlocal_cid, index, cnt):
+        for _ in range(cnt):
             # Signal the query finished with no results.
             rmsg = cp.ChordRelay()
             rmsg.index = index
