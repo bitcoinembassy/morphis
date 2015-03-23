@@ -46,6 +46,14 @@ class ChordTasks(object):
         conn_nodes = yield from\
             self.send_find_node(self.engine.node_id, self.engine.peer_trie)
 
+        if not conn_nodes:
+            return
+
+        for node in conn_nodes:
+            # Do not trust hearsay node_id; add_peers will recalculate it from
+            # the public key.
+            node.node_id = None
+
         yield from self.engine.add_peers(conn_nodes)
 
     @asyncio.coroutine
