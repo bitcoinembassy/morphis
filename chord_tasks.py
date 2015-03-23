@@ -69,7 +69,7 @@ class ChordTasks(object):
 
             if len(tasks) == max_concurrent_queries:
                 continue
-            if not peer.ready:
+            if not peer.ready():
                 continue
 
             tun_meta = TunnelMeta(peer, 0)
