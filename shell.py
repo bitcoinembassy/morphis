@@ -275,9 +275,8 @@ class Shell(cmd.Cmd):
 
         for r in result:
             self.writeln("nid[{}] FOUND: {:22} diff=[{}]"\
-                .format(peer.dbid, r.address,\
-                    hex_string(\
-                        [x ^ y for x, y in zip(r.node_id, node_id)])))
+                .format(r.id, r.address,\
+                    hex_string([x ^ y for x, y in zip(r.node_id, node_id)])))
 
     @asyncio.coroutine
     def do_conn(self, arg):
