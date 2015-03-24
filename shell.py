@@ -93,11 +93,14 @@ class Shell(cmd.Cmd):
         except AttributeError:
             return self.default(line)
 
-        if asyncio.iscoroutinefunction(func):
-            r = yield from func(arg)
-            return r
-        else:
-            return func(arg)
+        try:
+            if asyncio.iscoroutinefunction(func):
+                r = yield from func(arg)
+                return r
+            else:
+                return func(arg)
+        except Exception as e:
+            self.writeln("Exception [{}] executing command.".format(e))
 
     @asyncio.coroutine
     def readline(self):
@@ -249,17 +252,15 @@ class Shell(cmd.Cmd):
         return self.do_listpeers(arg)
 
     def do_listpeers(self, arg):
-        peers = self.peer.engine.peers
+        peers = self.peer.engine.peers.values()
+
         if arg:
             if arg == 'i':
-                peers = sorted(peers.values(), key=\
+                peers = sorted(peers, key=\
                     lambda peer: peer.dbid)
             elif arg == 'p':
-                peers = sorted(peers.values(), key=\
+                peers = sorted(peers, key=\
                     lambda peer: peer.address.split(':')[1])
-        else:
-            peers = peers.values()
-
         
         for peer in peers:
             self.writeln(\
