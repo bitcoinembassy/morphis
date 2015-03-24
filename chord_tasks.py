@@ -48,9 +48,18 @@ class ChordTasks(object):
             log.info("No connected nodes, unable to perform stabilize.")
             return
 
+        # Fetch closest to ourselves.
         yield from\
             self._do_stabilize(self.engine.node_id, self.engine.peer_trie)
 
+        # Fetch furthest from ourselves.
+        node_id = bytearray(self.engine.node_id)
+        for i in range(len(node_id)):
+            node_id[i] = (~node_id[i]) & 0xFF
+        yield from\
+            self._do_stabilize(node_id)
+
+        # Fetch each bucket starting at furthest, stopping when we get none.
         node_id = bytearray(self.engine.node_id)
         for bit in range(chord.NODE_ID_BITS-1, -1, -1):
             if log.isEnabledFor(logging.INFO):
@@ -78,6 +87,8 @@ class ChordTasks(object):
 
             nodes = yield from self._do_stabilize(node_id)
 
+            # For now, stop when we get no results for a bucket, assume the
+            # network isn't big enough for closer nodes yet.
             if not nodes:
                 break
 
