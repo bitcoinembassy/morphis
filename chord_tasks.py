@@ -43,6 +43,10 @@ class ChordTasks(object):
 
     @asyncio.coroutine
     def do_stabilize(self):
+        if not self.engine.peers:
+            log.info("No connected nodes, unable to perform stabilize.")
+            return
+
         conn_nodes = yield from\
             self.send_find_node(self.engine.node_id, self.engine.peer_trie)
 
@@ -58,6 +62,10 @@ class ChordTasks(object):
 
     @asyncio.coroutine
     def send_find_node(self, node_id, input_trie=None):
+        if not self.engine.peers:
+            log.info("No connected nodes, unable to send FindNode.")
+            return
+
         if not input_trie:
             input_trie = bittrie.BitTrie()
             for peer in self.engine.peer_trie:

@@ -64,6 +64,9 @@ class ChordEngine():
         self._process_connection_count_handle = None
         self._last_process_connection_count = datetime(1, 1, 1)
 
+        self._do_stabilize_handle = None
+        self._last_stabilize = None
+
     @property
     def bind_address(self):
         return self._bind_address
@@ -189,7 +192,7 @@ class ChordEngine():
         added = yield from self.loop.run_in_executor(None, dbcall)
 
         if process_check_connections and added and self.running:
-            yield from self._process_connection_count()
+            yield from self.process_connection_count()
 
         return added
 
@@ -207,17 +210,39 @@ class ChordEngine():
 
         log.info("Node listening on [{}:{}].".format(host, port))
 
-        yield from self._process_connection_count()
+        yield from self.process_connection_count()
+
+        yield from self.do_stabilize()
+
+    def _async_do_stabilize(self):
+        asyncio.async(self.do_stabilize(), loop=self.loop)
+
+    @asyncio.coroutine
+    def do_stabilize(self):
+        if log.isEnabledFor(logging.INFO):
+            now = datetime.today()
+            if self._last_stabilize:
+                diff = now - self._last_stabilize
+                log.info("Last stabilize was {} seconds ago.".format(diff))
+            self._last_stabilize = now
+
+        if self._do_stabilize_handle:
+            self._do_stabilize_handle.cancel()
+
+        self._do_stabilize_handle =\
+            self.loop.call_later(60, self._async_do_stabilize)
+
+        yield from self.tasks.do_stabilize()
 
     def stop(self):
         if self.server:
             self.server.close()
 
     def _async_process_connection_count(self):
-        asyncio.async(self._process_connection_count())
+        asyncio.async(self.process_connection_count(), loop=self.loop)
 
     @asyncio.coroutine
-    def _process_connection_count(self):
+    def process_connection_count(self):
         cnt = len(self.pending_connections) + len(self.peers)
         if cnt >= self.maximum_connections:
             return
@@ -239,10 +264,10 @@ class ChordEngine():
 
         needed = self.maximum_connections - cnt
 
-        yield from self.__process_connection_count(needed)
+        yield from self._process_connection_count(needed)
 
     @asyncio.coroutine
-    def __process_connection_count(self, needed):
+    def _process_connection_count(self, needed):
         log.info("Processing connection count.")
 
         def dbcall():
@@ -712,9 +737,6 @@ class ChordEngine():
         if server_mode:
             # TODO: Do checks, limits, and stuff.
             return;
-
-        # Client requests a GetPeers upon connection.
-        asyncio.async(self.tasks.do_stabilize(), loop=self.loop)
 
     @asyncio.coroutine
     def request_open_channel(self, peer, req):
