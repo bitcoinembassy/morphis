@@ -404,6 +404,8 @@ class ChordTasks(object):
                 if log.isEnabledFor(logging.INFO):
                     log.info("Skipping request for disconnected tunnel [{}]."\
                         .format(rmsg.index))
+                yield from self._signal_find_node_tunnel_closed(\
+                    peer, local_cid, index, rmsg.index)
 
     @asyncio.coroutine
     def _process_find_node_tunnel(\
@@ -422,7 +424,7 @@ class ChordTasks(object):
             assert job_cnt == 1
 
             yield from\
-                self._close_find_node_tunnel(\
+                self._signal_find_node_tunnel_closed(\
                     rpeer, rlocal_cid, index, job_cnt)
             return
 
@@ -477,14 +479,15 @@ class ChordTasks(object):
 
         outstanding = tun_meta.jobs.qsize() + req_cntr.value
         yield from\
-            self._close_find_node_tunnel(rpeer, rlocal_cid, index, outstanding)
+            self._signal_find_node_tunnel_closed(\
+                rpeer, rlocal_cid, index, outstanding)
 
         jobs = tun_meta.jobs
         tun_meta.jobs = None
         yield from jobs.put(None)
 
     @asyncio.coroutine
-    def _close_find_node_tunnel(self, rpeer, rlocal_cid, index, cnt):
+    def _signal_find_node_tunnel_closed(self, rpeer, rlocal_cid, index, cnt):
         rmsg = cp.ChordRelay()
         rmsg.index = index
         rmsg.packet = EMPTY_PEER_LIST_PACKET
