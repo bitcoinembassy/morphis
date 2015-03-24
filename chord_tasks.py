@@ -401,10 +401,14 @@ class ChordTasks(object):
             yield from tun_meta.peer.protocol.open_channel("mpeer", True)
         if not tun_meta.queue:
             tun_cntr.value -= 1
+
+            job_cnt = tun_meta.jobs.qsize()
             tun_meta.jobs = None
+            assert job_cnt == 1
+
             yield from\
                 self._close_find_node_tunnel(\
-                    rpeer, rlocal_cid, index, tun_meta.value)
+                    rpeer, rlocal_cid, index, job_cnt)
             return
 
         req_cntr = Counter(0)
@@ -456,7 +460,9 @@ class ChordTasks(object):
 
             req_cntr.value -= 1
 
-        yield from self._close_find_node_tunnel(rpeer, rlocal_cid, index, 1)
+        outstanding = tun_meta.jobs.qsize() + req_cntr.value
+        yield from\
+            self._close_find_node_tunnel(rpeer, rlocal_cid, index, outstanding)
 
         jobs = tun_meta.jobs
         tun_meta.jobs = None
