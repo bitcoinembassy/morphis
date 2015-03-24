@@ -67,6 +67,8 @@ class ChordEngine():
         self._do_stabilize_handle = None
         self._last_stabilize = None
 
+        self._tasks = ct.ChordTasks(self)
+
     @property
     def bind_address(self):
         return self._bind_address
@@ -232,7 +234,7 @@ class ChordEngine():
         self._do_stabilize_handle =\
             self.loop.call_later(60, self._async_do_stabilize)
 
-        yield from self.tasks.do_stabilize()
+        yield from self._tasks.do_stabilize()
 
     def stop(self):
         if self.server:
@@ -518,9 +520,6 @@ class ChordEngine():
             r = self.add_to_peers(peer)
             if not r:
                 return False
-
-        # Do any init that we delay until after auth to save cpu/mem/Etc.
-        self.tasks = ct.ChordTasks(self)
 
         return True
 
@@ -861,7 +860,7 @@ class ChordEngine():
             yield from self._check_update_remote_address(msg, peer)
 
             r = yield from\
-                self.tasks.process_find_node_request(\
+                self._tasks.process_find_node_request(\
                     msg, data, peer, queue, local_cid)
 
             return True
