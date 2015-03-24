@@ -486,13 +486,14 @@ class ChordTasks(object):
 
     @asyncio.coroutine
     def _close_find_node_tunnel(self, rpeer, rlocal_cid, index, cnt):
+        rmsg = cp.ChordRelay()
+        rmsg.index = index
+        rmsg.packet = EMPTY_PEER_LIST_PACKET
+        pkt = rmsg.encode()
+
         for _ in range(cnt):
             # Signal the query finished with no results.
-            rmsg = cp.ChordRelay()
-            rmsg.index = index
-            rmsg.packet = EMPTY_PEER_LIST_PACKET
-
-            rpeer.protocol.write_channel_data(rlocal_cid, rmsg.encode())
+            rpeer.protocol.write_channel_data(rlocal_cid, pkt)
 
     @asyncio.coroutine
     def _close_tunnels(self, meta_list):
