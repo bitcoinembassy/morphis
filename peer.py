@@ -52,12 +52,18 @@ class Peer():
     def ready(self):
         return self._protocol.status is mn1.Status.ready
 
+    def update_distance(self):
+        self.distance, self.direction =\
+            self.engine.calc_distance(self.engine.node_id, self.node_id)
+
     def _peer_authenticated(self, key):
         self.node_key = key
-        self.node_id = enc.generate_ID(self.node_key.asbytes())
+
+        if not self.node_id:
+            self.node_id = enc.generate_ID(self.node_key.asbytes())
 
         if not self.distance:
-            update_distance(self.engine.node_id, self)
+            self.update_distance()
 
 class ConnectionHandler():
     def __init__(self, peer):
@@ -138,30 +144,3 @@ class ChannelHandler():
         r = yield from self.peer.engine.channel_data(\
             self.peer, m.recipient_channel, m.data)
         return r
-
-# This works on peer.Peer as well as db.Peer.
-def update_distance(node_id, peer):
-    peer.distance, peer.direction =\
-        calc_distance(node_id, peer.node_id)
-
-# Returns: distance, direction
-def calc_distance(nid, pid):
-    if log.isEnabledFor(logging.DEBUG):
-        log.debug("pid=\n[{}], nid=\n[{}].".format(hex_dump(pid),\
-            hex_dump(nid)))
-
-    dist = 0
-    direction = 0
-
-    for i in range(64): # 64 bytes in 512 bits.
-        if pid[i] != nid[i]:
-            direction = 1 if pid[i] > nid[i] else -1
-
-            xv = pid[i] ^ nid[i]
-            xv = log_base2_8bit(xv)
-
-            dist = 8 * (63 - i) + xv
-
-            break
-
-    return dist, direction

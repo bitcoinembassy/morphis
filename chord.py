@@ -26,7 +26,6 @@ import enc
 from db import Peer
 from mutil import hex_dump, log_base2_8bit, hex_string
 
-
 BUCKET_SIZE = 2
 
 ZERO_MEM_512_BIT = bytearray(512>>3)
@@ -158,7 +157,7 @@ class ChordEngine():
                     if peer.pubkey:
                         assert peer.node_id is None
                         peer.node_id = enc.generate_ID(peer.pubkey)
-                        mnpeer.update_distance(self.node_id, peer)
+                        peer.update_distance()
                         q = q.filter(Peer.node_id == peer.node_id)
                     elif peer.address:
                         assert peer.node_id is None
@@ -218,6 +217,28 @@ class ChordEngine():
 
     def _async_do_stabilize(self):
         asyncio.async(self.do_stabilize(), loop=self.loop)
+
+    def calc_distance(self, nid, pid):
+        "Returns: distance, direction"
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("pid=\n[{}], nid=\n[{}].".format(hex_dump(pid),\
+                hex_dump(nid)))
+
+        dist = 0
+        direction = 0
+
+        for i in range(64): # 64 bytes in 512 bits.
+            if pid[i] != nid[i]:
+                direction = 1 if pid[i] > nid[i] else -1
+
+                xv = pid[i] ^ nid[i]
+                xv = log_base2_8bit(xv)
+
+                dist = 8 * (63 - i) + xv
+
+                break
+
+        return dist, direction
 
     @asyncio.coroutine
     def do_stabilize(self):
@@ -316,6 +337,7 @@ class ChordEngine():
                                 Peer.last_connect_attempt < grace))\
                         .order_by(desc(Peer.direction), Peer.node_id)\
                         .limit(bucket_needs * 2)
+#FIXME: Check what direction is doing here since this is really kad implemented.
 
                     r = q.all()
 

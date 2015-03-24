@@ -47,8 +47,33 @@ class ChordTasks(object):
             log.info("No connected nodes, unable to perform stabilize.")
             return
 
+        yield from self._do_stabilize(self.engine.node_id)
+
+        node_id = bytearray(self.engine.node_id)
+        for bit in range(512-1, -1, -1):
+            if bit != 511:
+                byte_ = ((bit+1) >> 3)
+                node_id[byte_] ^= 1 << ((bit+1) % 8) # Undo last change.
+            byte_ = (512>>3) - 1 - (bit >> 3)
+            node_id[byte_] ^= 1 << (bit % 8)
+
+            assert self.engine.calc_distance(node_id, self.engine.node_id)[0]\
+                == bit,\
+                "calc={}, bit={}."\
+                    .format(\
+                        self.engine.calc_distance(\
+                            node_id, self.engine.node_id)[0],\
+                        bit)
+
+            nodes = yield from self._do_stabilize(node_id)
+
+            if not nodes:
+                break
+
+    @asyncio.coroutine
+    def _do_stabilize(self, node_id):
         conn_nodes = yield from\
-            self.send_find_node(self.engine.node_id, self.engine.peer_trie)
+            self.send_find_node(node_id, self.engine.peer_trie)
 
         if not conn_nodes:
             return
@@ -59,6 +84,8 @@ class ChordTasks(object):
             node.node_id = None
 
         yield from self.engine.add_peers(conn_nodes)
+
+        return conn_nodes
 
     @asyncio.coroutine
     def send_find_node(self, node_id, input_trie=None):
