@@ -24,6 +24,7 @@ dumptasksonexit = False
 
 class Node():
     def __init__(self, loop, instance_id=None, dburl=None):
+        self.chord_engine = None
         self.loop = loop
 
         self.instance = instance_id
