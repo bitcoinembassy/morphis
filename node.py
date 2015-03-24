@@ -161,7 +161,9 @@ def __main():
     if instance == None:
         instance = 0
     bindaddr = args.bind
-    if bindaddr == None:
+    if bindaddr:
+        bindaddr.split(':') # Just to preemptively test.
+    else:
         bindaddr = "127.0.0.1:5555"
     instanceoffset = args.instanceoffset
     if instanceoffset:
@@ -179,20 +181,23 @@ def __main():
     dburl = args.dburl
     dumptasksonexit = args.dumptasksonexit
 
-    nodes = []
-
     while True:
-        node = Node(loop, instance, dburl)
-        yield from node.create_schema()
-        nodes.append(node)
-
-        if bindaddr:
-            bindaddr.split(':') # Just to preemptively test.
-            node.bind_address = bindaddr
 
         @asyncio.coroutine
-        def _start_node(node):
-            yield from loop.run_in_executor(None, node.load_key)
+        def _start_node(instance, bindaddr):
+            node = Node(loop, instance, dburl)
+            nodes.append(node)
+
+            yield from node.create_schema()
+
+            if bindaddr:
+                node.bind_address = bindaddr
+
+            if parallel_launch:
+                yield from loop.run_in_executor(None, node.load_key)
+            else:
+                node.load_key()
+
             node.init_chord()
             yield from node.start()
 
@@ -201,10 +206,10 @@ def __main():
                     for peer in addpeer:
                         yield from node.chord_engine.connect_peer(peer)
 
-        start_task = asyncio.async(_start_node(node), loop=loop)
-
-        if not parallel_launch:
-            yield from start_task
+        if parallel_launch:
+            asyncio.async(_start_node(instance, bindaddr), loop=loop)
+        else:
+            yield from _start_node(instance, bindaddr)
 
         log.info("Started Instance #{}.".format(instance))
 
