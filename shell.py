@@ -2,6 +2,7 @@ import llog
 
 import asyncio
 import cmd
+from datetime import datetime
 import logging
 import queue as tqueue
 
@@ -271,7 +272,10 @@ class Shell(cmd.Cmd):
 
         node_id = int(arg, 16).to_bytes(512>>3, "big")
 
+        start = datetime.today()
         result = yield from self.peer.engine.tasks.send_find_node(node_id)
+        diff = datetime.today() - start
+        self.writeln("send_find_node(..) took: {}.".format(diff))
 
         for r in result:
             self.writeln("nid[{}] FOUND: {:22} diff=[{}]"\
@@ -322,6 +326,18 @@ class Shell(cmd.Cmd):
 
         code = "list(filter(lambda x: x[1], map(lambda node: [node.bind_address, list(filter(lambda x: x[1], map(lambda peer: [peer.address, list(peer.protocol._channel_map.items())], node.chord_engine.peers.values())))], self.peer.engine.node.all_nodes)))"
         return self.do_eval(code)
+
+    @asyncio.coroutine
+    def do_time(self, arg):
+        "Time the passed command line."
+
+        start = datetime.today()
+        r = yield from self.onecmd(arg)
+        diff = datetime.today() - start
+
+        self.writeln("Timed command took: {}.".format(diff))
+
+        self.lastcmd = "time " + arg
 
     def emptyline(self):
         pass
