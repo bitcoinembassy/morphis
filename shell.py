@@ -6,6 +6,7 @@ from datetime import datetime
 import logging
 import queue as tqueue
 
+import chord
 import db
 import enc
 import mn1
@@ -271,7 +272,7 @@ class Shell(cmd.Cmd):
     def do_findnode(self, arg):
         "[id] find the node with hex encoded id."
 
-        node_id = int(arg, 16).to_bytes(512>>3, "big")
+        node_id = int(arg, 16).to_bytes(chord.NODE_ID_BYTES, "big")
 
         start = datetime.today()
         result = yield from self.peer.engine.tasks.send_find_node(node_id)

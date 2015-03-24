@@ -28,7 +28,8 @@ from mutil import hex_dump, log_base2_8bit, hex_string
 
 BUCKET_SIZE = 2
 
-ZERO_MEM_512_BIT = bytearray(512>>3)
+NODE_ID_BITS = 512
+NODE_ID_BYTES = NODE_ID_BITS >> 3
 
 log = logging.getLogger(__name__)
 
@@ -48,7 +49,7 @@ class ChordEngine():
         self.forced_connects = {} # {id, Peer}
         self.pending_connections = {} # {Task, Peer->dbid}
         self.peers = {} # {address: Peer}.
-        self.peer_buckets = [{} for i in range(512)] # [{addr: Peer}]
+        self.peer_buckets = [{} for i in range(NODE_ID_BITS)] # [{addr: Peer}]
         self.peer_trie = bittrie.BitTrie() # {node_id, Peer}
 
         self.minimum_connections = 10
@@ -157,7 +158,10 @@ class ChordEngine():
                     if peer.pubkey:
                         assert peer.node_id is None
                         peer.node_id = enc.generate_ID(peer.pubkey)
-                        peer.update_distance()
+                        peer.distance, peer.direction =\
+                            self.calc_distance(\
+                                self.node_id,\
+                                peer.node_id)
                         q = q.filter(Peer.node_id == peer.node_id)
                     elif peer.address:
                         assert peer.node_id is None
@@ -227,14 +231,15 @@ class ChordEngine():
         dist = 0
         direction = 0
 
-        for i in range(64): # 64 bytes in 512 bits.
+        for i in range(NODE_ID_BYTES):
             if pid[i] != nid[i]:
                 direction = 1 if pid[i] > nid[i] else -1
 
                 xv = pid[i] ^ nid[i]
                 xv = log_base2_8bit(xv)
 
-                dist = 8 * (63 - i) + xv
+                # (byte * 8) + bit.
+                dist = ((NODE_ID_BYTES - 1 - i) << 3) + xv
 
                 break
 
@@ -313,7 +318,7 @@ class ChordEngine():
         fetched = False
         distance = closestdistance
         while True:
-            if distance >= 512 + 1:
+            if distance >= NODE_ID_BITS + 1:
                 if fetched:
                     fetched = False
                     distance = closestdistance

@@ -8,6 +8,7 @@ import math
 from sqlalchemy import func
 
 import bittrie
+import chord
 import chord_packet as cp
 from chordexception import ChordException
 from db import Peer
@@ -50,11 +51,11 @@ class ChordTasks(object):
         yield from self._do_stabilize(self.engine.node_id)
 
         node_id = bytearray(self.engine.node_id)
-        for bit in range(512-1, -1, -1):
-            if bit != 511:
-                byte_ = ((bit+1) >> 3)
+        for bit in range(chord.NODE_ID_BYTES-1, -1, -1):
+            if bit != chord.NODE_ID_BYTES-1:
+                byte_ = chord.NODE_ID_BYTES - 1 - ((bit+1) >> 3)
                 node_id[byte_] ^= 1 << ((bit+1) % 8) # Undo last change.
-            byte_ = (512>>3) - 1 - (bit >> 3)
+            byte_ = chord.NODE_ID_BYTES - 1 - (bit >> 3)
             node_id[byte_] ^= 1 << (bit % 8)
 
             assert self.engine.calc_distance(node_id, self.engine.node_id)[0]\
