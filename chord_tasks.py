@@ -392,7 +392,6 @@ class ChordTasks(object):
 
             if not tun_meta.queue:
                 assert not rmsg.packet
-                tun_cntr.value += 1
                 tun_meta.jobs = asyncio.Queue()
                 asyncio.async(\
                     self._process_find_node_tunnel(\
@@ -501,7 +500,9 @@ class ChordTasks(object):
             if not tun_meta.queue:
                 continue
             if tun_meta.jobs:
-                yield from tun_meta.jobs.put(None)
+                jobs = tun_meta.jobs
+                tun_meta.jobs = None
+                yield from jobs.put(None)
 
             yield from\
                 tun_meta.peer.protocol.close_channel(tun_meta.local_cid)
