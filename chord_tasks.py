@@ -48,10 +48,15 @@ class ChordTasks(object):
             log.info("No connected nodes, unable to perform stabilize.")
             return
 
-        yield from self._do_stabilize(self.engine.node_id)
+        yield from\
+            self._do_stabilize(self.engine.node_id, self.engine.peer_trie)
 
         node_id = bytearray(self.engine.node_id)
-        for bit in range(chord.NODE_ID_BYTES-1, -1, -1):
+        for bit in range(chord.NODE_ID_BITS-1, -1, -1):
+            if log.isEnabledFor(logging.INFO):
+                log.info("Performing FindNode for bucket [{}]."\
+                    .format(bit+1))
+
             if bit != chord.NODE_ID_BYTES-1:
                 byte_ = chord.NODE_ID_BYTES - 1 - ((bit+1) >> 3)
                 node_id[byte_] ^= 1 << ((bit+1) % 8) # Undo last change.
@@ -72,9 +77,9 @@ class ChordTasks(object):
                 break
 
     @asyncio.coroutine
-    def _do_stabilize(self, node_id):
+    def _do_stabilize(self, node_id, input_trie=None):
         conn_nodes = yield from\
-            self.send_find_node(node_id, self.engine.peer_trie)
+            self.send_find_node(node_id, input_trie)
 
         if not conn_nodes:
             return
