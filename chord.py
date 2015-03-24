@@ -67,7 +67,7 @@ class ChordEngine():
         self._do_stabilize_handle = None
         self._last_stabilize = None
 
-        self._tasks = ct.ChordTasks(self)
+        self.tasks = ct.ChordTasks(self)
 
     @property
     def bind_address(self):
@@ -225,7 +225,7 @@ class ChordEngine():
             now = datetime.today()
             if self._last_stabilize:
                 diff = now - self._last_stabilize
-                log.info("Last stabilize was {} seconds ago.".format(diff))
+                log.info("Time since last stabilize: [{}].".format(diff))
             self._last_stabilize = now
 
         if self._do_stabilize_handle:
@@ -234,7 +234,7 @@ class ChordEngine():
         self._do_stabilize_handle =\
             self.loop.call_later(60, self._async_do_stabilize)
 
-        yield from self._tasks.do_stabilize()
+        yield from self.tasks.do_stabilize()
 
     def stop(self):
         if self.server:
@@ -860,7 +860,7 @@ class ChordEngine():
             yield from self._check_update_remote_address(msg, peer)
 
             r = yield from\
-                self._tasks.process_find_node_request(\
+                self.tasks.process_find_node_request(\
                     msg, data, peer, queue, local_cid)
 
             return True
