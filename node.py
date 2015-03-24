@@ -38,8 +38,10 @@ class Node():
         if dburl:
             self.db = db.Db(loop, dburl, 'n' + str(instance_id))
         else:
-            dburl = "sqlite:///morphis{}.sqlite".format(self.instance_postfix)
-            self.db = db.Db(loop, dburl)
+            self.db = db.Db(\
+                loop,\
+                "sqlite:///morphis{}.sqlite".format(self.instance_postfix))
+        self._db_initialized = False
 
         self.bind_address = None
         self.unsecured_transport = None
@@ -49,12 +51,22 @@ class Node():
         global nodes
         return nodes
 
+    def init_db(self):
+        if self._db_initialized:
+            log.debug("The database is already initialized.")
+            return
+
+        self.db.init_engine()
+        self._db_initialized = True
+
     @asyncio.coroutine
     def create_schema(self):
         yield from self.db.create_all()
 
     @asyncio.coroutine
     def start(self):
+        self.init_db()
+
         def dbcall():
             log.info("Clearing out connected state from Peer table.")
             with self.db.open_session() as sess:
@@ -140,6 +152,8 @@ def __main():
         help="Add a node to peer list.", action="append")
     parser.add_argument("--bind",\
         help="Specify bind address (host:port).")
+    parser.add_argument("--dbpoolsize", type=int,\
+        help="Specify the maximum amount of database connections.")
     parser.add_argument("--nodecount", type=int,\
         help="Specify amount of nodes to start.")
     parser.add_argument("--parallellaunch", action="store_true",\
@@ -166,6 +180,7 @@ def __main():
         bindaddr.split(':') # Just to preemptively test.
     else:
         bindaddr = "127.0.0.1:5555"
+    db_pool_size = args.dbpoolsize
     instanceoffset = args.instanceoffset
     if instanceoffset:
         instance += instanceoffset
@@ -189,6 +204,10 @@ def __main():
             node = Node(loop, instance, dburl)
             nodes.append(node)
 
+            if db_pool_size:
+                node.db.pool_size = db_pool_size
+
+            node.init_db()
             yield from node.create_schema()
 
             if bindaddr:
