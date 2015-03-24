@@ -801,12 +801,12 @@ class ChordEngine():
     @asyncio.coroutine
     def channel_request(self, peer, msg):
         if msg.request_type == "shell":
-            shell = self.shells[msg.recipient_channel]
+            shell = self.shells.get(msg.recipient_channel)
             if not shell:
                 return
             asyncio.async(shell.cmdloop(), loop=self.loop)
         elif msg.request_type == "exec":
-            shell = self.shells[msg.recipient_channel]
+            shell = self.shells.get(msg.recipient_channel)
             if not shell:
                 return
             l, cmd = sshtype.parseString(msg.payload)
