@@ -142,7 +142,7 @@ class ChordEngine():
             with self.node.db.open_session() as sess:
                 tlocked = False
 
-                batched = 0
+                batch = []
                 added = []
 
                 for peer in peers:
@@ -177,19 +177,22 @@ class ChordEngine():
                     if log.isEnabledFor(logging.INFO):
                         log.info("Adding Peer [{}].".format(peer.address))
                     sess.add(peer)
-                    added.append(peer)
+                    batch.append(peer)
 
-                    batched += 1
-                    if batched == 10:
+                    if len(batch) == 10:
                         sess.commit()
+                        for dbpeer in batch:
+                            fetch_id_in_thread = dbpeer.id
+                        added.extend(batch)
+                        batch.clear()
                         sess.expunge_all()
                         tlocked = False
-                        batched = 0
 
-                if added and tlocked:
+                if batch and tlocked:
                     sess.commit()
-                    for dbpeer in added:
+                    for dbpeer in batch:
                         fetch_id_in_thread = dbpeer.id
+                    added.extend(batch)
                     sess.expunge_all()
 
                 return added
