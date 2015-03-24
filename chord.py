@@ -236,7 +236,7 @@ class ChordEngine():
                 direction = 1 if pid[i] > nid[i] else -1
 
                 xv = pid[i] ^ nid[i]
-                xv = log_base2_8bit(xv)
+                xv = log_base2_8bit(xv) + 1
 
                 # (byte * 8) + bit.
                 dist = ((NODE_ID_BYTES - 1 - i) << 3) + xv
