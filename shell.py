@@ -323,6 +323,10 @@ class Shell(cmd.Cmd):
         self.writeln("Count: {}.".format(cnt))
 
     @asyncio.coroutine
+    def do_lc(self, arg):
+        return (yield from self.do_listchans(arg))
+
+    @asyncio.coroutine
     def do_listchans(self, arg):
         "List the open channels of all connected PeerS."
 
