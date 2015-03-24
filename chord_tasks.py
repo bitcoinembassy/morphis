@@ -57,19 +57,24 @@ class ChordTasks(object):
                 log.info("Performing FindNode for bucket [{}]."\
                     .format(bit+1))
 
-            if bit != chord.NODE_ID_BYTES-1:
+            if bit != chord.NODE_ID_BITS-1:
                 byte_ = chord.NODE_ID_BYTES - 1 - ((bit+1) >> 3)
                 node_id[byte_] ^= 1 << ((bit+1) % 8) # Undo last change.
             byte_ = chord.NODE_ID_BYTES - 1 - (bit >> 3)
             node_id[byte_] ^= 1 << (bit % 8)
 
             assert self.engine.calc_distance(node_id, self.engine.node_id)[0]\
-                == bit,\
-                "calc={}, bit={}."\
+                == (bit + 1),\
+                "calc={}, bit={}, diff={}."\
                     .format(\
                         self.engine.calc_distance(\
                             node_id, self.engine.node_id)[0],\
-                        bit)
+                        bit + 1,
+                        hex_string(\
+                            [x ^ y\
+                            for x, y\
+                                in zip(self.engine.node_id, node_id)])
+                        )
 
             nodes = yield from self._do_stabilize(node_id)
 
