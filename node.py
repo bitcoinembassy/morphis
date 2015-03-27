@@ -65,7 +65,8 @@ class Node():
 
     @asyncio.coroutine
     def start(self):
-        self.init_db()
+        if not self._db_initialized:
+            self.init_db()
 
         def dbcall():
             log.info("Clearing out connected state from Peer table.")
