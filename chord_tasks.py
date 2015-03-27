@@ -158,7 +158,7 @@ class ChordTasks(object):
             if not peer.ready():
                 continue
 
-            tun_meta = TunnelMeta(peer, 0)
+            tun_meta = TunnelMeta(peer)
             used_peers.append(tun_meta)
 
             tasks.append(self._send_find_node(\
@@ -207,16 +207,19 @@ class ChordTasks(object):
 
                 row.used = True
                 query_cntr.value += 1
-                tun_meta.jobs += 1
 
-                if tun_meta.jobs == 1:
-                    # If this is the first relay, then start a process task.
+                if tun_meta.jobs is None:
+                    # If this is the first relay for this tunnel, then start a
+                    # _process_find_node_relay task for that tunnel.
+                    tun_meta.jobs = 1
                     task_cntr.value += 1
                     asyncio.async(\
                         self._process_find_node_relay(\
                             node_id, tun_meta, query_cntr, done_all,\
                             task_cntr, result_trie),\
                         loop=self.loop)
+                else:
+                    tun_meta.jobs += 1
 
                 if query_cntr.value == max_concurrent_queries:
                     break
