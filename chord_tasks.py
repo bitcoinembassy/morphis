@@ -475,16 +475,6 @@ class ChordTasks(object):
             if not pkt:
                 break
 
-            if cp.ChordMessage.parse_type(pkt) != cp.CHORD_MSG_PEER_LIST:
-                log.info("Skipping unexpected non PeerList packet (type=[{}])."\
-                    .format(cp.ChordMessage.parse_type(pkt)))
-                continue
-
-            # Test that it is valid.
-            try:
-                cp.ChordPeerList(pkt)
-            except:
-                break
 
             msg = cp.ChordRelay()
             msg.index = index
