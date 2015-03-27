@@ -370,8 +370,7 @@ class ChordEngine():
 
             while len(connect_futures) < 7:
                 dbpeer = pbuffer.pop()
-                connect_c =\
-                    asyncio.async(self._connect_peer(dbpeer), loop=self.loop)
+                connect_c = self._connect_peer(dbpeer)
 
                 connect_futures.append(connect_c)
 
