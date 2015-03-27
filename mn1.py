@@ -14,7 +14,7 @@ import packet as mnetpacket
 import kex
 import rsakey
 import sshtype
-from sshexception import *
+from sshexception import SshException
 from mutil import hex_dump
 import peer
 
@@ -42,6 +42,8 @@ class SshProtocol(asyncio.Protocol):
         self.loop = loop
 
         self.address = None
+
+        self.transport = None
 
         self._next_channel_id = 0
         self.channel_queues = {}
@@ -72,6 +74,7 @@ class SshProtocol(asyncio.Protocol):
         self.waiter = None
         self.ready_waiter = None
         self.buf = bytearray()
+        self.cbuf = self.buf
         self.packet = None
         self.bpLength = None
 
@@ -622,7 +625,7 @@ class SshProtocol(asyncio.Protocol):
 
     def write_packet(self, packet):
         if log.isEnabledFor(logging.INFO):
-            log.info("Writing packet_type=[{}] ({} bytes) to address=[{}]."
+            log.info("Writing packet_type=[{}] ({} bytes) to address=[{}]."\
                 .format(packet.packet_type, len(packet.buf), self.address))
             if log.isEnabledFor(logging.DEBUG):
                 log.debug("data=[\n{}].".format(hex_dump(packet.buf)))
@@ -784,8 +787,10 @@ class SshProtocol(asyncio.Protocol):
                         if self.server_mode:
                             self.init_inbound_encryption()
                         else:
-                            """ Disable further processing until inbound encryption is setup.
-                                It may not have yet as parameters and newkeys may have come in same tcp packet. """
+                            # Disable further processing until inbound
+                            # encryption is setup. It may not have yet as
+                            # parameters and newkeys may have come in same tcp
+                            # packet.
                             self.set_inbound_enabled(False)
                         self.waitingForNewKeys = False
 
