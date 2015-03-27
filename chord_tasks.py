@@ -172,7 +172,7 @@ class ChordTasks(object):
 
         query_cntr = Counter(0)
         task_cntr = Counter(0)
-        done_all = asyncio.Event()
+        done_all = asyncio.Event(loop=self.loop)
 
         for depth in range(1, maximum_depth):
             direct_peers_lower = 0
@@ -215,7 +215,8 @@ class ChordTasks(object):
                     asyncio.async(\
                         self._process_find_node_relay(\
                             node_id, tun_meta, query_cntr, done_all,\
-                            task_cntr, result_trie))
+                            task_cntr, result_trie),\
+                        loop=self.loop)
 
                 if query_cntr.value == max_concurrent_queries:
                     break
@@ -235,7 +236,7 @@ class ChordTasks(object):
         for tun_meta in used_peers:
             tasks.append(\
                 tun_meta.peer.protocol.close_channel(tun_meta.local_cid))
-        yield from asyncio.wait(tasks)
+        yield from asyncio.wait(tasks, loop=self.loop)
 
         if log.isEnabledFor(logging.INFO):
             for vpeer in result_trie:
