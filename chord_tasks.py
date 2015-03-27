@@ -266,6 +266,10 @@ class ChordTasks(object):
         msg.sender_address = self.engine._bind_address #FIXME: Put elsewhere.
         msg.node_id = node_id
 
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("Sending root level FindNode msg to Peer (id=[{}])."\
+                .format(peer))
+
         peer.protocol.write_channel_data(local_cid, msg.encode())
 
         pkt = yield from queue.get()
@@ -276,6 +280,10 @@ class ChordTasks(object):
         tun_meta.local_cid = local_cid
 
         msg = cp.ChordPeerList(pkt)
+
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("Root level FindNode to Peer (id=[{}]) returned {}"\
+                " PeerS.".format(peer, len(msg.peers)))
 
         idx = 0
         for rpeer in msg.peers:
@@ -360,10 +368,12 @@ class ChordTasks(object):
                 log.info("No more nodes closer than ourselves.")
                 break
 
-            log.debug("nn: {} FOUND: {:04} {:22} diff=[{}]"\
-                .format(self.engine.node.instance, r.dbid, r.address,\
-                    hex_string(\
-                        [x ^ y for x, y in zip(r.node_id, fnmsg.node_id)])))
+            if log.isEnabledFor(logging.DEBUG):
+                log.debug("nn: {} FOUND: {:04} {:22} diff=[{}]"\
+                    .format(self.engine.node.instance, r.dbid, r.address,\
+                        hex_string(\
+                            [x ^ y for x, y in\
+                                zip(r.node_id, fnmsg.node_id)])))
 
             rlist.append(r)
 
@@ -461,6 +471,11 @@ class ChordTasks(object):
                     tun_meta.peer.protocol.close_channel(tun_meta.local_cid)
                 return
 
+            if log.isEnabledFor(logging.DEBUG):
+                log.debug("Relaying request (index={}) from Peer (id=[{}])"\
+                    " to Peer (id=[{}])."\
+                    .format(index, rpeer.dbid, tun_meta.peer.dbid))
+
             tun_meta.peer.protocol.write_channel_data(tun_meta.local_cid, pkt)
 
             req_cntr.value += 1
@@ -475,6 +490,10 @@ class ChordTasks(object):
             if not pkt:
                 break
 
+            if log.isEnabledFor(logging.DEBUG):
+                log.debug("Relaying response (index={}) from Peer (id=[{}])"\
+                    " to Peer (id=[{}])."\
+                    .format(index, tun_meta.peer.dbid, rpeer.dbid))
 
             msg = cp.ChordRelay()
             msg.index = index
