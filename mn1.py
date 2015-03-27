@@ -633,7 +633,7 @@ class SshProtocol(asyncio.Protocol):
         self.write_data([packet.buf])
 
     def write_channel_data(self, local_cid, data):
-        log.info("Writing to channel {} with {} bytes of data.".format(local_cid, len(data)))
+        log.info("Writing to channel {} with {} bytes of data (address={}).".format(local_cid, len(data), self.address))
 
         remote_cid = self._channel_map.get(local_cid)
         if remote_cid == None:

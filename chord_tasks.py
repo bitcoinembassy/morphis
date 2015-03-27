@@ -303,6 +303,9 @@ class ChordTasks(object):
 
             pmsg = cp.ChordPeerList(pkt)
 
+            log.info("Peer (id=[{}]) returned PeerList of size {}."\
+                .format(tun_meta.peer.dbid, len(pmsg.peers)))
+
             for rpeer in pmsg.peers:
                 key = bittrie.XorKey(node_id, rpeer.node_id)
                 result_trie.setdefault(key, VPeer(rpeer, path, tun_meta))
@@ -425,8 +428,8 @@ class ChordTasks(object):
     def _process_find_node_tunnel(\
             self, rpeer, rlocal_cid, index, tun_meta, tun_cntr):
         if log.isEnabledFor(logging.INFO):
-            log.info("Opening tunnel [{}] to Peer (id=[{}])."
-                .format(index, tun_meta.peer.dbid))
+            log.info("Opening tunnel [{}] to Peer (id=[{}]) for Peer(id=[{}])."\
+                .format(index, tun_meta.peer.dbid, rpeer))
 
         tun_meta.local_cid, tun_meta.queue =\
             yield from tun_meta.peer.protocol.open_channel("mpeer", True)
