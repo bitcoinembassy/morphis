@@ -336,7 +336,6 @@ class ChordTasks(object):
             tun_meta.jobs = 0
 
         tun_meta.queue = None
-        tun_meta.local_cid = None
 
         task_cntr.value -= 1
 
