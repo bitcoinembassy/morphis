@@ -438,7 +438,7 @@ class ChordTasks(object):
             self, rpeer, rlocal_cid, index, tun_meta, tun_cntr):
         if log.isEnabledFor(logging.INFO):
             log.info("Opening tunnel [{}] to Peer (id=[{}]) for Peer(id=[{}])."\
-                .format(index, tun_meta.peer.dbid, rpeer))
+                .format(index, tun_meta.peer.dbid, rpeer.dbid))
 
         tun_meta.local_cid, tun_meta.queue =\
             yield from tun_meta.peer.protocol.open_channel("mpeer", True)
