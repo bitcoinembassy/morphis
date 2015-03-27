@@ -306,7 +306,7 @@ class ChordTasks(object):
                 msg = cp.ChordRelay(pkt)
                 path.append(msg.index)
                 pkt = msg.packet
-                if cp.ChordMessage.parse_type(pkt) is not cp.CHORD_MSG_RELAY:
+                if cp.ChordMessage.parse_type(pkt) != cp.CHORD_MSG_RELAY:
                     break
 
             pmsg = cp.ChordPeerList(pkt)
