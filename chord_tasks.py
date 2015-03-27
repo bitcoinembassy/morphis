@@ -49,17 +49,21 @@ class ChordTasks(object):
             return
 
         # Fetch closest to ourselves.
-        yield from\
+        closest_nodes = yield from\
             self._do_stabilize(self.engine.node_id, self.engine.peer_trie)
+
+        closest_found_distance =\
+            closest_nodes[0].distance if closest_nodes else None
 
         # Fetch furthest from ourselves.
         node_id = bytearray(self.engine.node_id)
         for i in range(len(node_id)):
             node_id[i] = (~node_id[i]) & 0xFF
-        yield from\
-            self._do_stabilize(node_id)
 
-        # Fetch each bucket starting at furthest, stopping when we get none.
+        yield from self._do_stabilize(node_id)
+
+        # Fetch each bucket starting at furthest, stopping when we get to the
+        # closest that we found above.
         node_id = bytearray(self.engine.node_id)
         for bit in range(chord.NODE_ID_BITS-1, -1, -1):
             if log.isEnabledFor(logging.INFO):
@@ -87,13 +91,15 @@ class ChordTasks(object):
 
             nodes = yield from self._do_stabilize(node_id)
 
-            # For now, stop when we get no results for a bucket, assume the
-            # network isn't big enough for closer nodes yet.
-            if not nodes:
+            if not closest_found_distance and not nodes:
                 break
+            elif bit+1 == closest_found_distance:
+                break;
 
     @asyncio.coroutine
     def _do_stabilize(self, node_id, input_trie=None):
+        "Returns found nodes sorted by closets."
+
         conn_nodes = yield from\
             self.send_find_node(node_id, input_trie)
 
@@ -111,6 +117,8 @@ class ChordTasks(object):
 
     @asyncio.coroutine
     def send_find_node(self, node_id, input_trie=None):
+        "Returns found nodes sorted by closets."
+
         if not self.engine.peers:
             log.info("No connected nodes, unable to send FindNode.")
             return
