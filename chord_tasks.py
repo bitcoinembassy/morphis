@@ -327,6 +327,8 @@ class ChordTasks(object):
 
     @asyncio.coroutine
     def process_find_node_request(self, fnmsg, fndata, peer, queue, local_cid):
+        "The channel will be closed before this method returns."
+
         if fnmsg.sender_address:
             fnmsg.sender_address = ""
             fndata = fnmsg.encode()

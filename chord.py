@@ -831,7 +831,7 @@ class ChordEngine():
             log.info("Waiting for chord packet.")
             r = yield from\
                 self.__process_chord_packet(peer, queue, local_cid)
-            if not r:
+            if r:
                 break
 
     @asyncio.coroutine
