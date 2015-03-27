@@ -73,6 +73,17 @@ class Shell(cmd.Cmd):
 
     @asyncio.coroutine
     def onecmd(self, line):
+        if line and line[0] == ';':
+            for line in line.split(';'):
+                log.info("line=[{}].".format(line))
+                stop = yield from self._onecmd(line)
+                if stop:
+                    return True
+        else:
+            return (yield from self._onecmd(line))
+
+    @asyncio.coroutine
+    def _onecmd(self, line):
         log.info("Processing command line: [{}].".format(line))
 
         cmd, arg, line = self.parseline(line)
