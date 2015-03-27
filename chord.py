@@ -343,9 +343,8 @@ class ChordEngine():
                             Peer.connected == False,\
                             or_(Peer.last_connect_attempt == None,\
                                 Peer.last_connect_attempt < grace))\
-                        .order_by(desc(Peer.direction), Peer.node_id)\
+                        .order_by(func.random())\
                         .limit(bucket_needs * 2)
-#FIXME: Check what direction is doing here since this is really kad implemented.
 
                     r = q.all()
 
