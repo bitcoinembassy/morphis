@@ -307,6 +307,8 @@ class ChordTasks(object):
                 path.append(msg.index)
                 pkt = msg.packet
                 if cp.ChordMessage.parse_type(pkt) != cp.CHORD_MSG_RELAY:
+                    assert False, "Unexpected packet_type [{}]."\
+                        .format(cp.ChordMessage.parse_type(pkt))
                     break
 
             pmsg = cp.ChordPeerList(pkt)
@@ -425,7 +427,10 @@ class ChordTasks(object):
                     loop=self.loop)
                 yield from tun_meta.jobs.put(fndata)
             elif tun_meta.jobs:
-                assert rmsg.packet is not None
+                if rmsg.packet is None:
+                    log.warning("Peer [{}] sent additional empty relay packet"\
+                        " for tunnel [{}]; skipping.".format(rmsg.index))
+                continue
                 yield from tun_meta.jobs.put(rmsg.packet)
             else:
                 if log.isEnabledFor(logging.INFO):
