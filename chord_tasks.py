@@ -267,8 +267,8 @@ class ChordTasks(object):
         msg.node_id = node_id
 
         if log.isEnabledFor(logging.DEBUG):
-            log.debug("Sending root level FindNode msg to Peer (id=[{}])."\
-                .format(peer))
+            log.debug("Sending root level FindNode msg to Peer (dbid=[{}])."\
+                .format(peer.dbid))
 
         peer.protocol.write_channel_data(local_cid, msg.encode())
 
