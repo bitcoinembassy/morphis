@@ -504,14 +504,14 @@ class SshProtocol(asyncio.Protocol):
 
         self._channel_map.clear()
 
-        asyncio.async(self._close_queues(), loop=self.loop)
+        self._close_queues()
 
         self.connection_handler.connection_lost(self, exc)
 
-    @asyncio.coroutine
     def _close_queues(self):
         for queue in self.channel_queues.values():
-            yield from queue.put(None)
+            #yield from queue.put(None)
+            queue.put_nowait(None)
 
     def _data_received(self, data):
         if log.isEnabledFor(logging.DEBUG):
