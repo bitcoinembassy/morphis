@@ -70,6 +70,10 @@ class ConnectionHandler():
         self.peer = peer
 
     def connection_made(self, protocol):
+        if log.isEnabledFor(logging.INFO):
+            log.info("connection_made(): Peer (dbid=[{}], address=[{}],"\
+                " protocol.address=[{}])."\
+                .format(self.peer.dbid, self.peer.address, protocol.address))
         self.peer.address = "{}:{}".format(\
             self.peer.protocol.address[0],\
             self.peer.protocol.address[1])
@@ -79,8 +83,10 @@ class ConnectionHandler():
         pass
 
     def connection_lost(self, protocol, exc):
-        log.info("connection_lost(): peer (id=[{}], address=[{}])."\
-            .format(self.peer.dbid, self.peer.address))
+        if log.isEnabledFor(logging.INFO):
+            log.info("connection_lost(): Peer (dbid=[{}], address=[{}],"\
+                " protocol.address=[{}])."\
+                .format(self.peer.dbid, self.peer.address, protocol.address))
 
         self.peer.engine.connection_lost(self.peer, exc)
 
