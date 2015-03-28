@@ -425,6 +425,7 @@ class ChordTasks(object):
                     loop=self.loop)
                 yield from tun_meta.jobs.put(fndata)
             elif tun_meta.jobs:
+                assert rmsg.packet is not None
                 yield from tun_meta.jobs.put(rmsg.packet)
             else:
                 if log.isEnabledFor(logging.INFO):
