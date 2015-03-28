@@ -283,10 +283,14 @@ class ChordTasks(object):
 
         if log.isEnabledFor(logging.DEBUG):
             log.debug("Root level FindNode to Peer (id=[{}]) returned {}"\
-                " PeerS.".format(peer, len(msg.peers)))
+                " PeerS.".format(peer.dbid, len(msg.peers)))
 
         idx = 0
         for rpeer in msg.peers:
+            if log.isEnabledFor(logging.DEBUG):
+                log.debug("Peer (dbid=[{}]) returned PeerList containing Peer"\
+                    " (address=[{}]).".format(peer.dbid, rpeer.address))
+
             key = bittrie.XorKey(node_id, rpeer.node_id)
             result_trie.setdefault(key, VPeer(rpeer, [idx], tun_meta))
             idx += 1
@@ -306,9 +310,16 @@ class ChordTasks(object):
                 msg = cp.ChordRelay(pkt)
                 path.append(msg.index)
                 pkt = msg.packet
-                if cp.ChordMessage.parse_type(pkt) != cp.CHORD_MSG_RELAY:
-                    assert False, "Unexpected packet_type [{}]."\
-                        .format(cp.ChordMessage.parse_type(pkt))
+                packet_type = cp.ChordMessage.parse_type(pkt)
+                if packet_type == cp.CHORD_MSG_PEER_LIST:
+                    break
+                if packet_type != cp.CHORD_MSG_RELAY:
+                    log.warning("Unexpected packet_type [{}]."\
+                        .format(packet_type))
+
+                    tpeerlist = cp.ChordPeerList()
+                    tpeerlist.peers = []
+                    pkt = tpeerlist.encode()
                     break
 
             pmsg = cp.ChordPeerList(pkt)
