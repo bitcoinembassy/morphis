@@ -106,7 +106,12 @@ class ConnectionHandler():
         return r
 
     @asyncio.coroutine
-    def connection_ready(self):
+    def connection_ready(self, protocol):
+        log.info("Connection to Peer (dbid=[{}], address=[{}],"\
+            " protocol.address=[{}], server_mode=[{}]) is now ready."\
+            .format(self.peer.dbid, self.peer.address, protocol.address,\
+                protocol.server_mode))
+
         yield from self.peer.engine.connection_ready(self.peer)
 
 class ChannelHandler():

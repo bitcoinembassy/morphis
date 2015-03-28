@@ -320,7 +320,7 @@ class SshProtocol(asyncio.Protocol):
         if self.ready_waiter != None:
             self.ready_waiter.set_result(False)
             self.ready_waiter = None
-        yield from self.connection_handler.connection_ready()
+        yield from self.connection_handler.connection_ready(self)
 
         while True:
             packet = yield from self.read_packet(False)
