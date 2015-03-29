@@ -351,8 +351,9 @@ class Shell(cmd.Cmd):
 
         engine = self.peer.engine
 
-        self.writeln("Node:\n\tid=[{}]\n\tconnections={}"\
-            .format(hex_string(engine.node_id), len(engine.peers)))
+        self.writeln("Node:\n\tid=[{}]\n\tbind_port=[{}]\n\tconnections={}"\
+            .format(hex_string(engine.node_id), engine._bind_port,
+                len(engine.peers)))
 
     @asyncio.coroutine
     def do_time(self, arg):
