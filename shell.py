@@ -342,7 +342,7 @@ class Shell(cmd.Cmd):
     def do_listchans(self, arg):
         "List the open channels of all connected PeerS."
 
-        code = "list(filter(lambda x: x[1], map(lambda node: [node.bind_address, list(filter(lambda x: x[1], map(lambda peer: [peer.address, list(peer.protocol._channel_map.items())], node.chord_engine.peers.values())))], self.peer.engine.node.all_nodes)))"
+        code = "list(filter(lambda x: x[1], map(lambda peer: [peer.address, list(peer.protocol._channel_map.items())], self.peer.engine.node.chord_engine.peers.values())))"
         return self.do_eval(code)
 
     @asyncio.coroutine
