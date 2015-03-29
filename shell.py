@@ -276,7 +276,8 @@ class Shell(cmd.Cmd):
         
         for peer in peers:
             self.writeln(\
-                "Peer: (id={} addr={}).".format(peer.dbid, peer.address))
+                "Peer: (id={} addr={}, distance={})."\
+                    .format(peer.dbid, peer.address, peer.distance))
         self.writeln("Count: {}.".format(len(peers)))
 
     @asyncio.coroutine
