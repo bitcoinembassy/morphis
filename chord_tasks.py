@@ -381,9 +381,9 @@ class ChordTasks(object):
                 break
 
             if log.isEnabledFor(logging.DEBUG):
-                log.debug("nn: {} FOUND: {:04} {:22} diff=[{}]"\
+                log.debug("nn: {} FOUND: {:7} {:22} node_id=[{}] diff=[{}]"\
                     .format(self.engine.node.instance, r.dbid, r.address,\
-                        hex_string(\
+                        hex_string(r.node_id), hex_string(\
                             [x ^ y for x, y in\
                                 zip(r.node_id, fnmsg.node_id)])))
 
