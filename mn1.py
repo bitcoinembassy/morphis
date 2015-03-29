@@ -471,6 +471,7 @@ class SshProtocol(asyncio.Protocol):
     @asyncio.coroutine
     def _close_channel(self, local_cid):
         remote_cid = self._channel_map.pop(local_cid)
+        assert self._channel_map.get(local_cid) is None
 
         if remote_cid != -1 and remote_cid != -2:
             assert remote_cid >= 0, "remote_cid=[{}].".format(remote_cid)
