@@ -506,6 +506,10 @@ class SshProtocol(asyncio.Protocol):
 
         self._close_queues()
 
+        if self.waiter != None:
+            self.waiter.set_result(False)
+            self.waiter = None
+
         self.connection_handler.connection_lost(self, exc)
 
     def _close_queues(self):
@@ -589,11 +593,14 @@ class SshProtocol(asyncio.Protocol):
 
             return packet
 
-        if self.status is Status.closed:
+        if self.status is Status.closed or self.status is Status.disconnected:
             return None
 
         log.info("P: Waiting for packet.")
         yield from self.do_wait()
+
+        if self.status is Status.closed or self.status is Status.disconnected:
+            return None
 
         assert self.packet != None
         packet = self.packet
