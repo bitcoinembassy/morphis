@@ -440,7 +440,8 @@ class ChordTasks(object):
             elif tun_meta.jobs:
                 if rmsg.packet is None:
                     log.warning("Peer [{}] sent additional empty relay packet"\
-                        " for tunnel [{}]; skipping.".format(rmsg.index))
+                        " for tunnel [{}]; skipping."\
+                            .format(peer.dbid, rmsg.index))
                 continue
                 yield from tun_meta.jobs.put(rmsg.packet)
             else:
