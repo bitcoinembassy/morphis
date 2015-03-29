@@ -345,6 +345,15 @@ class Shell(cmd.Cmd):
         return self.do_eval(code)
 
     @asyncio.coroutine
+    def do_stat(self, arg):
+        "Report the node status."
+
+        engine = self.peer.engine
+
+        self.writeln("Node:\n\tid=[{}]\n\tconnections={}"\
+            .format(hex_string(engine.node_id), len(engine.peers)))
+
+    @asyncio.coroutine
     def do_time(self, arg):
         "Time the passed command line."
 
