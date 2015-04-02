@@ -220,12 +220,11 @@ def __main():
                 node.load_key()
 
             node.init_chord()
-            yield from node.start()
 
             if addpeer != None:
-                for peer in addpeer:
-                    for peer in addpeer:
-                        yield from node.chord_engine.connect_peer(peer)
+                node.chord_engine.connect_peers = addpeer
+
+            yield from node.start()
 
         if parallel_launch:
             asyncio.async(_start_node(instance, bindaddr), loop=loop)

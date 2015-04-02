@@ -56,6 +56,8 @@ class ChordEngine():
         self.maximum_connections = 72
         self.hard_maximum_connections = self.maximum_connections * 2
 
+        self.connect_peers = None # ["host:port"]
+
         self._bind_address = None
         self._bind_port = None
 
@@ -217,6 +219,11 @@ class ChordEngine():
         yield from self.server
 
         log.info("Node listening on [{}:{}].".format(host, port))
+
+        if self.connect_peers:
+            log.info("Connecting first to: [{}].".format(self.connect_peers))
+            for address in self.connect_peers:
+                yield from self.connect_peer(address)
 
         yield from self.process_connection_count()
 
