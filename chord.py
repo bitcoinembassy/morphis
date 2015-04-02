@@ -641,7 +641,7 @@ class ChordEngine():
 
                         if dbpeer.distance == 0:
                             log.info("Peer is us! (Has the same ID!)")
-                            return False, None
+                            return False, dbpeer
 
                         dbpeer.address = peer.address
 
@@ -654,11 +654,11 @@ class ChordEngine():
                             dbpeer.connected = False
                             sess.delete(dbpeer)
                             sess.commit()
-                            return False, None
+                            return False, dbpeer
 
                         if dbpeer.connected:
                             log.info("Already connected to Peer, disconnecting redundant connection.")
-                            return False, None
+                            return False, dbpeer
 
 #                        host, port = dbpeer.address.split(':')
 #                        if host != peer.protocol.address[0]:
@@ -678,10 +678,11 @@ class ChordEngine():
                     return True, dbpeer
 
             r, dbpeer = yield from self.loop.run_in_executor(None, dbcall)
-            if not r:
-                return False, False
 
             peer.dbid = dbpeer.id
+
+            if not r:
+                return False, False
 
             if peer.address != dbpeer.address:
                 peer.address = dbpeer.address
