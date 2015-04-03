@@ -335,9 +335,15 @@ class ChordTasks(object):
             log.info("Peer (id=[{}]) returned PeerList of size {}."\
                 .format(tun_meta.peer.dbid, len(pmsg.peers)))
 
+            idx = 0
             for rpeer in pmsg.peers:
+                end_path = list(path)
+                end_path.append(idx)
+
                 key = bittrie.XorKey(node_id, rpeer.node_id)
-                result_trie.setdefault(key, VPeer(rpeer, path, tun_meta))
+                result_trie.setdefault(key, VPeer(rpeer, end_path, tun_meta))
+
+                idx += 1
 
             if not tun_meta.jobs:
                 log.info(\
@@ -455,7 +461,7 @@ class ChordTasks(object):
                     log.warning("Peer [{}] sent additional empty relay packet"\
                         " for tunnel [{}]; skipping."\
                             .format(peer.dbid, rmsg.index))
-                continue
+                    continue
                 yield from tun_meta.jobs.put(rmsg.packet)
             else:
                 if log.isEnabledFor(logging.INFO):
