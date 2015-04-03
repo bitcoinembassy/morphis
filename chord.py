@@ -227,12 +227,9 @@ class ChordEngine():
             for address in self.connect_peers:
                 yield from self.connect_peer(address)
 
-        yield from self.process_connection_count()
+        self._async_process_connection_count()
 
-        yield from self.do_stabilize()
-
-    def _async_do_stabilize(self):
-        asyncio.async(self.do_stabilize(), loop=self.loop)
+        self._async_do_stabilize()
 
     def calc_distance(self, nid, pid):
         "Returns: distance, direction"
@@ -257,13 +254,18 @@ class ChordEngine():
 
         return dist, direction
 
+    def _async_do_stabilize(self):
+        self._do_stabilize_handle =\
+            self.loop.call_later(300, self._async_do_stabilize)
+
+        asyncio.async(self.do_stabilize(), loop=self.loop)
+
     @asyncio.coroutine
     def do_stabilize(self):
         if self._doing_stabilize:
             log.info("Do stabilize called when do_stabilize(..) is already"\
                 " running.")
             return
-        self._doing_stabilize = True
 
         if log.isEnabledFor(logging.INFO):
             now = datetime.today()
@@ -272,11 +274,7 @@ class ChordEngine():
                 log.info("Time since last stabilize: [{}].".format(diff))
             self._last_stabilize = now
 
-        if self._do_stabilize_handle:
-            self._do_stabilize_handle.cancel()
-
-        self._do_stabilize_handle =\
-            self.loop.call_later(300, self._async_do_stabilize)
+        self._doing_stabilize = True
 
         yield from self.tasks.do_stabilize()
 
@@ -287,11 +285,20 @@ class ChordEngine():
             self.server.close()
 
     def _async_process_connection_count(self):
+        self._process_connection_count_handle =\
+            self.loop.call_later(60, self._async_process_connection_count)
+
         asyncio.async(self.process_connection_count(), loop=self.loop)
 
     @asyncio.coroutine
     def process_connection_count(self):
+        if self._doing_process_connection_count:
+            log.info("process_connection_count(..) called while already"\
+                " processing.")
+            return
+
         cnt = len(self.pending_connections) + len(self.peers)
+
         if cnt >= self.maximum_connections:
             return
 
@@ -299,23 +306,13 @@ class ChordEngine():
         if cnt >= self.minimum_connections:
             diff = now - self._last_process_connection_count
             if diff < timedelta(seconds=15):
+                # If we are connected to at least minimum_connections then only
+                # let this run every 15 seconds.
                 return
 
-        if self._doing_process_connection_count:
-            log.info("process_connection_count(..) called while already"\
-                " processing.")
-            return
         self._doing_process_connection_count = True
 
-
         self._last_process_connection_count = now
-
-        if self._process_connection_count_handle:
-            self._process_connection_count_handle.cancel()
-
-        self._process_connection_count_handle =\
-            self.loop.call_later(\
-                60, self._async_process_connection_count)
 
         needed = self.maximum_connections - cnt
 
