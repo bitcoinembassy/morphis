@@ -2,14 +2,11 @@ import llog
 
 import asyncio
 import logging
-import os
 
-import packet as mnetpacket
+import packet as mnpacket
 import rsakey
 import mn1
 from mutil import hex_dump, log_base2_8bit
-import chord
-import peer
 import enc
 
 log = logging.getLogger(__name__)
@@ -52,18 +49,31 @@ class Peer():
         self._protocol.set_channel_handler(self.channel_handler)
         self._protocol.set_connection_handler(self.connection_handler)
 
+    def ready(self):
+        return self._protocol.status is mn1.Status.ready
+
+    def update_distance(self):
+        self.distance, self.direction =\
+            self.engine.calc_distance(self.engine.node_id, self.node_id)
+
     def _peer_authenticated(self, key):
         self.node_key = key
-        self.node_id = enc.generate_ID(self.node_key.asbytes())
+
+        if not self.node_id:
+            self.node_id = enc.generate_ID(self.node_key.asbytes())
 
         if not self.distance:
-            update_distance(self.engine.node_id, self)
+            self.update_distance()
 
 class ConnectionHandler():
     def __init__(self, peer):
         self.peer = peer
 
     def connection_made(self, protocol):
+        if log.isEnabledFor(logging.INFO):
+            log.info("connection_made(): Peer (dbid=[{}], address=[{}],"\
+                " protocol.address=[{}])."\
+                .format(self.peer.dbid, self.peer.address, protocol.address))
         self.peer.address = "{}:{}".format(\
             self.peer.protocol.address[0],\
             self.peer.protocol.address[1])
@@ -73,8 +83,10 @@ class ConnectionHandler():
         pass
 
     def connection_lost(self, protocol, exc):
-        log.info("connection_lost(): peer (id=[{}], address=[{}])."\
-            .format(self.peer.dbid, self.peer.address))
+        if log.isEnabledFor(logging.INFO):
+            log.info("connection_lost(): Peer (dbid=[{}], address=[{}],"\
+                " protocol.address=[{}])."\
+                .format(self.peer.dbid, self.peer.address, protocol.address))
 
         self.peer.engine.connection_lost(self.peer, exc)
 
@@ -94,7 +106,12 @@ class ConnectionHandler():
         return r
 
     @asyncio.coroutine
-    def connection_ready(self):
+    def connection_ready(self, protocol):
+        log.info("Connection to Peer (dbid=[{}], address=[{}],"\
+            " protocol.address=[{}], server_mode=[{}]) is now ready."\
+            .format(self.peer.dbid, self.peer.address, protocol.address,\
+                protocol.server_mode))
+
         yield from self.peer.engine.connection_ready(self.peer)
 
 class ChannelHandler():
@@ -129,7 +146,7 @@ class ChannelHandler():
 
     @asyncio.coroutine
     def channel_data(self, protocol, packet):
-        m = mnetpacket.SshChannelDataMessage(packet)
+        m = mnpacket.SshChannelDataMessage(packet)
         if log.isEnabledFor(logging.DEBUG):
             log.debug("Received data, recipient_channel=[{}], value=[\n{}]."\
                 .format(m.recipient_channel, hex_dump(m.data)))
@@ -138,30 +155,3 @@ class ChannelHandler():
         r = yield from self.peer.engine.channel_data(\
             self.peer, m.recipient_channel, m.data)
         return r
-
-# This works on peer.Peer as well as db.Peer.
-def update_distance(node_id, peer):
-    peer.distance, peer.direction =\
-        calc_distance(node_id, peer.node_id)
-
-# Returns: distance, direction
-def calc_distance(nid, pid):
-    if log.isEnabledFor(logging.DEBUG):
-        log.debug("pid=\n[{}], nid=\n[{}].".format(hex_dump(pid),\
-            hex_dump(nid)))
-
-    dist = 0
-    direction = 0
-
-    for i in range(64): # 64 bytes in 512 bits.
-        if pid[i] != nid[i]:
-            direction = 1 if pid[i] > nid[i] else -1
-
-            xv = pid[i] ^ nid[i]
-            xv = log_base2_8bit(xv)
-
-            dist = 8 * (63 - i) + xv
-
-            break
-
-    return dist, direction

@@ -13,7 +13,10 @@ def init():
         return
 
 #    print("Reading in logging.ini.")
-    config_file = "logging.ini" if sys.argv[1] != "-l" else sys.argv[2]
+    config_file = "logging.ini"
+    if len(sys.argv) > 3:
+        if sys.argv[1] == "-l":
+            config_file =  sys.argv[2]
 
     logging.config.fileConfig(config_file)
     logger = logging.getLogger(__name__)

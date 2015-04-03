@@ -24,6 +24,7 @@ dumptasksonexit = False
 
 class Node():
     def __init__(self, loop, instance_id=None, dburl=None):
+        self.chord_engine = None
         self.loop = loop
 
         self.instance = instance_id
@@ -32,23 +33,31 @@ class Node():
         else:
             self.instance_postfix = ""
 
-        self.node_key = self._load_key()
+        self.node_key = None
 
         if dburl:
             self.db = db.Db(loop, dburl, 'n' + str(instance_id))
         else:
-            dburl = "sqlite:///morphis{}.sqlite".format(self.instance_postfix)
-            self.db = db.Db(loop, dburl)
+            self.db = db.Db(\
+                loop,\
+                "sqlite:///morphis{}.sqlite".format(self.instance_postfix))
+        self._db_initialized = False
 
         self.bind_address = None
         self.unsecured_transport = None
-
-        self.chord_engine = chord.ChordEngine(self)
 
     @property
     def all_nodes(self):
         global nodes
         return nodes
+
+    def init_db(self):
+        if self._db_initialized:
+            log.debug("The database is already initialized.")
+            return
+
+        self.db.init_engine()
+        self._db_initialized = True
 
     @asyncio.coroutine
     def create_schema(self):
@@ -56,6 +65,9 @@ class Node():
 
     @asyncio.coroutine
     def start(self):
+        if not self._db_initialized:
+            self.init_db()
+
         def dbcall():
             log.info("Clearing out connected state from Peer table.")
             with self.db.open_session() as sess:
@@ -72,6 +84,9 @@ class Node():
     def stop(self):
         self.chord_engine.stop()
 
+    def load_key(self):
+        self.node_key = self._load_key()
+
     def _load_key(self):
         key_filename = "node_key-rsa{}.mnk".format(self.instance_postfix)
 
@@ -83,6 +98,9 @@ class Node():
             node_key = rsakey.RsaKey.generate(bits=4096)
             node_key.write_private_key_file(key_filename)
             return node_key
+
+    def init_chord(self):
+        self.chord_engine = chord.ChordEngine(self)
 
 def main():
     global loop, nodes, dumptasksonexit
@@ -135,6 +153,8 @@ def __main():
         help="Add a node to peer list.", action="append")
     parser.add_argument("--bind",\
         help="Specify bind address (host:port).")
+    parser.add_argument("--dbpoolsize", type=int,\
+        help="Specify the maximum amount of database connections.")
     parser.add_argument("--nodecount", type=int,\
         help="Specify amount of nodes to start.")
     parser.add_argument("--parallellaunch", action="store_true",\
@@ -157,8 +177,11 @@ def __main():
     if instance == None:
         instance = 0
     bindaddr = args.bind
-    if bindaddr == None:
+    if bindaddr:
+        bindaddr.split(':') # Just to preemptively test.
+    else:
         bindaddr = "127.0.0.1:5555"
+    db_pool_size = args.dbpoolsize
     instanceoffset = args.instanceoffset
     if instanceoffset:
         instance += instanceoffset
@@ -175,30 +198,38 @@ def __main():
     dburl = args.dburl
     dumptasksonexit = args.dumptasksonexit
 
-    nodes = []
-
     while True:
-        node = Node(loop, instance, dburl)
-        yield from node.create_schema()
-        nodes.append(node)
-
-        if bindaddr:
-            bindaddr.split(':') # Just to preemptively test.
-            node.bind_address = bindaddr
 
         @asyncio.coroutine
-        def _start_node(node):
-            yield from node.start()
+        def _start_node(instance, bindaddr):
+            node = Node(loop, instance, dburl)
+            nodes.append(node)
+
+            if db_pool_size:
+                node.db.pool_size = db_pool_size
+
+            node.init_db()
+            yield from node.create_schema()
+
+            if bindaddr:
+                node.bind_address = bindaddr
+
+            if parallel_launch:
+                yield from loop.run_in_executor(None, node.load_key)
+            else:
+                node.load_key()
+
+            node.init_chord()
 
             if addpeer != None:
-                for peer in addpeer:
-                    for peer in addpeer:
-                        yield from node.chord_engine.connect_peer(peer)
+                node.chord_engine.connect_peers = addpeer
 
-        start_task = asyncio.async(_start_node(node), loop=loop)
+            yield from node.start()
 
-        if not parallel_launch:
-            yield from start_task
+        if parallel_launch:
+            asyncio.async(_start_node(instance, bindaddr), loop=loop)
+        else:
+            yield from _start_node(instance, bindaddr)
 
         log.info("Started Instance #{}.".format(instance))
 

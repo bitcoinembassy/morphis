@@ -60,7 +60,7 @@ class Db():
 
         self.sqlite_lock = None
 
-        self._init_db()
+        self.pool_size = 10
 
     @property
     def schema(self):
@@ -69,7 +69,7 @@ class Db():
     @schema.setter
     def schema(self, value):
         self._schema = value
-        self.schema_setcmd = "set search_path={}".format(self._schema)
+        self._schema_setcmd = "set search_path={}".format(self._schema)
 
     @contextmanager
     def open_session(self):
@@ -102,25 +102,32 @@ class Db():
             .format(tableobj.__table__.name))
         sess.connection().execute(t)
 
-    def _init_db(self):
+    def init_engine(self):
+        is_sqlite = self.url.startswith("sqlite:")
+
         log.info("Creating engine.")
-        self.engine = create_engine(self.url, echo=False)
+        if is_sqlite:
+            self.engine = create_engine(self.url, echo=False)
+        else:
+            self.engine = create_engine(\
+                self.url, echo=False,
+                pool_size=self.pool_size, max_overflow=0)
 
         log.info("Configuring engine...")
-        if self.url.startswith("sqlite:"):
+        if is_sqlite:
             self.sqlite_lock = threading.Lock()
         else:
-            if self._schema:
-                def set_search_path(conn, proxy):
-                    if log.isEnabledFor(logging.INFO):
-                        log.info("Setting search path [{}]."\
-                            .format(self.schema))
-                    conn.cursor().execute(self.schema_setcmd)
-                    conn.commit()
-
-                event.listen(self.engine.pool, "connect", set_search_path)
+            if self.schema:
+                event.listen(\
+                    self.engine.pool, "connect", self._set_search_path)
 
         self.Session = sessionmaker(bind=self.engine)
+
+    def _set_search_path(self, conn, proxy):
+        if log.isEnabledFor(logging.INFO):
+            log.info("Setting search path [{}].".format(self.schema))
+        conn.cursor().execute(self._schema_setcmd)
+        conn.commit()
 
     @asyncio.coroutine
     def create_all(self):

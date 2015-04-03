@@ -14,7 +14,7 @@ import packet as mnetpacket
 import kex
 import rsakey
 import sshtype
-from sshexception import *
+from sshexception import SshException
 from mutil import hex_dump
 import peer
 
@@ -43,6 +43,8 @@ class SshProtocol(asyncio.Protocol):
 
         self.address = None
 
+        self.transport = None
+
         self._next_channel_id = 0
         self.channel_queues = {}
 
@@ -70,8 +72,9 @@ class SshProtocol(asyncio.Protocol):
         self.waitingForNewKeys = False
 
         self.waiter = None
-        self.ready_waiter = None
+        self.ready_waiters = []
         self.buf = bytearray()
+        self.cbuf = self.buf
         self.packet = None
         self.bpLength = None
 
@@ -107,14 +110,11 @@ class SshProtocol(asyncio.Protocol):
             if not block:
                 raise SshException("Connection is not ready yet.")
 
-            assert not self.ready_waiter
-            self.ready_waiter = asyncio.futures.Future(loop=self.loop)
+            waiter = asyncio.futures.Future(loop=self.loop)
+            self.ready_waiters.append(waiter)
+            yield from waiter
 
-            try:
-                yield from self.ready_waiter
-            finally:
-                self.waiter = None
-        elif self.status is not Status.ready:
+        if self.status is not Status.ready:
             # Ignore if it is closed or disconnected.
             if log.isEnabledFor(logging.INFO):
                 log.info("open_channel(..) called on a closed connection.")
@@ -166,6 +166,11 @@ class SshProtocol(asyncio.Protocol):
             return False
 
         remote_cid = self._channel_map.get(local_cid)
+        if remote_cid is None:
+            if log.isEnabledFor(logging.INFO):
+                log.info("close_channel(..) called on unmapped channel [{}]."\
+                    .format(local_cid))
+            return False
         if remote_cid == -1 or remote_cid == -2:
             if log.isEnabledFor(logging.INFO):
                 log.info("close_channel(..) called on channel in state [{}]."\
@@ -296,7 +301,10 @@ class SshProtocol(asyncio.Protocol):
 
     @asyncio.coroutine
     def _process_ssh_protocol(self):
-        yield from connectTaskCommon(self, self.server_mode)
+        r = yield from connectTaskCommon(self, self.server_mode)
+
+        if not r:
+            return r
 
         if cleartext_transport_enabled\
                 and self.remote_banner.endswith("+cleartext"):
@@ -309,10 +317,12 @@ class SshProtocol(asyncio.Protocol):
 
         # Connected and fully authenticated at this point.
         self.status = Status.ready
-        if self.ready_waiter != None:
-            self.ready_waiter.set_result(False)
-            self.ready_waiter = None
-        yield from self.connection_handler.connection_ready()
+
+        for waiter in self.ready_waiters:
+            waiter.set_result(False)
+        self.ready_waiters.clear()
+
+        yield from self.connection_handler.connection_ready(self)
 
         while True:
             packet = yield from self.read_packet(False)
@@ -369,7 +379,7 @@ class SshProtocol(asyncio.Protocol):
                 lcid = self._reverse_channel_map\
                     .setdefault(msg.sender_channel, msg.recipient_channel)
 
-                if lcid != msg.recipient_channel:
+                if lcid is not msg.recipient_channel:
                     log.warning("Received a CHANNEL_OPEN_CONFIRMATION for a remote channel that is already open; ignoring.")
                     return
 
@@ -463,6 +473,7 @@ class SshProtocol(asyncio.Protocol):
     @asyncio.coroutine
     def _close_channel(self, local_cid):
         remote_cid = self._channel_map.pop(local_cid)
+        assert self._channel_map.get(local_cid) is None
 
         if remote_cid != -1 and remote_cid != -2:
             assert remote_cid >= 0, "remote_cid=[{}].".format(remote_cid)
@@ -496,14 +507,22 @@ class SshProtocol(asyncio.Protocol):
 
         self._channel_map.clear()
 
-        asyncio.async(self._close_queues(), loop=self.loop)
+        self._close_queues()
+
+        if self.waiter != None:
+            self.waiter.set_result(False)
+            self.waiter = None
+
+        for waiter in self.ready_waiters:
+            waiter.set_result(False)
+        self.ready_waiters.clear()
 
         self.connection_handler.connection_lost(self, exc)
 
-    @asyncio.coroutine
     def _close_queues(self):
         for queue in self.channel_queues.values():
-            yield from queue.put(None)
+            #yield from queue.put(None)
+            queue.put_nowait(None)
 
     def _data_received(self, data):
         if log.isEnabledFor(logging.DEBUG):
@@ -581,11 +600,14 @@ class SshProtocol(asyncio.Protocol):
 
             return packet
 
-        if self.status is Status.closed:
+        if self.status is Status.closed or self.status is Status.disconnected:
             return None
 
         log.info("P: Waiting for packet.")
         yield from self.do_wait()
+
+        if self.status is Status.closed or self.status is Status.disconnected:
+            return None
 
         assert self.packet != None
         packet = self.packet
@@ -617,7 +639,7 @@ class SshProtocol(asyncio.Protocol):
 
     def write_packet(self, packet):
         if log.isEnabledFor(logging.INFO):
-            log.info("Writing packet_type=[{}] ({} bytes) to address=[{}]."
+            log.info("Writing packet_type=[{}] ({} bytes) to address=[{}]."\
                 .format(packet.packet_type, len(packet.buf), self.address))
             if log.isEnabledFor(logging.DEBUG):
                 log.debug("data=[\n{}].".format(hex_dump(packet.buf)))
@@ -625,7 +647,7 @@ class SshProtocol(asyncio.Protocol):
         self.write_data([packet.buf])
 
     def write_channel_data(self, local_cid, data):
-        log.info("Writing to channel {} with {} bytes of data.".format(local_cid, len(data)))
+        log.info("Writing to channel {} with {} bytes of data (address={}).".format(local_cid, len(data), self.address))
 
         remote_cid = self._channel_map.get(local_cid)
         if remote_cid == None:
@@ -635,7 +657,7 @@ class SshProtocol(asyncio.Protocol):
         msg.recipient_channel = remote_cid
         msg.encode()
 
-        self.write_data([msg.buf, data])
+        self.write_data((msg.buf, data))
         return True
 
     def write_data(self, datas):
@@ -779,8 +801,10 @@ class SshProtocol(asyncio.Protocol):
                         if self.server_mode:
                             self.init_inbound_encryption()
                         else:
-                            """ Disable further processing until inbound encryption is setup.
-                                It may not have yet as parameters and newkeys may have come in same tcp packet. """
+                            # Disable further processing until inbound
+                            # encryption is setup. It may not have yet as
+                            # parameters and newkeys may have come in same tcp
+                            # packet.
                             self.set_inbound_enabled(False)
                         self.waitingForNewKeys = False
 
@@ -889,9 +913,16 @@ def connectTaskCommon(protocol, server_mode):
 
     # Read banner.
     packet = yield from protocol.read_packet()
-    log.info("X: Received banner [{}].".format(packet))
+
+    if log.isEnabledFor(logging.INFO):
+        log.info("X: Received banner [{}].".format(packet))
+
+    if not packet:
+        return False
 
     protocol.remote_banner = packet.decode(encoding="UTF-8")
+
+    return True
 
 # Returns True on success, False on failure.
 @asyncio.coroutine
@@ -908,6 +939,9 @@ def connectTaskInsecure(protocol, server_mode):
     protocol.write_packet(m)
 
     pkt = yield from protocol.read_packet()
+    if not pkt:
+        return False
+
     m = mnetpacket.SshKexdhReplyMessage(pkt)
 
     if server_mode:
@@ -954,6 +988,9 @@ def connectTaskSecure(protocol, server_mode):
 
     # Read KexInit packet.
     packet = yield from protocol.read_packet()
+    if not packet:
+        return False
+
     if log.isEnabledFor(logging.DEBUG):
         log.debug("X: Received packet [{}].".format(hex_dump(packet)))
 
@@ -997,11 +1034,17 @@ def connectTaskSecure(protocol, server_mode):
         protocol.set_inbound_enabled(True)
 
     packet = yield from protocol.read_packet()
+    if not packet:
+        return False
+
     m = mnetpacket.SshNewKeysMessage(packet)
     log.debug("Received SSH_MSG_NEWKEYS.")
 
     if protocol.server_mode:
         packet = yield from protocol.read_packet()
+        if not packet:
+            return False
+
 #        m = mnetpacket.SshPacket(None, packet)
 #        log.info("X: Received packet (type={}) [{}].".format(m.packet_type, packet))
         m = mnetpacket.SshServiceRequestMessage(packet)
@@ -1017,6 +1060,9 @@ def connectTaskSecure(protocol, server_mode):
         protocol.write_packet(mr)
 
         packet = yield from protocol.read_packet()
+        if not packet:
+            return False
+
         m = mnetpacket.SshUserauthRequestMessage(packet)
         log.info("Userauth requested with method=[{}].".format(m.method_name))
 
@@ -1029,6 +1075,9 @@ def connectTaskSecure(protocol, server_mode):
             protocol.write_packet(mr)
 
             packet = yield from protocol.read_packet()
+            if not packet:
+                return False
+
             m = mnetpacket.SshUserauthRequestMessage(packet)
             log.info("Userauth requested with method=[{}].".format(m.method_name))
 
@@ -1048,6 +1097,9 @@ def connectTaskSecure(protocol, server_mode):
             protocol.write_packet(mr)
 
             packet = yield from protocol.read_packet()
+            if not packet:
+                return False
+
             m = mnetpacket.SshUserauthRequestMessage(packet)
             log.info("Userauth requested with method=[{}].".format(m.method_name))
 
@@ -1097,6 +1149,9 @@ def connectTaskSecure(protocol, server_mode):
         protocol.write_packet(m)
 
         packet = yield from protocol.read_packet()
+        if not packet:
+            return False
+
         m = mnetpacket.SshServiceAcceptMessage(packet)
         log.info("Service request accepted [{}].".format(m.service_name))
 
@@ -1125,6 +1180,9 @@ def connectTaskSecure(protocol, server_mode):
         protocol.write_packet(mr)
 
         packet = yield from protocol.read_packet()
+        if not packet:
+            return False
+
         m = mnetpacket.SshUserauthSuccessMessage(packet)
         log.info("Userauth accepted.")
 

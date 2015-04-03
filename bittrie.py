@@ -1,3 +1,5 @@
+none_found = object()
+
 class BitTrie(object):
     def __init__(self):
         self.trie = [None] * 0x10
@@ -19,16 +21,26 @@ class BitTrie(object):
 
     def __str__(self):
         buf = "["
+        first = True
 
         for x in self.find(ZeroKey()):
             if not x:
                 continue
+            if not first:
+                buf += ", "
+            else:
+                first = False
             buf += str(x)
-            buf += ", "
 
         buf += "]"
 
         return buf
+
+    def __iter__(self):
+        for item in self.find(ZeroKey()):
+            if item is none_found:
+                continue
+            yield item
 
     def __delitem__(self, key):
         self._del(key)
@@ -46,7 +58,13 @@ class BitTrie(object):
 
         raise KeyError()
 
-    def put(self, key, value):
+    def setdefault(self, key, default):
+        r = self.put(key, default, False)
+        if not r:
+            return default
+        return r
+
+    def put(self, key, value, replace=True):
         node = self.trie
 
         keylen = len(key)
@@ -67,7 +85,8 @@ class BitTrie(object):
                     if j == 0:
                         ii = i + 1
                         if ii == keylen:
-                            node[bit] = TrieLeaf(key, value)
+                            if replace:
+                                node[bit] = TrieLeaf(key, value)
                             return other.value
 
                         next_o_bit = (o_key[ii] >> 4) & 0x0F
@@ -164,7 +183,7 @@ class BitTrie(object):
                 next_node = node[bit]
 
                 if not next_node:
-                    yield None
+                    yield none_found
 
                     func = self._iterate_next(branches) if forward\
                         else self._iterate_prev(branches)
@@ -180,7 +199,7 @@ class BitTrie(object):
                         if nnk[i] != key[i]:
                             greater = nnk[i] > key[i]
 
-                            yield None
+                            yield none_found
 
                             if greater ^ (not forward):
                                 yield next_node.value
@@ -254,14 +273,17 @@ class XorKey(object):
         return len(self.key1)
 
 class ZeroKey(object):
-    def __init__(self):
-        pass
+    def __init__(self, length=0xFFFFFFFF):
+        self.length = length
 
     def __getitem__(self, idx):
         return 0x00
 
     def __len__(self):
-        return 0xFFFFFFFF
+        return self.length
+
+    def __eq__(self, other):
+        return other.length == self.length
 
 import random
 import os

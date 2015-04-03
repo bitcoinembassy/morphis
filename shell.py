@@ -2,6 +2,7 @@ import llog
 
 import asyncio
 import cmd
+from datetime import datetime
 import logging
 import queue as tqueue
 
@@ -72,6 +73,17 @@ class Shell(cmd.Cmd):
 
     @asyncio.coroutine
     def onecmd(self, line):
+        if line and line[0] == ';':
+            for line in line.split(';'):
+                log.info("line=[{}].".format(line))
+                stop = yield from self._onecmd(line)
+                if stop:
+                    return True
+        else:
+            return (yield from self._onecmd(line))
+
+    @asyncio.coroutine
+    def _onecmd(self, line):
         log.info("Processing command line: [{}].".format(line))
 
         cmd, arg, line = self.parseline(line)
@@ -93,11 +105,14 @@ class Shell(cmd.Cmd):
         except AttributeError:
             return self.default(line)
 
-        if asyncio.iscoroutinefunction(func):
-            r = yield from func(arg)
-            return r
-        else:
-            return func(arg)
+        try:
+            if asyncio.iscoroutinefunction(func):
+                r = yield from func(arg)
+                return r
+            else:
+                return func(arg)
+        except Exception as e:
+            self.writeln("Exception [{}] executing command.".format(e))
 
     @asyncio.coroutine
     def readline(self):
@@ -249,74 +264,37 @@ class Shell(cmd.Cmd):
         return self.do_listpeers(arg)
 
     def do_listpeers(self, arg):
-        peers = self.peer.engine.peers
+        peers = self.peer.engine.peers.values()
+
         if arg:
             if arg == 'i':
-                peers = sorted(peers.values(), key=\
+                peers = sorted(peers, key=\
                     lambda peer: peer.dbid)
             elif arg == 'p':
-                peers = sorted(peers.values(), key=\
+                peers = sorted(peers, key=\
                     lambda peer: peer.address.split(':')[1])
-        else:
-            peers = peers.values()
-
         
         for peer in peers:
             self.writeln(\
-                "Peer: (id={} addr={}).".format(peer.dbid, peer.address))
+                "Peer: (id={} addr={}, distance={})."\
+                    .format(peer.dbid, peer.address, peer.distance))
         self.writeln("Count: {}.".format(len(peers)))
 
     @asyncio.coroutine
     def do_findnode(self, arg):
         "[id] find the node with hex encoded id."
 
-        msg = chord.ChordFindNode()
-        #msg.node_id = int(arg).to_bytes(512>>3, "big")
-        msg.node_id = int(arg, 16).to_bytes(512>>3, "big")
+        node_id = int(arg, 16).to_bytes(chord.NODE_ID_BYTES, "big")
 
-        @asyncio.coroutine
-        def _run_find_node(peer):
-            cid, queue = yield from peer.protocol.open_channel("mpeer", True)
-            if not queue:
-                return
+        start = datetime.today()
+        result = yield from self.peer.engine.tasks.send_find_node(node_id)
+        diff = datetime.today() - start
+        self.writeln("send_find_node(..) took: {}.".format(diff))
 
-            peer.protocol.write_channel_data(cid, msg.encode())
-
-            while True:
-                pkt = yield from queue.get()
-                if not pkt:
-                    self.writeln("nid=[{}] EOF.".format(peer.dbid))
-                    return
-
-                pmsg = chord.ChordPeerList(pkt)
-
-                for r in pmsg.peers:
-                    r.node_id = enc.generate_ID(r.pubkey)
-
-                    self.writeln("nid[{}] FOUND: {:22} diff=[{}]".format(peer.dbid, r.address, hex_string([x ^ y for x, y in zip(r.node_id, msg.node_id)])))
-                    self.flush()
-
-        tasks = {} # {Task, Peer}
-
-        for peer in self.peer.engine.peers.values():
-            if not peer.protocol.remote_banner.startswith("SSH-2.0-mNet_"):
-                log.info("Skipping non morphis connection.")
-                continue
-
-            log.info("Sending FindNode to peer [{}].".format(peer.address))
-
-            task = asyncio.async(_run_find_node(peer), loop=self.loop)
-            tasks[task] = peer
-
-        if not tasks:
-            return
-
-        done, pending = yield from asyncio.wait(\
-            tasks.keys(), loop=self.loop, timeout=2)
-
-        for pend in pending:
-            self.writeln("note: Peer (id={}) didn't finish by timeout."\
-                .format(tasks[pend].dbid))
+        for r in result:
+            self.writeln("nid[{}] FOUND: {:22} diff=[{}]"\
+                .format(r.id, r.address,\
+                    hex_string([x ^ y for x, y in zip(r.node_id, node_id)])))
 
     @asyncio.coroutine
     def do_conn(self, arg):
@@ -330,7 +308,6 @@ class Shell(cmd.Cmd):
             for task in asyncio.Task.all_tasks(loop=self.loop):
                 task_str = str(task)
                 if "_process_ssh_protocol" in task_str\
-                        or "_process_chord_packet" in task_str\
                         or "_shell_exec" in task_str\
                         or "_connection_lost" in task_str\
                         or "cmdloop" in task_str:
@@ -357,11 +334,37 @@ class Shell(cmd.Cmd):
         self.writeln("Count: {}.".format(cnt))
 
     @asyncio.coroutine
+    def do_lc(self, arg):
+        return (yield from self.do_listchans(arg))
+
+    @asyncio.coroutine
     def do_listchans(self, arg):
         "List the open channels of all connected PeerS."
 
-        code = "list(filter(lambda x: x[1], map(lambda node: [node.bind_address, list(filter(lambda x: x[1], map(lambda peer: [peer.address, list(peer.protocol._channel_map.items())], node.chord_engine.peers.values())))], self.peer.engine.node.all_nodes)))"
+        code = "list(filter(lambda x: x[1], map(lambda peer: [peer.address, list(peer.protocol._channel_map.items())], self.peer.engine.node.chord_engine.peers.values())))"
         return self.do_eval(code)
+
+    @asyncio.coroutine
+    def do_stat(self, arg):
+        "Report the node status."
+
+        engine = self.peer.engine
+
+        self.writeln("Node:\n\tid=[{}]\n\tbind_port=[{}]\n\tconnections={}"\
+            .format(hex_string(engine.node_id), engine._bind_port,
+                len(engine.peers)))
+
+    @asyncio.coroutine
+    def do_time(self, arg):
+        "Time the passed command line."
+
+        start = datetime.today()
+        r = yield from self.onecmd(arg)
+        diff = datetime.today() - start
+
+        self.writeln("Timed command took: {}.".format(diff))
+
+        self.lastcmd = "time " + arg
 
     def emptyline(self):
         pass
