@@ -749,7 +749,7 @@ class ChordEngine():
         cnt = 0
         none_started = False
         for closer_node in self.peer_trie.find(xorkey, False):
-            if not closer_node:
+            if closer_node is bittrie.none_found:
                 none_started = True
                 continue
 #            elif not none_started and peer.protocol.server_mode:

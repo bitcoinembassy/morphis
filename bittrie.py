@@ -1,3 +1,5 @@
+none_found = object()
+
 class BitTrie(object):
     def __init__(self):
         self.trie = [None] * 0x10
@@ -36,7 +38,7 @@ class BitTrie(object):
 
     def __iter__(self):
         for item in self.find(ZeroKey()):
-            if not item:
+            if item is none_found:
                 continue
             yield item
 
@@ -181,7 +183,7 @@ class BitTrie(object):
                 next_node = node[bit]
 
                 if not next_node:
-                    yield None
+                    yield none_found
 
                     func = self._iterate_next(branches) if forward\
                         else self._iterate_prev(branches)
@@ -197,7 +199,7 @@ class BitTrie(object):
                         if nnk[i] != key[i]:
                             greater = nnk[i] > key[i]
 
-                            yield None
+                            yield none_found
 
                             if greater ^ (not forward):
                                 yield next_node.value
