@@ -437,6 +437,8 @@ class ChordEngine():
         r = yield from self.loop.run_in_executor(None, dbcall, dbpeer)
 
         if not r:
+            if peer.protocol:
+                peer.protocol.close()
             return None
 
         try:
