@@ -268,7 +268,7 @@ class ChordEngine():
             self._do_stabilize_handle.cancel()
 
         self._do_stabilize_handle =\
-            self.loop.call_later(60, self._async_do_stabilize)
+            self.loop.call_later(300, self._async_do_stabilize)
 
         yield from self.tasks.do_stabilize()
 
