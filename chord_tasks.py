@@ -146,6 +146,9 @@ class ChordTasks(object):
 
         result_trie = bittrie.BitTrie()
 
+        # Store ourselves to ignore when peers respond with us in their list.
+        result_trie[bittrie.XorKey(node_id, self.engine.node_id)] = False
+
         tasks = []
         used_peers = []
 
@@ -181,6 +184,13 @@ class ChordTasks(object):
         for depth in range(1, maximum_depth):
             direct_peers_lower = 0
             for row in result_trie:
+                if row is False:
+                    # Row is ourself. Prevent infinite loops.
+                    # Sometimes we are looking closer than ourselves, sometimes
+                    # further (stabilize vs other). We could use this to end
+                    # the loop maybe, do checks. For now, just ignoring it to
+                    # prevent infinite loops.
+                    continue
                 if row.path is None:
                     # Already asked direct peers, and only asking ones we
                     # haven't asked before.
@@ -251,12 +261,12 @@ class ChordTasks(object):
 
         if log.isEnabledFor(logging.INFO):
             for vpeer in result_trie:
-                if not vpeer.path:
+                if not vpeer or not vpeer.path:
                     continue
                 log.info("Found closer Peer (address={})."\
                     .format(vpeer.peer.address))
 
-        rnodes = [vpeer.peer for vpeer in result_trie if vpeer.path]
+        rnodes = [vpeer.peer for vpeer in result_trie if vpeer and vpeer.path]
 
         if log.isEnabledFor(logging.INFO):
             log.info("FindNode found [{}] Peers.".format(len(rnodes)))
