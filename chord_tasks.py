@@ -449,7 +449,7 @@ class ChordTasks(object):
                     log.info("Skipping request for disconnected tunnel [{}]."\
                         .format(rmsg.index))
                 yield from self._signal_find_node_tunnel_closed(\
-                    peer, local_cid, index, rmsg.index)
+                    peer, local_cid, rmsg.index, 1)
 
     @asyncio.coroutine
     def _process_find_node_tunnel(\
