@@ -304,7 +304,10 @@ class SshProtocol(asyncio.Protocol):
 
     @asyncio.coroutine
     def _process_ssh_protocol(self):
-        yield from connectTaskCommon(self, self.server_mode)
+        r = yield from connectTaskCommon(self, self.server_mode)
+
+        if not r:
+            return r
 
         if cleartext_transport_enabled\
                 and self.remote_banner.endswith("+cleartext"):
@@ -907,9 +910,16 @@ def connectTaskCommon(protocol, server_mode):
 
     # Read banner.
     packet = yield from protocol.read_packet()
-    log.info("X: Received banner [{}].".format(packet))
+
+    if log.isEnabledFor(logging.INFO):
+        log.info("X: Received banner [{}].".format(packet))
+
+    if not packet:
+        return False
 
     protocol.remote_banner = packet.decode(encoding="UTF-8")
+
+    return True
 
 # Returns True on success, False on failure.
 @asyncio.coroutine
@@ -926,6 +936,9 @@ def connectTaskInsecure(protocol, server_mode):
     protocol.write_packet(m)
 
     pkt = yield from protocol.read_packet()
+    if not pkt:
+        return False
+
     m = mnetpacket.SshKexdhReplyMessage(pkt)
 
     if server_mode:
@@ -972,6 +985,9 @@ def connectTaskSecure(protocol, server_mode):
 
     # Read KexInit packet.
     packet = yield from protocol.read_packet()
+    if not packet:
+        return False
+
     if log.isEnabledFor(logging.DEBUG):
         log.debug("X: Received packet [{}].".format(hex_dump(packet)))
 
@@ -1015,11 +1031,17 @@ def connectTaskSecure(protocol, server_mode):
         protocol.set_inbound_enabled(True)
 
     packet = yield from protocol.read_packet()
+    if not packet:
+        return False
+
     m = mnetpacket.SshNewKeysMessage(packet)
     log.debug("Received SSH_MSG_NEWKEYS.")
 
     if protocol.server_mode:
         packet = yield from protocol.read_packet()
+        if not packet:
+            return False
+
 #        m = mnetpacket.SshPacket(None, packet)
 #        log.info("X: Received packet (type={}) [{}].".format(m.packet_type, packet))
         m = mnetpacket.SshServiceRequestMessage(packet)
@@ -1035,6 +1057,9 @@ def connectTaskSecure(protocol, server_mode):
         protocol.write_packet(mr)
 
         packet = yield from protocol.read_packet()
+        if not packet:
+            return False
+
         m = mnetpacket.SshUserauthRequestMessage(packet)
         log.info("Userauth requested with method=[{}].".format(m.method_name))
 
@@ -1047,6 +1072,9 @@ def connectTaskSecure(protocol, server_mode):
             protocol.write_packet(mr)
 
             packet = yield from protocol.read_packet()
+            if not packet:
+                return False
+
             m = mnetpacket.SshUserauthRequestMessage(packet)
             log.info("Userauth requested with method=[{}].".format(m.method_name))
 
@@ -1066,6 +1094,9 @@ def connectTaskSecure(protocol, server_mode):
             protocol.write_packet(mr)
 
             packet = yield from protocol.read_packet()
+            if not packet:
+                return False
+
             m = mnetpacket.SshUserauthRequestMessage(packet)
             log.info("Userauth requested with method=[{}].".format(m.method_name))
 
@@ -1115,6 +1146,9 @@ def connectTaskSecure(protocol, server_mode):
         protocol.write_packet(m)
 
         packet = yield from protocol.read_packet()
+        if not packet:
+            return False
+
         m = mnetpacket.SshServiceAcceptMessage(packet)
         log.info("Service request accepted [{}].".format(m.service_name))
 
@@ -1143,6 +1177,9 @@ def connectTaskSecure(protocol, server_mode):
         protocol.write_packet(mr)
 
         packet = yield from protocol.read_packet()
+        if not packet:
+            return False
+
         m = mnetpacket.SshUserauthSuccessMessage(packet)
         log.info("Userauth accepted.")
 
