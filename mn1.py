@@ -72,7 +72,7 @@ class SshProtocol(asyncio.Protocol):
         self.waitingForNewKeys = False
 
         self.waiter = None
-        self.ready_waiter = None
+        self.ready_waiters = []
         self.buf = bytearray()
         self.cbuf = self.buf
         self.packet = None
@@ -110,14 +110,11 @@ class SshProtocol(asyncio.Protocol):
             if not block:
                 raise SshException("Connection is not ready yet.")
 
-            assert not self.ready_waiter
-            self.ready_waiter = asyncio.futures.Future(loop=self.loop)
+            waiter = asyncio.futures.Future(loop=self.loop)
+            self.ready_waiters.append(waiter)
+            yield from waiter
 
-            try:
-                yield from self.ready_waiter
-            finally:
-                self.waiter = None
-        elif self.status is not Status.ready:
+        if self.status is not Status.ready:
             # Ignore if it is closed or disconnected.
             if log.isEnabledFor(logging.INFO):
                 log.info("open_channel(..) called on a closed connection.")
@@ -320,9 +317,11 @@ class SshProtocol(asyncio.Protocol):
 
         # Connected and fully authenticated at this point.
         self.status = Status.ready
-        if self.ready_waiter != None:
-            self.ready_waiter.set_result(False)
-            self.ready_waiter = None
+
+        for waiter in self.ready_waiters:
+            waiter.set_result(False)
+        self.ready_waiters.clear()
+
         yield from self.connection_handler.connection_ready(self)
 
         while True:
@@ -513,6 +512,10 @@ class SshProtocol(asyncio.Protocol):
         if self.waiter != None:
             self.waiter.set_result(False)
             self.waiter = None
+
+        for waiter in self.ready_waiters:
+            waiter.set_result(False)
+        self.ready_waiters.clear()
 
         self.connection_handler.connection_lost(self, exc)
 
