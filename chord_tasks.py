@@ -168,6 +168,10 @@ class ChordTasks(object):
             log.info("Cannot perform FindNode, as we know no closer nodes.")
             return
 
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("Starting {} root level FindNode tasks."\
+                .format(len(tasks)))
+
         done, pending = yield from asyncio.wait(tasks, loop=self.loop)
 
         query_cntr = Counter(0)
@@ -193,6 +197,10 @@ class ChordTasks(object):
                 tun_meta = row.tun_meta
                 if not tun_meta.queue:
                     continue
+
+                if log.isEnabledFor(logging.DEBUG):
+                    log.debug("Sending FindNode to path [{}]."\
+                        .format(row.path))
 
                 pkt = None
                 for idx in reversed(row.path):
@@ -405,6 +413,7 @@ class ChordTasks(object):
         lmsg = cp.ChordPeerList()
         lmsg.peers = rlist
 
+        log.info("Writing PeerList response.")
         peer.protocol.write_channel_data(local_cid, lmsg.encode())
 
         rlist = [TunnelMeta(rpeer) for rpeer in rlist]
@@ -426,6 +435,10 @@ class ChordTasks(object):
                 return
 
             rmsg = cp.ChordRelay(pkt)
+
+            if log.isEnabledFor(logging.DEBUG):
+                log.debug("Processing request from Peer (id=[{}]) for index"\
+                    " [{}].".format(peer.dbid, rmsg.index))
 
             tun_meta = rlist[rmsg.index]
 
