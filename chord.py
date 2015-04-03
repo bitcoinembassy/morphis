@@ -63,9 +63,11 @@ class ChordEngine():
 
         self._next_request_id = 0
 
+        self._doing_process_connection_count = False
         self._process_connection_count_handle = None
         self._last_process_connection_count = datetime(1, 1, 1)
 
+        self._doing_stabilize = False
         self._do_stabilize_handle = None
         self._last_stabilize = None
 
@@ -257,6 +259,12 @@ class ChordEngine():
 
     @asyncio.coroutine
     def do_stabilize(self):
+        if self._doing_stabilize:
+            log.info("Do stabilize called when do_stabilize(..) is already"\
+                " running.")
+            return
+        self._doing_stabilize = True
+
         if log.isEnabledFor(logging.INFO):
             now = datetime.today()
             if self._last_stabilize:
@@ -271,6 +279,8 @@ class ChordEngine():
             self.loop.call_later(300, self._async_do_stabilize)
 
         yield from self.tasks.do_stabilize()
+
+        self._doing_stabilize = False
 
     def stop(self):
         if self.server:
@@ -291,6 +301,13 @@ class ChordEngine():
             if diff < timedelta(seconds=15):
                 return
 
+        if self._doing_process_connection_count:
+            log.info("process_connection_count(..) called while already"\
+                " processing.")
+            return
+        self._doing_process_connection_count = True
+
+
         self._last_process_connection_count = now
 
         if self._process_connection_count_handle:
@@ -303,6 +320,8 @@ class ChordEngine():
         needed = self.maximum_connections - cnt
 
         yield from self._process_connection_count(needed)
+
+        self._doing_process_connection_count = False
 
     @asyncio.coroutine
     def _process_connection_count(self, needed):
