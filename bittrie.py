@@ -273,14 +273,17 @@ class XorKey(object):
         return len(self.key1)
 
 class ZeroKey(object):
-    def __init__(self):
-        pass
+    def __init__(self, length=0xFFFFFFFF):
+        self.length = length
 
     def __getitem__(self, idx):
         return 0x00
 
     def __len__(self):
-        return 0xFFFFFFFF
+        return self.length
+
+    def __eq__(self, other):
+        return other.length == self.length
 
 import random
 import os
