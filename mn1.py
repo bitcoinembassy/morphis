@@ -37,6 +37,11 @@ class Status(Enum):
     closed = 20
     disconnected = 30
 
+class ChannelStatus(Enum):
+    opening = -1
+    closing = -2
+    implicit_data_sent = -3
+
 class SshProtocol(asyncio.Protocol):
     def __init__(self, loop):
         self.loop = loop
@@ -150,7 +155,7 @@ class SshProtocol(asyncio.Protocol):
 
         self.write_packet(msg)
 
-        self._channel_map[local_cid] = -1
+        self._channel_map[local_cid] = ChannelStatus.opening
 
         return local_cid
 
@@ -171,9 +176,14 @@ class SshProtocol(asyncio.Protocol):
                 log.info("close_channel(..) called on unmapped channel [{}]."\
                     .format(local_cid))
             return False
-        if remote_cid == -1 or remote_cid == -2:
+        if remote_cid is ChannelStatus.closing:
             if log.isEnabledFor(logging.INFO):
-                log.info("close_channel(..) called on channel in state [{}]."\
+                log.info("close_channel(..) called on already closing channel."\
+                    .format(remote_cid))
+            return False
+        if remote_cid is ChannelStatus.opening:
+            if log.isEnabledFor(logging.INFO):
+                log.info("close_channel(..) called on still opening channel."\
                     .format(remote_cid))
             return False
 
@@ -183,7 +193,7 @@ class SshProtocol(asyncio.Protocol):
 
         self.write_packet(msg)
 
-        self._channel_map[local_cid] = -2
+        self._channel_map[local_cid] = ChannelStatus.closing
         yield from self.channel_queues.pop(local_cid).put(None)
 
     def _create_channel_queue(self):
@@ -369,10 +379,10 @@ class SshProtocol(asyncio.Protocol):
                 if rcid == None:
                     log.warning("Received a CHANNEL_OPEN_CONFIRMATION for a local channel that was not started; ignoring.")
                     return
-                if rcid == -2:
+                if rcid == ChannelStatus.closing:
                     log.warning("Received a CHANNEL_OPEN_CONFIRMATION for a local channel that was closed; ignoring.")
                     return
-                if rcid != -1:
+                if rcid != ChannelStatus.opening:
                     log.warning("Received a CHANNEL_OPEN_CONFIRMATION for a local channel that was already open; ignoring.")
                     return
 
@@ -475,7 +485,8 @@ class SshProtocol(asyncio.Protocol):
         remote_cid = self._channel_map.pop(local_cid)
         assert self._channel_map.get(local_cid) is None
 
-        if remote_cid != -1 and remote_cid != -2:
+        if remote_cid != ChannelStatus.opening\
+                and remote_cid != ChannelStatus.closing:
             assert remote_cid >= 0, "remote_cid=[{}].".format(remote_cid)
             msg = mnetpacket.SshChannelCloseMessage()
             msg.recipient_channel = remote_cid
