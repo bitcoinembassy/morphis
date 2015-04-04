@@ -479,7 +479,7 @@ class SshProtocol(asyncio.Protocol):
                     msg.recipient_channel =\
                         self._reverse_channel_map[msg.recipient_channel]
 
-                    if not msg.recipient_channel:
+                    if type(msg.recipient_channel) is None:
                         log.info("Received data for closed implicit channel;"\
                             " ignoring.")
                         return
@@ -541,9 +541,11 @@ class SshProtocol(asyncio.Protocol):
             log.warning("Unhandled packet of type [{}].".format(t))
 
     def _accept_channel_open(self, req_msg):
-        log.info("Accepting channel open request.")
-
         local_cid = self._allocate_channel_id()
+
+        if log.isEnabledFor(logging.INFO):
+            log.info("Accepting channel open request: {}, {}."\
+                .format(local_cid, req_msg.sender_channel))
 
         self._channel_map[local_cid] = req_msg.sender_channel
         self._reverse_channel_map[req_msg.sender_channel] = local_cid
@@ -578,7 +580,7 @@ class SshProtocol(asyncio.Protocol):
 
     @asyncio.coroutine
     def _close_channel(self, local_cid):
-        remote_cid = self._channel_map.pop(local_cid)
+        remote_cid = self._channel_map.pop(local_cid, None)
 
         if remote_cid is None:
             return False
@@ -596,7 +598,7 @@ class SshProtocol(asyncio.Protocol):
             remote_cid = local_cid
             msg.implicit_channel = True
         else:
-            self._reverse_channel_map.pop(remote_cid)
+            self._reverse_channel_map.pop(remote_cid, None)
 
         msg.recipient_channel = remote_cid
         msg.encode()
