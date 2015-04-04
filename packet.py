@@ -357,6 +357,8 @@ class SshUserauthPkOkMessage(SshPacket):
 
 class SshChannelOpenMessage(SshPacket):
     def __init__(self, buf = None):
+        self.data_packet = None
+
         super().__init__(SSH_MSG_CHANNEL_OPEN, buf)
 
     def parse(self):
@@ -372,6 +374,9 @@ class SshChannelOpenMessage(SshPacket):
         self.maximum_packet_size = struct.unpack(">L", self.buf[i:i+4])[0]
         i += 4
 
+        if i < len(self.buf):
+            self.data_packet = self.buf[i:]
+
     def encode(self):
         nbuf = super().encode()
 
@@ -379,6 +384,9 @@ class SshChannelOpenMessage(SshPacket):
         nbuf += struct.pack(">L", self.sender_channel)
         nbuf += struct.pack(">L", self.initial_window_size)
         nbuf += struct.pack(">L", self.maximum_packet_size)
+
+        if self.data_packet:
+            nbuf += self.data_packet
 
         return nbuf
 
@@ -438,6 +446,7 @@ class SshChannelOpenFailureMessage(SshPacket):
 class SshChannelCloseMessage(SshPacket):
     def __init__(self, buf = None):
         self.recipient_channel = None
+        self.implicit_channel = False
 
         super().__init__(SSH_MSG_CHANNEL_CLOSE, buf)
 
@@ -446,11 +455,16 @@ class SshChannelCloseMessage(SshPacket):
 
         i = 1
         self.recipient_channel = struct.unpack(">L", self.buf[i:i+4])[0]
+        i += 4
+        if i < len(self.buf):
+            self.implicit_channel = struct.unpack("?", self.buf[i:i+1])[0]
 
     def encode(self):
         nbuf = super().encode()
 
         nbuf += struct.pack(">L", self.recipient_channel)
+        if self.implicit_channel:
+            nbuf += struct.pack("?", self.implicit_channel)
 
         return nbuf
 

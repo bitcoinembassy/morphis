@@ -93,6 +93,8 @@ class SshProtocol(asyncio.Protocol):
         self._channel_map = {} # {local_cid, remote_cid}
         self._reverse_channel_map = {} # {remote_cid, local_cid}
 
+        self._implicit_channels_enabled = False
+
     def set_connection_handler(self, value):
         self.connection_handler = value
 
@@ -125,12 +127,18 @@ class SshProtocol(asyncio.Protocol):
                 log.info("open_channel(..) called on a closed connection.")
             return None, None
 
-        local_cid = self._open_channel(channel_type)
+        if self._implicit_channels_enabled:
+            local_cid = self._open_implicit_channel(channel_type)
+        else:
+            local_cid = self._open_channel(channel_type)
 
         queue = self._create_channel_queue()
         self.channel_queues[local_cid] = queue
 
-        if block:
+        if self._implicit_channels_enabled:
+            yield from self.channel_handler.channel_opened(\
+                self, None, local_cid, queue)
+        elif block:
             r = yield from queue.get()
             if not r:
                 # Could be None for disconnect or False for rejected.
@@ -138,6 +146,23 @@ class SshProtocol(asyncio.Protocol):
             assert r == True, "r=[{}]!".format(r)
 
         return local_cid, queue
+
+    def _open_implicit_channel(self, channel_type):
+        local_cid = self._allocate_channel_id()
+
+        if log.isEnabledFor(logging.INFO):
+            log.info("Opening implicit channel [{}] (address=[{}])."\
+                .format(local_cid, self.address))
+
+        msg = mnetpacket.SshChannelOpenMessage()
+        msg.channel_type = channel_type
+        msg.sender_channel = local_cid
+        msg.initial_window_size = 65535
+        msg.maximum_packet_size = 65535
+
+        self._channel_map[local_cid] = msg
+
+        return local_cid
 
     def _open_channel(self, channel_type):
         local_cid = self._allocate_channel_id()
@@ -187,6 +212,10 @@ class SshProtocol(asyncio.Protocol):
                     .format(remote_cid))
             return False
 
+        if remote_cid is ChannelStatus.implicit_data_sent\
+                or type(remote_cid) is mnetpacket.SshChannelOpenMessage:
+            remote_cid = local_cid
+
         msg = mnetpacket.SshChannelCloseMessage()
         msg.recipient_channel = remote_cid
         msg.encode()
@@ -195,6 +224,9 @@ class SshProtocol(asyncio.Protocol):
 
         self._channel_map[local_cid] = ChannelStatus.closing
         yield from self.channel_queues.pop(local_cid).put(None)
+
+        yield from self.channel_handler.channel_closed(\
+                self, msg.recipient_channel)
 
     def _create_channel_queue(self):
         return asyncio.Queue()
@@ -343,109 +375,167 @@ class SshProtocol(asyncio.Protocol):
 
             t = m.packet_type
             log.info("Received packet, type=[{}].".format(t))
-            if t == mnetpacket.SSH_MSG_CHANNEL_OPEN:
-                msg = mnetpacket.SshChannelOpenMessage(packet)
-                log.info("P: Received CHANNEL_OPEN: channel_type=[{}], sender_channel=[{}].".format(msg.channel_type, msg.sender_channel))
 
-                if self._reverse_channel_map.get(msg.sender_channel):
-                    log.warning("Remote end sent a CHANNEL_OPEN request with an already open remote id; ignoring.")
-                    continue
+            yield from self._process_ssh_packet(t, packet)
 
-                r = yield from\
-                    self.channel_handler.request_open_channel(self, msg)
+    @asyncio.coroutine
+    def _process_ssh_packet(self, t, packet):
+        if t == mnetpacket.SSH_MSG_CHANNEL_OPEN:
+            msg = mnetpacket.SshChannelOpenMessage(packet)
+            log.info("P: Received CHANNEL_OPEN: channel_type=[{}], sender_channel=[{}].".format(msg.channel_type, msg.sender_channel))
 
-                if r:
-                    local_cid = self._accept_channel_open(msg)
+            if self._implicit_channels_enabled:
+                if msg.data_packet is None:
+                    raise SshException()
 
-                    if log.isEnabledFor(logging.INFO):
-                        log.info("Channel [{}] opened (address=[{}])."\
-                            .format(local_cid, self.address))
+            if self._reverse_channel_map.get(msg.sender_channel):
+                log.warning("Remote end sent a CHANNEL_OPEN request with an already open remote id; ignoring.")
+                return
 
-                    queue = self._create_channel_queue()
-                    self.channel_queues[local_cid] = queue
+            r = yield from\
+                self.channel_handler.request_open_channel(self, msg)
 
-                    yield from self.channel_handler.channel_opened(\
-                        self, msg.channel_type, local_cid, queue)
-                else:
-                    self._open_channel_reject(msg)
-
-            elif t == mnetpacket.SSH_MSG_CHANNEL_OPEN_CONFIRMATION:
-                msg = mnetpacket.SshChannelOpenConfirmationMessage(packet)
-                log.info("P: Received CHANNEL_OPEN_CONFIRMATION:"\
-                    " sender_channel=[{}], recipient_channel=[{}]."\
-                    .format(msg.sender_channel, msg.recipient_channel))
-
-                rcid = self._channel_map.get(msg.recipient_channel)
-                if rcid == None:
-                    log.warning("Received a CHANNEL_OPEN_CONFIRMATION for a local channel that was not started; ignoring.")
-                    return
-                if rcid == ChannelStatus.closing:
-                    log.warning("Received a CHANNEL_OPEN_CONFIRMATION for a local channel that was closed; ignoring.")
-                    return
-                if rcid != ChannelStatus.opening:
-                    log.warning("Received a CHANNEL_OPEN_CONFIRMATION for a local channel that was already open; ignoring.")
-                    return
-
-                lcid = self._reverse_channel_map\
-                    .setdefault(msg.sender_channel, msg.recipient_channel)
-
-                if lcid is not msg.recipient_channel:
-                    log.warning("Received a CHANNEL_OPEN_CONFIRMATION for a remote channel that is already open; ignoring.")
-                    return
-
-                self._channel_map[msg.recipient_channel] = msg.sender_channel
+            if r:
+                local_cid = self._accept_channel_open(msg)
 
                 if log.isEnabledFor(logging.INFO):
                     log.info("Channel [{}] opened (address=[{}])."\
-                        .format(msg.recipient_channel, self.address))
+                        .format(local_cid, self.address))
 
-                # First 'packet' is a True, signaling the channel is open to
-                # those yielding from the queue.
-                queue = self.channel_queues[msg.recipient_channel]
-                yield from queue.put(True)
+                queue = self._create_channel_queue()
+                self.channel_queues[local_cid] = queue
 
-                yield from self.channel_handler\
-                    .channel_opened(self, None, msg.recipient_channel, queue)
+                yield from self.channel_handler.channel_opened(\
+                    self, msg.channel_type, local_cid, queue)
 
-            elif t == mnetpacket.SSH_MSG_CHANNEL_OPEN_FAILURE:
-                msg = mnetpacket.SshChannelOpenFailureMessage(packet)
-                log.info("P: Received CHANNEL_OPEN_FAILURE recipient_channel=[{}].".format(msg.recipient_channel))
+                if self._implicit_channels_enabled:
+                    yield from self._process_ssh_packet(t, msg.data_packet)
+            elif not self._implicit_channels_enabled:
+                self._open_channel_reject(msg)
 
-                queue = self.channel_queues[msg.recipient_channel]
-                yield from queue.put(False)
-                yield from self._close_channel(msg.recipient_channel)
-                yield from self.channel_handler.channel_open_failed(self, msg)
+        elif t == mnetpacket.SSH_MSG_CHANNEL_OPEN_CONFIRMATION:
+            if self._implicit_channels_enabled:
+                raise SshException()
+            msg = mnetpacket.SshChannelOpenConfirmationMessage(packet)
+            log.info("P: Received CHANNEL_OPEN_CONFIRMATION:"\
+                " sender_channel=[{}], recipient_channel=[{}]."\
+                .format(msg.sender_channel, msg.recipient_channel))
 
-            elif t == mnetpacket.SSH_MSG_CHANNEL_DATA:
-                msg = mnetpacket.SshChannelDataMessage(packet)
-                log.info("P: Received CHANNEL_DATA recipient_channel=[{}].".format(msg.recipient_channel))
+            rcid = self._channel_map.get(msg.recipient_channel)
+            if rcid == None:
+                log.warning("Received a CHANNEL_OPEN_CONFIRMATION for a local channel that was not started; ignoring.")
+                return
+            if rcid == ChannelStatus.closing:
+                log.warning("Received a CHANNEL_OPEN_CONFIRMATION for a local channel that was closed; ignoring.")
+                return
+            if rcid != ChannelStatus.opening:
+                log.warning("Received a CHANNEL_OPEN_CONFIRMATION for a local channel that was already open; ignoring.")
+                return
 
-                r = yield from self.channel_handler.channel_data(self, packet)
-                if not r:
-                    log.info(\
-                        "Adding protocol (address={}) channel [{}] data"\
-                        " to queue."\
-                        .format(self.address, msg.recipient_channel))
-                    yield from self.channel_queues[msg.recipient_channel]\
-                        .put(msg.data)
-            elif t == mnetpacket.SSH_MSG_CHANNEL_CLOSE:
-                msg = mnetpacket.SshChannelCloseMessage(packet)
-                log.info("P: Received CHANNEL_CLOSE recipient_channel=[{}]"\
-                    .format(msg.recipient_channel))
+            lcid = self._reverse_channel_map\
+                .setdefault(msg.sender_channel, msg.recipient_channel)
 
-                yield from self._close_channel(msg.recipient_channel)
-                yield from self.channel_handler.channel_closed(self, msg.recipient_channel)
-            elif t == mnetpacket.SSH_MSG_CHANNEL_REQUEST:
-                msg = mnetpacket.SshChannelRequest(packet)
-                if log.isEnabledFor(logging.INFO):
-                    log.info("Received SSH_MSG_CHANNEL_REQUEST:"\
-                    " recipient_channel=[{}], request_type=[{}],"\
-                    " want_reply=[{}]."\
-                        .format(msg.recipient_channel, msg.request_type,\
-                            msg.want_reply))
-                yield from self.channel_handler.channel_request(self, msg)
+            if lcid is not msg.recipient_channel:
+                log.warning("Received a CHANNEL_OPEN_CONFIRMATION for a remote channel that is already open; ignoring.")
+                return
+
+            self._channel_map[msg.recipient_channel] = msg.sender_channel
+
+            if log.isEnabledFor(logging.INFO):
+                log.info("Channel [{}] opened (address=[{}])."\
+                    .format(msg.recipient_channel, self.address))
+
+            # First 'packet' is a True, signaling the channel is open to
+            # those yielding from the queue.
+            queue = self.channel_queues[msg.recipient_channel]
+            yield from queue.put(True)
+
+            yield from self.channel_handler\
+                .channel_opened(self, None, msg.recipient_channel, queue)
+
+        elif t == mnetpacket.SSH_MSG_CHANNEL_OPEN_FAILURE:
+            msg = mnetpacket.SshChannelOpenFailureMessage(packet)
+            log.info("P: Received CHANNEL_OPEN_FAILURE recipient_channel=[{}].".format(msg.recipient_channel))
+
+            queue = self.channel_queues[msg.recipient_channel]
+            yield from queue.put(False)
+            if (yield from self._close_channel(msg.recipient_channel)):
+                yield from\
+                    self.channel_handler.channel_open_failed(self, msg)
+
+        elif t == mnetpacket.SSH_MSG_CHANNEL_DATA\
+                or t == mnetpacket.SSH_MSG_CHANNEL_EXTENDED_DATA:
+            msg = None
+
+            if self._implicit_channels_enabled:
+                if t == mnetpacket.SSH_MSG_CHANNEL_EXTENDED_DATA:
+                    msg = mnetpacket.SshChannelExtendedDataMessage(packet)
+                    if msg.data_type_code is not 0xFE000000:
+                        raise SshException()
+
+                    msg.recipient_channel =\
+                        self._reverse_channel_map[msg.recipient_channel]
+
+                    if not msg.recipient_channel:
+                        log.info("Received data for closed implicit channel;"\
+                            " ignoring.")
+                        return
+                else:
+                    msg = mnetpacket.SshChannelDataMessage(packet)
             else:
-                log.warning("Unhandled packet of type [{}].".format(t))
+                if t == mnetpacket.SSH_MSG_CHANNEL_EXTENDED_DATA:
+                    raise SshException()
+
+                msg = mnetpacket.SshChannelDataMessage(packet)
+
+            log.info("P: Received CHANNEL_DATA recipient_channel=[{}]."\
+                .format(msg.recipient_channel))
+
+            remote_cid = self._channel_map[msg.recipient_channel]
+            if remote_cid is None:
+                raise SshException(\
+                    "Received data for unmapped channel.")
+
+            r = yield from self.channel_handler.channel_data(\
+                self, msg.recipient_channel, msg.data)
+
+            if not r:
+                log.info(\
+                    "Adding protocol (address={}) channel [{}] data"\
+                    " to queue."\
+                    .format(self.address, msg.recipient_channel))
+                yield from self.channel_queues[msg.recipient_channel]\
+                    .put(msg.data)
+
+        elif t == mnetpacket.SSH_MSG_CHANNEL_CLOSE:
+            msg = mnetpacket.SshChannelCloseMessage(packet)
+            log.info("P: Received CHANNEL_CLOSE recipient_channel=[{}]"\
+                .format(msg.recipient_channel))
+
+            local_cid = msg.recipient_channel
+
+            if self._implicit_channels_enabled:
+                if msg.implicit_channel:
+                    local_cid = self._reverse_channel_map[local_cid]
+            else:
+                if msg.implicit_channel:
+                    raise SshException()
+
+            if (yield from self._close_channel(local_cid)):
+                yield from self.channel_handler.channel_closed(\
+                        self, local_cid)
+
+        elif t == mnetpacket.SSH_MSG_CHANNEL_REQUEST:
+            msg = mnetpacket.SshChannelRequest(packet)
+            if log.isEnabledFor(logging.INFO):
+                log.info("Received SSH_MSG_CHANNEL_REQUEST:"\
+                " recipient_channel=[{}], request_type=[{}],"\
+                " want_reply=[{}]."\
+                    .format(msg.recipient_channel, msg.request_type,\
+                        msg.want_reply))
+            yield from self.channel_handler.channel_request(self, msg)
+        else:
+            log.warning("Unhandled packet of type [{}].".format(t))
 
     def _accept_channel_open(self, req_msg):
         log.info("Accepting channel open request.")
@@ -454,6 +544,9 @@ class SshProtocol(asyncio.Protocol):
 
         self._channel_map[local_cid] = req_msg.sender_channel
         self._reverse_channel_map[req_msg.sender_channel] = local_cid
+
+        if self._implicit_channels_enabled:
+            return local_cid
 
         cm = mnetpacket.SshChannelOpenConfirmationMessage()
         cm.recipient_channel = req_msg.sender_channel
@@ -483,15 +576,28 @@ class SshProtocol(asyncio.Protocol):
     @asyncio.coroutine
     def _close_channel(self, local_cid):
         remote_cid = self._channel_map.pop(local_cid)
-        assert self._channel_map.get(local_cid) is None
 
-        if remote_cid != ChannelStatus.opening\
-                and remote_cid != ChannelStatus.closing:
-            assert remote_cid >= 0, "remote_cid=[{}].".format(remote_cid)
-            msg = mnetpacket.SshChannelCloseMessage()
-            msg.recipient_channel = remote_cid
-            msg.encode()
-            self.write_packet(msg)
+        if remote_cid is None:
+            return False
+
+        if remote_cid is ChannelStatus.closing:
+            return False
+
+        if remote_cid is ChannelStatus.opening:
+            log.warning("close_channel called while channel is still opening.")
+            return False
+
+        msg = mnetpacket.SshChannelCloseMessage()
+
+        if remote_cid is ChannelStatus.implicit_data_sent:
+            remote_cid = local_cid
+            msg.implicit_channel = True
+        else:
+            self._reverse_channel_map.pop(remote_cid)
+
+        msg.recipient_channel = remote_cid
+        msg.encode()
+        self.write_packet(msg)
 
         queue = self.channel_queues.pop(local_cid, None)
         if queue:
@@ -500,6 +606,8 @@ class SshProtocol(asyncio.Protocol):
         if log.isEnabledFor(logging.INFO):
             log.info("Channel [{}] closed (address=[{}])."\
                 .format(local_cid, self.address))
+
+        return True
 
     def data_received(self, data):
         try:
@@ -661,14 +769,32 @@ class SshProtocol(asyncio.Protocol):
         log.info("Writing to channel {} with {} bytes of data (address={}).".format(local_cid, len(data), self.address))
 
         remote_cid = self._channel_map.get(local_cid)
-        if remote_cid == None:
+        if remote_cid is None:
             return False
+
+        if self._implicit_channels_enabled:
+            if type(remote_cid) is not int:
+                msg = mnetpacket.SshChannelExtendedDataMessage()
+                msg.data_type_code = 0xFE000000 # Implicit channel msg.
+                msg.recipient_channel = local_cid # We only know ours.
+
+                if remote_cid is ChannelStatus.implicit_data_sent:
+                    self.write_data((msg.encode(), data))
+                else:
+                    assert type(remote_cid) is mnetpacket.SshChannelOpenMessage
+
+                    self._channel_map[local_cid] =\
+                        ChannelStatus.implicit_data_sent
+
+                    # Chain data message to end of open msg that was stored.
+                    self.write_data((remote_cid, msg.encode(), data))
+
+                return True
 
         msg = mnetpacket.SshChannelDataMessage()
         msg.recipient_channel = remote_cid
-        msg.encode()
 
-        self.write_data((msg.buf, data))
+        self.write_data((msg.encode(), data))
         return True
 
     def write_data(self, datas):
@@ -1210,10 +1336,10 @@ class ChannelHandler():
         pass
 
     @asyncio.coroutine
-    def channel_data(self, protocol, packet):
-        m = mnetpacket.SshChannelDataMessage(packet)
+    def channel_data(self, protocol, local_cid, data):
         if log.isEnabledFor(logging.DEBUG):
-            log.debug("Received data, recipient_channel=[{}], value=[\n{}].".format(m.recipient_channel, hex_dump(m.data)))
+            log.debug("Received data, recipient_channel=[{}], value=[\n{}]."\
+                .format(local_cid, hex_dump(data)))
 
 def main():
     global log, server_key, client_key
