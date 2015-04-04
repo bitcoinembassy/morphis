@@ -223,7 +223,6 @@ class SshProtocol(asyncio.Protocol):
         self.write_packet(msg)
 
         self._channel_map[local_cid] = ChannelStatus.closing
-        yield from self.channel_queues.pop(local_cid).put(None)
 
         yield from self.channel_handler.channel_closed(\
                 self, msg.recipient_channel)
@@ -585,10 +584,7 @@ class SshProtocol(asyncio.Protocol):
         if remote_cid is None:
             return False
 
-        if remote_cid is ChannelStatus.closing:
-            return False
-
-        if not rejected:
+        if not rejected and remote_cid is not ChannelStatus.closing:
             if remote_cid is ChannelStatus.opening:
                 log.warning(\
                     "close_channel called while channel is still opening.")
