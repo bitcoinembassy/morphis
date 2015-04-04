@@ -64,9 +64,10 @@ class ChordTasks(object):
 
         if not closest_found_distance:
             closest_found_distance = chord.NODE_ID_BITS
-            for node in furthest_nodes:
-                if node.distance < closest_found_distance:
-                    closest_found_distance = node.distance
+            if furthest_nodes:
+                for node in furthest_nodes:
+                    if node.distance < closest_found_distance:
+                        closest_found_distance = node.distance
 
             if closest_found_distance is chord.NODE_ID_BITS:
                 log.info("Don't know how close a bucket to stop at so not"\
