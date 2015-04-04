@@ -60,7 +60,18 @@ class ChordTasks(object):
         for i in range(len(node_id)):
             node_id[i] = (~node_id[i]) & 0xFF
 
-        yield from self._do_stabilize(node_id)
+        furthest_nodes = yield from self._do_stabilize(node_id)
+
+        if not closest_found_distance:
+            closest_found_distance = chord.NODE_ID_BITS
+            for node in furthest_nodes:
+                if node.distance < closest_found_distance:
+                    closest_found_distance = node.distance
+
+            if closest_found_distance is chord.NODE_ID_BITS:
+                log.info("Don't know how close a bucket to stop at so not"\
+                    " searching inbetween closest and furthest.")
+                return
 
         # Fetch each bucket starting at furthest, stopping when we get to the
         # closest that we found above.
