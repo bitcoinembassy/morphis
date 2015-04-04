@@ -479,6 +479,35 @@ class SshChannelDataMessage(SshPacket):
 
         return nbuf
 
+class SshChannelExtendedDataMessage(SshPacket):
+    def __init__(self, buf = None):
+        self.recipient_channel = None
+        self.data_type_code = None
+        self.data = None
+
+        super().__init__(SSH_MSG_CHANNEL_DATA, buf)
+
+    def parse(self):
+        super().parse()
+
+        i = 1
+        self.recipient_channel = struct.unpack(">L", self.buf[i:i+4])[0]
+        i += 4
+        self.data_type_code = struct.unpack(">L", self.buf[i:i+4])[0]
+        i += 4
+        self.data = self.buf[i:]
+
+    def encode(self):
+        nbuf = super().encode()
+
+        nbuf += struct.pack(">L", self.recipient_channel)
+        nbuf += struct.pack(">L", self.data_type_code)
+        if self.data:
+            # Allow data to be stored separately.
+            nbuf += self.data
+
+        return nbuf
+
 class SshChannelRequest(SshPacket):
     def __init__(self, buf = None):
         self.recipient_channel = None
