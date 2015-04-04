@@ -350,6 +350,7 @@ class SshProtocol(asyncio.Protocol):
 
         if cleartext_transport_enabled\
                 and self.remote_banner.endswith("+cleartext"):
+            self._implicit_channels_enabled = True
             r = yield from connectTaskInsecure(self, self.server_mode)
         else:
             r = yield from connectTaskSecure(self, self.server_mode)
@@ -409,7 +410,9 @@ class SshProtocol(asyncio.Protocol):
                     self, msg.channel_type, local_cid, queue)
 
                 if self._implicit_channels_enabled:
-                    yield from self._process_ssh_packet(t, msg.data_packet)
+                    yield from self._process_ssh_packet(\
+                        mnetpacket.SshPacket.parse_type(msg.data_packet),
+                        msg.data_packet)
             elif not self._implicit_channels_enabled:
                 self._open_channel_reject(msg)
 
@@ -470,7 +473,7 @@ class SshProtocol(asyncio.Protocol):
             if self._implicit_channels_enabled:
                 if t == mnetpacket.SSH_MSG_CHANNEL_EXTENDED_DATA:
                     msg = mnetpacket.SshChannelExtendedDataMessage(packet)
-                    if msg.data_type_code is not 0xFE000000:
+                    if msg.data_type_code != 0xFE000000:
                         raise SshException()
 
                     msg.recipient_channel =\
@@ -787,7 +790,7 @@ class SshProtocol(asyncio.Protocol):
                         ChannelStatus.implicit_data_sent
 
                     # Chain data message to end of open msg that was stored.
-                    self.write_data((remote_cid, msg.encode(), data))
+                    self.write_data((remote_cid.encode(), msg.encode(), data))
 
                 return True
 

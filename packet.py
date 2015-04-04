@@ -39,6 +39,10 @@ SSH_MSG_CHANNEL_FAILURE = 100
 log = logging.getLogger(__name__)
 
 class SshPacket():
+    @staticmethod
+    def parse_type(buf):
+        return struct.unpack("B", buf[0:1])[0]
+
     def __init__(self, packet_type = None, buf = None):
         self.buf = buf
         self.packet_type = packet_type
@@ -499,7 +503,7 @@ class SshChannelExtendedDataMessage(SshPacket):
         self.data_type_code = None
         self.data = None
 
-        super().__init__(SSH_MSG_CHANNEL_DATA, buf)
+        super().__init__(SSH_MSG_CHANNEL_EXTENDED_DATA, buf)
 
     def parse(self):
         super().parse()
