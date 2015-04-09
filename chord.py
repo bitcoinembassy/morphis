@@ -828,8 +828,6 @@ class ChordEngine():
     def channel_closed(self, peer, local_cid):
         self.shells.pop(local_cid, None)
 
-        pass
-
     @asyncio.coroutine
     def channel_request(self, peer, msg):
         if msg.request_type == "shell":
