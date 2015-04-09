@@ -212,22 +212,23 @@ class SshProtocol(asyncio.Protocol):
                     .format(remote_cid))
             return False
 
-        msg = mnetpacket.SshChannelCloseMessage()
+        if type(remote_cid) is mnetpacket.SshChannelOpenMessage:
+            del self._channel_map[local_cid]
+        else:
+            msg = mnetpacket.SshChannelCloseMessage()
 
-        if remote_cid is ChannelStatus.implicit_data_sent\
-                or type(remote_cid) is mnetpacket.SshChannelOpenMessage:
-            remote_cid = local_cid
-            msg.implicit_channel = True
+            if remote_cid is ChannelStatus.implicit_data_sent
+                remote_cid = local_cid
+                msg.implicit_channel = True
 
-        msg.recipient_channel = remote_cid
-        msg.encode()
+            msg.recipient_channel = remote_cid
+            msg.encode()
 
-        self.write_packet(msg)
+            self.write_packet(msg)
 
-        self._channel_map[local_cid] = ChannelStatus.closing
+            self._channel_map[local_cid] = ChannelStatus.closing
 
-        yield from self.channel_handler.channel_closed(\
-                self, msg.recipient_channel)
+        yield from self.channel_handler.channel_closed(self, local_cid)
 
     def _create_channel_queue(self):
         return asyncio.Queue()
@@ -593,6 +594,9 @@ class SshProtocol(asyncio.Protocol):
 
         if remote_cid is None:
             return False
+
+        # This means we didn't open it yet so other end can't close it.
+        assert type(remote_cid) is not mnetpacket.SshChannelOpenMessage
 
         if not rejected and remote_cid is not ChannelStatus.closing:
             if remote_cid is ChannelStatus.opening:
