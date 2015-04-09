@@ -217,7 +217,7 @@ class SshProtocol(asyncio.Protocol):
         else:
             msg = mnetpacket.SshChannelCloseMessage()
 
-            if remote_cid is ChannelStatus.implicit_data_sent
+            if remote_cid is ChannelStatus.implicit_data_sent:
                 remote_cid = local_cid
                 msg.implicit_channel = True
 
