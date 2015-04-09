@@ -349,9 +349,11 @@ class SshProtocol(asyncio.Protocol):
         if not r:
             return r
 
+        if "-mNet_" in self.remote_banner:
+            self._implicit_channels_enabled = True
+
         if cleartext_transport_enabled\
                 and self.remote_banner.endswith("+cleartext"):
-            self._implicit_channels_enabled = True
             r = yield from connectTaskInsecure(self, self.server_mode)
         else:
             r = yield from connectTaskSecure(self, self.server_mode)
