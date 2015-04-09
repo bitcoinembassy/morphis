@@ -513,14 +513,20 @@ class SshProtocol(asyncio.Protocol):
 
         elif t == mnetpacket.SSH_MSG_CHANNEL_CLOSE:
             msg = mnetpacket.SshChannelCloseMessage(packet)
-            log.info("P: Received CHANNEL_CLOSE recipient_channel=[{}]"\
-                .format(msg.recipient_channel))
+
+            if log.isEnabledFor(logging.INFO):
+                log.info("P: Received CHANNEL_CLOSE (recipient_channel=[{}],"\
+                    " implicit_channel=[{}])."\
+                    .format(msg.recipient_channel, msg.implicit_channel))
 
             local_cid = msg.recipient_channel
 
             if self._implicit_channels_enabled:
                 if msg.implicit_channel:
                     local_cid = self._reverse_channel_map[local_cid]
+                    if log.isEnabledFor(logging.INFO):
+                        log.info("implicit_channel, local_cid=[{}]."\
+                            .format(local_cid))
             else:
                 if msg.implicit_channel:
                     raise SshException()
@@ -589,7 +595,7 @@ class SshProtocol(asyncio.Protocol):
         if not rejected and remote_cid is not ChannelStatus.closing:
             if remote_cid is ChannelStatus.opening:
                 log.warning(\
-                    "close_channel called while channel is still opening.")
+                    "_close_channel called while channel is still opening.")
                 return False
 
             msg = mnetpacket.SshChannelCloseMessage()
