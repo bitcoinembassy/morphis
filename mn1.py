@@ -212,11 +212,13 @@ class SshProtocol(asyncio.Protocol):
                     .format(remote_cid))
             return False
 
+        msg = mnetpacket.SshChannelCloseMessage()
+
         if remote_cid is ChannelStatus.implicit_data_sent\
                 or type(remote_cid) is mnetpacket.SshChannelOpenMessage:
             remote_cid = local_cid
+            msg.implicit_channel = True
 
-        msg = mnetpacket.SshChannelCloseMessage()
         msg.recipient_channel = remote_cid
         msg.encode()
 
