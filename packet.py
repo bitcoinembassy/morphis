@@ -39,6 +39,10 @@ SSH_MSG_CHANNEL_FAILURE = 100
 log = logging.getLogger(__name__)
 
 class SshPacket():
+    @staticmethod
+    def parse_type(buf):
+        return struct.unpack("B", buf[0:1])[0]
+
     def __init__(self, packet_type = None, buf = None):
         self.buf = buf
         self.packet_type = packet_type
@@ -357,6 +361,8 @@ class SshUserauthPkOkMessage(SshPacket):
 
 class SshChannelOpenMessage(SshPacket):
     def __init__(self, buf = None):
+        self.data_packet = None
+
         super().__init__(SSH_MSG_CHANNEL_OPEN, buf)
 
     def parse(self):
@@ -372,6 +378,9 @@ class SshChannelOpenMessage(SshPacket):
         self.maximum_packet_size = struct.unpack(">L", self.buf[i:i+4])[0]
         i += 4
 
+        if i < len(self.buf):
+            self.data_packet = self.buf[i:]
+
     def encode(self):
         nbuf = super().encode()
 
@@ -379,6 +388,9 @@ class SshChannelOpenMessage(SshPacket):
         nbuf += struct.pack(">L", self.sender_channel)
         nbuf += struct.pack(">L", self.initial_window_size)
         nbuf += struct.pack(">L", self.maximum_packet_size)
+
+        if self.data_packet:
+            nbuf += self.data_packet
 
         return nbuf
 
@@ -438,6 +450,7 @@ class SshChannelOpenFailureMessage(SshPacket):
 class SshChannelCloseMessage(SshPacket):
     def __init__(self, buf = None):
         self.recipient_channel = None
+        self.implicit_channel = False
 
         super().__init__(SSH_MSG_CHANNEL_CLOSE, buf)
 
@@ -446,11 +459,16 @@ class SshChannelCloseMessage(SshPacket):
 
         i = 1
         self.recipient_channel = struct.unpack(">L", self.buf[i:i+4])[0]
+        i += 4
+        if i < len(self.buf):
+            self.implicit_channel = struct.unpack("?", self.buf[i:i+1])[0]
 
     def encode(self):
         nbuf = super().encode()
 
         nbuf += struct.pack(">L", self.recipient_channel)
+        if self.implicit_channel:
+            nbuf += struct.pack("?", self.implicit_channel)
 
         return nbuf
 
@@ -473,6 +491,35 @@ class SshChannelDataMessage(SshPacket):
         nbuf = super().encode()
 
         nbuf += struct.pack(">L", self.recipient_channel)
+        if self.data:
+            # Allow data to be stored separately.
+            nbuf += self.data
+
+        return nbuf
+
+class SshChannelExtendedDataMessage(SshPacket):
+    def __init__(self, buf = None):
+        self.recipient_channel = None
+        self.data_type_code = None
+        self.data = None
+
+        super().__init__(SSH_MSG_CHANNEL_EXTENDED_DATA, buf)
+
+    def parse(self):
+        super().parse()
+
+        i = 1
+        self.recipient_channel = struct.unpack(">L", self.buf[i:i+4])[0]
+        i += 4
+        self.data_type_code = struct.unpack(">L", self.buf[i:i+4])[0]
+        i += 4
+        self.data = self.buf[i:]
+
+    def encode(self):
+        nbuf = super().encode()
+
+        nbuf += struct.pack(">L", self.recipient_channel)
+        nbuf += struct.pack(">L", self.data_type_code)
         if self.data:
             # Allow data to be stored separately.
             nbuf += self.data
