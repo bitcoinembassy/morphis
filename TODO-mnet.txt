@@ -1,3 +1,6 @@
+- fix ChordEngine->peers to store by protocol address, not peer, since it can lag behind/bewrong? - investigate
+    - symptom was: (ssh console) peer was not in peers but was in peer_trie.
+
 * Have local_cid an object that is unique so that closed channels are safe forever to call stuff on (and get exceptions and not misbehavior).
 morphis transport ddos protection:
 
