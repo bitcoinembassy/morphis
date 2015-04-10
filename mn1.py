@@ -240,18 +240,16 @@ class SshProtocol(asyncio.Protocol):
 
     @asyncio.coroutine
     def verify_server_key(self, key_data, sig):
-        key = rsakey.RsaKey(key_data)
-
-        if not key.verify_ssh_sig(self.h, sig):
-            raise SshException("Signature verification failed.")
-
-        log.info("Signature validated correctly!")
-
         if self.server_key:
             if self.server_key.asbytes() != key_data:
                 raise SshException("Key provided by server differs from that which we were expecting.")
+        else:
+            self.server_key = rsakey.RsaKey(key_data)
 
-        self.server_key = key
+        if not self.server_key.verify_ssh_sig(self.h, sig):
+            raise SshException("Signature verification failed.")
+
+        log.info("Signature validated correctly!")
 
         r = yield from self.connection_handler.peer_authenticated(self)
 
@@ -1102,12 +1100,14 @@ def connectTaskInsecure(protocol, server_mode):
         if protocol.client_key:
             if protocol.client_key.asbytes() != m.host_key:
                 raise SshException("Key provided by client differs from that which we were expecting.")
-        protocol.client_key = rsakey.RsaKey(m.host_key)
+        else:
+            protocol.client_key = rsakey.RsaKey(m.host_key)
     else:
         if protocol.server_key:
             if protocol.server_key.asbytes() != m.host_key:
                 raise SshException("Key provided by server differs from that which we were expecting.")
-        protocol.server_key = rsakey.RsaKey(m.host_key)
+        else:
+            protocol.server_key = rsakey.RsaKey(m.host_key)
 
     r = yield from protocol.connection_handler.peer_authenticated(protocol)
     if not r:
@@ -1265,24 +1265,21 @@ def connectTaskSecure(protocol, server_mode):
         if log.isEnabledFor(logging.DEBUG):
             log.debug("signature=[{}].".format(hex_dump(m.signature)))
 
-        signature = m.signature
+        if protocol.client_key:
+            if protocol.client_key.asbytes() != m.public_key:
+                raise SshException("Key provided by client differs from that which we were expecting.")
+        else:
+            protocol.client_key = rsakey.RsaKey(m.public_key)
 
         buf = bytearray()
         buf += sshtype.encodeBinary(protocol.session_id)
         buf += packet[:-m.signature_length]
 
-        client_key = rsakey.RsaKey(m.public_key)
-        r = client_key.verify_ssh_sig(buf, signature)
+        r = protocol.client_key.verify_ssh_sig(buf, m.signature)
 
         log.info("Userauth signature check result: [{}].".format(r))
         if not r:
             raise SshException("Signature and key provided by client did not match.")
-
-        if protocol.client_key:
-            if protocol.client_key.asbytes() != m.public_key:
-                raise SshException("Key provided by client differs from that which we were expecting.")
-
-        protocol.client_key = client_key
 
         r = yield from protocol.connection_handler.peer_authenticated(protocol)
         if not r:
