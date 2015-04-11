@@ -46,7 +46,7 @@ class SshProtocol(asyncio.Protocol):
     def __init__(self, loop):
         self.loop = loop
 
-        self.address = None
+        self.address = None # (host, port)
 
         self.transport = None
 

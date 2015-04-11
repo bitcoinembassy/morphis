@@ -48,7 +48,7 @@ class ChordEngine():
 
         self.forced_connects = {} # {id, Peer}
         self.pending_connections = {} # {Task, Peer->dbid}
-        self.peers = {} # {address: Peer}.
+        self.peers = {} # {protocol.address: Peer}.
         self.peer_buckets = [{} for i in range(NODE_ID_BITS)] # [{addr: Peer}]
         self.peer_trie = bittrie.BitTrie() # {node_id, Peer}
 
@@ -480,7 +480,8 @@ class ChordEngine():
 
         if dbpeer.node_id:
             if not self.add_to_peers(peer):
-                log.info("Already connected to Peer (id={}).".format(peer.dbid))
+                log.warning("Already connected to Peer (id={})."\
+                    .format(peer.dbid))
                 peer.protocol.close()
                 return None
 
@@ -570,8 +571,9 @@ class ChordEngine():
                 return False
 
         if add_to_peers:
-            r = self.add_to_peers(peer)
-            if not r:
+            if not self.add_to_peers(peer):
+                log.warning("Already connected to Peer (id={})."\
+                    .format(peer.dbid))
                 return False
 
         return True
@@ -723,11 +725,14 @@ class ChordEngine():
         return True, add_to_peers
 
     def add_to_peers(self, peer):
-        existing = self.peers.setdefault(peer.address, peer)
+        address = "{}:{}".format(\
+            peer.protocol.address[0], peer.protocol.address[1])
+
+        existing = self.peers.setdefault(address, peer)
         if existing is not peer:
-            log.error("Somehow we are trying to connect to an address [{}] already connected!".format(peer.address))
+            log.error("Somehow we are trying to connect to an address [{}] already connected!".format(address))
             return False
-        self.peer_buckets[peer.distance - 1][peer.address] = peer
+        self.peer_buckets[peer.distance - 1][address] = peer
 
         xorkey = bittrie.XorKey(self.node_id, peer.node_id)
         self.peer_trie[xorkey] = peer
@@ -735,9 +740,12 @@ class ChordEngine():
         return True
 
     def remove_from_peers(self, peer):
-        self.peers.pop(peer.address, None)
+        address = "{}:{}".format(\
+            peer.protocol.address[0], peer.protocol.address[1])
+
+        self.peers.pop(address, None)
         if peer.distance:
-            self.peer_buckets[peer.distance - 1].pop(peer.address, None)
+            self.peer_buckets[peer.distance - 1].pop(address, None)
 
         if peer.node_id:
             xorkey = bittrie.XorKey(self.node_id, peer.node_id)
@@ -950,26 +958,39 @@ class ChordEngine():
         if not msg.sender_address:
             return
 
-        if msg.sender_address != peer.address:
-            log.info(\
-                "Remote Peer said address [{}] has changed, updating our"\
-                " record [{}].".format(msg.sender_address, peer.address))
+        msghost, msgport = msg.sender_address.split(':')
+        dbhost, dbport = peer.address.split(':')
 
-            self.peers.pop(peer.address, None)
-            self.peer_buckets[peer.distance - 1].pop(peer.address, None)
+        if msghost != dbhost and msghost == peer.protocol.address[0]:
+            # Allow the Peer to update our records of its host if it told us to
+            # and it matches where its connection is coming from. We only do it
+            # if it told us to to prevent wierd outgoing only routes or such to
+            # cause any problems. We also only trust it if those match so it
+            # can't make us connect to random addresses or cause problems or
+            # whatever.
+            if log.isEnabledFor(logging.INFO):
+                log.info(\
+                    "Remote Peer said address [{}] has changed, updating our"\
+                    " record [{}].".format(msg.sender_address, peer.address))
 
-            peer.address = msg.sender_address
+            peer.address = "{}:{}".format(msghost, msgport)
+        elif msgport != dbport:
+            if log.isEnabledFor(logging.INFO):
+                log.info(\
+                    "Remote Peer said port [{}] has changed, updating our"\
+                    " record [{}].".format(msgport, dbport))
 
-            self.peers[peer.address] = peer
-            self.peer_buckets[peer.distance - 1][peer.address] = peer
+            peer.address = "{}:{}".format(dbhost, msgport)
+        else:
+            return
 
-            def dbcall():
-                with self.node.db.open_session() as sess:
-                    dbp = sess.query(Peer).get(peer.dbid);
-                    dbp.address = peer.address
-                    sess.commit()
+        def dbcall():
+            with self.node.db.open_session() as sess:
+                dbp = sess.query(Peer).get(peer.dbid);
+                dbp.address = peer.address
+                sess.commit()
 
-            yield from self.loop.run_in_executor(None, dbcall)
+        yield from self.loop.run_in_executor(None, dbcall)
 
 def check_address(address):
     try:
