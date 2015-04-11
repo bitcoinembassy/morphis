@@ -1,3 +1,5 @@
+- have the shell channel open code mark this dbpeer as a shell client and from then on only let the peer with that id (client pubkey authenticated with) open a session channel.
+
 * Have local_cid an object that is unique so that closed channels are safe forever to call stuff on (and get exceptions and not misbehavior).
 morphis transport ddos protection:
 
