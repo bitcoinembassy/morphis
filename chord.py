@@ -803,6 +803,9 @@ class ChordEngine():
         if server_mode:
             # TODO: Do checks, limits, and stuff.
             return;
+        else:
+            # Let peer we connected to know our node's bind_port.
+            asyncio.async(self.tasks.do_send_node_info(peer), loop=self.loop)
 
     @asyncio.coroutine
     def request_open_channel(self, peer, req):
@@ -918,11 +921,24 @@ class ChordEngine():
                 log.debug("Ignoring empty PeerList.")
                 return
             yield from self.add_peers(msg.peers)
+
+        elif packet_type == cp.CHORD_MSG_NODE_INFO:
+            log.info("Received CHORD_MSG_NODE_INFO message.")
+            msg = cp.ChordNodeInfo(data)
+
+            # Respond to them. Even though it doesn't make sense for now as
+            # they (a client) knows our bind port obviously, but in the future
+            # this message will contain the version and options of the protocol
+            # that don't belong at the lower SSH level.
+            rmsg = cp.ChordNodeInfo()
+            rmsg.sender_address = self.bind_address
+            peer.protocol.write_channel_data(local_cid, rmsg.encode())
+
+            yield from self._check_update_remote_address(msg, peer)
+
         elif packet_type == cp.CHORD_MSG_FIND_NODE:
             log.info("Received CHORD_MSG_FIND_NODE message.")
             msg = cp.ChordFindNode(data)
-
-            yield from self._check_update_remote_address(msg, peer)
 
             r = yield from\
                 self.tasks.process_find_node_request(\

@@ -9,6 +9,7 @@ import peer as mnpeer
 import sshtype
 
 # Chord Message Types.
+CHORD_MSG_NODE_INFO = 100
 CHORD_MSG_GET_PEERS = 110
 CHORD_MSG_PEER_LIST = 111
 CHORD_MSG_FIND_NODE = 150
@@ -43,6 +44,25 @@ class ChordMessage(object):
         self.buf = nbuf
 
         return nbuf
+
+class ChordNodeInfo(ChordMessage):
+    def __init__(self, buf = None):
+        self.sender_address = ""
+
+        super().__init__(CHORD_MSG_NODE_INFO, buf)
+
+    def encode(self):
+        nbuf = super().encode()
+
+        nbuf += sshtype.encodeString(self.sender_address)
+
+        return nbuf
+
+    def parse(self):
+        super().parse()
+
+        i = 1
+        l, self.sender_address = sshtype.parseString(self.buf[i:])
 
 class ChordGetPeers(ChordMessage):
     def __init__(self, buf = None):
@@ -103,14 +123,12 @@ class ChordPeerList(ChordMessage):
 
 class ChordFindNode(ChordMessage):
     def __init__(self, buf = None):
-        self.sender_address = ""
         self.node_id = None
 
         super().__init__(CHORD_MSG_FIND_NODE, buf)
 
     def encode(self):
         nbuf = super().encode()
-        nbuf += sshtype.encodeString(self.sender_address)
         nbuf += self.node_id
 
         return nbuf
@@ -118,8 +136,6 @@ class ChordFindNode(ChordMessage):
     def parse(self):
         super().parse()
         i = 1
-        l, self.sender_address = sshtype.parseString(self.buf[i:])
-        i += l
         self.node_id = self.buf[i:]
 
 class ChordRelay(ChordMessage):
