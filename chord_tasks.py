@@ -43,6 +43,27 @@ class ChordTasks(object):
         self.loop = engine.loop
 
     @asyncio.coroutine
+    def do_send_node_info(self, peer):
+        log.info("Sending ChordNodeInfo message.")
+
+        local_cid, queue =\
+            yield from peer.protocol.open_channel("mpeer", True)
+
+        msg = cp.ChordNodeInfo()
+        msg.sender_address = self.engine.bind_address
+
+        peer.protocol.write_channel_data(local_cid, msg.encode())
+
+        data = yield from queue.get()
+
+        msg = cp.ChordNodeInfo(data)
+        log.info("Received ChordNodeInfo message.")
+
+        yield from peer.protocol.close_channel(local_cid)
+
+        yield from self.engine._check_update_remote_address(msg, peer)
+
+    @asyncio.coroutine
     def do_stabilize(self):
         if not self.engine.peers:
             log.info("No connected nodes, unable to perform stabilize.")
@@ -391,10 +412,6 @@ class ChordTasks(object):
     @asyncio.coroutine
     def process_find_node_request(self, fnmsg, fndata, peer, queue, local_cid):
         "The channel will be closed before this method returns."
-
-        if fnmsg.sender_address:
-            fnmsg.sender_address = ""
-            fndata = fnmsg.encode()
 
         pt = bittrie.BitTrie()
 
