@@ -343,22 +343,27 @@ class SshProtocol(asyncio.Protocol):
 
     @asyncio.coroutine
     def _process_ssh_protocol(self):
-        r = yield from connectTaskCommon(self, self.server_mode)
+        try:
+            r = yield from connectTaskCommon(self, self.server_mode)
 
-        if not r:
-            return r
+            if not r:
+                return r
 
-        if "-mNet_" in self.remote_banner:
-            self._implicit_channels_enabled = True
+            if "-mNet_" in self.remote_banner:
+                self._implicit_channels_enabled = True
 
-        if cleartext_transport_enabled\
-                and self.remote_banner.endswith("+cleartext"):
-            r = yield from connectTaskInsecure(self, self.server_mode)
-        else:
-            r = yield from connectTaskSecure(self, self.server_mode)
+            if cleartext_transport_enabled\
+                    and self.remote_banner.endswith("+cleartext"):
+                r = yield from connectTaskInsecure(self, self.server_mode)
+            else:
+                r = yield from connectTaskSecure(self, self.server_mode)
 
-        if not r:
-            return r
+            if not r:
+                return r
+        except Exception as e:
+            log.exception("Exception performing connect task (closing connection):")
+            self.close()
+            raise
 
         # Connected and fully authenticated at this point.
         self.status = Status.ready
