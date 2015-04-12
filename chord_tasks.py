@@ -48,6 +48,8 @@ class ChordTasks(object):
 
         local_cid, queue =\
             yield from peer.protocol.open_channel("mpeer", True)
+        if not queue:
+            return
 
         msg = cp.ChordNodeInfo()
         msg.sender_address = self.engine.bind_address
@@ -55,6 +57,8 @@ class ChordTasks(object):
         peer.protocol.write_channel_data(local_cid, msg.encode())
 
         data = yield from queue.get()
+        if not data:
+            return
 
         msg = cp.ChordNodeInfo(data)
         log.info("Received ChordNodeInfo message.")
