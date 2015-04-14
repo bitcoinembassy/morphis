@@ -40,7 +40,7 @@ class Node():
         else:
             self.db = db.Db(\
                 loop,\
-                "sqlite:///morphis{}.sqlite".format(self.instance_postfix))
+                "sqlite:///data/morphis{}.sqlite".format(self.instance_postfix))
         self._db_initialized = False
 
         self.bind_address = None
@@ -88,7 +88,7 @@ class Node():
         self.node_key = self._load_key()
 
     def _load_key(self):
-        key_filename = "node_key-rsa{}.mnk".format(self.instance_postfix)
+        key_filename = "data/node_key-rsa{}.mnk".format(self.instance_postfix)
 
         if os.path.exists(key_filename):
             log.info("Node private key file found, loading.")
