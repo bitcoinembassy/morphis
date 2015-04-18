@@ -13,6 +13,7 @@ import chord_packet as cp
 from chordexception import ChordException
 from db import Peer
 from mutil import hex_string
+import enc
 
 log = logging.getLogger(__name__)
 
@@ -153,8 +154,15 @@ class ChordTasks(object):
         return conn_nodes
 
     @asyncio.coroutine
-    def send_find_node(self, node_id, input_trie=None):
-        "Returns found nodes sorted by closets."
+    def send_put_data(self, data):
+        key = enc.generate_ID(data)
+
+        yield from self.send_find_node(key)
+
+    @asyncio.coroutine
+    def send_find_node(self, node_id, input_trie=None, data=None):
+        "Returns found nodes sorted by closets. If data is not None then this"\
+        " is really {get/put}_data instead of find_node."
 
         if not self.engine.peers:
             log.info("No connected nodes, unable to send FindNode.")
@@ -249,13 +257,7 @@ class ChordTasks(object):
                     log.debug("Sending FindNode to path [{}]."\
                         .format(row.path))
 
-                pkt = None
-                for idx in reversed(row.path):
-                    msg = cp.ChordRelay()
-                    msg.index = idx
-                    if pkt:
-                        msg.packet = pkt
-                    pkt = msg.encode()
+                pkt, nil = _generate_relay_packets(row.path)
 
                 tun_meta.peer.protocol.write_channel_data(\
                     tun_meta.local_cid, pkt)
@@ -290,6 +292,20 @@ class ChordTasks(object):
                 log.info("All tasks exited.")
                 break
 
+        if data is not None:
+            # If in put_data mode, then put the data to the closest nodes that
+            # we found.
+            for row in result_trie:
+                pkt, inner_most = _generate_relay_packets(row.path)
+                #TODO: YOU_ARE_HERE: replace embedded ChordRelay packets with
+                # just one that has a 'path' field. Just more simple,
+                # efficient and should be easy change. It means less work
+                # for intermediate nodes that may want to examine the deepest
+                # packet, in the case of data, in order to opportunistically
+                # store the data. This might be a less good solution for
+                # anonyminty, but it could be as easilty switched back if that
+                # is true and a priority.
+
         tasks.clear()
         for tun_meta in used_peers:
             tasks.append(\
@@ -310,8 +326,27 @@ class ChordTasks(object):
 
         return rnodes
 
+    def _generate_relay_packets(self, path):
+        inner_most = None
+        pkt = None
+        for idx in reversed(row.path):
+            msg = cp.ChordRelay()
+            msg.index = idx
+            if pkt:
+                msg.packet = pkt
+            else:
+                inner_most = msg
+            pkt = msg.encode()
+
+        return pkt, inner_most
+
     @asyncio.coroutine
     def _send_find_node(self, peer, node_id, result_trie, tun_meta):
+        "Opens a channel and sends a 'root level' FIND_NODE to the passed"\
+        " connected peer, adding results to the passed result_trie, and then"\
+        " exiting. The channel is left open so that the caller may route to"\
+        " those results through this 'root level' FIND_NODE peer."
+
         local_cid, queue =\
             yield from peer.protocol.open_channel("mpeer", True)
         if not queue:

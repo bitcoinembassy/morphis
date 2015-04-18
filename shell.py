@@ -282,7 +282,7 @@ class Shell(cmd.Cmd):
 
     @asyncio.coroutine
     def do_findnode(self, arg):
-        "[id] find the node with hex encoded id."
+        "[ID] find the node with hex encoded id."
 
         node_id = int(arg, 16).to_bytes(chord.NODE_ID_BYTES, "big")
 
@@ -295,6 +295,23 @@ class Shell(cmd.Cmd):
             self.writeln("nid[{}] FOUND: {:22} diff=[{}]"\
                 .format(r.id, r.address,\
                     hex_string([x ^ y for x, y in zip(r.node_id, node_id)])))
+
+    @asyncio.coroutine
+    def do_putdata(self, arg):
+        "[DATA] store DATA into the network."
+
+        data = arg
+
+        max_len = mn1.MAX_PACKET_LENGTH - 5000 # Leave room for whatever.
+        if len(data) > max_len:
+            self.writeln("ERROR: data cannot be greater than {} bytes."\
+                .format(max_len))
+            return
+
+        start = datetime.today()
+        yield from self.peer.engine.tasks.send_put_data(data)
+        diff = datetime.today() - start
+        self.writeln("send_put_data(..) took: {}.".format(diff))
 
     @asyncio.coroutine
     def do_conn(self, arg):
