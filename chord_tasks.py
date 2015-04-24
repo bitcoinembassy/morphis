@@ -257,7 +257,7 @@ class ChordTasks(object):
                     log.debug("Sending FindNode to path [{}]."\
                         .format(row.path))
 
-                pkt, nil = _generate_relay_packets(row.path)
+                pkt = _generate_relay_packets(row.path)
 
                 tun_meta.peer.protocol.write_channel_data(\
                     tun_meta.local_cid, pkt)
@@ -288,16 +288,34 @@ class ChordTasks(object):
             yield from done_all.wait()
             done_all.clear()
 
+            assert query_cntr.value == 0
+
             if not task_cntr.value:
                 log.info("All tasks exited.")
                 break
 
-        if data is not None:
+        if data is not None and task_cntr.value:
             # If in put_data mode, then put the data to the closest nodes that
             # we found.
+            if log.isEnabledFor(logging.INFO):
+                log.info("Sending data with {} tunnels still open."\
+                    .format(task_cntr.value))
+
             for row in result_trie:
-                pkt, inner_most = _generate_relay_packets(row.path)
-                #TODO: YOU_ARE_HERE: replace embedded ChordRelay packets with
+                tun_meta = row.tun_meta
+
+                if not tun_meta.queue:
+                    # Tunnel is closed.
+                    continue
+                if row is False:
+                    # Row is ourself.
+                    continue
+
+                if log.isEnabledFor(logging.DEBUG):
+                    log.debug("Sending StoreData to path [{}]."\
+                        .format(row.path))
+
+                #TODO: MAYBE: replace embedded ChordRelay packets with
                 # just one that has a 'path' field. Just more simple,
                 # efficient and should be easy change. It means less work
                 # for intermediate nodes that may want to examine the deepest
@@ -306,6 +324,26 @@ class ChordTasks(object):
                 # anonyminty, but it could be as easilty switched back if that
                 # is true and a priority.
 
+                msg = cp.ChordStoreData()
+                msg.data_hash = node_id
+                msg.data = data
+
+                pkt = _generate_relay_packets(row.path, msg.encode())
+
+                tun_meta.peer.protocol.write_channel_data(\
+                    tun_meta.local_cid, pkt)
+
+                query_cntr.value += 1
+
+                if query_cntr.value == max_concurrent_queries:
+                    break
+
+            #TODO: YOU_ARE_HERE: Process responses? Data is stored...
+
+        elif data is not None:
+            log.warning("Couldn't send data as all tunnels got closed.")
+
+        # Close everything now that we are done.
         tasks.clear()
         for tun_meta in used_peers:
             tasks.append(\
@@ -326,8 +364,10 @@ class ChordTasks(object):
 
         return rnodes
 
-    def _generate_relay_packets(self, path):
-        inner_most = None
+    def _generate_relay_packets(self, path, payload = None):
+        "path: list of indexes."\
+        "payload_msg: optional packet data to wrap."
+
         pkt = None
         for idx in reversed(row.path):
             msg = cp.ChordRelay()
@@ -335,10 +375,11 @@ class ChordTasks(object):
             if pkt:
                 msg.packet = pkt
             else:
-                inner_most = msg
+                if payload:
+                    msg.packet = payload
             pkt = msg.encode()
 
-        return pkt, inner_most
+        return pkt
 
     @asyncio.coroutine
     def _send_find_node(self, peer, node_id, result_trie, tun_meta):

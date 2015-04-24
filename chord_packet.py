@@ -138,6 +138,25 @@ class ChordFindNode(ChordMessage):
         i = 1
         self.node_id = self.buf[i:]
 
+class ChordStoreData(ChordMessage):
+    def __init__(self, buf = None):
+        self.data_hash = None
+        self.data = None
+
+        super().__init__(CHORD_MSG_STORE_DATA, buf)
+
+    def encode(self):
+        nbuf = super().encode()
+        nbuf += sshtypes.encodeBinary(self.data_hash)
+        nbuf += sshtypes.encodeBinary(self.data)
+
+    def parse(self):
+        super().parse()
+        i = 1
+        l, self.data_hash = sshtype.parseBinary(self.buf[i:])
+        i += l
+        l, self.data = sshtype.parseBinary(self.buf[i:])
+
 class ChordRelay(ChordMessage):
     def __init__(self, buf = None):
         self.index = None
