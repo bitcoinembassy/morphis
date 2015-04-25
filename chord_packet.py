@@ -160,6 +160,7 @@ class ChordStoreData(ChordMessage):
 class ChordRelay(ChordMessage):
     def __init__(self, buf = None):
         self.index = None
+        self.data_tunnel = False
         self.packet = None
 
         super().__init__(CHORD_MSG_RELAY, buf)
@@ -167,6 +168,7 @@ class ChordRelay(ChordMessage):
     def encode(self):
         nbuf = super().encode()
         nbuf += struct.pack(">L", self.index)
+        nbuf += struct.pack("?", self.data_tunnel)
         if self.packet:
             nbuf += self.packet
 
@@ -177,6 +179,8 @@ class ChordRelay(ChordMessage):
         i = 1
         self.index = struct.unpack(">L", self.buf[i:i+4])[0]
         i += 4
+        self.data_tunnel = struct.unpack("?", self.buf[i:i+1])[0]
+        i += 1
         if i < len(self.buf):
             self.packet = self.buf[i:]
 

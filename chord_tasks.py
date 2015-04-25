@@ -34,6 +34,7 @@ class VPeer(object):
         self.path = path
         self.tun_meta = tun_meta
         self.used = False
+        self.will_store = None
 
 EMPTY_PEER_LIST_MESSAGE = cp.ChordPeerList(peers=[])
 EMPTY_PEER_LIST_PACKET = EMPTY_PEER_LIST_MESSAGE.encode()
@@ -186,8 +187,9 @@ class ChordTasks(object):
         maximum_depth = int(math.log(known_peer_cnt, 2))
 
         if log.isEnabledFor(logging.INFO):
-            log.info("Performing FindNode to a max depth of [{}]."\
-                .format(maximum_depth))
+            log.info("Performing FindNode (data_packet={}) to a max depth of"\
+                " [{}]."\
+                .format(data is not None, maximum_depth))
 
         result_trie = bittrie.BitTrie()
 
@@ -257,7 +259,7 @@ class ChordTasks(object):
                     log.debug("Sending FindNode to path [{}]."\
                         .format(row.path))
 
-                pkt = _generate_relay_packets(row.path)
+                pkt = _generate_relay_packets(row.path, data is not None)
 
                 tun_meta.peer.protocol.write_channel_data(\
                     tun_meta.local_cid, pkt)
@@ -302,13 +304,18 @@ class ChordTasks(object):
                     .format(task_cntr.value))
 
             for row in result_trie:
+                if row is False:
+                    # Row is ourself.
+                    continue
+                if not row.will_store:
+                    # The node may be close to id, but it says that it does not
+                    # want to store the proposed data for whatever reason.
+                    continue
+
                 tun_meta = row.tun_meta
 
                 if not tun_meta.queue:
                     # Tunnel is closed.
-                    continue
-                if row is False:
-                    # Row is ourself.
                     continue
 
                 if log.isEnabledFor(logging.DEBUG):
@@ -328,7 +335,7 @@ class ChordTasks(object):
                 msg.data_hash = node_id
                 msg.data = data
 
-                pkt = _generate_relay_packets(row.path, msg.encode())
+                pkt = _generate_relay_packets(row.path, True, msg.encode())
 
                 tun_meta.peer.protocol.write_channel_data(\
                     tun_meta.local_cid, pkt)
@@ -364,7 +371,7 @@ class ChordTasks(object):
 
         return rnodes
 
-    def _generate_relay_packets(self, path, payload = None):
+    def _generate_relay_packets(self, path, data_tunnel=False, payload=None):
         "path: list of indexes."\
         "payload_msg: optional packet data to wrap."
 
@@ -372,6 +379,7 @@ class ChordTasks(object):
         for idx in reversed(row.path):
             msg = cp.ChordRelay()
             msg.index = idx
+            msg.data_tunnel = data_tunnel
             if pkt:
                 msg.packet = pkt
             else:
