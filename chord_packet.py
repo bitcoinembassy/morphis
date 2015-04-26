@@ -13,6 +13,7 @@ CHORD_MSG_NODE_INFO = 100
 CHORD_MSG_GET_PEERS = 110
 CHORD_MSG_PEER_LIST = 111
 CHORD_MSG_FIND_NODE = 150
+CHORD_MSG_STORE_DATA = 170
 CHORD_MSG_RELAY = 160
 
 log = logging.getLogger(__name__)
@@ -147,8 +148,8 @@ class ChordStoreData(ChordMessage):
 
     def encode(self):
         nbuf = super().encode()
-        nbuf += sshtypes.encodeBinary(self.data_hash)
-        nbuf += sshtypes.encodeBinary(self.data)
+        nbuf += sshtype.encodeBinary(self.data_hash)
+        nbuf += sshtype.encodeBinary(self.data)
 
     def parse(self):
         super().parse()
