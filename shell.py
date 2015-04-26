@@ -297,7 +297,7 @@ class Shell(cmd.Cmd):
                     hex_string([x ^ y for x, y in zip(r.node_id, node_id)])))
 
     @asyncio.coroutine
-    def do_putdata(self, arg):
+    def do_storedata(self, arg):
         "[DATA] store DATA into the network."
 
         data = arg
@@ -309,9 +309,9 @@ class Shell(cmd.Cmd):
             return
 
         start = datetime.today()
-        yield from self.peer.engine.tasks.send_put_data(data)
+        yield from self.peer.engine.tasks.send_store_data(data)
         diff = datetime.today() - start
-        self.writeln("send_put_data(..) took: {}.".format(diff))
+        self.writeln("send_store_data(..) took: {}.".format(diff))
 
     @asyncio.coroutine
     def do_conn(self, arg):

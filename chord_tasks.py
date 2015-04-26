@@ -155,7 +155,7 @@ class ChordTasks(object):
         return conn_nodes
 
     @asyncio.coroutine
-    def send_put_data(self, data):
+    def send_store_data(self, data):
         key = enc.generate_ID(data)
 
         yield from self.send_find_node(key)
@@ -298,8 +298,8 @@ class ChordTasks(object):
                 break
 
         if data is not None and task_cntr.value:
-            # If in put_data mode, then put the data to the closest nodes that
-            # we found.
+            # If in store_data mode, then send the data to the closest nodes
+            # that we found.
             if log.isEnabledFor(logging.INFO):
                 log.info("Sending data with {} tunnels still open."\
                     .format(task_cntr.value))
