@@ -260,7 +260,7 @@ class ChordTasks(object):
                     log.debug("Sending FindNode to path [{}]."\
                         .format(row.path))
 
-                pkt = _generate_relay_packets(row.path, data is not None)
+                pkt = self._generate_relay_packets(row.path, data is not None)
 
                 tun_meta.peer.protocol.write_channel_data(\
                     tun_meta.local_cid, pkt)
@@ -336,7 +336,7 @@ class ChordTasks(object):
                 msg.data_hash = node_id
                 msg.data = data
 
-                pkt = _generate_relay_packets(row.path, True, msg.encode())
+                pkt = self._generate_relay_packets(row.path, True, msg.encode())
 
                 tun_meta.peer.protocol.write_channel_data(\
                     tun_meta.local_cid, pkt)
@@ -399,7 +399,7 @@ class ChordTasks(object):
         # improvement now that a huge data packet is tacked on the end.
 
         pkt = None
-        for idx in reversed(row.path):
+        for idx in reversed(path):
             msg = cp.ChordRelay()
             msg.index = idx
             msg.data_tunnel = data_tunnel
