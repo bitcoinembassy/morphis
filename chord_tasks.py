@@ -202,7 +202,8 @@ class ChordTasks(object):
 
         for peer in input_trie:
             key = bittrie.XorKey(node_id, peer.node_id)
-            result_trie[key] = VPeer(peer)
+            vpeer = VPeer(peer)
+            result_trie[key] = vpeer
 
             if len(tasks) == max_concurrent_queries:
                 continue
@@ -213,7 +214,7 @@ class ChordTasks(object):
             used_peers.append(tun_meta)
 
             tasks.append(self._send_find_node(\
-                peer, node_id, result_trie, tun_meta))
+                vpeer, node_id, result_trie, tun_meta, data is not None))
 
         if not tasks:
             log.info("Cannot perform FindNode, as we know no closer nodes.")
@@ -298,8 +299,8 @@ class ChordTasks(object):
                 break
 
         if data is not None and task_cntr.value:
-            # If in store_data mode, then send the data to the closest nodes
-            # that we found.
+            # If in store_data mode, then send the data to the closest willing
+            # nodes that we found.
             if log.isEnabledFor(logging.INFO):
                 log.info("Sending data with {} tunnels still open."\
                     .format(task_cntr.value))
@@ -413,11 +414,13 @@ class ChordTasks(object):
         return pkt
 
     @asyncio.coroutine
-    def _send_find_node(self, peer, node_id, result_trie, tun_meta):
+    def _send_find_node(self, vpeer, node_id, result_trie, tun_meta, for_data):
         "Opens a channel and sends a 'root level' FIND_NODE to the passed"\
         " connected peer, adding results to the passed result_trie, and then"\
         " exiting. The channel is left open so that the caller may route to"\
         " those results through this 'root level' FIND_NODE peer."
+
+        peer = vpeer.peer
 
         local_cid, queue =\
             yield from peer.protocol.open_channel("mpeer", True)
@@ -425,8 +428,8 @@ class ChordTasks(object):
             return
 
         msg = cp.ChordFindNode()
-        msg.sender_address = self.engine._bind_address #FIXME: Put elsewhere.
         msg.node_id = node_id
+        msg.for_data = for_data
 
         if log.isEnabledFor(logging.DEBUG):
             log.debug("Sending root level FindNode msg to Peer (dbid=[{}])."\
@@ -440,6 +443,14 @@ class ChordTasks(object):
 
         tun_meta.queue = queue
         tun_meta.local_cid = local_cid
+
+        if for_data:
+            msg = cp.ChordStorageInterest(pkt)
+            vpeer.will_store = msg.will_store
+
+            pkt = yield from queue.get()
+            if not pkt:
+                return
 
         msg = cp.ChordPeerList(pkt)
 
@@ -522,7 +533,8 @@ class ChordTasks(object):
 
     @asyncio.coroutine
     def process_find_node_request(self, fnmsg, fndata, peer, queue, local_cid):
-        "The channel will be closed before this method returns."
+        "Process an incoming FindNode request."\
+        " The channel will be closed before this method returns."
 
         pt = bittrie.BitTrie()
 

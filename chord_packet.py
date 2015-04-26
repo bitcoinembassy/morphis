@@ -11,9 +11,10 @@ import sshtype
 # Chord Message Types.
 CHORD_MSG_NODE_INFO = 100
 CHORD_MSG_GET_PEERS = 110
-CHORD_MSG_PEER_LIST = 111
+CHORD_MSG_PEER_LIST = 115
 CHORD_MSG_FIND_NODE = 150
 CHORD_MSG_STORE_DATA = 170
+CHORD_MSG_STORAGE_INTEREST = 175
 CHORD_MSG_RELAY = 160
 
 log = logging.getLogger(__name__)
@@ -125,19 +126,23 @@ class ChordPeerList(ChordMessage):
 class ChordFindNode(ChordMessage):
     def __init__(self, buf = None):
         self.node_id = None
+        self.for_data = False
 
         super().__init__(CHORD_MSG_FIND_NODE, buf)
 
     def encode(self):
         nbuf = super().encode()
-        nbuf += self.node_id
+        nbuf += sshtype.encodeBinary(self.node_id)
+        nbuf += struct.pack("?", self.for_data)
 
         return nbuf
 
     def parse(self):
         super().parse()
         i = 1
-        self.node_id = self.buf[i:]
+        l, self.node_id = sshtype.parseBinary(self.buf[i:])
+        i += l
+        self.for_data = struct.unpack("?", self.buf[i:i+1])[0]
 
 class ChordStoreData(ChordMessage):
     def __init__(self, buf = None):
@@ -151,12 +156,31 @@ class ChordStoreData(ChordMessage):
         nbuf += sshtype.encodeBinary(self.data_hash)
         nbuf += sshtype.encodeBinary(self.data)
 
+        return nbuf
+
     def parse(self):
         super().parse()
         i = 1
         l, self.data_hash = sshtype.parseBinary(self.buf[i:])
         i += l
         l, self.data = sshtype.parseBinary(self.buf[i:])
+
+class ChordStorageInterest(ChordMessage):
+    def __init__(self, buf = None):
+        self.will_store = False
+
+        super().__init__(CHORD_MSG_STORAGE_INTEREST, buf)
+
+    def encode(self):
+        nbuf = super().encode()
+        nbuf += struct.pack("?", self.will_store)
+
+        return nbuf
+
+    def parse(self):
+        super().parse()
+        i = 1
+        self.will_store = struct.unpack("?", buf[i:i+1])[0]
 
 class ChordRelay(ChordMessage):
     def __init__(self, buf = None):
