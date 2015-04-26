@@ -163,7 +163,8 @@ class ChordTasks(object):
     @asyncio.coroutine
     def send_find_node(self, node_id, input_trie=None, data=None):
         "Returns found nodes sorted by closets. If data is not None then this"\
-        " is really {get/put}_data instead of find_node."
+        " is really {get/store}_data instead of find_node and nothing is"\
+        " returned."
 
         if not self.engine.peers:
             log.info("No connected nodes, unable to send FindNode.")
@@ -345,7 +346,18 @@ class ChordTasks(object):
                 if query_cntr.value == max_concurrent_queries:
                     break
 
-            #TODO: YOU_ARE_HERE: Process responses? Data is stored...
+            if log.isEnabledFor(logging.INFO):
+                log.info("Sent StoreData to [{}] nodes."\
+                    .format(query_cntr.value))
+
+            yield from done_all.wait()
+            done_all.clear()
+
+            assert query_cntr.value == 0
+
+            if log.isEnabledFor(logging.INFO):
+                log.info("Finished waiting for StoreData operations; now"\
+                    " cleaning up.")
 
         elif data is not None:
             log.warning("Couldn't send data as all tunnels got closed.")
@@ -357,14 +369,18 @@ class ChordTasks(object):
                 tun_meta.peer.protocol.close_channel(tun_meta.local_cid))
         yield from asyncio.wait(tasks, loop=self.loop)
 
+        if data is not None:
+            # In data mode we don't return the peers to save CPU for now.
+            return
+
+        rnodes = [vpeer.peer for vpeer in result_trie if vpeer and vpeer.path]
+
         if log.isEnabledFor(logging.INFO):
             for vpeer in result_trie:
                 if not vpeer or not vpeer.path:
                     continue
                 log.info("Found closer Peer (address={})."\
                     .format(vpeer.peer.address))
-
-        rnodes = [vpeer.peer for vpeer in result_trie if vpeer and vpeer.path]
 
         if log.isEnabledFor(logging.INFO):
             log.info("FindNode found [{}] Peers.".format(len(rnodes)))
@@ -374,6 +390,13 @@ class ChordTasks(object):
     def _generate_relay_packets(self, path, data_tunnel=False, payload=None):
         "path: list of indexes."\
         "payload_msg: optional packet data to wrap."
+
+        #TODO: ChordRelay should be modified to allow a message payload instead
+        # of the byte 'packet' payload. This way it can recursively call
+        # encode() on the payloads that way appending data each iteration
+        # instead of the inefficient way it does it now with inserting the
+        # wrapping packet each iteration. This is an especially important
+        # improvement now that a huge data packet is tacked on the end.
 
         pkt = None
         for idx in reversed(row.path):
