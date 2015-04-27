@@ -186,7 +186,7 @@ class ChordRelay(ChordMessage):
     def __init__(self, buf = None):
         self.index = None
         self.for_data = False
-        self.packet = None
+        self.packets = None
 
         super().__init__(CHORD_MSG_RELAY, buf)
 
@@ -194,8 +194,10 @@ class ChordRelay(ChordMessage):
         nbuf = super().encode()
         nbuf += struct.pack(">L", self.index)
         nbuf += struct.pack("?", self.for_data)
-        if self.packet:
-            nbuf += self.packet
+
+        nbuf += struct.pack(">L", len(self.packets))
+        for packet in self.packets:
+            nbuf += sshtype.encodeBinary(self.packet)
 
         return nbuf
 
@@ -206,6 +208,11 @@ class ChordRelay(ChordMessage):
         i += 4
         self.for_data = struct.unpack("?", self.buf[i:i+1])[0]
         i += 1
-        if i < len(self.buf):
-            self.packet = self.buf[i:]
 
+        cnt = struct.unpack(">L", self.buf[i:i+4])[0]
+        i += 4
+        self.packets = []
+        for n in range(cnt):
+            l, packet = sshtype.parseBinary(self.buf[i:])
+            i += l
+            self.packets.append(packet)

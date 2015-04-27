@@ -405,10 +405,12 @@ class ChordTasks(object):
             msg.index = idx
             msg.for_data = for_data
             if pkt:
-                msg.packet = pkt
+                msg.packets = [pkt]
             else:
                 if payload:
-                    msg.packet = payload
+                    msg.packets = [payload]
+                else
+                    msg.packets = []
             pkt = msg.encode()
 
         return pkt
@@ -483,7 +485,7 @@ class ChordTasks(object):
             if not pkt:
                 break
 
-            pkt, path = self.unwrap_relay_packets(pkt, for_data)
+            pkts, path = self.unwrap_relay_packets(pkt, for_data)
 
             pmsg = cp.ChordPeerList(pkt)
 
@@ -533,24 +535,55 @@ class ChordTasks(object):
         " packets."
 
         path = []
+        invalid = False
 
         while True:
             msg = cp.ChordRelay(pkt)
             path.append(msg.index)
-            pkt = msg.packet
-            packet_type = cp.ChordMessage.parse_type(pkt)
-            if packet_type == cp.CHORD_MSG_PEER_LIST:
-                break
-            if packet_type != cp.CHORD_MSG_RELAY:
-                log.warning("Unexpected packet_type [{}]; ignoring."\
-                    .format(packet_type))
+            pkts = msg.packets
 
-                tpeerlist = cp.ChordPeerList()
-                tpeerlist.peers = []
-                pkt = tpeerlist.encode()
+            if len(pkts) == 1:
+                pkt = pkts[0]
+
+                packet_type = cp.ChordMessage.parse_type(pkt)
+                if packet_type == cp.CHORD_MSG_PEER_LIST:
+                    break;
+                elif packet_type != cp.CHORD_MSG_RELAY:
+                    log.warning("Unexpected packet_type [{}]; ignoring."\
+                        .format(packet_type))
+                    invalid = True
+                    break
+            elif len(pkts) > 1:
+                # In data mode, PeerS return their storage intent, as well as a
+                # list of their connected PeerS.
+                if not for_data\
+                        or cp.ChordMessage.parse_type(pkts[0])\
+                            != cp.CHORD_MSG_STORAGE_INTEREST\
+                        or cp.ChordMessage.parse_type(pkts[1])\
+                            != cp.CHORD_MSG_PEER_LIST:
+                    invalid = True
+                # Break as we reached deepest packets.
+                break
+            else:
+                # There should never be an empty relay packet embedded when
+                # this method is called.
+                invalid = True
                 break
 
-        return pkt, path
+        if invalid:
+            #FIXME: We should probably update the hostiity tracking of both the
+            # Peer and the tunnel Peer instead of just ignoring this invalid
+            # state.
+            pkts = []
+
+            if for_data:
+                pkts.append(cp.ChordStorageInterest())
+
+            tpeerlist = cp.ChordPeerList()
+            tpeerlist.peers = []
+            pkts.append(tpeerlist.encode())
+
+        return pkts, path
 
     @asyncio.coroutine
     def process_find_node_request(self, fnmsg, fndata, peer, queue, local_cid):
@@ -632,7 +665,10 @@ class ChordTasks(object):
             tun_meta = rlist[rmsg.index]
 
             if not tun_meta.queue:
-                assert not rmsg.packet
+                # First packet to a yet to be contacted Peer should be empty
+                # which instructs us to open the tunnel and send it the root
+                # FindNode packet.
+                assert not len(rmsg.packets)
                 tun_meta.jobs = asyncio.Queue()
                 asyncio.async(\
                     self._process_find_node_tunnel(\
@@ -640,12 +676,24 @@ class ChordTasks(object):
                     loop=self.loop)
                 yield from tun_meta.jobs.put(fndata)
             elif tun_meta.jobs:
-                if rmsg.packet is None:
+                if not len(rmsg.packets):
                     log.warning("Peer [{}] sent additional empty relay packet"\
                         " for tunnel [{}]; skipping."\
                             .format(peer.dbid, rmsg.index))
                     continue
-                yield from tun_meta.jobs.put(rmsg.packet)
+                if len(rmsg.packets) > 1:
+                    log.warning("Peer [{}] sent relay packet with more than"\
+                        " one embedded packet for tunnel [{}]; skipping."\
+                            .format(peer.dbid, rmsg.index))
+                e_pkt = rmsg.packets[0]
+
+                if cp.ChordMessage.parse_type(e_pkt) != CHORD_MSG_RELAY:
+                    log.warning("Peer [{}] sent a non-empty relay packet with"\
+                        " other than a relay packet embedded for tunnel [{}];"\
+                        " skipping."\
+                            .format(peer.dbid, rmsg.index))
+
+                yield from tun_meta.jobs.put(e_pkt)
             else:
                 if log.isEnabledFor(logging.INFO):
                     log.info("Skipping request for disconnected tunnel [{}]."\
@@ -716,7 +764,7 @@ class ChordTasks(object):
 
             msg = cp.ChordRelay()
             msg.index = index
-            msg.packet = pkt
+            msg.packets = [pkt]
 
             rpeer.protocol.write_channel_data(rlocal_cid, msg.encode())
 
@@ -735,7 +783,7 @@ class ChordTasks(object):
     def _signal_find_node_tunnel_closed(self, rpeer, rlocal_cid, index, cnt):
         rmsg = cp.ChordRelay()
         rmsg.index = index
-        rmsg.packet = EMPTY_PEER_LIST_PACKET
+        rmsg.packet = [EMPTY_PEER_LIST_PACKET]
         pkt = rmsg.encode()
 
         for _ in range(cnt):
