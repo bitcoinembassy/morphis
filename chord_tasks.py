@@ -277,7 +277,7 @@ class ChordTasks(object):
                     asyncio.async(\
                         self._process_find_node_relay(\
                             node_id, tun_meta, query_cntr, done_all,\
-                            task_cntr, result_trie),\
+                            task_cntr, result_trie, data is not None),\
                         loop=self.loop)
                 else:
                     tun_meta.jobs += 1
@@ -471,35 +471,26 @@ class ChordTasks(object):
     @asyncio.coroutine
     def _process_find_node_relay(\
             self, node_id, tun_meta, query_cntr, done_all, task_cntr,
-            result_trie):
+            result_trie, for_data):
+        "This method processes an open tunnel's responses, processing the"\
+        " incoming messages and appending the PeerS in those messages to the"\
+        " result_trie. This method does not close any channel to the tunnel,"\
+        " and does not stop processing and exit until the channel is closed"\
+        " either the Peer or by our side outside this method."
+
         while True:
             pkt = yield from tun_meta.queue.get()
             if not pkt:
                 break
 
-            path = []
-
-            while True:
-                msg = cp.ChordRelay(pkt)
-                path.append(msg.index)
-                pkt = msg.packet
-                packet_type = cp.ChordMessage.parse_type(pkt)
-                if packet_type == cp.CHORD_MSG_PEER_LIST:
-                    break
-                if packet_type != cp.CHORD_MSG_RELAY:
-                    log.warning("Unexpected packet_type [{}]."\
-                        .format(packet_type))
-
-                    tpeerlist = cp.ChordPeerList()
-                    tpeerlist.peers = []
-                    pkt = tpeerlist.encode()
-                    break
+            pkt, path = self.unwrap_relay_packets(pkt, for_data)
 
             pmsg = cp.ChordPeerList(pkt)
 
             log.info("Peer (id=[{}]) returned PeerList of size {}."\
                 .format(tun_meta.peer.dbid, len(pmsg.peers)))
 
+            # Add returned PeerS to result_trie.
             idx = 0
             for rpeer in pmsg.peers:
                 end_path = list(path)
@@ -511,6 +502,8 @@ class ChordTasks(object):
                 idx += 1
 
             if not tun_meta.jobs:
+                #FIXME: Should handle this as an attack and ignore them and
+                # update tracking of hostility of the Peer AND tunnel.
                 log.info(\
                     "Got extra result from tunnel (Peer.id={}, path=[{}])."\
                         .format(tun_meta.peer.dbid, path))
@@ -522,14 +515,42 @@ class ChordTasks(object):
                 done_all.set()
 
         if tun_meta.jobs:
+            # This tunnel closed while there were still pending jobs, so
+            # consider those jobs now completed and subtract them from the
+            # count of ongoing jobs.
             query_cntr.value -= tun_meta.jobs
             if not query_cntr.value:
                 done_all.set()
             tun_meta.jobs = 0
 
+        # Mark tunnel as closed.
         tun_meta.queue = None
-
+        # Update counter of open tunnels.
         task_cntr.value -= 1
+
+    def unwrap_relay_packets(self, pkt, for_data):
+        "Returns the inner most packet and the path stored in the relay"\
+        " packets."
+
+        path = []
+
+        while True:
+            msg = cp.ChordRelay(pkt)
+            path.append(msg.index)
+            pkt = msg.packet
+            packet_type = cp.ChordMessage.parse_type(pkt)
+            if packet_type == cp.CHORD_MSG_PEER_LIST:
+                break
+            if packet_type != cp.CHORD_MSG_RELAY:
+                log.warning("Unexpected packet_type [{}]; ignoring."\
+                    .format(packet_type))
+
+                tpeerlist = cp.ChordPeerList()
+                tpeerlist.peers = []
+                pkt = tpeerlist.encode()
+                break
+
+        return pkt, path
 
     @asyncio.coroutine
     def process_find_node_request(self, fnmsg, fndata, peer, queue, local_cid):
