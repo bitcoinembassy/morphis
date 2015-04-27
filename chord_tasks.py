@@ -388,7 +388,7 @@ class ChordTasks(object):
 
         return rnodes
 
-    def _generate_relay_packets(self, path, data_tunnel=False, payload=None):
+    def _generate_relay_packets(self, path, for_data=False, payload=None):
         "path: list of indexes."\
         "payload_msg: optional packet data to wrap."
 
@@ -403,7 +403,7 @@ class ChordTasks(object):
         for idx in reversed(path):
             msg = cp.ChordRelay()
             msg.index = idx
-            msg.data_tunnel = data_tunnel
+            msg.for_data = for_data
             if pkt:
                 msg.packet = pkt
             else:
