@@ -230,6 +230,8 @@ class ChordTasks(object):
         task_cntr = Counter(0)
         done_all = asyncio.Event(loop=self.loop)
 
+        far_peers_by_path = {}
+
         for depth in range(1, maximum_depth):
             direct_peers_lower = 0
             for row in result_trie:
@@ -277,7 +279,8 @@ class ChordTasks(object):
                     asyncio.async(\
                         self._process_find_node_relay(\
                             node_id, tun_meta, query_cntr, done_all,\
-                            task_cntr, result_trie, data is not None),\
+                            task_cntr, result_trie, data is not None,\
+                            far_peers_by_path),\
                         loop=self.loop)
                 else:
                     tun_meta.jobs += 1
@@ -473,7 +476,7 @@ class ChordTasks(object):
     @asyncio.coroutine
     def _process_find_node_relay(\
             self, node_id, tun_meta, query_cntr, done_all, task_cntr,
-            result_trie, for_data):
+            result_trie, for_data, far_peers_by_path):
         "This method processes an open tunnel's responses, processing the"\
         " incoming messages and appending the PeerS in those messages to the"\
         " result_trie. This method does not close any channel to the tunnel,"\
@@ -487,6 +490,20 @@ class ChordTasks(object):
 
             pkts, path = self.unwrap_relay_packets(pkt, for_data)
 
+            if for_data:
+                imsg = cp.ChordStorageInterest(pkts[0])
+                if imsg.will_store:
+                    rvpeer = far_peers_by_path.get(tuple(path))
+                    if rvpeer is None:
+                        #FIXME: Treat this as attack, Etc.
+                        log.warning("Far node not found in dict for path [{}]."\
+                            .format(path))
+
+                    rvpeer.will_store = True
+                pkt = pkts[1]
+            else:
+                pkt = pkts[0]
+
             pmsg = cp.ChordPeerList(pkt)
 
             log.info("Peer (id=[{}]) returned PeerList of size {}."\
@@ -495,11 +512,15 @@ class ChordTasks(object):
             # Add returned PeerS to result_trie.
             idx = 0
             for rpeer in pmsg.peers:
-                end_path = list(path)
+                end_path = tuple(path)
                 end_path.append(idx)
 
+                vpeer = VPeer(rpeer, end_path, tun_meta)
+
                 key = bittrie.XorKey(node_id, rpeer.node_id)
-                result_trie.setdefault(key, VPeer(rpeer, end_path, tun_meta))
+                result_trie.setdefault(key, vpeer)
+
+                far_peers_by_path.setdefault(end_path, vpeer)
 
                 idx += 1
 
