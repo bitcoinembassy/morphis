@@ -412,7 +412,7 @@ class ChordTasks(object):
             else:
                 if payload:
                     msg.packets = [payload]
-                else
+                else:
                     msg.packets = []
             pkt = msg.encode()
 
@@ -708,7 +708,7 @@ class ChordTasks(object):
                             .format(peer.dbid, rmsg.index))
                 e_pkt = rmsg.packets[0]
 
-                if cp.ChordMessage.parse_type(e_pkt) != CHORD_MSG_RELAY:
+                if cp.ChordMessage.parse_type(e_pkt) != cp.CHORD_MSG_RELAY:
                     log.warning("Peer [{}] sent a non-empty relay packet with"\
                         " other than a relay packet embedded for tunnel [{}];"\
                         " skipping."\

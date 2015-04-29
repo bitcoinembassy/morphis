@@ -180,7 +180,7 @@ class ChordStorageInterest(ChordMessage):
     def parse(self):
         super().parse()
         i = 1
-        self.will_store = struct.unpack("?", buf[i:i+1])[0]
+        self.will_store = struct.unpack("?", self.buf[i:i+1])[0]
 
 class ChordRelay(ChordMessage):
     def __init__(self, buf = None):
