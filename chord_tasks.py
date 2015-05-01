@@ -650,8 +650,19 @@ class ChordTasks(object):
 
         if not rlist:
             log.info("No nodes closer than ourselves.")
-            yield from peer.protocol.close_channel(local_cid)
-            return
+            if not fnmsg.for_data:
+                yield from peer.protocol.close_channel(local_cid)
+                return
+
+        will_store = False
+        if fnmsg.for_data:
+            # In for_data mode we respond with two packets.
+            will_store = self.check_do_want(fnmsg.node_id)
+            imsg = cp.ChordStorageInterest()
+            imsg.will_store = will_store
+            log.info("Writing StorageInterest (will_store=[{}]) response."\
+                .format(will_store))
+            peer.protocol.write_channel_data(local_cid, imsg.encode())
 
         lmsg = cp.ChordPeerList()
         lmsg.peers = rlist
@@ -671,8 +682,9 @@ class ChordTasks(object):
                 yield from self._close_tunnels(rlist)
                 return
 
-            if not tun_cntr.value:
-                # If all the tunnels were closed.
+            if not tun_cntr.value and not will_store:
+                # If all the tunnels were closed and we aren't waiting for
+                # data, then we clean up and exit.
                 yield from self._close_tunnels(rlist)
                 yield from peer.protocol.close_channel(local_cid)
                 return
@@ -686,10 +698,15 @@ class ChordTasks(object):
             tun_meta = rlist[rmsg.index]
 
             if not tun_meta.queue:
-                # First packet to a yet to be contacted Peer should be empty
-                # which instructs us to open the tunnel and send it the root
-                # FindNode packet.
-                assert not len(rmsg.packets)
+                # First packet to a yet to be utilized Peer should be empty,
+                # which instructs us to open the tunnel and forward it the root
+                # FindNode packet that started this process.
+                if len(rmsg.packets):
+                    log.warning("Peer sent invalid packet (not empty but"\
+                        " tunnel not yet opened) for index [{}]; skipping."\
+                        .format(rmsg.index))
+                    continue
+
                 tun_meta.jobs = asyncio.Queue()
                 asyncio.async(\
                     self._process_find_node_tunnel(\
@@ -706,6 +723,8 @@ class ChordTasks(object):
                     log.warning("Peer [{}] sent relay packet with more than"\
                         " one embedded packet for tunnel [{}]; skipping."\
                             .format(peer.dbid, rmsg.index))
+                    continue
+
                 e_pkt = rmsg.packets[0]
 
                 if cp.ChordMessage.parse_type(e_pkt) != cp.CHORD_MSG_RELAY:
@@ -713,12 +732,15 @@ class ChordTasks(object):
                         " other than a relay packet embedded for tunnel [{}];"\
                         " skipping."\
                             .format(peer.dbid, rmsg.index))
+                    continue
 
+                # Otherwise, tell tunnel process to forward embedded packet.
                 yield from tun_meta.jobs.put(e_pkt)
             else:
                 if log.isEnabledFor(logging.INFO):
                     log.info("Skipping request for disconnected tunnel [{}]."\
                         .format(rmsg.index))
+
                 yield from self._signal_find_node_tunnel_closed(\
                     peer, local_cid, rmsg.index, 1)
 
