@@ -1,0 +1,48 @@
+[COMMIT:0e042bb6b3d3be2ecde619d6ed42f8b794eda864]
+future: Task(<process_connection_count>)<exception=AttributeError("'Future' object has no attribute 'clauses'",)>
+Traceback (most recent call last):
+  File "/usr/lib64/python3.4/asyncio/tasks.py", line 317, in _step
+    result = coro.throw(exc)
+  File "/home/mdev/src/l/morphis/chord.py", line 319, in process_connection_count
+    yield from self._process_connection_count(needed)
+  File "/home/mdev/src/l/morphis/chord.py", line 379, in _process_connection_count
+    rs = yield from self.loop.run_in_executor(None, dbcall)
+  File "/usr/lib64/python3.4/asyncio/futures.py", line 348, in __iter__
+    yield self  # This tells Task to wait for completion.
+  File "/usr/lib64/python3.4/asyncio/tasks.py", line 370, in _wakeup
+    value = future.result()
+  File "/usr/lib64/python3.4/asyncio/futures.py", line 243, in result
+    raise self._exception
+  File "/usr/lib64/python3.4/concurrent/futures/thread.py", line 54, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "/home/mdev/src/l/morphis/chord.py", line 372, in dbcall
+    r = q.all()
+  File "/usr/lib64/python3.4/site-packages/sqlalchemy/orm/query.py", line 2323, in all
+    return list(self)
+  File "/usr/lib64/python3.4/site-packages/sqlalchemy/orm/query.py", line 2441, in __iter__
+    return self._execute_and_instances(context)
+  File "/usr/lib64/python3.4/site-packages/sqlalchemy/orm/query.py", line 2456, in _execute_and_instances
+    result = conn.execute(querycontext.statement, self._params)
+  File "/usr/lib64/python3.4/site-packages/sqlalchemy/engine/base.py", line 841, in execute
+    return meth(self, multiparams, params)
+  File "/usr/lib64/python3.4/site-packages/sqlalchemy/sql/elements.py", line 322, in _execute_on_connection
+    return connection._execute_clauseelement(self, multiparams, params)
+  File "/usr/lib64/python3.4/site-packages/sqlalchemy/engine/base.py", line 931, in _execute_clauseelement
+    inline=len(distilled_params) > 1)
+  File "<string>", line 1, in <lambda>
+  File "/usr/lib64/python3.4/site-packages/sqlalchemy/sql/elements.py", line 493, in compile
+    return self._compiler(dialect, bind=bind, **kw)
+  File "/usr/lib64/python3.4/site-packages/sqlalchemy/sql/elements.py", line 499, in _compiler
+    return dialect.statement_compiler(dialect, self, **kw)
+  File "/usr/lib64/python3.4/site-packages/sqlalchemy/sql/compiler.py", line 395, in __init__
+    Compiled.__init__(self, dialect, statement, **kwargs)
+  File "/usr/lib64/python3.4/site-packages/sqlalchemy/sql/compiler.py", line 199, in __init__
+    self.string = self.process(self.statement, **compile_kwargs)
+  File "/usr/lib64/python3.4/site-packages/sqlalchemy/sql/compiler.py", line 222, in process
+    return obj._compiler_dispatch(self, **kwargs)
+  File "/usr/lib64/python3.4/site-packages/sqlalchemy/sql/visitors.py", line 80, in _compiler_dispatch
+    return meth(self, **kw)
+  File "/usr/lib64/python3.4/site-packages/sqlalchemy/sql/compiler.py", line 1559, in visit_select
+    if select._order_by_clause.clauses:
+AttributeError: 'Future' object has no attribute 'clauses'
+
