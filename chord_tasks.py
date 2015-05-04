@@ -14,6 +14,7 @@ from chordexception import ChordException
 from db import Peer
 from mutil import hex_string
 import enc
+import peer as mnpeer
 
 log = logging.getLogger(__name__)
 
@@ -23,6 +24,8 @@ class Counter(object):
 
 class TunnelMeta(object):
     def __init__(self, peer=None, jobs=None):
+        assert type(peer) is mnpeer.Peer
+
         self.peer = peer
         self.queue = None
         self.local_cid = None
@@ -30,6 +33,8 @@ class TunnelMeta(object):
 
 class VPeer(object):
     def __init__(self, peer=None, path=None, tun_meta=None):
+        assert type(peer) is mnpeer.Peer
+
         self.peer = peer
         self.path = path
         self.tun_meta = tun_meta
@@ -710,7 +715,8 @@ class ChordTasks(object):
                 tun_meta.jobs = asyncio.Queue()
                 asyncio.async(\
                     self._process_find_node_tunnel(\
-                        peer, local_cid, rmsg.index, tun_meta, tun_cntr),\
+                        peer, local_cid, rmsg.index, tun_meta, tun_cntr,\
+                        fnmsg.for_data),\
                     loop=self.loop)
                 yield from tun_meta.jobs.put(fndata)
             elif tun_meta.jobs:
@@ -746,7 +752,14 @@ class ChordTasks(object):
 
     @asyncio.coroutine
     def _process_find_node_tunnel(\
-            self, rpeer, rlocal_cid, index, tun_meta, tun_cntr):
+            self, rpeer, rlocal_cid, index, tun_meta, tun_cntr, for_data):
+        assert type(rpeer) is mnpeer.Peer
+
+        "Start a tunnel to the Peer in tun_meta by opening a channel and then"
+        " passing all packets put into the tun_meta.jobs queue to the Peer."
+        " Another coroutine is started to process the responses and send them"
+        " back to the Peer passed in rpeer."
+
         if log.isEnabledFor(logging.INFO):
             log.info("Opening tunnel [{}] to Peer (id=[{}]) for Peer(id=[{}])."\
                 .format(index, tun_meta.peer.dbid, rpeer.dbid))
@@ -769,7 +782,7 @@ class ChordTasks(object):
 
         asyncio.async(\
             self._process_find_node_tunnel_responses(\
-                rpeer, rlocal_cid, index, tun_meta, req_cntr),
+                rpeer, rlocal_cid, index, tun_meta, req_cntr, for_data),
             loop=self.loop)
 
         jobs = tun_meta.jobs
@@ -792,13 +805,26 @@ class ChordTasks(object):
 
     @asyncio.coroutine
     def _process_find_node_tunnel_responses(\
-            self, rpeer, rlocal_cid, index, tun_meta, req_cntr):
+            self, rpeer, rlocal_cid, index, tun_meta, req_cntr, for_data):
+        "Process the responses from a tunnel and relay them back to rpeer."
+
         while True:
             pkt = yield from tun_meta.queue.get()
-            if not tun_meta.jobs:
-                return
             if not pkt:
                 break
+            if not tun_meta.jobs:
+                return
+
+            pkt2 = None
+            if for_data and cp.ChordMessage.parse_type(pkt)\
+                    != cp.CHORD_MSG_RELAY:
+                # First two packets from a newly opened tunnel in for_data mode
+                # will be the StorageInterest and PeerList packet.
+                pkt2 = yield from tun_meta.queue.get()
+                if not pkt2:
+                    break
+                if not tun_meta.jobs:
+                    return
 
             if log.isEnabledFor(logging.DEBUG):
                 log.debug("Relaying response (index={}) from Peer (id=[{}])"\
@@ -807,7 +833,10 @@ class ChordTasks(object):
 
             msg = cp.ChordRelay()
             msg.index = index
-            msg.packets = [pkt]
+            if pkt2:
+                msg.packets = [pkt, pkt2]
+            else:
+                msg.packets = [pkt]
 
             rpeer.protocol.write_channel_data(rlocal_cid, msg.encode())
 
@@ -845,3 +874,9 @@ class ChordTasks(object):
 
             yield from\
                 tun_meta.peer.protocol.close_channel(tun_meta.local_cid)
+
+    def check_do_want(data_id):
+        #TODO: FIXME: Make this intelligent; based on closeness, diskspace, Etc.
+        # Probably something like: if space available, return true. else, return
+        # true with probability based upon closeness.
+        return True

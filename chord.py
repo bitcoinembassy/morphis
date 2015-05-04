@@ -232,7 +232,9 @@ class ChordEngine():
         self._async_do_stabilize()
 
     def calc_distance(self, nid, pid):
-        "Returns: distance, direction"
+        "Returns: distance, direction."
+        " distance is in log base2."
+
         if log.isEnabledFor(logging.DEBUG):
             log.debug("pid=\n[{}], nid=\n[{}].".format(hex_dump(pid),\
                 hex_dump(nid)))
