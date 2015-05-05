@@ -653,26 +653,26 @@ class ChordTasks(object):
         # some time.
         pt = None
 
-        if not rlist:
-            log.info("No nodes closer than ourselves.")
-            if not fnmsg.for_data:
-                yield from peer.protocol.close_channel(local_cid)
-                return
-
         will_store = False
         if fnmsg.for_data:
             # In for_data mode we respond with two packets.
-            will_store = self.check_do_want(fnmsg.node_id)
+            will_store = self.check_do_want_data(fnmsg.node_id)
             imsg = cp.ChordStorageInterest()
             imsg.will_store = will_store
             log.info("Writing StorageInterest (will_store=[{}]) response."\
                 .format(will_store))
             peer.protocol.write_channel_data(local_cid, imsg.encode())
 
+        if not rlist:
+            log.info("No nodes closer than ourselves.")
+            if not will_store:
+                yield from peer.protocol.close_channel(local_cid)
+                return
+
         lmsg = cp.ChordPeerList()
         lmsg.peers = rlist
 
-        log.info("Writing PeerList response.")
+        log.info("Writing PeerList (size={}) response.".format(len(rlist)))
         peer.protocol.write_channel_data(local_cid, lmsg.encode())
 
         rlist = [TunnelMeta(rpeer) for rpeer in rlist]
@@ -694,7 +694,13 @@ class ChordTasks(object):
                 yield from peer.protocol.close_channel(local_cid)
                 return
 
-            rmsg = cp.ChordRelay(pkt)
+            if will_store\
+                    and cp.ChordMessage.parse_type(pkt)\
+                        == cp.CHORD_MSG_STORE_DATA:
+                rmsg = cp.ChordStoreData(pkt)
+                self.store_data(rmsg)
+            else:
+                rmsg = cp.ChordRelay(pkt)
 
             if log.isEnabledFor(logging.DEBUG):
                 log.debug("Processing request from Peer (id=[{}]) for index"\
@@ -875,7 +881,7 @@ class ChordTasks(object):
             yield from\
                 tun_meta.peer.protocol.close_channel(tun_meta.local_cid)
 
-    def check_do_want(data_id):
+    def check_do_want_data(self, data_id):
         #TODO: FIXME: Make this intelligent; based on closeness, diskspace, Etc.
         # Probably something like: if space available, return true. else, return
         # true with probability based upon closeness.
