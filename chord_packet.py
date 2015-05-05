@@ -197,7 +197,7 @@ class ChordRelay(ChordMessage):
 
         nbuf += struct.pack(">L", len(self.packets))
         for packet in self.packets:
-            nbuf += sshtype.encodeBinary(self.packet)
+            nbuf += sshtype.encodeBinary(packet)
 
         return nbuf
 

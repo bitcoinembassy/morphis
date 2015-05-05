@@ -33,7 +33,7 @@ class TunnelMeta(object):
 
 class VPeer(object):
     def __init__(self, peer=None, path=None, tun_meta=None):
-        assert type(peer) is mnpeer.Peer
+        assert type(peer) is Peer or type(peer) is mnpeer.Peer
 
         self.peer = peer
         self.path = path
@@ -518,7 +518,7 @@ class ChordTasks(object):
             idx = 0
             for rpeer in pmsg.peers:
                 end_path = tuple(path)
-                end_path.append(idx)
+                end_path += (idx,)
 
                 vpeer = VPeer(rpeer, end_path, tun_meta)
 
@@ -810,10 +810,10 @@ class ChordTasks(object):
 
         while True:
             pkt = yield from tun_meta.queue.get()
-            if not pkt:
-                break
             if not tun_meta.jobs:
                 return
+            if not pkt:
+                break
 
             pkt2 = None
             if for_data and cp.ChordMessage.parse_type(pkt)\
@@ -821,10 +821,10 @@ class ChordTasks(object):
                 # First two packets from a newly opened tunnel in for_data mode
                 # will be the StorageInterest and PeerList packet.
                 pkt2 = yield from tun_meta.queue.get()
-                if not pkt2:
-                    break
                 if not tun_meta.jobs:
                     return
+                if not pkt2:
+                    break
 
             if log.isEnabledFor(logging.DEBUG):
                 log.debug("Relaying response (index={}) from Peer (id=[{}])"\
@@ -855,7 +855,7 @@ class ChordTasks(object):
     def _signal_find_node_tunnel_closed(self, rpeer, rlocal_cid, index, cnt):
         rmsg = cp.ChordRelay()
         rmsg.index = index
-        rmsg.packet = [EMPTY_PEER_LIST_PACKET]
+        rmsg.packets = [EMPTY_PEER_LIST_PACKET]
         pkt = rmsg.encode()
 
         for _ in range(cnt):
