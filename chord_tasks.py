@@ -161,9 +161,11 @@ class ChordTasks(object):
 
     @asyncio.coroutine
     def send_store_data(self, data):
-        key = enc.generate_ID(data)
+        # data_hash is a double hash due to the anti-entrapment feature.
+        enc_key = enc.generate_ID(data)
+        data_hash = enc.generate_ID(enc_key)
 
-        yield from self.send_find_node(key)
+        yield from self.send_find_node(data_hash)
 
     @asyncio.coroutine
     def send_find_node(self, node_id, input_trie=None, data=None):
@@ -697,8 +699,11 @@ class ChordTasks(object):
             if will_store\
                     and cp.ChordMessage.parse_type(pkt)\
                         == cp.CHORD_MSG_STORE_DATA:
+                if log.isEnabledFor(logging.INFO):
+                    log.info("Received ChordStoreData packet, storing.")
                 rmsg = cp.ChordStoreData(pkt)
-                self.store_data(rmsg)
+                self.store_data(peer, rmsg)
+                continue
             else:
                 rmsg = cp.ChordRelay(pkt)
 
@@ -886,3 +891,15 @@ class ChordTasks(object):
         # Probably something like: if space available, return true. else, return
         # true with probability based upon closeness.
         return True
+
+    def store_data(self, peer, dmsg):
+        data = dmsg.data
+
+        enc_key = enc.generate_ID(data)
+        data_hash = enc.generate_ID(enc_key)
+
+        if data_hash != dmsg.data_hash:
+            log.warning("Peer (dbid=[{}]) sent a data_hash that didn't match"\
+                " the data!".format(peer.dbid))
+
+        #TODO: YOU_ARE_HERE
