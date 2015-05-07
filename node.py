@@ -59,6 +59,13 @@ class Node():
         self.db.init_engine()
         self._db_initialized = True
 
+    def init_store(self):
+        d = "data/store-{}".format(self.instance)
+        if not os.path.exists(d):
+            if log.isEnabledFor(logging.INFO):
+                log.info("Creating data store directory [{}].".format(d))
+            os.makedirs(d)
+
     @asyncio.coroutine
     def create_schema(self):
         yield from self.db.create_all()
@@ -218,6 +225,8 @@ def __main():
                 yield from loop.run_in_executor(None, node.load_key)
             else:
                 node.load_key()
+
+            node.init_store()
 
             node.init_chord()
 

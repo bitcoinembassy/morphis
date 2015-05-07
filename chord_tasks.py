@@ -934,7 +934,8 @@ class ChordTasks(object):
                     .format(hex_string(data_id)))
             return
 
-        new_file = open("store/{}.blk".format(data_block_id))
+        new_file = open("data/store-{}/{}.blk"\
+            .format(self.engine.node.instance, data_block_id))
 
         if log.isEnabledFor(logging.INFO):
             log.info("Encrypting [{}] bytes of data.".format(len(data)))
