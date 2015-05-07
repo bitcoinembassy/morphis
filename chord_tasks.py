@@ -2,6 +2,7 @@ import llog
 
 import asyncio
 from collections import namedtuple
+from datetime import datetime
 import logging
 import math
 
@@ -11,7 +12,7 @@ import bittrie
 import chord
 import chord_packet as cp
 from chordexception import ChordException
-from db import Peer
+from db import Peer, DataBlock
 from mutil import hex_string
 import enc
 import peer as mnpeer
@@ -902,4 +903,42 @@ class ChordTasks(object):
             log.warning("Peer (dbid=[{}]) sent a data_id that didn't match"\
                 " the data!".format(peer.dbid))
 
-        #TODO: YOU_ARE_HERE
+        def dbcall():
+            with self.engine.node.db.open_session() as sess:
+                q = sess.query(func.count("*"))
+                q = q.filter(DataBlock.data_id == data_id)
+
+                if q.scalar() > 0:
+                    # We already have this block.
+                    return None
+
+                data_block = DataBlock()
+                data_block.data_id = data_id
+                data_block.insert_timestamp = datetime.today()
+
+                sess.add(data_block)
+
+                sess.commit()
+                sess.expunge(data_block)
+
+                return data_block.id
+
+        data_block_id = yield from self.loop.run_in_executor(None, dbcall)
+
+        if not data_block_id:
+            if log.isEnabledFor(logging.INFO):
+                log.info("Not storing data that we already have"\
+                    " (data_id=[{}])."\
+                    .format(hex_string(data_id)))
+            return
+
+        new_file = open("store/{}.blk".format(data_block_id))
+
+        def iocall():
+            new_file.write(data)
+
+        yield from self.loop.run_in_executor(None, iocall)
+
+        if log.isEnabledFor(logging.INFO):
+            log.info("Stored data for data_id=[{}] as [{}.blk]."\
+                .format(data_id, data_block_id))
