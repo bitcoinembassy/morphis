@@ -161,11 +161,11 @@ class ChordTasks(object):
 
     @asyncio.coroutine
     def send_store_data(self, data):
-        # data_hash is a double hash due to the anti-entrapment feature.
+        # data_id is a double hash due to the anti-entrapment feature.
         enc_key = enc.generate_ID(data)
-        data_hash = enc.generate_ID(enc_key)
+        data_id = enc.generate_ID(enc_key)
 
-        yield from self.send_find_node(data_hash)
+        yield from self.send_find_node(data_id)
 
     @asyncio.coroutine
     def send_find_node(self, node_id, input_trie=None, data=None):
@@ -344,7 +344,7 @@ class ChordTasks(object):
                 # is true and a priority.
 
                 msg = cp.ChordStoreData()
-                msg.data_hash = node_id
+                msg.data_id = node_id
                 msg.data = data
 
                 pkt = self._generate_relay_packets(row.path, True, msg.encode())
@@ -896,10 +896,10 @@ class ChordTasks(object):
         data = dmsg.data
 
         enc_key = enc.generate_ID(data)
-        data_hash = enc.generate_ID(enc_key)
+        data_id = enc.generate_ID(enc_key)
 
-        if data_hash != dmsg.data_hash:
-            log.warning("Peer (dbid=[{}]) sent a data_hash that didn't match"\
+        if data_id != dmsg.data_id:
+            log.warning("Peer (dbid=[{}]) sent a data_id that didn't match"\
                 " the data!".format(peer.dbid))
 
         #TODO: YOU_ARE_HERE

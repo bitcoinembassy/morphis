@@ -146,14 +146,14 @@ class ChordFindNode(ChordMessage):
 
 class ChordStoreData(ChordMessage):
     def __init__(self, buf = None):
-        self.data_hash = None
+        self.data_id = None # H(H(d))
         self.data = None
 
         super().__init__(CHORD_MSG_STORE_DATA, buf)
 
     def encode(self):
         nbuf = super().encode()
-        nbuf += sshtype.encodeBinary(self.data_hash)
+        nbuf += sshtype.encodeBinary(self.data_id)
         nbuf += sshtype.encodeBinary(self.data)
 
         return nbuf
@@ -161,7 +161,7 @@ class ChordStoreData(ChordMessage):
     def parse(self):
         super().parse()
         i = 1
-        l, self.data_hash = sshtype.parseBinary(self.buf[i:])
+        l, self.data_id = sshtype.parseBinary(self.buf[i:])
         i += l
         l, self.data = sshtype.parseBinary(self.buf[i:])
 
