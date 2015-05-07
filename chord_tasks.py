@@ -163,8 +163,8 @@ class ChordTasks(object):
     @asyncio.coroutine
     def send_store_data(self, data):
         # data_id is a double hash due to the anti-entrapment feature.
-        enc_key = enc.generate_ID(data)
-        data_id = enc.generate_ID(enc_key)
+        data_key = enc.generate_ID(data)
+        data_id = enc.generate_ID(data_key)
 
         yield from self.send_find_node(data_id, data=data)
 
@@ -896,8 +896,8 @@ class ChordTasks(object):
     def store_data(self, peer, dmsg):
         data = dmsg.data
 
-        enc_key = enc.generate_ID(data)
-        data_id = enc.generate_ID(enc_key)
+        data_key = enc.generate_ID(data)
+        data_id = enc.generate_ID(data_key)
 
         if data_id != dmsg.data_id:
             log.warning("Peer (dbid=[{}]) sent a data_id that didn't match"\
@@ -936,8 +936,20 @@ class ChordTasks(object):
 
         new_file = open("store/{}.blk".format(data_block_id))
 
+        if log.isEnabledFor(logging.INFO):
+            log.info("Encrypting [{}] bytes of data.".format(len(data)))
+
+        # PyCrypto works in blocks, so extra than round block size goes into
+        # enc_data_remainder.
+        enc_data, enc_data_remainder = enc.encrypt_data_block(data, data_key)
+
+        if log.isEnabledFor(logging.INFO):
+            log.info("Storing [{}] bytes of data."\
+                .format(len(enc_data) + len(enc_data_remainder)))
+
         def iocall():
-            new_file.write(data)
+            new_file.write(enc_data)
+            new_file.write(enc_data_remainder)
 
         yield from self.loop.run_in_executor(None, iocall)
 
