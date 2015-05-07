@@ -905,6 +905,8 @@ class ChordTasks(object):
 
         def dbcall():
             with self.engine.node.db.open_session() as sess:
+                self.engine.node.db.lock_table(sess, DataBlock)
+
                 q = sess.query(func.count("*"))
                 q = q.filter(DataBlock.data_id == data_id)
 
