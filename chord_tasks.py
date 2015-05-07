@@ -51,7 +51,7 @@ class ChordTasks(object):
         self.loop = engine.loop
 
     @asyncio.coroutine
-    def do_send_node_info(self, peer):
+    def send_node_info(self, peer):
         log.info("Sending ChordNodeInfo message.")
 
         local_cid, queue =\

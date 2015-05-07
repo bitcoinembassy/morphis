@@ -807,7 +807,7 @@ class ChordEngine():
             return;
         else:
             # Let peer we connected to know our node's bind_port.
-            asyncio.async(self.tasks.do_send_node_info(peer), loop=self.loop)
+            asyncio.async(self.tasks.send_node_info(peer), loop=self.loop)
 
     @asyncio.coroutine
     def request_open_channel(self, peer, req):
