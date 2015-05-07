@@ -307,7 +307,7 @@ class Shell(cmd.Cmd):
     def do_storedata(self, arg):
         "[DATA] store DATA into the network."
 
-        data = arg
+        data = bytes(arg, 'UTF8')
 
         max_len = mn1.MAX_PACKET_LENGTH - 5000 # Leave room for whatever.
         if len(data) > max_len:
