@@ -166,7 +166,7 @@ class ChordTasks(object):
         enc_key = enc.generate_ID(data)
         data_id = enc.generate_ID(enc_key)
 
-        yield from self.send_find_node(data_id)
+        yield from self.send_find_node(data_id, data=data)
 
     @asyncio.coroutine
     def send_find_node(self, node_id, input_trie=None, data=None):
