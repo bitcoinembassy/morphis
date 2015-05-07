@@ -261,9 +261,11 @@ class Shell(cmd.Cmd):
             self.writeln("Exception: [{}].".format(e))
 
     def do_lp(self, arg):
+        "listpeers alias."
         return self.do_listpeers(arg)
 
     def do_listpeers(self, arg):
+        "List connected PeerS."
         peers = self.peer.engine.peers.values()
 
         if arg:
@@ -297,6 +299,11 @@ class Shell(cmd.Cmd):
                     hex_string([x ^ y for x, y in zip(r.node_id, node_id)])))
 
     @asyncio.coroutine
+    def do_sd(self, arg):
+        "storedata alias."
+        yield from self.do_storedata(arg)
+
+    @asyncio.coroutine
     def do_storedata(self, arg):
         "[DATA] store DATA into the network."
 
@@ -315,11 +322,13 @@ class Shell(cmd.Cmd):
 
     @asyncio.coroutine
     def do_conn(self, arg):
+        "Connect to the passed address as a Peer."
         r = yield from self.peer.engine.connect_peer(arg)
         self.writeln(r)
 
     @asyncio.coroutine
     def do_st(self, arg):
+        "Print out current eventloop TaskS (filtering uninteresting ones)."
         cnt = 0
         try:
             for task in asyncio.Task.all_tasks(loop=self.loop):
@@ -339,6 +348,7 @@ class Shell(cmd.Cmd):
 
     @asyncio.coroutine
     def do_sta(self, arg):
+        "Print out current eventloop TaskS (unfiltered)."
         cnt = 0
         try:
             for task in asyncio.Task.all_tasks(loop=self.loop):
@@ -352,6 +362,7 @@ class Shell(cmd.Cmd):
 
     @asyncio.coroutine
     def do_lc(self, arg):
+        "listchans alias."
         return (yield from self.do_listchans(arg))
 
     @asyncio.coroutine
@@ -373,7 +384,7 @@ class Shell(cmd.Cmd):
 
     @asyncio.coroutine
     def do_time(self, arg):
-        "Time the passed command line."
+        "Time the passed command line (wrapping call)."
 
         start = datetime.today()
         r = yield from self.onecmd(arg)
