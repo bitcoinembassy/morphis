@@ -916,6 +916,7 @@ class ChordTasks(object):
 
                 data_block = DataBlock()
                 data_block.data_id = data_id
+                data_block.length = len(data)
                 data_block.insert_timestamp = datetime.today()
 
                 sess.add(data_block)

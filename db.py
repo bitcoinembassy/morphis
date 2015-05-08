@@ -60,6 +60,7 @@ def _init_daos(Base, d):
 
         id = Column(Integer, primary_key=True)
         data_id = Column(LargeBinary, nullable=False)
+        length = Column(Integer, nullable=False)
         insert_timestamp = Column(DateTime, nullable=False)
         last_access = Column(DateTime, nullable=True)
 
