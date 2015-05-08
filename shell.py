@@ -113,6 +113,7 @@ class Shell(cmd.Cmd):
                 return func(arg)
         except Exception as e:
             self.writeln("Exception [{}] executing command.".format(e))
+            log.exception("func(arg)")
 
     @asyncio.coroutine
     def readline(self):
