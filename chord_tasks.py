@@ -309,12 +309,15 @@ class ChordTasks(object):
                 log.info("All tasks exited.")
                 break
 
-        if data is not None and task_cntr.value:
+        if data is not None:
             # If in store_data mode, then send the data to the closest willing
             # nodes that we found.
             if log.isEnabledFor(logging.INFO):
                 log.info("Sending data with {} tunnels still open."\
                     .format(task_cntr.value))
+
+            # Just FYI: There might be no tunnels open if we are connected to
+            # everyone.
 
             for row in result_trie:
                 if row is False:
@@ -325,10 +328,8 @@ class ChordTasks(object):
                     # want to store the proposed data for whatever reason.
                     continue
 
-                tun_meta = row.tun_meta
-
-                if not tun_meta.queue:
-                    # Tunnel is closed.
+                if row.tun_meta and not row.tun_meta.queue:
+                    # Row is a tunnel, and it is closed.
                     continue
 
                 if log.isEnabledFor(logging.DEBUG):
@@ -348,7 +349,11 @@ class ChordTasks(object):
                 msg.data_id = node_id
                 msg.data = data
 
-                pkt = self._generate_relay_packets(row.path, True, msg.encode())
+                if row.tun_meta:
+                    pkt = self._generate_relay_packets(\
+                        row.path, True, msg.encode())
+                else:
+                    pkt = msg.encode()
 
                 tun_meta.peer.protocol.write_channel_data(\
                     tun_meta.local_cid, pkt)
@@ -478,8 +483,10 @@ class ChordTasks(object):
                 log.debug("Peer (dbid=[{}]) returned PeerList containing Peer"\
                     " (address=[{}]).".format(peer.dbid, rpeer.address))
 
+            vpeer = VPeer(rpeer, [idx], tun_meta)
+
             key = bittrie.XorKey(node_id, rpeer.node_id)
-            result_trie.setdefault(key, VPeer(rpeer, [idx], tun_meta))
+            result_trie.setdefault(key, vpeer)
             if for_data:
                 far_peers_by_path.setdefault((idx,), vpeer)
 
