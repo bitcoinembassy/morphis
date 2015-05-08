@@ -239,6 +239,7 @@ class ChordTasks(object):
         query_cntr = Counter(0)
         task_cntr = Counter(0)
         done_all = asyncio.Event(loop=self.loop)
+        sent_data = Counter(0)
 
         for depth in range(1, maximum_depth):
             direct_peers_lower = 0
@@ -288,7 +289,7 @@ class ChordTasks(object):
                         self._process_find_node_relay(\
                             node_id, tun_meta, query_cntr, done_all,\
                             task_cntr, result_trie, data is not None,\
-                            far_peers_by_path),\
+                            far_peers_by_path, sent_data),\
                         loop=self.loop)
                 else:
                     tun_meta.jobs += 1
@@ -318,6 +319,9 @@ class ChordTasks(object):
 
             # Just FYI: There might be no tunnels open if we are connected to
             # everyone.
+
+            sent_data.value = 1
+            immediate_node_jobs = 0
 
             for row in result_trie:
                 if row is False:
@@ -352,8 +356,10 @@ class ChordTasks(object):
                 if row.tun_meta:
                     pkt = self._generate_relay_packets(\
                         row.path, True, msg.encode())
+                    tun_meta.jobs += 1
                 else:
                     pkt = msg.encode()
+                    immediate_node_jobs += 1 # This tracks non tunnel jobs.
 
                 tun_meta.peer.protocol.write_channel_data(\
                     tun_meta.local_cid, pkt)
@@ -366,6 +372,9 @@ class ChordTasks(object):
             if log.isEnabledFor(logging.INFO):
                 log.info("Sent StoreData to [{}] nodes."\
                     .format(query_cntr.value))
+
+            #TODO: YOU_ARE_HERE: Start root node processor to track DataStored
+            # messages.
 
             yield from done_all.wait()
             done_all.clear()
@@ -495,12 +504,14 @@ class ChordTasks(object):
     @asyncio.coroutine
     def _process_find_node_relay(\
             self, node_id, tun_meta, query_cntr, done_all, task_cntr,
-            result_trie, for_data, far_peers_by_path):
+            result_trie, for_data, far_peers_by_path, sent_data):
         "This method processes an open tunnel's responses, processing the"\
         " incoming messages and appending the PeerS in those messages to the"\
         " result_trie. This method does not close any channel to the tunnel,"\
         " and does not stop processing and exit until the channel is closed"\
         " either by the Peer or by our side outside this method."
+
+        assert type(sent_data) is Counter
 
         while True:
             pkt = yield from tun_meta.queue.get()
@@ -510,6 +521,11 @@ class ChordTasks(object):
             pkts, path = self.unwrap_relay_packets(pkt, for_data)
 
             if for_data:
+                if sent_data.value:
+                    if cp.ChordMessage.parse_type(pkts[0])\
+                            == cp.CHORD_MSG_DATA_STORED:
+
+
                 imsg = cp.ChordStorageInterest(pkts[0])
                 if imsg.will_store:
                     rvpeer = far_peers_by_path.get(tuple(path))
@@ -715,7 +731,10 @@ class ChordTasks(object):
                 if log.isEnabledFor(logging.INFO):
                     log.info("Received ChordStoreData packet, storing.")
                 rmsg = cp.ChordStoreData(pkt)
-                yield from self.store_data(peer, rmsg)
+                r = yield from self.store_data(peer, rmsg)
+                if r:
+                    dsmsg = cp.ChordDataStored()
+                    peer.protocol.write_channel_data(local_cid, dsmsg.encode())
                 continue
             else:
                 rmsg = cp.ChordRelay(pkt)
@@ -907,6 +926,9 @@ class ChordTasks(object):
 
     @asyncio.coroutine
     def store_data(self, peer, dmsg):
+        "Store the data block on disk and meta in the database. Returns True"
+        " if the data was stored, False otherwise."
+
         data = dmsg.data
 
         data_key = enc.generate_ID(data)
@@ -946,7 +968,7 @@ class ChordTasks(object):
                 log.info("Not storing data that we already have"\
                     " (data_id=[{}])."\
                     .format(hex_string(data_id)))
-            return
+            return False
 
         new_file = open("data/store-{}/{}.blk"\
             .format(self.engine.node.instance, data_block_id))
@@ -971,3 +993,5 @@ class ChordTasks(object):
         if log.isEnabledFor(logging.INFO):
             log.info("Stored data for data_id=[{}] as [{}.blk]."\
                 .format(data_id, data_block_id))
+
+        return True
