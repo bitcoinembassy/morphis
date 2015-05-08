@@ -207,6 +207,7 @@ class ChordTasks(object):
 
         tasks = []
         used_peers = []
+        far_peers_by_path = {}
 
         for peer in input_trie:
             key = bittrie.XorKey(node_id, peer.node_id)
@@ -222,7 +223,8 @@ class ChordTasks(object):
             used_peers.append(tun_meta)
 
             tasks.append(self._send_find_node(\
-                vpeer, node_id, result_trie, tun_meta, data is not None))
+                vpeer, node_id, result_trie, tun_meta, data is not None,\
+                far_peers_by_path))
 
         if not tasks:
             log.info("Cannot perform FindNode, as we know no closer nodes.")
@@ -237,8 +239,6 @@ class ChordTasks(object):
         query_cntr = Counter(0)
         task_cntr = Counter(0)
         done_all = asyncio.Event(loop=self.loop)
-
-        far_peers_by_path = {}
 
         for depth in range(1, maximum_depth):
             direct_peers_lower = 0
@@ -427,7 +427,8 @@ class ChordTasks(object):
         return pkt
 
     @asyncio.coroutine
-    def _send_find_node(self, vpeer, node_id, result_trie, tun_meta, for_data):
+    def _send_find_node(self, vpeer, node_id, result_trie, tun_meta, for_data,\
+            far_peers_by_path):
         "Opens a channel and sends a 'root level' FIND_NODE to the passed"\
         " connected peer, adding results to the passed result_trie, and then"\
         " exiting. The channel is left open so that the caller may route to"\
@@ -479,6 +480,9 @@ class ChordTasks(object):
 
             key = bittrie.XorKey(node_id, rpeer.node_id)
             result_trie.setdefault(key, VPeer(rpeer, [idx], tun_meta))
+            if for_data:
+                far_peers_by_path.setdefault((idx,), vpeer)
+
             idx += 1
 
     @asyncio.coroutine
@@ -489,7 +493,7 @@ class ChordTasks(object):
         " incoming messages and appending the PeerS in those messages to the"\
         " result_trie. This method does not close any channel to the tunnel,"\
         " and does not stop processing and exit until the channel is closed"\
-        " either the Peer or by our side outside this method."
+        " either by the Peer or by our side outside this method."
 
         while True:
             pkt = yield from tun_meta.queue.get()
@@ -528,7 +532,8 @@ class ChordTasks(object):
                 key = bittrie.XorKey(node_id, rpeer.node_id)
                 result_trie.setdefault(key, vpeer)
 
-                far_peers_by_path.setdefault(end_path, vpeer)
+                if for_data:
+                    far_peers_by_path.setdefault(end_path, vpeer)
 
                 idx += 1
 
