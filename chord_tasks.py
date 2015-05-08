@@ -333,8 +333,8 @@ class ChordTasks(object):
                     continue
 
                 if log.isEnabledFor(logging.DEBUG):
-                    log.debug("Sending StoreData to path [{}]."\
-                        .format(row.path))
+                    log.debug("Sending StoreData to Peer [{}] and path [{}]."\
+                        .format(row.peer.address, row.path))
 
                 #TODO: MAYBE: replace embedded ChordRelay packets with
                 # just one that has a 'path' field. Just more simple,
@@ -715,7 +715,7 @@ class ChordTasks(object):
                 if log.isEnabledFor(logging.INFO):
                     log.info("Received ChordStoreData packet, storing.")
                 rmsg = cp.ChordStoreData(pkt)
-                self.store_data(peer, rmsg)
+                yield from self.store_data(peer, rmsg)
                 continue
             else:
                 rmsg = cp.ChordRelay(pkt)
@@ -905,6 +905,7 @@ class ChordTasks(object):
         # true with probability based upon closeness.
         return True
 
+    @asyncio.coroutine
     def store_data(self, peer, dmsg):
         data = dmsg.data
 
