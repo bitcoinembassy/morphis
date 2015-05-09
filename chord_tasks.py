@@ -650,7 +650,8 @@ class ChordTasks(object):
                 pkt = pkts[0]
 
                 packet_type = cp.ChordMessage.parse_type(pkt)
-                if packet_type == cp.CHORD_MSG_PEER_LIST:
+                if packet_type == cp.CHORD_MSG_PEER_LIST\
+                        or packet_type == cp.CHORD_MSG_DATA_STORED:
                     break;
                 elif packet_type != cp.CHORD_MSG_RELAY:
                     log.warning("Unexpected packet_type [{}]; ignoring."\
@@ -681,7 +682,7 @@ class ChordTasks(object):
             pkts = []
 
             if for_data:
-                pkts.append(cp.ChordStorageInterest())
+                pkts.append(cp.ChordStorageInterest().encode())
 
             tpeerlist = cp.ChordPeerList()
             tpeerlist.peers = []
