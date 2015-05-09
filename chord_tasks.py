@@ -1037,10 +1037,12 @@ class ChordTasks(object):
             return False
 
         try:
+            data_block_file_path = "data/store-{}/{}.blk"
+
             new_file = open(
-                "data/store-{}/{}.blk"
+                data_block_file_path
                     .format(self.engine.node.instance, data_block_id),
-                "w")
+                "wb")
 
             if log.isEnabledFor(logging.INFO):
                 log.info("Encrypting [{}] bytes of data.".format(len(data)))
@@ -1065,7 +1067,9 @@ class ChordTasks(object):
                     .format(data_id, data_block_id))
 
             return True
-        except:
+        except Exception as e:
+            log.exception(e)
+
             def dbcall():
                 with self.engine.node.db.open_session() as sess:
                     sess.query(DataBlock).filter(DataBlock.id == data_block_id)\
@@ -1073,5 +1077,13 @@ class ChordTasks(object):
                     sess.commit()
 
             yield from self.loop.run_in_executor(None, dbcall)
+
+            def iocall():
+                os.remove(data_block_file_path)
+
+            try:
+                yield from self.loop.run_in_executor(None, iocall)
+            except Exception:
+                pass
 
             return False
