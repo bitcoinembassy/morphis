@@ -41,7 +41,7 @@ def encrypt_data_block(data, data_key):
     # of data.
     main_chunk = cipher.encrypt(bytes(data[:main_len]))
     if remainder_len:
-        last_chunk = data[main_len:] + os.urandom(16 - remainder_len)
+        last_chunk = data[main_len:] + data_key[48:64 - remainder_len]
         remainder = cipher.encrypt(bytes(last_chunk))
     else:
         remainder = None
