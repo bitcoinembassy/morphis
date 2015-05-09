@@ -31,6 +31,7 @@ class TunnelMeta(object):
         self.queue = None
         self.local_cid = None
         self.jobs = jobs
+        self.task_running = False
 
 class VPeer(object):
     def __init__(self, peer=None, path=None, tun_meta=None):
@@ -206,12 +207,13 @@ class ChordTasks(object):
         result_trie[bittrie.XorKey(node_id, self.engine.node_id)] = False
 
         tasks = []
-        used_peers = []
+        used_tunnels = {}
         far_peers_by_path = {}
 
         for peer in input_trie:
             key = bittrie.XorKey(node_id, peer.node_id)
             vpeer = VPeer(peer)
+            # Store immediate PeerS in the result_trie.
             result_trie[key] = vpeer
 
             if len(tasks) == max_concurrent_queries:
@@ -220,7 +222,7 @@ class ChordTasks(object):
                 continue
 
             tun_meta = TunnelMeta(peer)
-            used_peers.append(tun_meta)
+            used_tunnels[vpeer] = tun_meta
 
             tasks.append(self._send_find_node(\
                 vpeer, node_id, result_trie, tun_meta, data is not None,\
@@ -255,7 +257,7 @@ class ChordTasks(object):
                     # Already asked direct peers, and only asking ones we
                     # haven't asked before.
                     direct_peers_lower += 1
-                    if direct_peers_lower == len(used_peers):
+                    if direct_peers_lower == len(used_tunnels):
                         # Only deal with results closer than the furthest of
                         # the direct peers we used.
                         break
@@ -320,8 +322,19 @@ class ChordTasks(object):
             # Just FYI: There might be no tunnels open if we are connected to
             # everyone.
 
-            sent_data.value = 1
-            immediate_node_jobs = 0
+            sent_data.value = 1 # Let tunnel process tasks know.
+
+            # We have to process responses from three different cases:
+            # 1. Peer reached through a tunnel.
+            # 2. Immediate Peer that is also an open tunnel. (task running)
+            # 3. Immediate Peer that is not an open tunnel.
+            # The last case requires a new processing task as no task is
+            # already running to handle it. Case 1 & 2 are handled by the
+            # _process_find_node_relay(..) co-routine tasks. The last case can
+            # only happen if there was no tunnel opened with that Peer. If the
+            # tunnel got closed then we don't even use that immediate Peer so
+            # it being closed won't be a case we have to handle. (We don't
+            # reopen channels at this point.)
 
             for row in result_trie:
                 if row is False:
@@ -332,34 +345,43 @@ class ChordTasks(object):
                     # want to store the proposed data for whatever reason.
                     continue
 
-                if row.tun_meta and not row.tun_meta.queue:
-                    # Row is a tunnel, and it is closed.
+                tun_meta = row.tun_meta
+                if tun_meta and not tun_meta.queue:
+                    # Peer is reached through a tunnel, but the tunnel is
+                    # closed.
                     continue
 
                 if log.isEnabledFor(logging.DEBUG):
                     log.debug("Sending StoreData to Peer [{}] and path [{}]."\
                         .format(row.peer.address, row.path))
 
-                #TODO: MAYBE: replace embedded ChordRelay packets with
-                # just one that has a 'path' field. Just more simple,
-                # efficient and should be easy change. It means less work
-                # for intermediate nodes that may want to examine the deepest
-                # packet, in the case of data, in order to opportunistically
-                # store the data. This might be a less good solution for
-                # anonyminty, but it could be as easilty switched back if that
-                # is true and a priority.
-
                 msg = cp.ChordStoreData()
                 msg.data_id = node_id
                 msg.data = data
 
-                if row.tun_meta:
+                if tun_meta:
+                    # Then this is a Peer reached through a tunnel.
                     pkt = self._generate_relay_packets(\
                         row.path, True, msg.encode())
                     tun_meta.jobs += 1
                 else:
+                    # Then this is an immediate Peer.
                     pkt = msg.encode()
-                    immediate_node_jobs += 1 # This tracks non tunnel jobs.
+
+                    tun_meta = used_tunnels.get(row)
+
+                    if tun_meta.task_running:
+                        # Then this immediate Peer is an open tunnel and will
+                        # be handled as described above for case #2.
+                        tun_meta.jobs += 1
+                    else:
+                        # Then this immediate Peer is not an open tunnel and we
+                        # will have to start a task to process its DataStored
+                        # message.
+                        asyncio.async(\
+                            self._wait_for_data_stored(\
+                                row, tun_meta, query_cntr),\
+                            loop=self.loop)
 
                 tun_meta.peer.protocol.write_channel_data(\
                     tun_meta.local_cid, pkt)
@@ -372,9 +394,6 @@ class ChordTasks(object):
             if log.isEnabledFor(logging.INFO):
                 log.info("Sent StoreData to [{}] nodes."\
                     .format(query_cntr.value))
-
-            #TODO: YOU_ARE_HERE: Start root node processor to track DataStored
-            # messages.
 
             yield from done_all.wait()
             done_all.clear()
@@ -390,7 +409,7 @@ class ChordTasks(object):
 
         # Close everything now that we are done.
         tasks.clear()
-        for tun_meta in used_peers:
+        for tun_meta in used_tunnels.items():
             tasks.append(\
                 tun_meta.peer.protocol.close_channel(tun_meta.local_cid))
         yield from asyncio.wait(tasks, loop=self.loop)
@@ -416,6 +435,15 @@ class ChordTasks(object):
     def _generate_relay_packets(self, path, for_data=False, payload=None):
         "path: list of indexes."\
         "payload_msg: optional packet data to wrap."
+
+        #TODO: MAYBE: replace embedded ChordRelay packets with
+        # just one that has a 'path' field. Just more simple,
+        # efficient and should be easy change. It means less work
+        # for intermediate nodes that may want to examine the deepest
+        # packet, in the case of data, in order to opportunistically
+        # store the data. This might be a less good solution for
+        # anonyminty, but it could be as easilty switched back if that
+        # is true and a priority.
 
         #TODO: ChordRelay should be modified to allow a message payload instead
         # of the byte 'packet' payload. This way it can recursively call
@@ -513,18 +541,36 @@ class ChordTasks(object):
 
         assert type(sent_data) is Counter
 
+        tun_meta.task_running = True
+
         while True:
             pkt = yield from tun_meta.queue.get()
             if not pkt:
                 break
 
-            pkts, path = self.unwrap_relay_packets(pkt, for_data)
+            if sent_data.value\
+                    and cp.ChordMessage.parse_type(pkt) != cp.CHORD_MSG_RELAY:
+                # This co-routine only expects unwrapped packets in the case
+                # we have sent data and are waiting for an ack from the
+                # immediate Peer.
+                pkts = (pkt,)
+            else:
+                pkts, path = self.unwrap_relay_packets(pkt, for_data)
 
             if for_data:
                 if sent_data.value:
                     if cp.ChordMessage.parse_type(pkts[0])\
-                            == cp.CHORD_MSG_DATA_STORED:
+                            != cp.CHORD_MSG_DATA_STORED:
+                        # They are too late! We are only looking for DataStored
+                        # messages now.
+                        continue
 
+                    query_cntr.value -= 1
+                    if not query_cntr.value:
+                        done_all.set()
+                        return
+
+                    continue
 
                 imsg = cp.ChordStorageInterest(pkts[0])
                 if imsg.will_store:
@@ -584,6 +630,7 @@ class ChordTasks(object):
 
         # Mark tunnel as closed.
         tun_meta.queue = None
+        tun_meta.task_running = False
         # Update counter of open tunnels.
         task_cntr.value -= 1
 
@@ -641,6 +688,20 @@ class ChordTasks(object):
             pkts.append(tpeerlist.encode())
 
         return pkts, path
+
+    @asyncio.coroutine
+    def _wait_for_data_stored(self, vpeer, tun_meta, query_cntr, done_all):
+        while True:
+            pkt = yield from tun_meta.queue.get()
+            if not pkt:
+                break
+
+            msg = cp.ChordDataStored(pkt)
+            break
+
+        query_cntr.value -= 1
+        if not query_cntr.value:
+            done_all.set()
 
     @asyncio.coroutine
     def process_find_node_request(self, fnmsg, fndata, peer, queue, local_cid):
