@@ -1064,7 +1064,7 @@ class ChordTasks(object):
 
             if log.isEnabledFor(logging.INFO):
                 log.info("Stored data for data_id=[{}] as [{}.blk]."\
-                    .format(data_id, data_block_id))
+                    .format(hex_string(data_id)), data_block_id))
 
             return True
         except Exception as e:
