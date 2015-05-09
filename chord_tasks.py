@@ -842,13 +842,15 @@ class ChordTasks(object):
                 e_pkt = rmsg.packets[0]
 
                 if cp.ChordMessage.parse_type(e_pkt) != cp.CHORD_MSG_RELAY:
-                    log.warning("Peer [{}] sent a non-empty relay packet with"\
-                        " other than a relay packet embedded for tunnel [{}];"\
-                        " skipping."\
-                            .format(peer.dbid, rmsg.index))
-                    continue
+                    if not fnmsg.for_data:
+                        log.warning("Peer [{}] sent a non-empty relay packet"\
+                            " with other than a relay packet embedded for"\
+                            " tunnel [{}]; skipping."\
+                                .format(peer.dbid, rmsg.index))
+                        continue
+                    # else: It is likely a StoreData message, which is ok.
 
-                # Otherwise, tell tunnel process to forward embedded packet.
+                # If all good, tell tunnel process to forward embedded packet.
                 yield from tun_meta.jobs.put(e_pkt)
             else:
                 if log.isEnabledFor(logging.INFO):
