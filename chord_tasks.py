@@ -926,15 +926,19 @@ class ChordTasks(object):
                 break
 
             pkt2 = None
-            if for_data and cp.ChordMessage.parse_type(pkt)\
-                    != cp.CHORD_MSG_RELAY:
-                # First two packets from a newly opened tunnel in for_data mode
-                # will be the StorageInterest and PeerList packet.
-                pkt2 = yield from tun_meta.queue.get()
-                if not tun_meta.jobs:
-                    return
-                if not pkt2:
-                    break
+            if for_data:
+                pkt_type = cp.ChordMessage.parse_type(pkt)
+                if pkt_type == cp.CHORD_MSG_DATA_STORED:
+                    # Relay the ack.
+                    pass
+                elif pkt_type != cp.CHORD_MSG_RELAY:
+                    # First two packets from a newly opened tunnel in for_data
+                    # mode will be the StorageInterest and PeerList packet.
+                    pkt2 = yield from tun_meta.queue.get()
+                    if not tun_meta.jobs:
+                        return
+                    if not pkt2:
+                        break
 
             if log.isEnabledFor(logging.DEBUG):
                 log.debug("Relaying response (index={}) from Peer (id=[{}])"\
