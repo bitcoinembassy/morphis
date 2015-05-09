@@ -162,9 +162,11 @@ class ChordTasks(object):
         return conn_nodes
 
     @asyncio.coroutine
-    def send_store_data(self, data):
+    def send_store_data(self, data, key_callback=None):
         # data_id is a double hash due to the anti-entrapment feature.
         data_key = enc.generate_ID(data)
+        if key_callback:
+            key_callback(data_key)
         data_id = enc.generate_ID(data_key)
 
         yield from self.send_find_node(data_id, data=data)

@@ -316,8 +316,11 @@ class Shell(cmd.Cmd):
                 .format(max_len))
             return
 
+        def key_callback(data_key):
+            self.writeln("data_key=[{}].".format(hex_string(data_key)))
+
         start = datetime.today()
-        yield from self.peer.engine.tasks.send_store_data(data)
+        yield from self.peer.engine.tasks.send_store_data(data, key_callback)
         diff = datetime.today() - start
         self.writeln("send_store_data(..) took: {}.".format(diff))
 
