@@ -380,7 +380,7 @@ class ChordTasks(object):
                         # message.
                         asyncio.async(\
                             self._wait_for_data_stored(\
-                                row, tun_meta, query_cntr),\
+                                row, tun_meta, query_cntr, done_all),\
                             loop=self.loop)
 
                 tun_meta.peer.protocol.write_channel_data(\
@@ -409,7 +409,7 @@ class ChordTasks(object):
 
         # Close everything now that we are done.
         tasks.clear()
-        for tun_meta in used_tunnels.items():
+        for tun_meta in used_tunnels.values():
             tasks.append(\
                 tun_meta.peer.protocol.close_channel(tun_meta.local_cid))
         yield from asyncio.wait(tasks, loop=self.loop)
@@ -791,11 +791,15 @@ class ChordTasks(object):
                         == cp.CHORD_MSG_STORE_DATA:
                 if log.isEnabledFor(logging.INFO):
                     log.info("Received ChordStoreData packet, storing.")
+
                 rmsg = cp.ChordStoreData(pkt)
+
                 r = yield from self.store_data(peer, rmsg)
-                if r:
-                    dsmsg = cp.ChordDataStored()
-                    peer.protocol.write_channel_data(local_cid, dsmsg.encode())
+
+                dsmsg = cp.ChordDataStored()
+                dsmsg.stored = r
+
+                peer.protocol.write_channel_data(local_cid, dsmsg.encode())
                 continue
             else:
                 rmsg = cp.ChordRelay(pkt)
@@ -1018,7 +1022,6 @@ class ChordTasks(object):
                 sess.add(data_block)
 
                 sess.commit()
-                sess.expunge(data_block)
 
                 return data_block.id
 
@@ -1031,28 +1034,42 @@ class ChordTasks(object):
                     .format(hex_string(data_id)))
             return False
 
-        new_file = open("data/store-{}/{}.blk"\
-            .format(self.engine.node.instance, data_block_id))
+        try:
+            new_file = open(
+                "data/store-{}/{}.blk"
+                    .format(self.engine.node.instance, data_block_id),
+                "w")
 
-        if log.isEnabledFor(logging.INFO):
-            log.info("Encrypting [{}] bytes of data.".format(len(data)))
+            if log.isEnabledFor(logging.INFO):
+                log.info("Encrypting [{}] bytes of data.".format(len(data)))
 
-        # PyCrypto works in blocks, so extra than round block size goes into
-        # enc_data_remainder.
-        enc_data, enc_data_remainder = enc.encrypt_data_block(data, data_key)
+            # PyCrypto works in blocks, so extra than round block size goes
+            # into enc_data_remainder.
+            enc_data, enc_data_remainder\
+                = enc.encrypt_data_block(data, data_key)
 
-        if log.isEnabledFor(logging.INFO):
-            log.info("Storing [{}] bytes of data."\
-                .format(len(enc_data) + len(enc_data_remainder)))
+            if log.isEnabledFor(logging.INFO):
+                log.info("Storing [{}] bytes of data."\
+                    .format(len(enc_data) + len(enc_data_remainder)))
 
-        def iocall():
-            new_file.write(enc_data)
-            new_file.write(enc_data_remainder)
+            def iocall():
+                new_file.write(enc_data)
+                new_file.write(enc_data_remainder)
 
-        yield from self.loop.run_in_executor(None, iocall)
+            yield from self.loop.run_in_executor(None, iocall)
 
-        if log.isEnabledFor(logging.INFO):
-            log.info("Stored data for data_id=[{}] as [{}.blk]."\
-                .format(data_id, data_block_id))
+            if log.isEnabledFor(logging.INFO):
+                log.info("Stored data for data_id=[{}] as [{}.blk]."\
+                    .format(data_id, data_block_id))
 
-        return True
+            return True
+        except:
+            def dbcall():
+                with self.engine.node.db.open_session() as sess:
+                    sess.query(DataBlock).filter(DataBlock.id == data_block_id)\
+                        .delete(synchronize_session=False)
+                    sess.commit()
+
+            yield from self.loop.run_in_executor(None, dbcall)
+
+            return False

@@ -203,15 +203,20 @@ class ChordStoreData(ChordMessage):
 
 class ChordDataStored(ChordMessage):
     def __init__(self, buf = None):
+        self.stored = False
+
         super().__init__(CHORD_MSG_DATA_STORED, buf)
 
     def encode(self):
         nbuf = super().encode()
+        nbuf += struct.pack("?", self.stored)
 
         return nbuf
 
     def parse(self):
         super().parse()
+        i = 1
+        self.stored = struct.unpack("?", self.buf[i:i+1])[0]
 
 class ChordStorageInterest(ChordMessage):
     def __init__(self, buf = None):
