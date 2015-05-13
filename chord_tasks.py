@@ -41,7 +41,8 @@ class VPeer(object):
         self.path = path
         self.tun_meta = tun_meta
         self.used = False
-        self.will_store = None
+        self.will_store = False
+        self.data_present = False
 
 EMPTY_PEER_LIST_MESSAGE = cp.ChordPeerList(peers=[])
 EMPTY_PEER_LIST_PACKET = EMPTY_PEER_LIST_MESSAGE.encode()
@@ -162,6 +163,12 @@ class ChordTasks(object):
         return conn_nodes
 
     @asyncio.coroutine
+    def send_get_data(self, data_key):
+        data_id = enc.generate_ID(data_key)
+
+        yield from self.send_get_data(data_id, for_data=True)
+
+    @asyncio.coroutine
     def send_store_data(self, data, key_callback=None):
         # data_id is a double hash due to the anti-entrapment feature.
         data_key = enc.generate_ID(data)
@@ -169,13 +176,20 @@ class ChordTasks(object):
             key_callback(data_key)
         data_id = enc.generate_ID(data_key)
 
-        yield from self.send_find_node(data_id, data=data)
+        yield from self.send_find_node(data_id, for_data=True, data=data)
 
     @asyncio.coroutine
-    def send_find_node(self, node_id, input_trie=None, data=None):
-        "Returns found nodes sorted by closets. If data is not None then this"\
-        " is really {get/store}_data instead of find_node and nothing is"\
-        " returned."
+    def send_find_node(self, node_id, input_trie=None, for_data=False,\
+            data=None):
+        "Returns found nodes sorted by closets. If for_data is True then"\
+        " this is really {get/store}_data instead of find_node. If data is"\
+        " None than it is get_data and the data is returned. Store data"\
+        " currently returns nothing."
+
+        if for_data:
+            data_mode = cp.DataMode.get if data is None else cp.DataMode.store
+        else:
+            data_mode = cp.DataMode.none
 
         if not self.engine.peers:
             log.info("No connected nodes, unable to send FindNode.")
@@ -199,9 +213,8 @@ class ChordTasks(object):
         maximum_depth = int(math.log(known_peer_cnt, 2))
 
         if log.isEnabledFor(logging.INFO):
-            log.info("Performing FindNode (data_packet={}) to a max depth of"\
-                " [{}]."\
-                .format(data is not None, maximum_depth))
+            log.info("Performing FindNode (data_mode={}) to a max depth of"\
+                " [{}].".format(data_mode, maximum_depth))
 
         result_trie = bittrie.BitTrie()
 
@@ -227,7 +240,7 @@ class ChordTasks(object):
             used_tunnels[vpeer] = tun_meta
 
             tasks.append(self._send_find_node(\
-                vpeer, node_id, result_trie, tun_meta, data is not None,\
+                vpeer, node_id, result_trie, tun_meta, data_mode,\
                 far_peers_by_path))
 
         if not tasks:
@@ -276,7 +289,7 @@ class ChordTasks(object):
                     log.debug("Sending FindNode to path [{}]."\
                         .format(row.path))
 
-                pkt = self._generate_relay_packets(row.path, data is not None)
+                pkt = self._generate_relay_packets(row.path)
 
                 tun_meta.peer.protocol.write_channel_data(\
                     tun_meta.local_cid, pkt)
@@ -292,7 +305,7 @@ class ChordTasks(object):
                     asyncio.async(\
                         self._process_find_node_relay(\
                             node_id, tun_meta, query_cntr, done_all,\
-                            task_cntr, result_trie, data is not None,\
+                            task_cntr, result_trie, data_mode,\
                             far_peers_by_path, sent_data),\
                         loop=self.loop)
                 else:
@@ -314,6 +327,7 @@ class ChordTasks(object):
                 log.info("All tasks exited.")
                 break
 
+#TODO: YOU_ARE_HERE: Update this for get mode.
         if data is not None:
             # If in store_data mode, then send the data to the closest willing
             # nodes that we found.
@@ -364,7 +378,7 @@ class ChordTasks(object):
                 if tun_meta:
                     # Then this is a Peer reached through a tunnel.
                     pkt = self._generate_relay_packets(\
-                        row.path, True, msg.encode())
+                        row.path, msg.encode())
                     tun_meta.jobs += 1
                 else:
                     # Then this is an immediate Peer.
@@ -406,9 +420,6 @@ class ChordTasks(object):
                 log.info("Finished waiting for StoreData operations; now"\
                     " cleaning up.")
 
-        elif data is not None:
-            log.warning("Couldn't send data as all tunnels got closed.")
-
         # Close everything now that we are done.
         tasks.clear()
         for tun_meta in used_tunnels.values():
@@ -416,9 +427,13 @@ class ChordTasks(object):
                 tun_meta.peer.protocol.close_channel(tun_meta.local_cid))
         yield from asyncio.wait(tasks, loop=self.loop)
 
-        if data is not None:
-            # In data mode we don't return the peers to save CPU for now.
-            return
+        if data_mode.value:
+            if data_mode is cp.DataMode.store:
+                # In store mode we don't return the peers to save CPU for now.
+                return
+            else:
+                assert data_mode is cp.DataMode.get
+                #TODO: YOU_ARE_HERE: return data
 
         rnodes = [vpeer.peer for vpeer in result_trie if vpeer and vpeer.path]
 
@@ -434,7 +449,7 @@ class ChordTasks(object):
 
         return rnodes
 
-    def _generate_relay_packets(self, path, for_data=False, payload=None):
+    def _generate_relay_packets(self, path, payload=None):
         "path: list of indexes."\
         "payload_msg: optional packet data to wrap."
 
@@ -458,7 +473,6 @@ class ChordTasks(object):
         for idx in reversed(path):
             msg = cp.ChordRelay()
             msg.index = idx
-            msg.for_data = for_data
             if pkt:
                 msg.packets = [pkt]
             else:
@@ -471,8 +485,8 @@ class ChordTasks(object):
         return pkt
 
     @asyncio.coroutine
-    def _send_find_node(self, vpeer, node_id, result_trie, tun_meta, for_data,\
-            far_peers_by_path):
+    def _send_find_node(self, vpeer, node_id, result_trie, tun_meta,\
+            data_mode, far_peers_by_path):
         "Opens a channel and sends a 'root level' FIND_NODE to the passed"\
         " connected peer, adding results to the passed result_trie, and then"\
         " exiting. The channel is left open so that the caller may route to"\
@@ -487,7 +501,7 @@ class ChordTasks(object):
 
         msg = cp.ChordFindNode()
         msg.node_id = node_id
-        msg.for_data = for_data
+        msg.data_mode = data_mode
 
         if log.isEnabledFor(logging.DEBUG):
             log.debug("Sending root level FindNode msg to Peer (dbid=[{}])."\
@@ -502,13 +516,21 @@ class ChordTasks(object):
         tun_meta.queue = queue
         tun_meta.local_cid = local_cid
 
-        if for_data:
-            msg = cp.ChordStorageInterest(pkt)
-            vpeer.will_store = msg.will_store
+        if data_mode.value:
+            if data_mode is cp.DataMode.store:
+                msg = cp.ChordStorageInterest(pkt)
+                vpeer.will_store = msg.will_store
 
-            pkt = yield from queue.get()
-            if not pkt:
-                return
+                pkt = yield from queue.get()
+                if not pkt:
+                    return
+            elif data_mode is cp.DataMode.get:
+                msg = cp.ChordDataPresence(pkt)
+                vpeer.data_present = msg.data_present
+
+                pkt = yield from queue.get()
+                if not pkt:
+                    return
 
         msg = cp.ChordPeerList(pkt)
 
@@ -526,7 +548,7 @@ class ChordTasks(object):
 
             key = bittrie.XorKey(node_id, rpeer.node_id)
             result_trie.setdefault(key, vpeer)
-            if for_data:
+            if data_mode.value:
                 far_peers_by_path.setdefault((idx,), vpeer)
 
             idx += 1
@@ -534,7 +556,7 @@ class ChordTasks(object):
     @asyncio.coroutine
     def _process_find_node_relay(\
             self, node_id, tun_meta, query_cntr, done_all, task_cntr,
-            result_trie, for_data, far_peers_by_path, sent_data):
+            result_trie, data_mode, far_peers_by_path, sent_data):
         "This method processes an open tunnel's responses, processing the"\
         " incoming messages and appending the PeerS in those messages to the"\
         " result_trie. This method does not close any channel to the tunnel,"\
@@ -556,16 +578,36 @@ class ChordTasks(object):
                 # we have sent data and are waiting for an ack from the
                 # immediate Peer.
                 pkts = (pkt,)
+                path = None
             else:
                 pkts, path = self.unwrap_relay_packets(pkt, for_data)
 
-            if for_data:
+            if data_mode.value:
                 if sent_data.value:
-                    if cp.ChordMessage.parse_type(pkts[0])\
-                            != cp.CHORD_MSG_DATA_STORED:
-                        # They are too late! We are only looking for DataStored
-                        # messages now.
-                        continue
+                    if data_mode is cp.DataMode.get:
+                        if cp.ChordMessage.parse_type(pkts[0])\
+                                != cp.CHORD_MSG_DATA_RESPONSE:
+                            # They are too late! We are only looking for
+                            # DataResponse messages now.
+                            continue
+
+                        rmsg = cp.ChordDataResponse(pkts[0])
+
+                        r = yield from self._process_data_response(\
+                            rmsg, tun_meta, path)
+
+                        if not r:
+                            # If the data was invalid, we will try from another
+                            # Peer (or possibly tunnel).
+                            continue
+                    else:
+                        assert data_mode is cp.DataMode.store
+
+                        if cp.ChordMessage.parse_type(pkts[0])\
+                                != cp.CHORD_MSG_DATA_STORED:
+                            # They are too late! We are only looking for
+                            # DataStored messages now.
+                            continue
 
                     query_cntr.value -= 1
                     if not query_cntr.value:
@@ -574,15 +616,29 @@ class ChordTasks(object):
 
                     continue
 
-                imsg = cp.ChordStorageInterest(pkts[0])
-                if imsg.will_store:
-                    rvpeer = far_peers_by_path.get(tuple(path))
-                    if rvpeer is None:
-                        #FIXME: Treat this as attack, Etc.
-                        log.warning("Far node not found in dict for path [{}]."\
-                            .format(path))
+                if data_mode is cp.DataMode.get:
+                    pmsg = cp.ChordDataPresence(pkts[0])
+                    if pmsg.data_present:
+                        rvpeer = far_peers_by_path.get(tuple(path))
+                        if rvpeer is None:
+                            #FIXME: Treat this as attack, Etc.
+                            log.warning("Far node not found in dict for path"\
+                                "[{}].".format(path))
+                        else:
+                            rvpeer.data_present = True
+                else:
+                    assert data_mode is cp.DataMode.store
 
-                    rvpeer.will_store = True
+                    imsg = cp.ChordStorageInterest(pkts[0])
+                    if imsg.will_store:
+                        rvpeer = far_peers_by_path.get(tuple(path))
+                        if rvpeer is None:
+                            #FIXME: Treat this as attack, Etc.
+                            log.warning("Far node not found in dict for path"\
+                                "[{}].".format(path))
+                        else:
+                            rvpeer.will_store = True
+
                 pkt = pkts[1]
             else:
                 pkt = pkts[0]
@@ -603,7 +659,7 @@ class ChordTasks(object):
                 key = bittrie.XorKey(node_id, rpeer.node_id)
                 result_trie.setdefault(key, vpeer)
 
-                if for_data:
+                if data_mode.value:
                     far_peers_by_path.setdefault(end_path, vpeer)
 
                 idx += 1
@@ -636,7 +692,7 @@ class ChordTasks(object):
         # Update counter of open tunnels.
         task_cntr.value -= 1
 
-    def unwrap_relay_packets(self, pkt, for_data):
+    def unwrap_relay_packets(self, pkt, data_mode):
         "Returns the inner most packet and the path stored in the relay"\
         " packets."
 
@@ -663,12 +719,24 @@ class ChordTasks(object):
             elif len(pkts) > 1:
                 # In data mode, PeerS return their storage intent, as well as a
                 # list of their connected PeerS.
-                if not for_data\
-                        or cp.ChordMessage.parse_type(pkts[0])\
-                            != cp.CHORD_MSG_STORAGE_INTEREST\
-                        or cp.ChordMessage.parse_type(pkts[1])\
-                            != cp.CHORD_MSG_PEER_LIST:
+                if not data_mode.value
                     invalid = True
+                else:
+                    if data_mode is cp.DataMode.get
+                            and (cp.ChordMessage.parse_type(pkts[0])\
+                                    != cp.CHORD_MSG_DATA_PRESENCE\
+                                or cp.ChordMessage.parse_type(pkts[1])\
+                                    != cp.CHORD_MSG_PEER_LIST):
+                        invalid = True
+                    elif data_mode is cp.DataMode.store
+                            and (cp.ChordMessage.parse_type(pkts[0])\
+                                    != cp.CHORD_MSG_STORAGE_INTEREST\
+                                or cp.ChordMessage.parse_type(pkts[1])\
+                                    != cp.CHORD_MSG_PEER_LIST):
+                        invalid = True
+                    else:
+                        assert False
+
                 # Break as we reached deepest packets.
                 break
             else:
@@ -678,12 +746,14 @@ class ChordTasks(object):
                 break
 
         if invalid:
-            #FIXME: We should probably update the hostiity tracking of both the
-            # Peer and the tunnel Peer instead of just ignoring this invalid
-            # state.
+            #FIXME: We should probably update the hostility tracking of both
+            # the Peer and the tunnel Peer instead of just ignoring this
+            # invalid state.
             pkts = []
 
-            if for_data:
+            if data_mode is cp.DataMode.get:
+                pkts.append(cp.ChordDataPresence().encode())
+            elif data_mode is cp.DataMode.store:
                 pkts.append(cp.ChordStorageInterest().encode())
 
             tpeerlist = cp.ChordPeerList()
@@ -694,12 +764,30 @@ class ChordTasks(object):
 
     @asyncio.coroutine
     def _wait_for_data_stored(self, vpeer, tun_meta, query_cntr, done_all):
+        "This is a coroutine that is used in data_mode and is started for"\
+        " immediate PeerS that do not have a tunnel open (and thus a tunnel"\
+        " coroutine already processing it."
+
         while True:
             pkt = yield from tun_meta.queue.get()
             if not pkt:
                 break
 
-            msg = cp.ChordDataStored(pkt)
+            if data_mode is cp.DataMode.get:
+                rmsg = cp.ChordDataResponse(pkt)
+
+                r = yield from self._process_data_response(\
+                    rmsg, tun_meta, path)
+
+                if not r:
+                    # If the data was invalid, we will try from another
+                    # Peer (or possibly tunnel).
+                    continue
+            else:
+                assert data_mode is cp.DataMode.store
+
+                msg = cp.ChordDataStored(pkt)
+
             break
 
         query_cntr.value -= 1
@@ -996,6 +1084,12 @@ class ChordTasks(object):
         #TODO: FIXME: Make this intelligent; based on closeness, diskspace, Etc.
         # Probably something like: if space available, return true. else, return
         # true with probability based upon closeness.
+        return True
+
+    @asyncio.coroutine
+    def _process_data_response(self, data, tun_meta, path):
+        log.info("GOT DATA!")
+        #TODO: YOU_ARE_HERE: Verify data, if good, do something with it!
         return True
 
     @asyncio.coroutine

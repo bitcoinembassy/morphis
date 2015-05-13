@@ -305,6 +305,17 @@ class Shell(cmd.Cmd):
         yield from self.do_storedata(arg)
 
     @asyncio.coroutine
+    def do_getdata(self, arg):
+        "[DATA_KEY] retrieve data for DATA_KEY from the network."
+
+        data_key = bytearray.fromhex(arg)
+
+        start = datetime.today()
+        yield from self.peer.engine.tasks.send_get_data(data_key)
+        diff = datetime.today() - start
+        self.writeln("send_get_data(..) took: {}.".format(diff))
+
+    @asyncio.coroutine
     def do_storedata(self, arg):
         "[DATA] store DATA into the network."
 

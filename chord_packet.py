@@ -14,9 +14,17 @@ CHORD_MSG_NODE_INFO = 110
 CHORD_MSG_GET_PEERS = 115
 CHORD_MSG_PEER_LIST = 120
 CHORD_MSG_FIND_NODE = 150
-CHORD_MSG_STORE_DATA = 160
-CHORD_MSG_DATA_STORED = 162
-CHORD_MSG_STORAGE_INTEREST = 165
+CHORD_MSG_GET_DATA = 160
+CHORD_MSG_DATA_RESPONSE = 162
+CHORD_MSG_DATA_PRESENCE = 165
+CHORD_MSG_STORE_DATA = 170
+CHORD_MSG_DATA_STORED = 172
+CHORD_MSG_STORAGE_INTEREST = 175
+
+class DataMode(Enum):
+    none = 0
+    get = 10
+    store = 20
 
 log = logging.getLogger(__name__)
 
@@ -51,15 +59,17 @@ class ChordMessage(object):
 class ChordRelay(ChordMessage):
     def __init__(self, buf = None):
         self.index = None
-        self.for_data = False
         self.packets = None
 
         super().__init__(CHORD_MSG_RELAY, buf)
 
+    @property
+    def for_data(self):
+        raise Exception("No more such property.")
+
     def encode(self):
         nbuf = super().encode()
         nbuf += struct.pack(">L", self.index)
-        nbuf += struct.pack("?", self.for_data)
 
         nbuf += struct.pack(">L", len(self.packets))
         for packet in self.packets:
@@ -72,8 +82,6 @@ class ChordRelay(ChordMessage):
         i = 1
         self.index = struct.unpack(">L", self.buf[i:i+4])[0]
         i += 4
-        self.for_data = struct.unpack("?", self.buf[i:i+1])[0]
-        i += 1
 
         cnt = struct.unpack(">L", self.buf[i:i+4])[0]
         i += 4
@@ -162,14 +170,14 @@ class ChordPeerList(ChordMessage):
 class ChordFindNode(ChordMessage):
     def __init__(self, buf = None):
         self.node_id = None
-        self.for_data = False
+        self.data_mode = DataMode.none
 
         super().__init__(CHORD_MSG_FIND_NODE, buf)
 
     def encode(self):
         nbuf = super().encode()
         nbuf += sshtype.encodeBinary(self.node_id)
-        nbuf += struct.pack("?", self.for_data)
+        nbuf += struct.pack("?", self.data_mode)
 
         return nbuf
 
@@ -178,7 +186,62 @@ class ChordFindNode(ChordMessage):
         i = 1
         l, self.node_id = sshtype.parseBinary(self.buf[i:])
         i += l
-        self.for_data = struct.unpack("?", self.buf[i:i+1])[0]
+        self.data_mode = struct.unpack("?", self.buf[i:i+1])[0]
+
+class ChordGetData(ChordMessage):
+    def __init__(self, buf = None):
+        self.data_id = None
+
+        super().__init__(CHORD_MSG_GET_DATA, buf)
+
+    def encode(self):
+        nbuf = super().encode()
+        nbuf += sshtype.encodeBinary(self.data_id)
+
+        return nbuf
+
+    def parse(self):
+        super().parse()
+        i = 1
+        l, self.data_id = sshtype.parseBinary(self.buf[i:])
+
+class ChordDataResponse(ChordMessage):
+    def __init__(self, buf = None):
+        self.data_id = None
+        self.data = None
+
+        super().__init__(CHORD_MSG_DATA_RESPONSE, buf)
+
+    def encode(self):
+        nbuf = super().encode()
+        nbuf += sshtype.encodeBinary(self.data_id)
+        nbuf += sshtype.encodeBinary(self.data)
+
+        return nbuf
+
+    def parse(self):
+        super().parse()
+        i = 1
+        l, self.data_id = sshtype.parseBinary(self.buf[i:])
+        i += l
+        l, self.data = sshtype.parseBinary(self.buf[i:])
+
+class ChordDataPresence(ChordMessage):
+    def __init__(self, buf = None):
+        self.data_present = False
+
+        super().__init__(CHORD_MSG_DATA_PRESENCE, buf)
+
+    def encode(self):
+        nbuf = super().encode()
+        nbuf += struct.pack("?", self.data_present)
+
+        return nbuf
+
+    def parse(self):
+        super().parse()
+        i = 1
+        self.data_present = struct.unpack("?", self.buf[i:i+1])[0]
 
 class ChordStoreData(ChordMessage):
     def __init__(self, buf = None):
