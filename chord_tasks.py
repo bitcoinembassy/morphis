@@ -837,18 +837,34 @@ class ChordTasks(object):
         pt = None
 
         will_store = False
-        if fnmsg.for_data:
+        data_present = False
+        if fnmsg.data_mode.value:
             # In for_data mode we respond with two packets.
-            will_store = self.check_do_want_data(fnmsg.node_id)
-            imsg = cp.ChordStorageInterest()
-            imsg.will_store = will_store
-            log.info("Writing StorageInterest (will_store=[{}]) response."\
-                .format(will_store))
-            peer.protocol.write_channel_data(local_cid, imsg.encode())
+            if fnmsg.data_mode is cp.DataMode.get:
+                data_present = self.check_has_data(fnmsg.node_id)
+                pmsg = cp.ChordDataPresence()
+                pmsg.data_present = data_present
+
+                log.info("Writing DataPresence (data_present=[{}]) response."\
+                    .format(data_present))
+
+                peer.protocol.write_channel_data(local_cid, pmsg.encode())
+            elif fnmsg.data_mode is cp.DataMode.store:
+                will_store = self.check_do_want_data(fnmsg.node_id)
+                imsg = cp.ChordStorageInterest()
+                imsg.will_store = will_store
+
+                log.info("Writing StorageInterest (will_store=[{}]) response."\
+                    .format(will_store))
+
+                peer.protocol.write_channel_data(local_cid, imsg.encode())
+            else:
+                log.warning("Invalid data_mode ([{}])."\
+                    .format(fnmsg.data_mode))
 
         if not rlist:
             log.info("No nodes closer than ourselves.")
-            if not will_store:
+            if not will_store and not data_present:
                 yield from peer.protocol.close_channel(local_cid)
                 return
 
@@ -870,28 +886,45 @@ class ChordTasks(object):
                 yield from self._close_tunnels(rlist)
                 return
 
-            if not tun_cntr.value and not will_store:
+            if not tun_cntr.value and not will_store and not data_present:
                 # If all the tunnels were closed and we aren't waiting for
                 # data, then we clean up and exit.
                 yield from self._close_tunnels(rlist)
                 yield from peer.protocol.close_channel(local_cid)
                 return
 
-            if will_store\
-                    and cp.ChordMessage.parse_type(pkt)\
-                        == cp.CHORD_MSG_STORE_DATA:
+            packet_type = cp.ChordMessage.parse_type(pkt)
+            if will_store and packet_type == cp.CHORD_MSG_STORE_DATA:
                 if log.isEnabledFor(logging.INFO):
                     log.info("Received ChordStoreData packet, storing.")
 
                 rmsg = cp.ChordStoreData(pkt)
 
-                r = yield from self.store_data(peer, rmsg)
+                r = yield from self._store_data(peer, rmsg)
 
                 dsmsg = cp.ChordDataStored()
                 dsmsg.stored = r
 
                 peer.protocol.write_channel_data(local_cid, dsmsg.encode())
                 continue
+            elif data_present and packet_type == cp.CHORD_MSG_GET_DATA:
+                if log.isEnabledFor(logging.INFO)
+                    log.info("Received ChordGetData packet, fetching.")
+
+                data = yield from self._retrieve_data(fnmsg.node_id)
+
+                drmsg = cp.ChordDataResponse()
+                drmsg.data = data
+
+                peer.protocol.write_channel_data(local_cid, drmsg.encode())
+
+                # After we return the data, since we are honest, there is no
+                # point in the requesting node asking for data from one of our
+                # immediate PeerS through us as a tunnel, so we clean up and
+                # exit.
+                yield from self._close_tunnels(rlist)
+                yield from peer.protocol.close_channel(local_cid)
+                return
             else:
                 rmsg = cp.ChordRelay(pkt)
 
@@ -915,7 +948,7 @@ class ChordTasks(object):
                 asyncio.async(\
                     self._process_find_node_tunnel(\
                         peer, local_cid, rmsg.index, tun_meta, tun_cntr,\
-                        fnmsg.for_data),\
+                        fnmsg.data_mode),\
                     loop=self.loop)
                 yield from tun_meta.jobs.put(fndata)
             elif tun_meta.jobs:
@@ -933,13 +966,14 @@ class ChordTasks(object):
                 e_pkt = rmsg.packets[0]
 
                 if cp.ChordMessage.parse_type(e_pkt) != cp.CHORD_MSG_RELAY:
-                    if not fnmsg.for_data:
+                    if not fnmsg.data_mode.value:
                         log.warning("Peer [{}] sent a non-empty relay packet"\
                             " with other than a relay packet embedded for"\
                             " tunnel [{}]; skipping."\
                                 .format(peer.dbid, rmsg.index))
                         continue
-                    # else: It is likely a StoreData message, which is ok.
+                    # else: It is likely a {Get,Store}Data message, which is
+                    # ok.
 
                 # If all good, tell tunnel process to forward embedded packet.
                 yield from tun_meta.jobs.put(e_pkt)
@@ -953,7 +987,7 @@ class ChordTasks(object):
 
     @asyncio.coroutine
     def _process_find_node_tunnel(\
-            self, rpeer, rlocal_cid, index, tun_meta, tun_cntr, for_data):
+            self, rpeer, rlocal_cid, index, tun_meta, tun_cntr, data_mode):
         assert type(rpeer) is mnpeer.Peer
 
         "Start a tunnel to the Peer in tun_meta by opening a channel and then"
@@ -983,7 +1017,7 @@ class ChordTasks(object):
 
         asyncio.async(\
             self._process_find_node_tunnel_responses(\
-                rpeer, rlocal_cid, index, tun_meta, req_cntr, for_data),
+                rpeer, rlocal_cid, index, tun_meta, req_cntr, data_mode),
             loop=self.loop)
 
         jobs = tun_meta.jobs
@@ -1006,7 +1040,7 @@ class ChordTasks(object):
 
     @asyncio.coroutine
     def _process_find_node_tunnel_responses(\
-            self, rpeer, rlocal_cid, index, tun_meta, req_cntr, for_data):
+            self, rpeer, rlocal_cid, index, tun_meta, req_cntr, data_mode):
         "Process the responses from a tunnel and relay them back to rpeer."
 
         while True:
@@ -1017,14 +1051,27 @@ class ChordTasks(object):
                 break
 
             pkt2 = None
-            if for_data:
+            if data_mode.value:
                 pkt_type = cp.ChordMessage.parse_type(pkt)
-                if pkt_type == cp.CHORD_MSG_DATA_STORED:
-                    # Relay the ack.
+
+                # These exceptions are for packets directly from the immediate
+                # Peer, as opposed to relay packets containing responses from
+                # PeerS being accessed through the immediate Peer acting as a
+                # tunnel.
+
+                if data_mode is cp.DataMode.get\
+                        and pkt_type == cp.CHORD_MSG_DATA_RESPONSE:
+                    #TODO: Verify the data matches the key before relaying.
+                    # Relay the DataResponse from immediate Peer.
+                    pass
+                elif data_mode is cp.DataMode.store\
+                        and pkt_type == cp.CHORD_MSG_DATA_STORED:
+                    # Relay the DataStored from immediate Peer.
                     pass
                 elif pkt_type != cp.CHORD_MSG_RELAY:
-                    # First two packets from a newly opened tunnel in for_data
-                    # mode will be the StorageInterest and PeerList packet.
+                    # First two packets from a newly opened tunnel in data_mode
+                    # mode will be the DataPresence or StorageInterest\
+                    # and PeerList packet.
                     pkt2 = yield from tun_meta.queue.get()
                     if not tun_meta.jobs:
                         return
@@ -1093,7 +1140,11 @@ class ChordTasks(object):
         return True
 
     @asyncio.coroutine
-    def store_data(self, peer, dmsg):
+    def _retrieve_data(self, data_id):
+        #TODO: YOU_ARE_HERE: Retrieve the data.
+
+    @asyncio.coroutine
+    def _store_data(self, peer, dmsg):
         "Store the data block on disk and meta in the database. Returns True"
         " if the data was stored, False otherwise."
 
