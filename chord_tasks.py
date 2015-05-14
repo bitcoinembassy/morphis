@@ -1199,6 +1199,14 @@ class ChordTasks(object):
             if log.isEnabledFor(logging.INFO):
                 log.info("Encrypting [{}] bytes of data.".format(len(data)))
 
+            #TODO: If not too much a performance cost: Hash encrypted data
+            # block and store hash in the db so we can verify it didn't become
+            # corrupted on the filesystem. This is because we will be penalized
+            # by the network if we give invalid data when asked for.
+            #NOTE: Actually, it should be fine as we can do it in another
+            # thread and thus not impact our eventloop thread. We can do it
+            # concurrently with encryption!
+
             # PyCrypto works in blocks, so extra than round block size goes
             # into enc_data_remainder.
             enc_data, enc_data_remainder\
