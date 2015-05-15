@@ -300,21 +300,26 @@ class Shell(cmd.Cmd):
                     hex_string([x ^ y for x, y in zip(r.node_id, node_id)])))
 
     @asyncio.coroutine
-    def do_sd(self, arg):
-        "storedata alias."
-        yield from self.do_storedata(arg)
+    def do_gd(self, arg):
+        "getdata alias."
+        yield from self.do_getdata(arg)
 
     @asyncio.coroutine
     def do_getdata(self, arg):
         "[DATA_KEY] retrieve data for DATA_KEY from the network."
 
-        data_key = bytearray.fromhex(arg)
+        data_key = bytes.fromhex(arg)
 
         start = datetime.today()
         data = yield from self.peer.engine.tasks.send_get_data(data_key)
         diff = datetime.today() - start
         self.writeln("data=[{}].".format(data))
         self.writeln("send_get_data(..) took: {}.".format(diff))
+
+    @asyncio.coroutine
+    def do_sd(self, arg):
+        "storedata alias."
+        yield from self.do_storedata(arg)
 
     @asyncio.coroutine
     def do_storedata(self, arg):

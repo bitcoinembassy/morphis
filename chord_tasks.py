@@ -29,7 +29,7 @@ class Counter(object):
 # instance per request.
 class DataResponseWrapper(object):
     def __init__(self, data_key):
-        self.data_key = None
+        self.data_key = data_key
         self.data = None
 
 class TunnelMeta(object):
@@ -177,6 +177,8 @@ class ChordTasks(object):
 
     @asyncio.coroutine
     def send_get_data(self, data_key):
+        assert type(data_key) is bytes
+
         data_id = enc.generate_ID(data_key)
 
         data = yield from self.send_find_node(\
@@ -776,8 +778,11 @@ class ChordTasks(object):
 
                 packet_type = cp.ChordMessage.parse_type(pkt)
                 if packet_type == cp.CHORD_MSG_PEER_LIST\
-                        or packet_type == cp.CHORD_MSG_DATA_STORED:
-                    break;
+                        or (data_mode is cp.DataMode.get\
+                            and packet_type == cp.CHORD_MSG_DATA_RESPONSE)\
+                        or (data_mode is cp.DataMode.store\
+                            and packet_type == cp.CHORD_MSG_DATA_STORED):
+                    break
                 elif packet_type != cp.CHORD_MSG_RELAY:
                     log.warning("Unexpected packet_type [{}]; ignoring."\
                         .format(packet_type))
