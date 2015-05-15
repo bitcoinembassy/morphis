@@ -1,2 +1,4 @@
+*** OOps, I believe I forgot to make the code consider itself for storage or retreival!
+
 * Needs an insert time prefix/suffix to the key so to efficiently reduce the chance of collisions.
 
