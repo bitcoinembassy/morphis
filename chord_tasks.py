@@ -24,6 +24,14 @@ class Counter(object):
     def __init__(self, value=None):
         self.value = value
 
+#TODO: The existence of the following (DataResponseWrapper) is the indicator
+# that we should really refactor this whole file into a new class that is an
+# instance per request.
+class DataResponseWrapper(object):
+    def __init__(self, data_key):
+        self.data_key = None
+        self.data = None
+
 class TunnelMeta(object):
     def __init__(self, peer=None, jobs=None):
         assert type(peer) is mnpeer.Peer
@@ -36,6 +44,8 @@ class TunnelMeta(object):
 
 class VPeer(object):
     def __init__(self, peer=None, path=None, tun_meta=None):
+        # self.peer can be a mnpeer.Peer for immediate Peer, or a db.Peer for
+        # a non immediate (tunneled) Peer.
         assert type(peer) is Peer or type(peer) is mnpeer.Peer
 
         self.peer = peer
@@ -169,7 +179,10 @@ class ChordTasks(object):
     def send_get_data(self, data_key):
         data_id = enc.generate_ID(data_key)
 
-        yield from self.send_get_data(data_id, for_data=True)
+        data = yield from self.send_find_node(\
+            data_id, for_data=True, data_key=data_key)
+
+        return data
 
     @asyncio.coroutine
     def send_store_data(self, data, key_callback=None):
@@ -183,7 +196,7 @@ class ChordTasks(object):
 
     @asyncio.coroutine
     def send_find_node(self, node_id, input_trie=None, for_data=False,\
-            data=None):
+            data=None, data_key=None):
         "Returns found nodes sorted by closets. If for_data is True then"\
         " this is really {get/store}_data instead of find_node. If data is"\
         " None than it is get_data and the data is returned. Store data"\
@@ -259,7 +272,9 @@ class ChordTasks(object):
         query_cntr = Counter(0)
         task_cntr = Counter(0)
         done_all = asyncio.Event(loop=self.loop)
-        sent_data = Counter(0)
+
+        sent_data_request = Counter(0)
+        data_rw = DataResponseWrapper(data_key)
 
         for depth in range(1, maximum_depth):
             direct_peers_lower = 0
@@ -309,7 +324,7 @@ class ChordTasks(object):
                         self._process_find_node_relay(\
                             node_id, tun_meta, query_cntr, done_all,\
                             task_cntr, result_trie, data_mode,\
-                            far_peers_by_path, sent_data),\
+                            far_peers_by_path, sent_data_request, data_rw),\
                         loop=self.loop)
                 else:
                     tun_meta.jobs += 1
@@ -330,19 +345,31 @@ class ChordTasks(object):
                 log.info("All tasks exited.")
                 break
 
-        if data_mode is cp.DataMode.get:
-            pass
-        elif data_mode is cp.DataMode.store:
+        if data_mode.value:
+            msg_name = "GetData" if data_mode is cp.DataMode.get\
+                else "StoreData"
+
+            # If in get_data mode, then send a GetData message to each Peer
+            # that indicated data presence, one at a time, stopping upon first
+            # success. Right now we will start at closest node, which might
+            # make it harder to Sybil attack targeted data_ids.
+            #TODO: Figure out if that is so, because otherwise we might not
+            # want to grab from the closest for load balancing purposes.
+            # Certainly future versions should have a more advanced algorithm
+            # here that bases the decision on latency, tunnel depth, trust,
+            # Etc.
+
             # If in store_data mode, then send the data to the closest willing
             # nodes that we found.
+
             if log.isEnabledFor(logging.INFO):
-                log.info("Sending data with {} tunnels still open."\
-                    .format(task_cntr.value))
+                log.info("Sending {} with {} tunnels still open."\
+                    .format(msg_name, task_cntr.value))
 
             # Just FYI: There might be no tunnels open if we are connected to
-            # everyone.
+            # everyone, or only immediate PeerS were closest.
 
-            sent_data.value = 1 # Let tunnel process tasks know.
+            sent_data_request.value = 1 # Let tunnel process tasks know.
 
             # We have to process responses from three different cases:
             # 1. Peer reached through a tunnel.
@@ -372,12 +399,17 @@ class ChordTasks(object):
                     continue
 
                 if log.isEnabledFor(logging.DEBUG):
-                    log.debug("Sending StoreData to Peer [{}] and path [{}]."\
-                        .format(row.peer.address, row.path))
+                    log.debug("Sending {} to Peer [{}] and path [{}]."\
+                        .format(msg_name, row.peer.address, row.path))
 
-                msg = cp.ChordStoreData()
-                msg.data_id = node_id
-                msg.data = data
+                if data_mode is cp.DataMode.get:
+                    msg = cp.ChordGetData()
+                else:
+                    assert data_mode is cp.DataMode.store
+
+                    msg = cp.ChordStoreData()
+                    msg.data_id = node_id
+                    msg.data = data
 
                 if tun_meta:
                     # Then this is a Peer reached through a tunnel.
@@ -409,12 +441,26 @@ class ChordTasks(object):
 
                 query_cntr.value += 1
 
+                if data_mode is cp.DataMode.get:
+                    # We only send one at a time, stopping at success.
+                    yield from done_all.wait()
+
+                    if data_rw.data:
+                        # If the data was read and validated successfully, then
+                        # break out of the loop and clean up.
+                        break
+                    else:
+                        # If the data was not validated correctly, then we ask
+                        # the next Peer.
+                        continue
+
                 if query_cntr.value == max_concurrent_queries:
                     break
 
-            if log.isEnabledFor(logging.INFO):
-                log.info("Sent StoreData to [{}] nodes."\
-                    .format(query_cntr.value))
+            if data_mode is cp.DataMode.store:
+                if log.isEnabledFor(logging.INFO):
+                    log.info("Sent StoreData to [{}] nodes."\
+                        .format(query_cntr.value))
 
             yield from done_all.wait()
             done_all.clear()
@@ -422,8 +468,8 @@ class ChordTasks(object):
             assert query_cntr.value == 0
 
             if log.isEnabledFor(logging.INFO):
-                log.info("Finished waiting for StoreData operations; now"\
-                    " cleaning up.")
+                log.info("Finished waiting for {} operations; now"\
+                    " cleaning up.".format(msg_name))
 
         # Close everything now that we are done.
         tasks.clear()
@@ -438,7 +484,8 @@ class ChordTasks(object):
                 return
             else:
                 assert data_mode is cp.DataMode.get
-                #TODO: YOU_ARE_HERE: return data
+
+                return data_rw.data
 
         rnodes = [vpeer.peer for vpeer in result_trie if vpeer and vpeer.path]
 
@@ -560,15 +607,16 @@ class ChordTasks(object):
 
     @asyncio.coroutine
     def _process_find_node_relay(\
-            self, node_id, tun_meta, query_cntr, done_all, task_cntr,
-            result_trie, data_mode, far_peers_by_path, sent_data):
+            self, node_id, tun_meta, query_cntr, done_all, task_cntr,\
+            result_trie, data_mode, far_peers_by_path, sent_data_request,\
+            data_rw):
         "This method processes an open tunnel's responses, processing the"\
         " incoming messages and appending the PeerS in those messages to the"\
         " result_trie. This method does not close any channel to the tunnel,"\
         " and does not stop processing and exit until the channel is closed"\
         " either by the Peer or by our side outside this method."
 
-        assert type(sent_data) is Counter
+        assert type(sent_data_request) is Counter
 
         tun_meta.task_running = True
 
@@ -577,7 +625,7 @@ class ChordTasks(object):
             if not pkt:
                 break
 
-            if sent_data.value\
+            if sent_data_request.value\
                     and cp.ChordMessage.parse_type(pkt) != cp.CHORD_MSG_RELAY:
                 # This co-routine only expects unwrapped packets in the case
                 # we have sent data and are waiting for an ack from the
@@ -588,7 +636,7 @@ class ChordTasks(object):
                 pkts, path = self.unwrap_relay_packets(pkt, data_mode)
 
             if data_mode.value:
-                if sent_data.value:
+                if sent_data_request.value:
                     if data_mode is cp.DataMode.get:
                         if cp.ChordMessage.parse_type(pkts[0])\
                                 != cp.CHORD_MSG_DATA_RESPONSE:
@@ -599,11 +647,14 @@ class ChordTasks(object):
                         rmsg = cp.ChordDataResponse(pkts[0])
 
                         r = yield from self._process_data_response(\
-                            rmsg, tun_meta, path)
+                            rmsg, tun_meta, path, data_rw)
 
                         if not r:
                             # If the data was invalid, we will try from another
                             # Peer (or possibly tunnel).
+                            query_cntr.value -= 1
+                            assert not query_cntr.value
+                            done_all.set()
                             continue
                     else:
                         assert data_mode is cp.DataMode.store
@@ -767,7 +818,7 @@ class ChordTasks(object):
 
     @asyncio.coroutine
     def _wait_for_data_stored(self, data_mode, vpeer, tun_meta, query_cntr,\
-            done_all):
+            done_all, data_rw):
         "This is a coroutine that is used in data_mode and is started for"\
         " immediate PeerS that do not have a tunnel open (and thus a tunnel"\
         " coroutine already processing it."
@@ -781,11 +832,14 @@ class ChordTasks(object):
                 rmsg = cp.ChordDataResponse(pkt)
 
                 r = yield from self._process_data_response(\
-                    rmsg, tun_meta, None)
+                    rmsg, tun_meta, None, data_rw)
 
                 if not r:
                     # If the data was invalid, we will try from another
                     # Peer (or possibly tunnel).
+                    query_cntr.value -= 1
+                    assert not query_cntr.value
+                    done_all.set()
                     continue
             else:
                 assert data_mode is cp.DataMode.store
@@ -1140,10 +1194,31 @@ class ChordTasks(object):
         return True
 
     @asyncio.coroutine
-    def _process_data_response(self, data, tun_meta, path):
-        log.info("GOT DATA!")
-        #TODO: YOU_ARE_HERE: Verify data, if good, do something with it!
-        return True
+    def _process_data_response(self, data_response, tun_meta, path, data_rw):
+        "Processes the DataResponse packet, storing the decrypted data into"\
+        " data_rw if it matches the original key. Returns True on success,"\
+        " False otherwise."
+
+        if log.isEnabledFor(logging.INFO):
+            log.info("Received DataResponse from Peer [{}] and path [{}]."\
+                .format(tun_meta.peer.dbid, path))
+
+        def threadcall():
+            data = enc.decrypt_data_block(data_response.data, data_rw.data_key)
+
+            # Truncate the data to exclude the cipher padding.
+            data = data[:data_response.original_length]
+
+            # Verify that the decrypted data matches the original hash of it.
+            data_key = enc.generate_ID(data)
+
+            if data_key == data_rw.data_key:
+                data_rw.data = data
+                return True
+            else:
+                return False
+
+        return (yield from self.loop.run_in_executor(None, threadcall))
 
     @asyncio.coroutine
     def _retrieve_data(self, data_id):
@@ -1240,8 +1315,11 @@ class ChordTasks(object):
 
             # PyCrypto works in blocks, so extra than round block size goes
             # into enc_data_remainder.
+            def threadcall():
+                return enc.encrypt_data_block(data, data_key)
+
             enc_data, enc_data_remainder\
-                = enc.encrypt_data_block(data, data_key)
+                = self.loop.run_in_executor(None, threadcall)
 
             if log.isEnabledFor(logging.INFO):
                 log.info("Storing [{}] bytes of data."\
