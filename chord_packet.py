@@ -1,5 +1,6 @@
 import llog
 
+from enum import Enum
 import logging
 import struct
 

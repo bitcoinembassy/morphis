@@ -5,6 +5,7 @@ from collections import namedtuple
 from datetime import datetime
 import logging
 import math
+import os
 
 from sqlalchemy import func
 
@@ -329,8 +330,9 @@ class ChordTasks(object):
                 log.info("All tasks exited.")
                 break
 
-#TODO: YOU_ARE_HERE: Update this for get mode.
-        if data is not None:
+        if data_mode is cp.DataMode.get:
+            pass
+        elif data_mode is cp.DataMode.store:
             # If in store_data mode, then send the data to the closest willing
             # nodes that we found.
             if log.isEnabledFor(logging.INFO):
@@ -398,7 +400,8 @@ class ChordTasks(object):
                         # message.
                         asyncio.async(\
                             self._wait_for_data_stored(\
-                                row, tun_meta, query_cntr, done_all),\
+                                data_mode, row, tun_meta, query_cntr,\
+                                done_all),\
                             loop=self.loop)
 
                 tun_meta.peer.protocol.write_channel_data(\
@@ -582,7 +585,7 @@ class ChordTasks(object):
                 pkts = (pkt,)
                 path = None
             else:
-                pkts, path = self.unwrap_relay_packets(pkt, for_data)
+                pkts, path = self.unwrap_relay_packets(pkt, data_mode)
 
             if data_mode.value:
                 if sent_data.value:
@@ -721,23 +724,21 @@ class ChordTasks(object):
             elif len(pkts) > 1:
                 # In data mode, PeerS return their storage intent, as well as a
                 # list of their connected PeerS.
-                if not data_mode.value
-                    invalid = True
-                else:
-                    if data_mode is cp.DataMode.get
+                if data_mode.value:
+                    if data_mode is cp.DataMode.get\
                             and (cp.ChordMessage.parse_type(pkts[0])\
                                     != cp.CHORD_MSG_DATA_PRESENCE\
                                 or cp.ChordMessage.parse_type(pkts[1])\
                                     != cp.CHORD_MSG_PEER_LIST):
                         invalid = True
-                    elif data_mode is cp.DataMode.store
+                    elif data_mode is cp.DataMode.store\
                             and (cp.ChordMessage.parse_type(pkts[0])\
                                     != cp.CHORD_MSG_STORAGE_INTEREST\
                                 or cp.ChordMessage.parse_type(pkts[1])\
                                     != cp.CHORD_MSG_PEER_LIST):
                         invalid = True
-                    else:
-                        assert False
+                else:
+                    invalid = True
 
                 # Break as we reached deepest packets.
                 break
@@ -765,7 +766,8 @@ class ChordTasks(object):
         return pkts, path
 
     @asyncio.coroutine
-    def _wait_for_data_stored(self, vpeer, tun_meta, query_cntr, done_all):
+    def _wait_for_data_stored(self, data_mode, vpeer, tun_meta, query_cntr,\
+            done_all):
         "This is a coroutine that is used in data_mode and is started for"\
         " immediate PeerS that do not have a tunnel open (and thus a tunnel"\
         " coroutine already processing it."
@@ -779,7 +781,7 @@ class ChordTasks(object):
                 rmsg = cp.ChordDataResponse(pkt)
 
                 r = yield from self._process_data_response(\
-                    rmsg, tun_meta, path)
+                    rmsg, tun_meta, None)
 
                 if not r:
                     # If the data was invalid, we will try from another
@@ -910,7 +912,7 @@ class ChordTasks(object):
                 peer.protocol.write_channel_data(local_cid, dsmsg.encode())
                 continue
             elif data_present and packet_type == cp.CHORD_MSG_GET_DATA:
-                if log.isEnabledFor(logging.INFO)
+                if log.isEnabledFor(logging.INFO):
                     log.info("Received ChordGetData packet, fetching.")
 
                 data, data_l = yield from self._retrieve_data(fnmsg.node_id)
@@ -1170,7 +1172,7 @@ class ChordTasks(object):
         def iocall():
             data_file = open(
                 DATA_BLOCK_FILE_PATH\
-                    .format(self.engine.node.instance, data_block_id),
+                    .format(self.engine.node.instance, data_block.id),
                 "rb")
 
             return data_file.read()
@@ -1274,7 +1276,7 @@ class ChordTasks(object):
 
             def iocall():
                 os.remove(DATA_BLOCK_FILE_PATH\
-                    .format(self.engine.node.instance, data_block_id),
+                    .format(self.engine.node.instance, data_block_id))
 
             try:
                 yield from self.loop.run_in_executor(None, iocall)
