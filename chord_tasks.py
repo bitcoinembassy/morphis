@@ -1191,11 +1191,6 @@ class ChordTasks(object):
         try:
             data_block_file_path = "data/store-{}/{}.blk"
 
-            new_file = open(
-                data_block_file_path
-                    .format(self.engine.node.instance, data_block_id),
-                "wb")
-
             if log.isEnabledFor(logging.INFO):
                 log.info("Encrypting [{}] bytes of data.".format(len(data)))
 
@@ -1217,6 +1212,11 @@ class ChordTasks(object):
                     .format(len(enc_data) + len(enc_data_remainder)))
 
             def iocall():
+                new_file = open(
+                    data_block_file_path
+                        .format(self.engine.node.instance, data_block_id),
+                    "wb")
+
                 new_file.write(enc_data)
                 new_file.write(enc_data_remainder)
 
