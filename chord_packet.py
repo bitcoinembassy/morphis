@@ -178,7 +178,7 @@ class ChordFindNode(ChordMessage):
     def encode(self):
         nbuf = super().encode()
         nbuf += sshtype.encodeBinary(self.node_id)
-        nbuf += struct.pack("?", self.data_mode)
+        nbuf += struct.pack("B", self.data_mode.value)
 
         return nbuf
 
@@ -187,7 +187,7 @@ class ChordFindNode(ChordMessage):
         i = 1
         l, self.node_id = sshtype.parseBinary(self.buf[i:])
         i += l
-        self.data_mode = DataMode(struct.unpack("?", self.buf[i:i+1])[0])
+        self.data_mode = DataMode(struct.unpack("B", self.buf[i:i+1])[0])
 
 class ChordGetData(ChordMessage):
     def __init__(self, buf = None):

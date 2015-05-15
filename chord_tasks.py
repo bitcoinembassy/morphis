@@ -387,10 +387,19 @@ class ChordTasks(object):
                 if row is False:
                     # Row is ourself.
                     continue
-                if not row.will_store:
-                    # The node may be close to id, but it says that it does not
-                    # want to store the proposed data for whatever reason.
-                    continue
+
+                if data_mode is cp.DataMode.get:
+                    if not row.data_present:
+                        # This node doesn't have our data.
+                        continue
+                else:
+                    assert data_mode is cp.DataMode.store
+
+                    if not row.will_store:
+                        # The node may be close to id, but it says that it
+                        # does not want to store the proposed data for whatever
+                        # reason.
+                        continue
 
                 tun_meta = row.tun_meta
                 if tun_meta and not tun_meta.queue:
@@ -433,7 +442,7 @@ class ChordTasks(object):
                         asyncio.async(\
                             self._wait_for_data_stored(\
                                 data_mode, row, tun_meta, query_cntr,\
-                                done_all),\
+                                done_all, data_rw),\
                             loop=self.loop)
 
                 tun_meta.peer.protocol.write_channel_data(\
@@ -462,8 +471,10 @@ class ChordTasks(object):
                     log.info("Sent StoreData to [{}] nodes."\
                         .format(query_cntr.value))
 
-            yield from done_all.wait()
-            done_all.clear()
+            if query_cntr.value:
+                # query_cntr can be zero if no PeerS were tried.
+                yield from done_all.wait()
+                done_all.clear()
 
             assert query_cntr.value == 0
 
@@ -899,7 +910,7 @@ class ChordTasks(object):
         if fnmsg.data_mode.value:
             # In for_data mode we respond with two packets.
             if fnmsg.data_mode is cp.DataMode.get:
-                data_present = self.check_has_data(fnmsg.node_id)
+                data_present = yield from self._check_has_data(fnmsg.node_id)
                 pmsg = cp.ChordDataPresence()
                 pmsg.data_present = data_present
 
@@ -908,7 +919,7 @@ class ChordTasks(object):
 
                 peer.protocol.write_channel_data(local_cid, pmsg.encode())
             elif fnmsg.data_mode is cp.DataMode.store:
-                will_store = yield from self.check_do_want_data(fnmsg.node_id)
+                will_store = yield from self._check_do_want_data(fnmsg.node_id)
                 imsg = cp.ChordStorageInterest()
                 imsg.will_store = will_store
 
@@ -1187,7 +1198,21 @@ class ChordTasks(object):
                 tun_meta.peer.protocol.close_channel(tun_meta.local_cid)
 
     @asyncio.coroutine
-    def check_do_want_data(self, data_id):
+    def _check_has_data(self, data_id):
+        def dbcall():
+            with self.engine.node.db.open_session() as sess:
+                q = sess.query(func.count("*"))
+                q = q.filter(DataBlock.data_id == data_id)
+
+                if q.scalar() > 0:
+                    return True
+                else:
+                    return False
+
+        return (yield from self.loop.run_in_executor(None, dbcall))
+
+    @asyncio.coroutine
+    def _check_do_want_data(self, data_id):
         #TODO: FIXME: Make this intelligent; based on closeness, diskspace, Etc.
         # Probably something like: if space available, return true. else, return
         # true with probability based upon closeness.
@@ -1319,7 +1344,7 @@ class ChordTasks(object):
                 return enc.encrypt_data_block(data, data_key)
 
             enc_data, enc_data_remainder\
-                = self.loop.run_in_executor(None, threadcall)
+                = yield from self.loop.run_in_executor(None, threadcall)
 
             if log.isEnabledFor(logging.INFO):
                 log.info("Storing [{}] bytes of data."\
