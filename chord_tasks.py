@@ -47,6 +47,8 @@ class VPeer(object):
 EMPTY_PEER_LIST_MESSAGE = cp.ChordPeerList(peers=[])
 EMPTY_PEER_LIST_PACKET = EMPTY_PEER_LIST_MESSAGE.encode()
 
+DATA_BLOCK_FILE_PATH = "data/store-{}/{}.blk"
+
 class ChordTasks(object):
     def __init__(self, engine):
         self.engine = engine
@@ -850,7 +852,7 @@ class ChordTasks(object):
 
                 peer.protocol.write_channel_data(local_cid, pmsg.encode())
             elif fnmsg.data_mode is cp.DataMode.store:
-                will_store = self.check_do_want_data(fnmsg.node_id)
+                will_store = yield from self.check_do_want_data(fnmsg.node_id)
                 imsg = cp.ChordStorageInterest()
                 imsg.will_store = will_store
 
@@ -911,10 +913,11 @@ class ChordTasks(object):
                 if log.isEnabledFor(logging.INFO)
                     log.info("Received ChordGetData packet, fetching.")
 
-                data = yield from self._retrieve_data(fnmsg.node_id)
+                data, data_l = yield from self._retrieve_data(fnmsg.node_id)
 
                 drmsg = cp.ChordDataResponse()
                 drmsg.data = data
+                drmsg.original_length = data_l
 
                 peer.protocol.write_channel_data(local_cid, drmsg.encode())
 
@@ -1127,6 +1130,7 @@ class ChordTasks(object):
             yield from\
                 tun_meta.peer.protocol.close_channel(tun_meta.local_cid)
 
+    @asyncio.coroutine
     def check_do_want_data(self, data_id):
         #TODO: FIXME: Make this intelligent; based on closeness, diskspace, Etc.
         # Probably something like: if space available, return true. else, return
@@ -1141,7 +1145,39 @@ class ChordTasks(object):
 
     @asyncio.coroutine
     def _retrieve_data(self, data_id):
-        #TODO: YOU_ARE_HERE: Retrieve the data.
+        "Retrieve data for data_id from the file system (and meta data from"\
+        " the database."\
+        "returns: data, original_length"\
+        "   original_length is the length of the data before it was encrypted."
+
+        def dbcall():
+            with self.engine.node.db.open_session() as sess:
+                data_block = sess.query(DataBlock).filter(\
+                    DataBlock.data_id == data_id).first()
+
+                if not data_block:
+                    return None
+
+                sess.expunge(data_block)
+
+                return data_block
+
+        data_block = yield from self.loop.run_in_executor(None, dbcall)
+
+        if not data_block:
+            return None, None
+
+        def iocall():
+            data_file = open(
+                DATA_BLOCK_FILE_PATH\
+                    .format(self.engine.node.instance, data_block_id),
+                "rb")
+
+            return data_file.read()
+
+        enc_data = yield from self.loop.run_in_executor(None, iocall)
+
+        return enc_data, data_block.length
 
     @asyncio.coroutine
     def _store_data(self, peer, dmsg):
@@ -1189,8 +1225,6 @@ class ChordTasks(object):
             return False
 
         try:
-            data_block_file_path = "data/store-{}/{}.blk"
-
             if log.isEnabledFor(logging.INFO):
                 log.info("Encrypting [{}] bytes of data.".format(len(data)))
 
@@ -1213,7 +1247,7 @@ class ChordTasks(object):
 
             def iocall():
                 new_file = open(
-                    data_block_file_path
+                    DATA_BLOCK_FILE_PATH\
                         .format(self.engine.node.instance, data_block_id),
                     "wb")
 
@@ -1239,7 +1273,8 @@ class ChordTasks(object):
             yield from self.loop.run_in_executor(None, dbcall)
 
             def iocall():
-                os.remove(data_block_file_path)
+                os.remove(DATA_BLOCK_FILE_PATH\
+                    .format(self.engine.node.instance, data_block_id),
 
             try:
                 yield from self.loop.run_in_executor(None, iocall)
