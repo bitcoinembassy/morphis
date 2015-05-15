@@ -1,0 +1,2 @@
+* Needs an insert time prefix/suffix to the key so to efficiently reduce the chance of collisions.
+
