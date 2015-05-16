@@ -1383,8 +1383,10 @@ class ChordTasks(object):
                 = yield from self.loop.run_in_executor(None, threadcall)
 
             if log.isEnabledFor(logging.INFO):
-                log.info("Storing [{}] bytes of data."\
-                    .format(len(enc_data) + len(enc_data_remainder)))
+                tlen = len(enc_data)
+                if enc_data_remainder:
+                    tlen += len(enc_data_remainder)
+                log.info("Storing [{}] bytes of data.".format(tlen))
 
             def iocall():
                 new_file = open(
@@ -1393,7 +1395,8 @@ class ChordTasks(object):
                     "wb")
 
                 new_file.write(enc_data)
-                new_file.write(enc_data_remainder)
+                if enc_data_remainder:
+                    new_file.write(enc_data_remainder)
 
             yield from self.loop.run_in_executor(None, iocall)
 
