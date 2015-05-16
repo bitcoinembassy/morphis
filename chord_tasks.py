@@ -388,7 +388,55 @@ class ChordTasks(object):
             for row in result_trie:
                 if row is False:
                     # Row is ourself.
-                    continue
+                    if data_mode is cp.DataMode.get:
+                        data_present =\
+                            yield from self._check_has_data(node_id)
+
+                        if not data_present:
+                            continue
+
+                        log.info("We have the data; fetching.")
+
+                        enc_data, data_l =\
+                            yield from self._retrieve_data(node_id)
+
+                        drmsg = cp.ChordDataResponse()
+                        drmsg.data = enc_data
+                        drmsg.original_length = data_l
+
+                        r = yield from self._process_data_response(\
+                            drmsg, None, None, data_rw)
+
+                        if not r:
+                            # Data was invalid somehow!
+                            log.warning("Data from ourselves was invalid!")
+                            continue
+
+                        # Otherwise, break out of the loop as we've fetched the
+                        # data.
+                        break
+                    else:
+                        assert data_mode is cp.DataMode.store
+
+                        will_store = self._check_do_want_data(node_id)
+
+                        if not will_store:
+                            continue
+
+                        log.info("We are choosing to additionally store the"\
+                            " data locally.")
+
+                        dmsg = cp.ChordStoreData()
+                        dmsg.data = data
+                        dmsg.data_id = node_id
+
+                        r = yield from self._store_data(None, dmsg)
+
+                        if not r:
+                            log.warning("We failed to store the data.")
+
+                        # Store it still elsewhere if others want it as well.
+                        continue
 
                 if data_mode is cp.DataMode.get:
                     if not row.data_present:
@@ -497,6 +545,9 @@ class ChordTasks(object):
                 return
             else:
                 assert data_mode is cp.DataMode.get
+
+                if not data_rw.data:
+                    log.info("Failed to find the data!")
 
                 return data_rw.data
 
@@ -1265,8 +1316,9 @@ class ChordTasks(object):
         " False otherwise."
 
         if log.isEnabledFor(logging.INFO):
+            peer_dbid = tun_meta.peer.dbid if tun_meta else "<self>"
             log.info("Received DataResponse from Peer [{}] and path [{}]."\
-                .format(tun_meta.peer.dbid, path))
+                .format(peer_dbid, path))
 
         def threadcall():
             data = enc.decrypt_data_block(data_response.data, data_rw.data_key)
@@ -1326,6 +1378,8 @@ class ChordTasks(object):
         "Store the data block on disk and meta in the database. Returns True"
         " if the data was stored, False otherwise."
 
+        peer_dbid = peer.dbid if peer else "<self>"
+
         data = dmsg.data
 
         data_key = enc.generate_ID(data)
@@ -1333,7 +1387,7 @@ class ChordTasks(object):
 
         if data_id != dmsg.data_id:
             log.warning("Peer (dbid=[{}]) sent a data_id that didn't match"\
-                " the data!".format(peer.dbid))
+                " the data!".format(peer_dbid))
 
         def dbcall():
             with self.engine.node.db.open_session() as sess:
