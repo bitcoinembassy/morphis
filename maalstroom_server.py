@@ -23,16 +23,27 @@ class DataResponseWrapper(object):
         self.timed_out = False
 
 class MaalstroomHandler(BaseHTTPRequestHandler):
+    def __init__(self, a, b, c):
+        super().__init__(a, b, c)
+
+        self.protocol_version = "HTTP/1.1"
+
     def do_GET(self):
         try:
-            data_key = self.path[1:]
-            if data_key[-1] == '/':
-                data_key = data_key[:-1]
+            data_key_hex = self.path[1:]
+            if data_key_hex[-1] == '/':
+                data_key_hex = data_key_hex[:-1]
 
             if log.isEnabledFor(logging.INFO):
-                log.info("data_key=[{}].".format(data_key))
+                log.info("data_key_hex=[{}].".format(data_key_hex))
 
-            data_key = bytes.fromhex(data_key)
+            if self.headers["If-None-Match"] == data_key_hex:
+                self.send_response(304)
+                self.send_header("ETag", data_key_hex)
+                self.end_headers()
+                return
+
+            data_key = bytes.fromhex(data_key_hex)
         except:
             log.exception("fromhex(..)")
 
@@ -50,7 +61,10 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
 
         if data_rw.data:
             self.send_response(200)
-            self.send_header("Content-type", "text/html")
+            self.send_header("Content-Type", "text/html")
+            self.send_header("Content-Length", len(data_rw.data))
+            self.send_header("Cache-Control", "public")
+            self.send_header("ETag", data_key_hex)
             self.end_headers()
 
             self.wfile.write(data_rw.data)
@@ -95,9 +109,9 @@ def init_maalstroom_server(the_node):
         # maalstroom process even when running in multi-instance test mode.
         return
 
-    log.info("Starting Maalstroom server instance.")
-
     node = the_node
+
+    log.info("Starting Maalstroom server instance.")
 
     server = HTTPServer((host, port), MaalstroomHandler)
 
