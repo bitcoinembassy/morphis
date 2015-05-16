@@ -8,7 +8,7 @@ from threading import Event
 log = logging.getLogger(__name__)
 
 host = "localhost"
-port = 5555
+port = 4251
 
 node = None
 server = None
