@@ -633,6 +633,38 @@ class ChordTasks(object):
 
         tun_meta.task_running = True
 
+        try:
+            r = yield from self.__process_find_node_relay(\
+                node_id, tun_meta, query_cntr, done_all, task_cntr,\
+                result_trie, data_mode, far_peers_by_path, sent_data_request,\
+                data_rw)
+
+            if not r:
+                return
+        except:
+            log.exception("__process_find_node_relay(..)")
+
+        if tun_meta.jobs:
+            # This tunnel closed while there were still pending jobs, so
+            # consider those jobs now completed and subtract them from the
+            # count of ongoing jobs.
+            query_cntr.value -= tun_meta.jobs
+            if not query_cntr.value:
+                done_all.set()
+            tun_meta.jobs = 0
+
+        # Mark tunnel as closed.
+        tun_meta.queue = None
+        tun_meta.task_running = False
+        # Update counter of open tunnels.
+        task_cntr.value -= 1
+
+    @asyncio.coroutine
+    def __process_find_node_relay(\
+            self, node_id, tun_meta, query_cntr, done_all, task_cntr,\
+            result_trie, data_mode, far_peers_by_path, sent_data_request,\
+            data_rw):
+        "Inner function for above call."
         while True:
             pkt = yield from tun_meta.queue.get()
             if not pkt:
@@ -683,7 +715,7 @@ class ChordTasks(object):
                     query_cntr.value -= 1
                     if not query_cntr.value:
                         done_all.set()
-                        return
+                        return False
 
                     continue
 
@@ -748,20 +780,7 @@ class ChordTasks(object):
             if not query_cntr.value:
                 done_all.set()
 
-        if tun_meta.jobs:
-            # This tunnel closed while there were still pending jobs, so
-            # consider those jobs now completed and subtract them from the
-            # count of ongoing jobs.
-            query_cntr.value -= tun_meta.jobs
-            if not query_cntr.value:
-                done_all.set()
-            tun_meta.jobs = 0
-
-        # Mark tunnel as closed.
-        tun_meta.queue = None
-        tun_meta.task_running = False
-        # Update counter of open tunnels.
-        task_cntr.value -= 1
+        return True
 
     def unwrap_relay_packets(self, pkt, data_mode):
         "Returns the inner most packet and the path stored in the relay"\
