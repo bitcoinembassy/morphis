@@ -9,6 +9,7 @@ from sqlalchemy import update
 
 import packet as mnetpacket
 import rsakey
+import maalstroom_server as maalstroom
 import mn1
 from mutil import hex_dump
 import chord
@@ -21,6 +22,7 @@ loop = None
 nodes = []
 
 dumptasksonexit = False
+maalstroom_enabled = False
 
 class Node():
     def __init__(self, loop, instance_id=None, dburl=None):
@@ -135,6 +137,9 @@ def main():
         node.stop()
     loop.close()
 
+    if maalstroom_enabled:
+        maalstroom.shutdown()
+
     log.info("Shutdown.")
 
 @asyncio.coroutine
@@ -148,7 +153,7 @@ def _main():
 
 @asyncio.coroutine
 def __main():
-    global loop, nodes, dumptasksonexit
+    global loop, nodes, dumptasksonexit, maalstroom_enabled
 
     print("Launching node.")
     log.info("Launching node.")
@@ -177,6 +182,9 @@ def __main():
     parser.add_argument("-l", dest="logconf",\
         help="Specify alternate logging.ini [IF SPECIFIED, THIS MUST BE THE"\
             " FIRST PARAMETER!].")
+    parser.add_argument("--dm", action="store_true",\
+        help="Disable Maalstroom server.")
+
     args = parser.parse_args()
 
     addpeer = args.addpeer
@@ -204,6 +212,7 @@ def __main():
         mn1.enable_cleartext_transport()
     dburl = args.dburl
     dumptasksonexit = args.dumptasksonexit
+    maalstroom_enabled = False if args.dm else True
 
     while True:
 
@@ -229,6 +238,9 @@ def __main():
             node.init_store()
 
             node.init_chord()
+
+            if maalstroom_enabled:
+                yield from maalstroom.init_maalstroom_server(node)
 
             if addpeer != None:
                 node.chord_engine.connect_peers = addpeer
