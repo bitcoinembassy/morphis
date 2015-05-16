@@ -682,11 +682,16 @@ class ChordTasks(object):
                     log.debug("Unwrapping ChordRelay packet.")
                 pkts, path = self.unwrap_relay_packets(pkt, data_mode)
 
-            if data_mode.value:
+            pkt_type = cp.ChordMessage.parse_type(pkts[0])
+
+            if data_mode.value and pkt_type != cp.CHORD_MSG_PEER_LIST:
+                # Above pkt_type check is because a node that had no closer
+                # PeerS for us and didn't have or want data will have closed
+                # the channel and thus caused only an empty PeerList to be
+                # sent to us.
                 if sent_data_request.value:
                     if data_mode is cp.DataMode.get:
-                        if cp.ChordMessage.parse_type(pkts[0])\
-                                != cp.CHORD_MSG_DATA_RESPONSE:
+                        if pkt_type != cp.CHORD_MSG_DATA_RESPONSE:
                             # They are too late! We are only looking for
                             # DataResponse messages now.
                             continue
@@ -706,8 +711,7 @@ class ChordTasks(object):
                     else:
                         assert data_mode is cp.DataMode.store
 
-                        if cp.ChordMessage.parse_type(pkts[0])\
-                                != cp.CHORD_MSG_DATA_STORED:
+                        if pkt_type != cp.CHORD_MSG_DATA_STORED:
                             # They are too late! We are only looking for
                             # DataStored messages now.
                             continue
