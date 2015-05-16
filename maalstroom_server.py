@@ -25,6 +25,8 @@ class DataResponseWrapper(object):
 class MaalstroomHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         data_key = self.path[1:]
+        if data_key[-1] == '/':
+            data_key = data_key[:-1]
 
         if log.isEnabledFor(logging.INFO):
             log.info("data_key=[{}].".format(data_key))
