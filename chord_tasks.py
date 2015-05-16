@@ -711,6 +711,11 @@ class ChordTasks(object):
                             # They are too late! We are only looking for
                             # DataStored messages now.
                             continue
+                        else:
+                            if log.isEnabledFor(logging.DEBUG):
+                                log.debug("Received DataStored message from"\
+                                    " Peer (dbid={})."\
+                                        .format(tun_meta.peer.dbid, path))
 
                     query_cntr.value -= 1
                     if not query_cntr.value:
