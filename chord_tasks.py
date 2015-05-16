@@ -646,6 +646,8 @@ class ChordTasks(object):
                 pkts = (pkt,)
                 path = None
             else:
+                if log.isEnabledFor(logging.DEBUG):
+                    log.debug("Unwrapping ChordRelay packet.")
                 pkts, path = self.unwrap_relay_packets(pkt, data_mode)
 
             if data_mode.value:
@@ -819,6 +821,8 @@ class ChordTasks(object):
             #FIXME: We should probably update the hostility tracking of both
             # the Peer and the tunnel Peer instead of just ignoring this
             # invalid state.
+            log.warning("Unwrapping found invalid state.")
+
             pkts = []
 
             if data_mode is cp.DataMode.get:
@@ -829,6 +833,9 @@ class ChordTasks(object):
             tpeerlist = cp.ChordPeerList()
             tpeerlist.peers = []
             pkts.append(tpeerlist.encode())
+
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("Unwrapped {} packets.".format(len(pkts)))
 
         return pkts, path
 
