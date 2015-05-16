@@ -195,7 +195,7 @@ def __main():
     if bindaddr:
         bindaddr.split(':') # Just to preemptively test.
     else:
-        bindaddr = "127.0.0.1:5555"
+        bindaddr = "127.0.0.1:4250"
     db_pool_size = args.dbpoolsize
     instanceoffset = args.instanceoffset
     if instanceoffset:

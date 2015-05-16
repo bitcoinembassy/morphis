@@ -1,7 +1,7 @@
 import time
 import zmq
 
-connect_address = "tcp://localhost:5555"
+connect_address = "tcp://localhost:4250"
 
 context = zmq.Context()
 socket = context.socket(zmq.REQ)
