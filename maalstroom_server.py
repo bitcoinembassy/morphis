@@ -75,16 +75,13 @@ def _send_get_data(data_key, data_rw):
             node.chord_engine.tasks.send_get_data(data_key),\
             loop=node.loop)
 
-        try:
-            yield from asyncio.wait_for(future, 1.0, loop=node.loop)
-        except asyncio.TimeoutError:
-            data_rw.timed_out = True
-            return
+        yield from asyncio.wait_for(future, 1.0, loop=node.loop)
 
         data_rw.data = future.result()
+    except asyncio.TimeoutError:
+        data_rw.timed_out = True
     except:
         log.exception("send_get_data()")
-
         data_rw.exception = True
 
     data_rw.is_done.set()
