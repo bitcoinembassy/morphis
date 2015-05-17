@@ -165,16 +165,14 @@ def __main():
         help="Add a node to peer list.", action="append")
     parser.add_argument("--bind",\
         help="Specify bind address (host:port).")
-    parser.add_argument("--dbpoolsize", type=int,\
-        help="Specify the maximum amount of database connections.")
-    parser.add_argument("--nodecount", type=int,\
-        help="Specify amount of nodes to start.")
-    parser.add_argument("--parallellaunch", action="store_true",\
-        help="Enable parallel launch of the nodecount nodes.")
     parser.add_argument("--cleartexttransport", action="store_true",\
         help="Clear text transport and no authentication.")
+    parser.add_argument("--dbpoolsize", type=int,\
+        help="Specify the maximum amount of database connections.")
     parser.add_argument("--dburl",\
         help="Specify the database url to use.")
+    parser.add_argument("--dm", action="store_true",\
+        help="Disable Maalstroom server.")
     parser.add_argument("--dumptasksonexit", action="store_true",\
         help="Dump async task list on exit.")
     parser.add_argument("--instanceoffset", type=int,\
@@ -182,8 +180,10 @@ def __main():
     parser.add_argument("-l", dest="logconf",\
         help="Specify alternate logging.ini [IF SPECIFIED, THIS MUST BE THE"\
             " FIRST PARAMETER!].")
-    parser.add_argument("--dm", action="store_true",\
-        help="Disable Maalstroom server.")
+    parser.add_argument("--nodecount", type=int,\
+        help="Specify amount of nodes to start.")
+    parser.add_argument("--parallellaunch", action="store_true",\
+        help="Enable parallel launch of the nodecount nodes.")
 
     args = parser.parse_args()
 
@@ -196,23 +196,23 @@ def __main():
         bindaddr.split(':') # Just to preemptively test.
     else:
         bindaddr = "127.0.0.1:4250"
+    if args.cleartexttransport:
+        log.info("Enabling cleartext transport.")
+        mn1.enable_cleartext_transport()
     db_pool_size = args.dbpoolsize
+    dburl = args.dburl
+    dumptasksonexit = args.dumptasksonexit
     instanceoffset = args.instanceoffset
     if instanceoffset:
         instance += instanceoffset
         host, port = bindaddr.split(':')
         port = int(port) + instanceoffset
         bindaddr = "{}:{}".format(host, port)
+    maalstroom_enabled = False if args.dm else True
     nodecount = args.nodecount
     if nodecount == None:
         nodecount = 1
     parallel_launch = args.parallellaunch
-    if args.cleartexttransport:
-        log.info("Enabling cleartext transport.")
-        mn1.enable_cleartext_transport()
-    dburl = args.dburl
-    dumptasksonexit = args.dumptasksonexit
-    maalstroom_enabled = False if args.dm else True
 
     while True:
 
