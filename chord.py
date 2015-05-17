@@ -948,6 +948,11 @@ class ChordEngine():
 
             return True
 
+#NOTE: The problem is that SQLite only allows bitwise operations on integer
+# columns, or at least it does NOT work on blob/bytea columns. The other
+# problem is then that integer can only hold upto 64 bits, so the node_id will
+# have to be broken up into 8 columns (as it is currently 512 bits).
+#
 # Example of non-working db code. Sqlite seems to break when order by contains
 # any bitwise operations. (It just returns the rows in order of id.)
 #            def dbcall():
