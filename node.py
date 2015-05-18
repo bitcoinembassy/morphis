@@ -239,7 +239,7 @@ def __main():
         help="Specify the database url to use.")
     parser.add_argument("--dm", action="store_true",\
         help="Disable Maalstroom server.")
-    parser.add_argument("--dssize",\
+    parser.add_argument("--dssize", type=int,\
         help="Specify the datastore size in standard non-IEC-redefined JEDEC"\
             " MBs (default is one gigabyte, as in 1024^3 bytes). Morphis does"\
             " not deal in MiecBytes (1 MiecB = 1000^2 bytes), but in"\
