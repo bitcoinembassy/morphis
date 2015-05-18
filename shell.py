@@ -341,8 +341,11 @@ class Shell(cmd.Cmd):
             self.writeln("data_key=[{}].".format(hex_string(data_key)))
 
         start = datetime.today()
-        yield from self.peer.engine.tasks.send_store_data(data, key_callback)
+        storing_nodes =\
+            yield from self.peer.engine.tasks.send_store_data(\
+                data, key_callback)
         diff = datetime.today() - start
+        self.writeln("storing_nodes=[{}].".format(storing_nodes))
         self.writeln("send_store_data(..) took: {}.".format(diff))
 
     @asyncio.coroutine

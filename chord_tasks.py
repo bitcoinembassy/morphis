@@ -185,13 +185,19 @@ class ChordTasks(object):
 
     @asyncio.coroutine
     def send_store_data(self, data, key_callback=None):
+        "Sends a StoreData request, returning the count of nodes that claim"\
+        " to have stored it."
+
         # data_id is a double hash due to the anti-entrapment feature.
         data_key = enc.generate_ID(data)
         if key_callback:
             key_callback(data_key)
         data_id = enc.generate_ID(data_key)
 
-        yield from self.send_find_node(data_id, for_data=True, data=data)
+        storing_nodes =\
+            yield from self.send_find_node(data_id, for_data=True, data=data)
+
+        return storing_nodes
 
     @asyncio.coroutine
     def send_find_node(self, node_id, input_trie=None, for_data=False,\
@@ -199,7 +205,8 @@ class ChordTasks(object):
         "Returns found nodes sorted by closets. If for_data is True then"\
         " this is really {get/store}_data instead of find_node. If data is"\
         " None than it is get_data and the data is returned. Store data"\
-        " currently returns nothing."
+        " currently returns the count of nodes that claim to have stored the"\
+        " data."
 
         if for_data:
             data_mode = cp.DataMode.get if data is None else cp.DataMode.store
@@ -345,6 +352,8 @@ class ChordTasks(object):
                 break
 
         if data_mode.value:
+            storing_nodes = 0
+
             msg_name = "GetData" if data_mode is cp.DataMode.get\
                 else "StoreData"
 
@@ -433,6 +442,8 @@ class ChordTasks(object):
 
                         if not r:
                             log.info("We failed to store the data.")
+                        else:
+                            storing_nodes += 1
 
                         # Store it still elsewhere if others want it as well.
                         continue
@@ -517,9 +528,11 @@ class ChordTasks(object):
                     break
 
             if data_mode is cp.DataMode.store:
+                storing_nodes += query_cntr.value
+
                 if log.isEnabledFor(logging.INFO):
                     log.info("Sent StoreData to [{}] nodes."\
-                        .format(query_cntr.value))
+                        .format(storing_nodes))
 
             if query_cntr.value:
                 # query_cntr can be zero if no PeerS were tried.
@@ -541,8 +554,7 @@ class ChordTasks(object):
 
         if data_mode.value:
             if data_mode is cp.DataMode.store:
-                # In store mode we don't return the peers to save CPU for now.
-                return
+                return storing_nodes
             else:
                 assert data_mode is cp.DataMode.get
 
@@ -1325,7 +1337,11 @@ class ChordTasks(object):
                 < self.engine.node.datastore_max_size:
             return True, False
 
-        distance = self.engine.calc_raw_distance(data_id, self.engine.node_id)
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("Datastore is full, checking if proposed block is"\
+                " closer than enough stored blocks to fit with a purge.")
+
+        distance = self.engine.calc_raw_distance(self.engine.node_id, data_id)
 
         # If there is space contention, then we do a more complex algorithm
         # in order to see if we want to store it.
@@ -1342,9 +1358,15 @@ class ChordTasks(object):
                     freeable_space += block.original_size
 
                     if freeable_space >= mnnode.MAX_DATA_BLOCK_SIZE:
+                        if log.isEnabledFor(logging.DEBUG):
+                            log.debug("Found enough purgable blocks to fit"\
+                                " new proposed block.")
                         return True
 
                 assert freeable_space < mnnode.MAX_DATA_BLOCK_SIZE
+                if log.isEnabledFor(logging.DEBUG):
+                    log.debug("Not enough purgable blocks to fit new"\
+                        " proposed block.")
                 return False
 
         return (yield from self.loop.run_in_executor(None, dbcall)), True
@@ -1438,7 +1460,7 @@ class ChordTasks(object):
             log.warning("Peer (dbid=[{}]) sent a data_id that didn't match"\
                 " the data!".format(peer_dbid))
 
-        distance = self.engine.calc_raw_distance(data_id, self.engine.node_id)
+        distance = self.engine.calc_raw_distance(self.engine.node_id, data_id)
         original_size = len(data)
 
         def dbcall():
