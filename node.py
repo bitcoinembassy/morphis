@@ -252,6 +252,8 @@ def __main():
     parser.add_argument("-l", dest="logconf",\
         help="Specify alternate logging.ini [IF SPECIFIED, THIS MUST BE THE"\
             " FIRST PARAMETER!].")
+    parser.add_argument("--maxconn", type=int,\
+        help="Specify the maximum connections to seek.")
     parser.add_argument("--nodecount", type=int,\
         help="Specify amount of nodes to start.")
     parser.add_argument("--parallellaunch", action="store_true",\
@@ -316,6 +318,10 @@ def __main():
                 node.init_store(dssize << 20, reinitds) # Convert MBs to bytes.
 
             node.init_chord()
+
+            if args.maxconn:
+                node.chord_engine.maximum_connections = args.maxconn
+                node.chord_engine.hard_maximum_connections = args.maxconn * 2
 
             if maalstroom_enabled:
                 yield from maalstroom.init_maalstroom_server(node)
