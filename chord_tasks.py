@@ -660,12 +660,12 @@ class ChordTasks(object):
                 log.debug("Peer (dbid=[{}]) returned PeerList containing Peer"\
                     " (address=[{}]).".format(peer.dbid, rpeer.address))
 
-            vpeer = VPeer(rpeer, [idx], tun_meta)
+            tvpeer = VPeer(rpeer, [idx], tun_meta)
 
             key = bittrie.XorKey(node_id, rpeer.node_id)
-            result_trie.setdefault(key, vpeer)
+            result_trie.setdefault(key, tvpeer)
             if data_mode.value:
-                far_peers_by_path.setdefault((idx,), vpeer)
+                far_peers_by_path.setdefault((peer.dbid, idx), tvpeer)
 
             idx += 1
 
@@ -732,6 +732,7 @@ class ChordTasks(object):
                 if log.isEnabledFor(logging.DEBUG):
                     log.debug("Unwrapping ChordRelay packet.")
                 pkts, path = self.unwrap_relay_packets(pkt, data_mode)
+                path = tuple(path)
 
             pkt_type = cp.ChordMessage.parse_type(pkts[0])
 
@@ -786,11 +787,12 @@ class ChordTasks(object):
                 if data_mode is cp.DataMode.get:
                     pmsg = cp.ChordDataPresence(pkts[0])
                     if pmsg.data_present:
-                        rvpeer = far_peers_by_path.get(tuple(path))
+                        apath = (tun_meta.peer.dbid,) + path
+                        rvpeer = far_peers_by_path.get(apath)
                         if rvpeer is None:
                             #FIXME: Treat this as attack, Etc.
-                            log.warning("Far node not found in dict for path"\
-                                "[{}].".format(path))
+                            log.warning("Far node not found in dict for apath"\
+                                "[{}].".format(apath))
                         else:
                             rvpeer.data_present = True
                 else:
@@ -798,11 +800,12 @@ class ChordTasks(object):
 
                     imsg = cp.ChordStorageInterest(pkts[0])
                     if imsg.will_store:
-                        rvpeer = far_peers_by_path.get(tuple(path))
+                        apath = (tun_meta.peer.dbid,) + path
+                        rvpeer = far_peers_by_path.get(apath)
                         if rvpeer is None:
                             #FIXME: Treat this as attack, Etc.
-                            log.warning("Far node not found in dict for path"\
-                                "[{}].".format(path))
+                            log.warning("Far node not found in dict for apath"\
+                                "[{}].".format(apath))
                         else:
                             rvpeer.will_store = True
 
@@ -818,8 +821,7 @@ class ChordTasks(object):
             # Add returned PeerS to result_trie.
             idx = 0
             for rpeer in pmsg.peers:
-                end_path = tuple(path)
-                end_path += (idx,)
+                end_path = path + (idx,)
 
                 vpeer = VPeer(rpeer, end_path, tun_meta)
 
@@ -827,7 +829,8 @@ class ChordTasks(object):
                 result_trie.setdefault(key, vpeer)
 
                 if data_mode.value:
-                    far_peers_by_path.setdefault(end_path, vpeer)
+                    apath = (tun_meta.peer.dbid,) + end_path
+                    far_peers_by_path.setdefault(apath, vpeer)
 
                 idx += 1
 
@@ -1335,8 +1338,8 @@ class ChordTasks(object):
                     .order_by(DataBlock.distance.desc())
 
                 freeable_space = 0
-                for original_size in page_query(q):
-                    freeable_space += original_size
+                for block in page_query(q):
+                    freeable_space += block.original_size
 
                     if freeable_space >= mnnode.MAX_DATA_BLOCK_SIZE:
                         return True
@@ -1458,8 +1461,8 @@ class ChordTasks(object):
                         .order_by(DataBlock.distance.desc())
 
                     for block in page_query(q):
-                        freeable_space += block[1]
-                        blocks_to_prune.append(block[0])
+                        freeable_space += block.original_size
+                        blocks_to_prune.append(block.id)
 
                         if freeable_space >= original_size:
                             break

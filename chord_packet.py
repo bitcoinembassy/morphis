@@ -41,13 +41,16 @@ class ChordMessage(object):
         if not buf:
             return
 
-        self.parse()
+        self._packet_type = packet_type # Expected packet_type.
 
-        if packet_type and self.packet_type != packet_type:
-            raise ChordException("Expecting packet type [{}] but got [{}].".format(packet_type, self.packet_type))
+        self.parse()
 
     def parse(self):
         self.packet_type = struct.unpack("B", self.buf[0:1])[0]
+
+        if self._packet_type and self.packet_type != self._packet_type:
+            raise ChordException("Expecting packet type [{}] but got [{}]."\
+                .format(self._packet_type, self.packet_type))
 
     def encode(self):
         nbuf = bytearray()
