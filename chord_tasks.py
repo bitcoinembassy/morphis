@@ -17,7 +17,7 @@ from db import Peer, DataBlock, NodeState
 from mutil import hex_string, page_query
 import enc
 import peer as mnpeer
-import node
+import node as mnnode
 
 log = logging.getLogger(__name__)
 
@@ -58,8 +58,6 @@ class VPeer(object):
 
 EMPTY_PEER_LIST_MESSAGE = cp.ChordPeerList(peers=[])
 EMPTY_PEER_LIST_PACKET = EMPTY_PEER_LIST_MESSAGE.encode()
-
-DATA_BLOCK_FILE_PATH = "data/store-{}/{}.blk"
 
 class ChordTasks(object):
     def __init__(self, engine):
@@ -418,7 +416,7 @@ class ChordTasks(object):
                         assert data_mode is cp.DataMode.store
 
                         will_store, need_pruning =\
-                            self._check_do_want_data(node_id)
+                            yield from self._check_do_want_data(node_id)
 
                         if not will_store:
                             continue
@@ -1333,10 +1331,10 @@ class ChordTasks(object):
                 for original_size in page_query(q):
                     freeable_space += original_size
 
-                    if freeable_space >= node.MAX_DATA_BLOCK_SIZE:
+                    if freeable_space >= mnnode.MAX_DATA_BLOCK_SIZE:
                         return True
 
-                assert freeable_space < node.MAX_DATA_BLOCK_SIZE
+                assert freeable_space < mnnode.MAX_DATA_BLOCK_SIZE
                 return False
 
         return (yield from self.loop.run_in_executor(None, dbcall)), True
@@ -1395,7 +1393,7 @@ class ChordTasks(object):
 
         def iocall():
             data_file = open(
-                DATA_BLOCK_FILE_PATH\
+                self.engine.node.data_block_file_path\
                     .format(self.engine.node.instance, data_block.id),
                 "rb")
 
@@ -1482,12 +1480,13 @@ class ChordTasks(object):
                 # Rule: only update this NodeState row when holding a lock on
                 # the DataBlock table.
                 node_state = sess.query(NodeState)\
-                    .filter(DataBlock.key == node.NSK_DATASTORE_SIZE)\
+                    .filter(NodeState.key == mnnode.NSK_DATASTORE_SIZE)\
                     .first()
 
                 if not node_state:
                     node_state = NodeState()
-                    node_state.key = node.NSK_DATASTORE_SIZE
+                    node_state.key = mnnode.NSK_DATASTORE_SIZE
+                    node_state.value = 0
                     sess.add(node_state)
 
                 size_diff = original_size
@@ -1495,13 +1494,13 @@ class ChordTasks(object):
                 if need_pruning:
                     size_diff -= freeable_space
 
-                node_state.value = NodeState.value + size_diff
+                node_state.value += size_diff
 
                 sess.commit()
 
                 if need_pruning:
                     for andid in blocks_to_prune:
-                        os.remove(DATA_BLOCK_FILE_PATH\
+                        os.remove(self.engine.node.data_block_file_path\
                             .format(self.engine.node.instance, anid))
 
                 return data_block.id, size_diff
@@ -1552,7 +1551,7 @@ class ChordTasks(object):
 
             def iocall():
                 new_file = open(
-                    DATA_BLOCK_FILE_PATH\
+                    self.engine.node.data_block_file_path\
                         .format(self.engine.node.instance, data_block_id),
                     "wb")
 
@@ -1584,10 +1583,10 @@ class ChordTasks(object):
                     # Rule: only update this NodeState row when holding a lock
                     # on the DataBlock table.
                     node_state = sess.query(NodeState)\
-                        .filter(NodeState.key == node.NSK_DATASTORE_SIZE)\
+                        .filter(NodeState.key == mnnode.NSK_DATASTORE_SIZE)\
                         .first()
 
-                    node_state.value = NodeState.value - original_size
+                    node_state.value -= original_size
 
                     sess.commit()
 
@@ -1596,7 +1595,7 @@ class ChordTasks(object):
             self.engine.node.datastore_size -= original_size
 
             def iocall():
-                os.remove(DATA_BLOCK_FILE_PATH\
+                os.remove(self.engine.node.data_block_file_path\
                     .format(self.engine.node.instance, data_block_id))
 
             try:

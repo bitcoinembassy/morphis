@@ -46,6 +46,10 @@ class Node():
 
         self.node_key = None
 
+        self.data_block_path = "data/store-{}"
+        self.data_block_file_path =\
+            self.data_block_path + "/{}.blk"
+
         self.datastore_max_size = 0 # In bytes.
         self.datastore_size = 0 # In bytes.
 
@@ -73,10 +77,11 @@ class Node():
         self.db.init_engine()
         self._db_initialized = True
 
+    @asyncio.coroutine
     def init_store(self, max_size, reinit):
         self.datastore_max_size = max_size
 
-        d = "data/store-{}".format(self.instance)
+        d = self.data_block_path.format(self.instance)
         if not os.path.exists(d):
             if log.isEnabledFor(logging.INFO):
                 log.info("Creating data store directory [{}].".format(d))
@@ -85,17 +90,12 @@ class Node():
             # Update the database to reflect the filesystem if reinit is True.
             def dbcall():
                 with self.db.open_session() as sess:
-                    st = sess.query(db.DataStore).statement.with_only_columns(\
+                    st = sess.query(db.DataBlock).statement.with_only_columns(\
                         [func.count('*')])
                     cnt =  sess.execute(st).scalar()
 
                     if cnt and not reinit:
-                        errmsg = "Database still had DataStore rows;"\
-                            " refusing to start in an inconsistent state."\
-                            " If you meant to delete your datastore then"\
-                            " rerun with --reinitds."
-                        log.warning(errmsg)
-                        raise Exception(errmsg)
+                        return False
 
                     stmt =\
                         update(db.NodeState, bind=self.db.engine)\
@@ -103,11 +103,21 @@ class Node():
                             .values(value=0)
                     sess.execute(stmt)
 
-                    sess.query(db.DataStore).delete(synchronize_session=False)
+                    sess.query(db.DataBlock).delete(synchronize_session=False)
 
                     sess.commit()
 
-            yield from self.loop.run_in_executor(None, dbcall)
+                    return True
+
+            r = yield from self.loop.run_in_executor(None, dbcall)
+
+            if not r:
+                errmsg = "Database still had DataBlock rows;"\
+                    " refusing to start in an inconsistent state."\
+                    " If you meant to delete your datastore then"\
+                    " rerun with --reinitds."
+                log.warning(errmsg)
+                raise Exception(errmsg)
 
         else:
             def dbcall():
@@ -302,7 +312,8 @@ def __main():
             else:
                 node.load_key()
 
-            node.init_store(dssize << 20, reinitds) # Convert MBs to bytes.
+            yield from\
+                node.init_store(dssize << 20, reinitds) # Convert MBs to bytes.
 
             node.init_chord()
 

@@ -240,7 +240,7 @@ class ChordEngine():
         buf = bytearray()
 
         for i in range(len(data1)):
-            buf += data1[i] ^ data2[i]
+            buf.append(data1[i] ^ data2[i])
 
         return buf
 
