@@ -105,7 +105,7 @@ def init_maalstroom_server(the_node):
     global node, server
 
     if node:
-        #FIXME: Handle this better, but for now this is how we only start one
+        #TODO: Handle this better, but for now this is how we only start one
         # maalstroom process even when running in multi-instance test mode.
         return
 

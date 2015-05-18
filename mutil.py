@@ -74,3 +74,19 @@ def hex_string(val):
         buf += hex(b)[2:]
 
     return buf
+
+def page_query(query, page_size=10):
+    "Batch fetch an SQLAlchemy query."
+
+    offset = 0
+
+    while True:
+        page = query.limit(page_size).offset(offset).all()
+
+        for row in page:
+            yield row
+
+        if len(page) < page_size:
+            break
+
+        offset += page_size

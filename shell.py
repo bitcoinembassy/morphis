@@ -11,6 +11,7 @@ import db
 import enc
 import mn1
 from mutil import hex_dump, hex_string
+import node
 import sshtype
 
 log = logging.getLogger(__name__)
@@ -297,7 +298,9 @@ class Shell(cmd.Cmd):
         for r in result:
             self.writeln("nid[{}] FOUND: {:22} diff=[{}]"\
                 .format(r.id, r.address,\
-                    hex_string([x ^ y for x, y in zip(r.node_id, node_id)])))
+                    hex_string(\
+                        self.peer.engine.calc_raw_distance(\
+                            r.node_id, node_id))))
 
     @asyncio.coroutine
     def do_gd(self, arg):
@@ -327,7 +330,8 @@ class Shell(cmd.Cmd):
 
         data = bytes(arg, 'UTF8')
 
-        max_len = mn1.MAX_PACKET_LENGTH - 5000 # Leave room for whatever.
+        max_len = node.MAX_DATA_BLOCK_SIZE
+
         if len(data) > max_len:
             self.writeln("ERROR: data cannot be greater than {} bytes."\
                 .format(max_len))

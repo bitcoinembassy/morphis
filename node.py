@@ -5,7 +5,7 @@ import logging
 import os
 import argparse
 
-from sqlalchemy import update
+from sqlalchemy import update, func
 
 import packet as mnetpacket
 import rsakey
@@ -15,6 +15,15 @@ from mutil import hex_dump
 import chord
 import peer
 import db
+
+# NodeState keys.
+NSK_DATASTORE_SIZE = "datastore_size"
+
+# The following is limited by max packet size. We could either increase that
+# size, violating the SSH spec, which I don't want to do because then it would
+# be easier to identify Morphis traffic. Instead we would need to modify the
+# dataMessage task code to handle a single block in multiple StoreData packets.
+MAX_DATA_BLOCK_SIZE = 32768
 
 log = logging.getLogger(__name__)
 
@@ -36,6 +45,9 @@ class Node():
             self.instance_postfix = ""
 
         self.node_key = None
+
+        self.datastore_max_size = 0 # In bytes.
+        self.datastore_size = 0 # In bytes.
 
         if dburl:
             self.db = db.Db(loop, dburl, 'n' + str(instance_id))
@@ -61,12 +73,56 @@ class Node():
         self.db.init_engine()
         self._db_initialized = True
 
-    def init_store(self):
+    def init_store(self, max_size, reinit):
+        self.datastore_max_size = max_size
+
         d = "data/store-{}".format(self.instance)
         if not os.path.exists(d):
             if log.isEnabledFor(logging.INFO):
                 log.info("Creating data store directory [{}].".format(d))
             os.makedirs(d)
+
+            # Update the database to reflect the filesystem if reinit is True.
+            def dbcall():
+                with self.db.open_session() as sess:
+                    st = sess.query(db.DataStore).statement.with_only_columns(\
+                        [func.count('*')])
+                    cnt =  sess.execute(st).scalar()
+
+                    if cnt and not reinit:
+                        errmsg = "Database still had DataStore rows;"\
+                            " refusing to start in an inconsistent state."\
+                            " If you meant to delete your datastore then"\
+                            " rerun with --reinitds."
+                        log.warning(errmsg)
+                        raise Exception(errmsg)
+
+                    stmt =\
+                        update(db.NodeState, bind=self.db.engine)\
+                            .where(db.NodeState.key == NSK_DATASTORE_SIZE)\
+                            .values(value=0)
+                    sess.execute(stmt)
+
+                    sess.query(db.DataStore).delete(synchronize_session=False)
+
+                    sess.commit()
+
+            yield from self.loop.run_in_executor(None, dbcall)
+
+        else:
+            def dbcall():
+                with self.db.open_session() as sess:
+                    node_state = sess.query(db.NodeState)\
+                        .filter(db.NodeState.key == NSK_DATASTORE_SIZE)\
+                        .first()
+
+                    if node_state:
+                        return node_state.value
+                    else:
+                        return 0
+
+            self.datastore_size =\
+                yield from self.loop.run_in_executor(None, dbcall)
 
     @asyncio.coroutine
     def create_schema(self):
@@ -173,6 +229,12 @@ def __main():
         help="Specify the database url to use.")
     parser.add_argument("--dm", action="store_true",\
         help="Disable Maalstroom server.")
+    parser.add_argument("--dssize",\
+        help="Specify the datastore size in standard non-IEC-redefined JEDEC"\
+            " MBs (default is one gigabyte, as in 1024^3 bytes). Morphis does"\
+            " not deal in MiecBytes (1 MiecB = 1000^2 bytes), but in"\
+            " MegaBytes (1 MB = 1024^2 bytes). Morphis does not recognize the"\
+            " attempted redefinition of an existing unit by the IEC.")
     parser.add_argument("--dumptasksonexit", action="store_true",\
         help="Dump async task list on exit.")
     parser.add_argument("--instanceoffset", type=int,\
@@ -184,6 +246,9 @@ def __main():
         help="Specify amount of nodes to start.")
     parser.add_argument("--parallellaunch", action="store_true",\
         help="Enable parallel launch of the nodecount nodes.")
+    parser.add_argument("--reinitds", action="store_true",\
+        help="Allow reinitialization of the Datastore. This will only happen"\
+            " if the Datastore directory has already been manually deleted.")
 
     args = parser.parse_args()
 
@@ -201,6 +266,7 @@ def __main():
         mn1.enable_cleartext_transport()
     db_pool_size = args.dbpoolsize
     dburl = args.dburl
+    dssize = args.dssize if args.dssize else 1024
     dumptasksonexit = args.dumptasksonexit
     instanceoffset = args.instanceoffset
     if instanceoffset:
@@ -213,6 +279,7 @@ def __main():
     if nodecount == None:
         nodecount = 1
     parallel_launch = args.parallellaunch
+    reinitds = args.reinitds
 
     while True:
 
@@ -235,7 +302,7 @@ def __main():
             else:
                 node.load_key()
 
-            node.init_store()
+            node.init_store(dssize << 20, reinitds) # Convert MBs to bytes.
 
             node.init_chord()
 

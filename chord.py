@@ -163,7 +163,7 @@ class ChordEngine():
                         assert peer.node_id is None
                         peer.node_id = enc.generate_ID(peer.pubkey)
                         peer.distance, peer.direction =\
-                            self.calc_distance(\
+                            self.calc_log_distance(\
                                 self.node_id,\
                                 peer.node_id)
                         q = q.filter(Peer.node_id == peer.node_id)
@@ -231,7 +231,12 @@ class ChordEngine():
 
         self._async_do_stabilize()
 
-    def calc_distance(self, nid, pid):
+    def calc_raw_distance(data1, data2):
+        "Calculates the XOR distance, return is absolute value."
+
+        return [x ^ y for x, y in zip(data1, data2)]
+
+    def calc_log_distance(self, nid, pid):
         "Returns: distance, direction."
         " distance is in log base2."
 

@@ -20,6 +20,7 @@ Base = declarative_base()
 
 Peer = None
 DataBlock = None
+NodeState = None
 
 def _init_daos(Base, d):
     # If I recall correctly, this abomination is purely for PostgreSQL mode,
@@ -60,13 +61,23 @@ def _init_daos(Base, d):
 
         id = Column(Integer, primary_key=True)
         data_id = Column(LargeBinary, nullable=False)
-        length = Column(Integer, nullable=False)
+        distance = Column(LargeBinary, nullable=False)
+        original_size = Column(Integer, nullable=False)
         insert_timestamp = Column(DateTime, nullable=False)
         last_access = Column(DateTime, nullable=True)
 
     Index("data_id", DataBlock.data_id)
+    Index("datablock__distance", DataBlock.distance.desc())
 
     d.DataBlock = DataBlock
+
+    class NodeState(Base):
+        __tablename__ = "NodeState"
+
+        key = Column(String(64), primary_key=True)
+        value = Column(String(128), nullable=True)
+
+    d.NodeState = NodeState
 
     return d
 
@@ -183,3 +194,4 @@ if Peer is None:
 
     Peer = d.Peer
     DataBlock = d.DataBlock
+    NodeState = d.NodeState

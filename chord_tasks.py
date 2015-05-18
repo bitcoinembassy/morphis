@@ -13,10 +13,11 @@ import bittrie
 import chord
 import chord_packet as cp
 from chordexception import ChordException
-from db import Peer, DataBlock
-from mutil import hex_string
+from db import Peer, DataBlock, NodeState
+from mutil import hex_string, page_query
 import enc
 import peer as mnpeer
+import node
 
 log = logging.getLogger(__name__)
 
@@ -136,18 +137,16 @@ class ChordTasks(object):
             byte_ = chord.NODE_ID_BYTES - 1 - (bit >> 3)
             node_id[byte_] ^= 1 << (bit % 8)
 
-            assert self.engine.calc_distance(node_id, self.engine.node_id)[0]\
-                == (bit + 1),\
+            assert self.engine.calc_log_distance(\
+                node_id, self.engine.node_id)[0] == (bit + 1),\
                 "calc={}, bit={}, diff={}."\
                     .format(\
-                        self.engine.calc_distance(\
+                        self.engine.calc_log_distance(\
                             node_id, self.engine.node_id)[0],\
                         bit + 1,
                         hex_string(\
-                            [x ^ y\
-                            for x, y\
-                                in zip(self.engine.node_id, node_id)])
-                        )
+                            self.engine.calc_raw_distance(\
+                                self.engine.node_id, node_id)))
 
             nodes = yield from self._do_stabilize(node_id)
 
@@ -402,7 +401,7 @@ class ChordTasks(object):
 
                         drmsg = cp.ChordDataResponse()
                         drmsg.data = enc_data
-                        drmsg.original_length = data_l
+                        drmsg.original_size = data_l
 
                         r = yield from self._process_data_response(\
                             drmsg, None, None, data_rw)
@@ -418,7 +417,8 @@ class ChordTasks(object):
                     else:
                         assert data_mode is cp.DataMode.store
 
-                        will_store = self._check_do_want_data(node_id)
+                        will_store, need_pruning =\
+                            self._check_do_want_data(node_id)
 
                         if not will_store:
                             continue
@@ -430,10 +430,11 @@ class ChordTasks(object):
                         dmsg.data = data
                         dmsg.data_id = node_id
 
-                        r = yield from self._store_data(None, dmsg)
+                        r = yield from self._store_data(\
+                            None, dmsg, need_pruning)
 
                         if not r:
-                            log.warning("We failed to store the data.")
+                            log.info("We failed to store the data.")
 
                         # Store it still elsewhere if others want it as well.
                         continue
@@ -982,9 +983,10 @@ class ChordTasks(object):
             if log.isEnabledFor(logging.DEBUG):
                 log.debug("nn: {} FOUND: {:7} {:22} node_id=[{}] diff=[{}]"\
                     .format(self.engine.node.instance, r.dbid, r.address,\
-                        hex_string(r.node_id), hex_string(\
-                            [x ^ y for x, y in\
-                                zip(r.node_id, fnmsg.node_id)])))
+                        hex_string(r.node_id),\
+                        hex_string(\
+                            self.engine.calc_raw_distance(\
+                                r.node_id, fnmsg.node_id))))
 
             rlist.append(r)
 
@@ -997,6 +999,7 @@ class ChordTasks(object):
         pt = None
 
         will_store = False
+        need_pruning = False
         data_present = False
         if fnmsg.data_mode.value:
             # In for_data mode we respond with two packets.
@@ -1010,7 +1013,9 @@ class ChordTasks(object):
 
                 peer.protocol.write_channel_data(local_cid, pmsg.encode())
             elif fnmsg.data_mode is cp.DataMode.store:
-                will_store = yield from self._check_do_want_data(fnmsg.node_id)
+                will_store, need_pruning =\
+                    yield from self._check_do_want_data(fnmsg.node_id)
+
                 imsg = cp.ChordStorageInterest()
                 imsg.will_store = will_store
 
@@ -1060,7 +1065,7 @@ class ChordTasks(object):
 
                 rmsg = cp.ChordStoreData(pkt)
 
-                r = yield from self._store_data(peer, rmsg)
+                r = yield from self._store_data(peer, rmsg, need_pruning)
 
                 dsmsg = cp.ChordDataStored()
                 dsmsg.stored = r
@@ -1075,7 +1080,7 @@ class ChordTasks(object):
 
                 drmsg = cp.ChordDataResponse()
                 drmsg.data = data
-                drmsg.original_length = data_l
+                drmsg.original_size = data_l
 
                 peer.protocol.write_channel_data(local_cid, drmsg.encode())
 
@@ -1304,10 +1309,31 @@ class ChordTasks(object):
 
     @asyncio.coroutine
     def _check_do_want_data(self, data_id):
-        #TODO: FIXME: Make this intelligent; based on closeness, diskspace, Etc.
-        # Probably something like: if space available, return true. else, return
-        # true with probability based upon closeness.
-        return True
+        "Checks if we have space to store, and if not if we have enough data"\
+        " that is further in distance thus having enough space to free."\
+        "returns: will_store, need_pruning"
+
+        if self.engine.node.datastore_size\
+                < self.engine.node.datastore_max_size:
+            return True, False
+
+        distance = self.engine.calc_raw_distance(data_id, self.engine.node_id)
+
+        # If there is space contention, then we do a more complex algorithm
+        # in order to see if we want to store it.
+        def dbcall():
+            with self.engine.node.db.open_session() as sess:
+                # We don't worry about inaccuracy caused by padding for now.
+                q = sess.query(func.sum("original_size"))
+                q = q.filter(DataBlock.distance > distance)
+
+                if q.scalar() > node.MAX_DATA_BLOCK_SIZE:
+                    # Then we have room by deleting further blocks.
+                    return True
+                else:
+                    return False
+
+        return (yield from self.loop.run_in_executor(None, dbcall)), True
 
     @asyncio.coroutine
     def _process_data_response(self, data_response, tun_meta, path, data_rw):
@@ -1324,7 +1350,7 @@ class ChordTasks(object):
             data = enc.decrypt_data_block(data_response.data, data_rw.data_key)
 
             # Truncate the data to exclude the cipher padding.
-            data = data[:data_response.original_length]
+            data = data[:data_response.original_size]
 
             # Verify that the decrypted data matches the original hash of it.
             data_key = enc.generate_ID(data)
@@ -1341,8 +1367,8 @@ class ChordTasks(object):
     def _retrieve_data(self, data_id):
         "Retrieve data for data_id from the file system (and meta data from"\
         " the database."\
-        "returns: data, original_length"\
-        "   original_length is the length of the data before it was encrypted."
+        "returns: data, original_size"\
+        "   original_size is the size of the data before it was encrypted."
 
         def dbcall():
             with self.engine.node.db.open_session() as sess:
@@ -1371,12 +1397,21 @@ class ChordTasks(object):
 
         enc_data = yield from self.loop.run_in_executor(None, iocall)
 
-        return enc_data, data_block.length
+        return enc_data, data_block.original_size
 
     @asyncio.coroutine
-    def _store_data(self, peer, dmsg):
+    def _store_data(self, peer, dmsg, need_pruning):
         "Store the data block on disk and meta in the database. Returns True"
         " if the data was stored, False otherwise."
+
+        #TODO: I now realize that this whole method should probably run in a
+        # separate thread that is passed to run_in_executor(..), instead of
+        # breaking it up into many such calls. Just for efficiency and since
+        # there is probably no reason not to.
+        #FIXME: This code needs to be fixed to use an additional table,
+        # something like DataBlockJournal, which tracks pending deletes or
+        # creations, thus ensuring the filesystem is kept in sync, even if
+        # crashes, Etc.
 
         peer_dbid = peer.dbid if peer else "<self>"
 
@@ -1389,6 +1424,9 @@ class ChordTasks(object):
             log.warning("Peer (dbid=[{}]) sent a data_id that didn't match"\
                 " the data!".format(peer_dbid))
 
+        distance = self.engine.calc_raw_distance(data_id, self.engine.node_id)
+        original_size = len(data)
+
         def dbcall():
             with self.engine.node.db.open_session() as sess:
                 self.engine.node.db.lock_table(sess, DataBlock)
@@ -1398,27 +1436,90 @@ class ChordTasks(object):
 
                 if q.scalar() > 0:
                     # We already have this block.
-                    return None
+                    return None, None
+
+                if need_pruning:
+                    freeable_space = 0
+                    blocks_to_prune = []
+                    pending_freed_space = 0
+
+                    q = sess.query(DataBlock)\
+                        .filter(DataBlock.distance > distance)\
+                        .order_by(DataBlock.distance.desc())
+
+                    for block in page_query(q):
+                        freeable_space += block.original_size
+
+                        blocks_to_prune.append(block.id)
+                        pending_freed_space += block.original_size
+
+                        if freeable_space >= original_size:
+                            break
+
+                    if freeable_space < original_size:
+                        return False, None
+
+                    if log.isEnabledFor(logging.INFO):
+                        log.info("Pruning {} blocks to make room."\
+                            .format(len(blocks_to_prune)))
+
+                    for anid in blocks_to_prune:
+                        sess.query(DataBlock)\
+                            .filter(DataBlock.id == anid)\
+                            .delete(synchronize_session=False)
 
                 data_block = DataBlock()
                 data_block.data_id = data_id
-                data_block.length = len(data)
+                data_block.distance = distance
+                data_block.original_size = original_size
                 data_block.insert_timestamp = datetime.today()
 
                 sess.add(data_block)
 
+                # Rule: only update this NodeState row when holding a lock on
+                # the DataBlock table.
+                node_state = sess.query(NodeState)\
+                    .filter(DataBlock.key == node.NSK_DATASTORE_SIZE)\
+                    .first()
+
+                if not node_state:
+                    node_state = NodeState()
+                    node_state.key = node.NSK_DATASTORE_SIZE
+                    sess.add(node_state)
+
+                size_diff = original_size
+
+                if need_pruning:
+                    size_diff -= pending_freed_space
+
+                node_state.value = NodeState.value + size_diff
+
                 sess.commit()
 
-                return data_block.id
+                if need_pruning:
+                    for andid in blocks_to_prune:
+                        os.remove(DATA_BLOCK_FILE_PATH\
+                            .format(self.engine.node.instance, anid))
 
-        data_block_id = yield from self.loop.run_in_executor(None, dbcall)
+                return data_block.id, size_diff
+
+        data_block_id, size_diff =\
+            yield from self.loop.run_in_executor(None, dbcall)
 
         if not data_block_id:
             if log.isEnabledFor(logging.INFO):
-                log.info("Not storing data that we already have"\
-                    " (data_id=[{}])."\
-                    .format(hex_string(data_id)))
+                if data_block_id is False:
+                    log.info("Not storing block we said we would as we"\
+                        " can won't free up enough space for it. (Some"\
+                        " other block upload must have beaten this one to"\
+                        " us.")
+                else:
+                    log.info("Not storing data that we already have"\
+                        " (data_id=[{}])."\
+                        .format(hex_string(data_id)))
             return False
+
+        self.engine.node.datastore_size += size_diff
 
         try:
             if log.isEnabledFor(logging.INFO):
@@ -1464,15 +1565,32 @@ class ChordTasks(object):
 
             return True
         except Exception as e:
-            log.exception(e)
+            log.exception("encrypt/write_to_disk")
+
+            log.warning("There was an exception attempting to store the data"\
+                " on disk.")
 
             def dbcall():
                 with self.engine.node.db.open_session() as sess:
-                    sess.query(DataBlock).filter(DataBlock.id == data_block_id)\
+                    self.engine.node.db.lock_table(sess, DataBlock)
+
+                    sess.query(DataBlock)\
+                        .filter(DataBlock.id == data_block_id)\
                         .delete(synchronize_session=False)
+
+                    # Rule: only update this NodeState row when holding a lock
+                    # on the DataBlock table.
+                    node_state = sess.query(NodeState)\
+                        .filter(NodeState.key == node.NSK_DATASTORE_SIZE)\
+                        .first()
+
+                    node_state.value = NodeState.value - original_size
+
                     sess.commit()
 
             yield from self.loop.run_in_executor(None, dbcall)
+
+            self.engine.node.datastore_size -= original_size
 
             def iocall():
                 os.remove(DATA_BLOCK_FILE_PATH\
@@ -1481,6 +1599,7 @@ class ChordTasks(object):
             try:
                 yield from self.loop.run_in_executor(None, iocall)
             except Exception:
+                log.exception("os.remove(..)")
                 pass
 
             return False

@@ -54,7 +54,7 @@ class Peer():
 
     def update_distance(self):
         self.distance, self.direction =\
-            self.engine.calc_distance(self.engine.node_id, self.node_id)
+            self.engine.calc_log_distance(self.engine.node_id, self.node_id)
 
     def _peer_authenticated(self, key):
         self.node_key = key
