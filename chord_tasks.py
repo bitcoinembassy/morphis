@@ -1342,6 +1342,8 @@ class ChordTasks(object):
                 " closer than enough stored blocks to fit with a purge.")
 
         distance = self.engine.calc_raw_distance(self.engine.node_id, data_id)
+        current_datastore_size = self.engine.node.datastore_size
+        current_datastore_max_size = self.engine.node.datastore_max_size
 
         # If there is space contention, then we do a more complex algorithm
         # in order to see if we want to store it.
@@ -1357,13 +1359,17 @@ class ChordTasks(object):
                 for block in page_query(q):
                     freeable_space += block.original_size
 
-                    if freeable_space >= mnnode.MAX_DATA_BLOCK_SIZE:
+                    if current_datastore_size - freeable_space\
+                            <= current_datastore_max_size\
+                                - mnnode.MAX_DATA_BLOCK_SIZE:
                         if log.isEnabledFor(logging.DEBUG):
                             log.debug("Found enough purgable blocks to fit"\
                                 " new proposed block.")
                         return True
 
-                assert freeable_space < mnnode.MAX_DATA_BLOCK_SIZE
+                assert current_datastore_size - freeable_space\
+                    > current_datastore_max_size - mnnode.MAX_DATA_BLOCK_SIZE
+
                 if log.isEnabledFor(logging.DEBUG):
                     log.debug("Not enough purgable blocks to fit new"\
                         " proposed block.")
