@@ -1,11 +1,5 @@
 * Need to implement ssh re-keying.
 
-- have the shell channel open code mark this dbpeer as a shell client and from then on only let the peer with that id (client pubkey authenticated with) open a session channel.
-
 * Have local_cid an object that is unique so that closed channels are safe forever to call stuff on (and get exceptions and not misbehavior).
 
-morphis transport ddos protection:
-
-- consider morphis/ssh protocol disconnect message as authentic. consider tcp disconnect as ddos and simply reconnect. (issue with one host firewalled, thus only connecting host can reconnect). have some sanity to prevent loop.
 - add feature to morphis-ssh to be able to resume an ssh session with 0 protocol overhead. Ie: if tcp disconnects, simply tcp connect again and continue as if nothing happened (ssh session never died, keys reused, etc).
-
