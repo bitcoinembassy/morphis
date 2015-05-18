@@ -127,7 +127,7 @@ class Node():
                         .first()
 
                     if node_state:
-                        return node_state.value
+                        return int(node_state.value)
                     else:
                         return 0
 

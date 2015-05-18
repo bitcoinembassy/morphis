@@ -1494,7 +1494,7 @@ class ChordTasks(object):
                 if need_pruning:
                     size_diff -= freeable_space
 
-                node_state.value += size_diff
+                node_state.value = str(int(node_state.value) + size_diff)
 
                 sess.commit()
 
@@ -1586,7 +1586,8 @@ class ChordTasks(object):
                         .filter(NodeState.key == mnnode.NSK_DATASTORE_SIZE)\
                         .first()
 
-                    node_state.value -= original_size
+                    node_state.value =\
+                        str(int(node_state.value) - original_size)
 
                     sess.commit()
 
