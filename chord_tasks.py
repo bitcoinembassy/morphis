@@ -502,6 +502,7 @@ class ChordTasks(object):
                 if data_mode is cp.DataMode.get:
                     # We only send one at a time, stopping at success.
                     yield from done_all.wait()
+                    done_all.clear()
 
                     if data_rw.data:
                         # If the data was read and validated successfully, then
@@ -754,7 +755,11 @@ class ChordTasks(object):
                         if not r:
                             # If the data was invalid, we will try from another
                             # Peer (or possibly tunnel).
+                            log.info("Data in response did not match request"\
+                                " key.")
+
                             query_cntr.value -= 1
+                            # There should only be one GetData at a time.
                             assert not query_cntr.value
                             done_all.set()
                             continue
@@ -938,6 +943,8 @@ class ChordTasks(object):
                 if not r:
                     # If the data was invalid, we will try from another
                     # Peer (or possibly tunnel).
+                    log.info("Data in response did not match request"\
+                        " key.")
                     query_cntr.value -= 1
                     assert not query_cntr.value
                     done_all.set()
