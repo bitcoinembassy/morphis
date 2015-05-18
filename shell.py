@@ -11,6 +11,7 @@ import db
 import enc
 import mn1
 from mutil import hex_dump, hex_string
+import node
 import sshtype
 
 log = logging.getLogger(__name__)
@@ -113,6 +114,7 @@ class Shell(cmd.Cmd):
                 return func(arg)
         except Exception as e:
             self.writeln("Exception [{}] executing command.".format(e))
+            log.exception("func(arg)")
 
     @asyncio.coroutine
     def readline(self):
@@ -261,9 +263,11 @@ class Shell(cmd.Cmd):
             self.writeln("Exception: [{}].".format(e))
 
     def do_lp(self, arg):
+        "listpeers alias."
         return self.do_listpeers(arg)
 
     def do_listpeers(self, arg):
+        "List connected PeerS."
         peers = self.peer.engine.peers.values()
 
         if arg:
@@ -282,7 +286,7 @@ class Shell(cmd.Cmd):
 
     @asyncio.coroutine
     def do_findnode(self, arg):
-        "[id] find the node with hex encoded id."
+        "[ID] find the node with hex encoded id."
 
         node_id = int(arg, 16).to_bytes(chord.NODE_ID_BYTES, "big")
 
@@ -294,15 +298,65 @@ class Shell(cmd.Cmd):
         for r in result:
             self.writeln("nid[{}] FOUND: {:22} diff=[{}]"\
                 .format(r.id, r.address,\
-                    hex_string([x ^ y for x, y in zip(r.node_id, node_id)])))
+                    hex_string(\
+                        self.peer.engine.calc_raw_distance(\
+                            r.node_id, node_id))))
+
+    @asyncio.coroutine
+    def do_gd(self, arg):
+        "getdata alias."
+        yield from self.do_getdata(arg)
+
+    @asyncio.coroutine
+    def do_getdata(self, arg):
+        "[DATA_KEY] retrieve data for DATA_KEY from the network."
+
+        data_key = bytes.fromhex(arg)
+
+        start = datetime.today()
+        data = yield from self.peer.engine.tasks.send_get_data(data_key)
+        diff = datetime.today() - start
+        self.writeln("data=[{}].".format(data))
+        self.writeln("send_get_data(..) took: {}.".format(diff))
+
+    @asyncio.coroutine
+    def do_sd(self, arg):
+        "storedata alias."
+        yield from self.do_storedata(arg)
+
+    @asyncio.coroutine
+    def do_storedata(self, arg):
+        "[DATA] store DATA into the network."
+
+        data = bytes(arg, 'UTF8')
+
+        max_len = node.MAX_DATA_BLOCK_SIZE
+
+        if len(data) > max_len:
+            self.writeln("ERROR: data cannot be greater than {} bytes."\
+                .format(max_len))
+            return
+
+        def key_callback(data_key):
+            self.writeln("data_key=[{}].".format(hex_string(data_key)))
+
+        start = datetime.today()
+        storing_nodes =\
+            yield from self.peer.engine.tasks.send_store_data(\
+                data, key_callback)
+        diff = datetime.today() - start
+        self.writeln("storing_nodes=[{}].".format(storing_nodes))
+        self.writeln("send_store_data(..) took: {}.".format(diff))
 
     @asyncio.coroutine
     def do_conn(self, arg):
+        "Connect to the passed address as a Peer."
         r = yield from self.peer.engine.connect_peer(arg)
         self.writeln(r)
 
     @asyncio.coroutine
     def do_st(self, arg):
+        "Print out current eventloop TaskS (filtering uninteresting ones)."
         cnt = 0
         try:
             for task in asyncio.Task.all_tasks(loop=self.loop):
@@ -322,6 +376,7 @@ class Shell(cmd.Cmd):
 
     @asyncio.coroutine
     def do_sta(self, arg):
+        "Print out current eventloop TaskS (unfiltered)."
         cnt = 0
         try:
             for task in asyncio.Task.all_tasks(loop=self.loop):
@@ -335,6 +390,7 @@ class Shell(cmd.Cmd):
 
     @asyncio.coroutine
     def do_lc(self, arg):
+        "listchans alias."
         return (yield from self.do_listchans(arg))
 
     @asyncio.coroutine
@@ -356,7 +412,7 @@ class Shell(cmd.Cmd):
 
     @asyncio.coroutine
     def do_time(self, arg):
-        "Time the passed command line."
+        "Time the passed command line (wrapping call)."
 
         start = datetime.today()
         r = yield from self.onecmd(arg)

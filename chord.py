@@ -163,7 +163,7 @@ class ChordEngine():
                         assert peer.node_id is None
                         peer.node_id = enc.generate_ID(peer.pubkey)
                         peer.distance, peer.direction =\
-                            self.calc_distance(\
+                            self.calc_log_distance(\
                                 self.node_id,\
                                 peer.node_id)
                         q = q.filter(Peer.node_id == peer.node_id)
@@ -231,8 +231,23 @@ class ChordEngine():
 
         self._async_do_stabilize()
 
-    def calc_distance(self, nid, pid):
-        "Returns: distance, direction"
+    def calc_raw_distance(self, data1, data2):
+        "Calculates the XOR distance, return is absolute value."
+
+        assert type(data1) in (bytes, bytearray)\
+            and type(data2) in (bytes, bytearray)
+
+        buf = bytearray()
+
+        for i in range(len(data1)):
+            buf.append(data1[i] ^ data2[i])
+
+        return buf
+
+    def calc_log_distance(self, nid, pid):
+        "Returns: distance, direction."
+        " distance is in log base2."
+
         if log.isEnabledFor(logging.DEBUG):
             log.debug("pid=\n[{}], nid=\n[{}].".format(hex_dump(pid),\
                 hex_dump(nid)))
@@ -805,7 +820,7 @@ class ChordEngine():
             return;
         else:
             # Let peer we connected to know our node's bind_port.
-            asyncio.async(self.tasks.do_send_node_info(peer), loop=self.loop)
+            asyncio.async(self.tasks.send_node_info(peer), loop=self.loop)
 
     @asyncio.coroutine
     def request_open_channel(self, peer, req):
@@ -946,6 +961,11 @@ class ChordEngine():
 
             return True
 
+#NOTE: The problem is that SQLite only allows bitwise operations on integer
+# columns, or at least it does NOT work on blob/bytea columns. The other
+# problem is then that integer can only hold upto 64 bits, so the node_id will
+# have to be broken up into 8 columns (as it is currently 512 bits).
+#
 # Example of non-working db code. Sqlite seems to break when order by contains
 # any bitwise operations. (It just returns the rows in order of id.)
 #            def dbcall():

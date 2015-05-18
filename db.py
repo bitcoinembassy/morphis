@@ -17,9 +17,19 @@ from sqlalchemy.types import LargeBinary, Boolean, DateTime
 log = logging.getLogger(__name__)
 
 Base = declarative_base()
+
 Peer = None
+DataBlock = None
+NodeState = None
 
 def _init_daos(Base, d):
+    # If I recall correctly, this abomination is purely for PostgreSQL mode,
+    # and only for the create schema. It is because while setting the
+    # search_path works for all usage, there is the one exception that the
+    # create schema code of SQLAlchemy runs before that gets set or something
+    # (I think that was it) and the schema won't be created in separate schemas
+    # as desired. Hopefully we can get SQLAlchemy fixed and then this
+    # complication removed.
     class Peer(Base):
         __tablename__ = "Peer"
 
@@ -45,6 +55,29 @@ def _init_daos(Base, d):
     Index("address", Peer.address)
 
     d.Peer = Peer
+
+    class DataBlock(Base):
+        __tablename__ = "DataBlock"
+
+        id = Column(Integer, primary_key=True)
+        data_id = Column(LargeBinary, nullable=False)
+        distance = Column(LargeBinary, nullable=False)
+        original_size = Column(Integer, nullable=False)
+        insert_timestamp = Column(DateTime, nullable=False)
+        last_access = Column(DateTime, nullable=True)
+
+    Index("data_id", DataBlock.data_id)
+    Index("datablock__distance", DataBlock.distance.desc())
+
+    d.DataBlock = DataBlock
+
+    class NodeState(Base):
+        __tablename__ = "NodeState"
+
+        key = Column(String(64), primary_key=True)
+        value = Column(String(128), nullable=True)
+
+    d.NodeState = NodeState
 
     return d
 
@@ -160,3 +193,5 @@ if Peer is None:
     d = _init_daos(Base, DObject())
 
     Peer = d.Peer
+    DataBlock = d.DataBlock
+    NodeState = d.NodeState

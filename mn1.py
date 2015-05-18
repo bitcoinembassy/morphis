@@ -1379,9 +1379,9 @@ def main():
 
     chandler = ChannelHandler()
 
-#    f = asyncio.start_server(accept_client, host=None, port=5555)
-#    server = loop.create_server(lambda: SshServerProtocol(loop, chandler), "127.0.0.1", 5555)
-    host, port = "127.0.0.1", 5555
+#    f = asyncio.start_server(accept_client, host=None, port=4250)
+#    server = loop.create_server(lambda: SshServerProtocol(loop, chandler), "127.0.0.1", 4250)
+    host, port = "127.0.0.1", 4250
     server = loop.create_server(lambda: _create_server_protocol(loop), host, port)
     loop.run_until_complete(server)
 
@@ -1396,7 +1396,7 @@ def main():
         client_key = rsakey.RsaKey.generate(bits=4096)
         client_key.write_private_key_file(key_filename)
 
-    client = loop.create_connection(lambda: _create_client_protocol(loop), "127.0.0.1", 5555)
+    client = loop.create_connection(lambda: _create_client_protocol(loop), "127.0.0.1", 4250)
     loop.run_until_complete(client)
 
     try:
