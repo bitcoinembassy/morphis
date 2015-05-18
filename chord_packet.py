@@ -204,14 +204,14 @@ class ChordGetData(ChordMessage):
 class ChordDataResponse(ChordMessage):
     def __init__(self, buf = None):
         self.data = None
-        self.original_length = 0 # Original (unencrypted) length.
+        self.original_size = 0 # Original (unencrypted) length.
 
         super().__init__(CHORD_MSG_DATA_RESPONSE, buf)
 
     def encode(self):
         nbuf = super().encode()
         nbuf += sshtype.encodeBinary(self.data)
-        nbuf += struct.pack(">L", self.original_length)
+        nbuf += struct.pack(">L", self.original_size)
 
         return nbuf
 
@@ -220,7 +220,7 @@ class ChordDataResponse(ChordMessage):
         i = 1
         l, self.data = sshtype.parseBinary(self.buf[i:])
         i += l
-        self.original_length = struct.unpack(">L", self.buf[i:i+4])[0]
+        self.original_size = struct.unpack(">L", self.buf[i:i+4])[0]
 
 class ChordDataPresence(ChordMessage):
     def __init__(self, buf = None):
