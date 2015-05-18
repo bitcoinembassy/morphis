@@ -1324,14 +1324,20 @@ class ChordTasks(object):
         def dbcall():
             with self.engine.node.db.open_session() as sess:
                 # We don't worry about inaccuracy caused by padding for now.
-                q = sess.query(func.sum("original_size"))
-                q = q.filter(DataBlock.distance > distance)
 
-                if q.scalar() > node.MAX_DATA_BLOCK_SIZE:
-                    # Then we have room by deleting further blocks.
-                    return True
-                else:
-                    return False
+                q = sess.query(DataBlock.original_size)\
+                    .filter(DataBlock.distance > distance)\
+                    .order_by(DataBlock.distance.desc())
+
+                freeable_space = 0
+                for original_size in page_query(q):
+                    freeable_space += original_size
+
+                    if freeable_space >= node.MAX_DATA_BLOCK_SIZE:
+                        return True
+
+                assert freeable_space < node.MAX_DATA_BLOCK_SIZE
+                return False
 
         return (yield from self.loop.run_in_executor(None, dbcall)), True
 
@@ -1441,17 +1447,14 @@ class ChordTasks(object):
                 if need_pruning:
                     freeable_space = 0
                     blocks_to_prune = []
-                    pending_freed_space = 0
 
-                    q = sess.query(DataBlock)\
+                    q = sess.query(DataBlock.id, DataBlock.original_size)\
                         .filter(DataBlock.distance > distance)\
                         .order_by(DataBlock.distance.desc())
 
                     for block in page_query(q):
-                        freeable_space += block.original_size
-
-                        blocks_to_prune.append(block.id)
-                        pending_freed_space += block.original_size
+                        freeable_space += block[1]
+                        blocks_to_prune.append(block[0])
 
                         if freeable_space >= original_size:
                             break
@@ -1490,7 +1493,7 @@ class ChordTasks(object):
                 size_diff = original_size
 
                 if need_pruning:
-                    size_diff -= pending_freed_space
+                    size_diff -= freeable_space
 
                 node_state.value = NodeState.value + size_diff
 

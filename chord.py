@@ -231,10 +231,18 @@ class ChordEngine():
 
         self._async_do_stabilize()
 
-    def calc_raw_distance(data1, data2):
+    def calc_raw_distance(self, data1, data2):
         "Calculates the XOR distance, return is absolute value."
 
-        return [x ^ y for x, y in zip(data1, data2)]
+        assert type(data1) in (bytes, bytearray)\
+            and type(data2) in (bytes, bytearray)
+
+        buf = bytearray()
+
+        for i in range(len(data1)):
+            buf += data1[i] ^ data2[i]
+
+        return buf
 
     def calc_log_distance(self, nid, pid):
         "Returns: distance, direction."
