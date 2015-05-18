@@ -75,6 +75,7 @@ def hex_string(val):
 
     return buf
 
+#TODO: Maybe move this to db.py and make it use cursor if in PostgreSQL mode.
 def page_query(query, page_size=10):
     "Batch fetch an SQLAlchemy query."
 
