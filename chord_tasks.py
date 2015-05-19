@@ -90,14 +90,14 @@ class ChordTasks(object):
         yield from self.engine._check_update_remote_address(msg, peer)
 
     @asyncio.coroutine
-    def do_stabilize(self):
+    def perform_stabilize(self):
         if not self.engine.peers:
             log.info("No connected nodes, unable to perform stabilize.")
             return
 
         # Fetch closest to ourselves.
         closest_nodes = yield from\
-            self._do_stabilize(self.engine.node_id, self.engine.peer_trie)
+            self._perform_stabilize(self.engine.node_id, self.engine.peer_trie)
 
         closest_found_distance =\
             closest_nodes[0].distance if closest_nodes else None
@@ -107,7 +107,7 @@ class ChordTasks(object):
         for i in range(len(node_id)):
             node_id[i] = (~node_id[i]) & 0xFF
 
-        furthest_nodes = yield from self._do_stabilize(node_id)
+        furthest_nodes = yield from self._perform_stabilize(node_id)
 
         if not closest_found_distance:
             closest_found_distance = chord.NODE_ID_BITS
@@ -146,7 +146,7 @@ class ChordTasks(object):
                             self.engine.calc_raw_distance(\
                                 self.engine.node_id, node_id)))
 
-            nodes = yield from self._do_stabilize(node_id)
+            nodes = yield from self._perform_stabilize(node_id)
 
             if not closest_found_distance and not nodes:
                 break
@@ -154,7 +154,7 @@ class ChordTasks(object):
                 break;
 
     @asyncio.coroutine
-    def _do_stabilize(self, node_id, input_trie=None):
+    def _perform_stabilize(self, node_id, input_trie=None):
         "Returns found nodes sorted by closets."
 
         conn_nodes = yield from\

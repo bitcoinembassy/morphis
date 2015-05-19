@@ -291,7 +291,7 @@ class ChordEngine():
 
         self._doing_stabilize = True
 
-        yield from self.tasks.do_stabilize()
+        yield from self.tasks.perform_stabilize()
 
         self._doing_stabilize = False
 
