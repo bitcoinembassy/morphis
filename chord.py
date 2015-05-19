@@ -279,7 +279,7 @@ class ChordEngine():
     def do_stabilize(self):
         if self._doing_stabilize:
             log.info("Do stabilize called when do_stabilize(..) is already"\
-                " running.")
+                " running; ignoring call.")
             return
 
         if log.isEnabledFor(logging.INFO):
@@ -301,7 +301,7 @@ class ChordEngine():
 
     def _async_process_connection_count(self):
         self._process_connection_count_handle =\
-            self.loop.call_later(60, self._async_process_connection_count)
+            self.loop.call_later(150, self._async_process_connection_count)
 
         asyncio.async(self.process_connection_count(), loop=self.loop)
 
@@ -309,7 +309,7 @@ class ChordEngine():
     def process_connection_count(self):
         if self._doing_process_connection_count:
             log.info("process_connection_count(..) called while already"\
-                " processing.")
+                " processing; ignoring call.")
             return
 
         cnt = len(self.pending_connections) + len(self.peers)
@@ -320,7 +320,7 @@ class ChordEngine():
         now = datetime.today()
         if cnt >= self.minimum_connections:
             diff = now - self._last_process_connection_count
-            if diff < timedelta(seconds=15):
+            if diff < timedelta(seconds=60):
                 # If we are connected to at least minimum_connections then only
                 # let this run every 15 seconds.
                 return

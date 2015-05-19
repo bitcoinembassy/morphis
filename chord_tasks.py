@@ -91,13 +91,17 @@ class ChordTasks(object):
 
     @asyncio.coroutine
     def perform_stabilize(self):
+        found_new_nodes = False
+
         if not self.engine.peers:
             log.info("No connected nodes, unable to perform stabilize.")
             return
 
         # Fetch closest to ourselves.
-        closest_nodes = yield from\
+        closest_nodes, new_nodes = yield from\
             self._perform_stabilize(self.engine.node_id, self.engine.peer_trie)
+
+        found_new_nodes |= new_nodes
 
         closest_found_distance =\
             closest_nodes[0].distance if closest_nodes else None
@@ -107,7 +111,9 @@ class ChordTasks(object):
         for i in range(len(node_id)):
             node_id[i] = (~node_id[i]) & 0xFF
 
-        furthest_nodes = yield from self._perform_stabilize(node_id)
+        furthest_nodes, new_nodes = yield from self._perform_stabilize(node_id)
+
+        found_new_nodes |= new_nodes
 
         if not closest_found_distance:
             closest_found_distance = chord.NODE_ID_BITS
@@ -146,16 +152,23 @@ class ChordTasks(object):
                             self.engine.calc_raw_distance(\
                                 self.engine.node_id, node_id)))
 
-            nodes = yield from self._perform_stabilize(node_id)
+            nodes, new_nodes = yield from self._perform_stabilize(node_id)
+            found_new_nodes |= new_nodes
 
             if not closest_found_distance and not nodes:
                 break
             elif bit+1 == closest_found_distance:
                 break;
 
+        if new_nodes:
+            log.info("Finished total stabilize, checking connections.")
+            yield from self.engine.process_connection_count()
+
     @asyncio.coroutine
     def _perform_stabilize(self, node_id, input_trie=None):
-        "Returns found nodes sorted by closets."
+        "returns: conn_nods, new_nodes"\
+        "   conn_nodes: found nodes sorted by closets."\
+        "   new_nodes: if any found were new."
 
         conn_nodes = yield from\
             self.send_find_node(node_id, input_trie)
@@ -168,9 +181,10 @@ class ChordTasks(object):
             # the public key.
             node.node_id = None
 
-        yield from self.engine.add_peers(conn_nodes)
+        new_nodes = yield from self.engine.add_peers(\
+            conn_nodes, process_check_connections=False)
 
-        return conn_nodes
+        return conn_nodes, bool(new_nodes)
 
     @asyncio.coroutine
     def send_get_data(self, data_key):
