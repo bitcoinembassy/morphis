@@ -3,6 +3,7 @@ import llog
 import asyncio
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import logging
+from socketserver import ThreadingMixIn
 from threading import Event
 
 log = logging.getLogger(__name__)
@@ -21,6 +22,9 @@ class DataResponseWrapper(object):
 
         self.exception = None
         self.timed_out = False
+
+class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
+    pass
 
 class MaalstroomHandler(BaseHTTPRequestHandler):
     def __init__(self, a, b, c):
@@ -113,7 +117,7 @@ def init_maalstroom_server(the_node):
 
     log.info("Starting Maalstroom server instance.")
 
-    server = HTTPServer((host, port), MaalstroomHandler)
+    server = ThreadedHTTPServer((host, port), MaalstroomHandler)
 
     def threadcall():
         try:
