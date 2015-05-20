@@ -93,7 +93,7 @@ def _send_get_data(data_key, data_rw):
             node.chord_engine.tasks.send_get_data(data_key),\
             loop=node.loop)
 
-        yield from asyncio.wait_for(future, 1.0, loop=node.loop)
+        yield from asyncio.wait_for(future, 5.0, loop=node.loop)
 
         data_rw.data = future.result()
     except asyncio.TimeoutError:
