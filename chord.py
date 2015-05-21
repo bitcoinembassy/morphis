@@ -318,12 +318,10 @@ class ChordEngine():
             return
 
         now = datetime.today()
-        if cnt >= self.minimum_connections:
-            diff = now - self._last_process_connection_count
-            if diff < timedelta(seconds=60):
-                # If we are connected to at least minimum_connections then only
-                # let this run every 15 seconds.
-                return
+        diff = now - self._last_process_connection_count
+        if (cnt >= self.minimum_connections and diff < timedelta(seconds=60))\
+                or diff < timedelta(seconds=15):
+            return
 
         self._doing_process_connection_count = True
 
