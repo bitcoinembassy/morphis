@@ -214,7 +214,8 @@ def _main():
 
     try:
         yield from __main()
-    except SystemExit:
+    except:
+        log.exception("__main()")
         loop.stop()
 
 @asyncio.coroutine
@@ -254,6 +255,8 @@ def __main():
             " FIRST PARAMETER!].")
     parser.add_argument("--maxconn", type=int,\
         help="Specify the maximum connections to seek.")
+    parser.add_argument("--maaluppage",\
+        help="Override Maalstroom upload page with the specified file.")
     parser.add_argument("--nodecount", type=int,\
         help="Specify amount of nodes to start.")
     parser.add_argument("--parallellaunch", action="store_true",\
@@ -287,6 +290,7 @@ def __main():
         port = int(port) + instanceoffset
         bindaddr = "{}:{}".format(host, port)
     maalstroom_enabled = False if args.dm else True
+    maaluppage = args.maaluppage
     nodecount = args.nodecount
     if nodecount == None:
         nodecount = 1
@@ -294,7 +298,6 @@ def __main():
     reinitds = args.reinitds
 
     while True:
-
         @asyncio.coroutine
         def _start_node(instance, bindaddr):
             node = Node(loop, instance, dburl)
@@ -324,7 +327,9 @@ def __main():
                 node.chord_engine.hard_maximum_connections = args.maxconn * 2
 
             if maalstroom_enabled:
-                yield from maalstroom.init_maalstroom_server(node)
+                if maaluppage:
+                    maalstroom.set_upload_page(maaluppage)
+                yield from maalstroom.start_maalstroom_server(node)
 
             if addpeer != None:
                 node.chord_engine.connect_peers = addpeer
