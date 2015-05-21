@@ -73,6 +73,8 @@ class KexGroup14():
 
         # compute e = g^x mod p (where g=2), and send it
         self.e = pow(self.G, self.x, self.P)
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("Sending e=[{}].".format(self.e))
         m = mnetpacket.SshKexdhInitMessage()
         m.e = self.e
         m.encode()
