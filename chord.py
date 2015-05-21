@@ -327,14 +327,12 @@ class ChordEngine():
 
         self._last_process_connection_count = now
 
-        needed = self.maximum_connections - cnt
-
-        yield from self._process_connection_count(needed)
+        yield from self._process_connection_count()
 
         self._doing_process_connection_count = False
 
     @asyncio.coroutine
-    def _process_connection_count(self, needed):
+    def _process_connection_count(self):
         log.info("Processing connection count.")
 
         def dbcall():
@@ -358,10 +356,6 @@ class ChordEngine():
         distance = closestdistance
         while True:
             if distance >= NODE_ID_BITS + 1:
-                if fetched:
-                    fetched = False
-                    distance = closestdistance
-                    continue
                 break
 
             peer_bucket = self.peer_buckets[distance - 1]
@@ -388,23 +382,17 @@ class ChordEngine():
 
                     return r
 
-            if len(pbuffer) < 10:
-                rs = yield from self.loop.run_in_executor(None, dbcall)
+            rs = yield from self.loop.run_in_executor(None, dbcall)
 
-                if not len(rs):
-                    distance += 1
-                    continue
+            distance += 1
 
-                fetched = True
+            if not len(rs):
+                continue
 
-                for dbpeer in rs:
-                    pbuffer.append(dbpeer)
+            for dbpeer in rs:
+                pbuffer.append(dbpeer)
 
-                if len(pbuffer) < 10:
-                    distance += 1
-                    continue
-
-            while len(connect_futures) < 7:
+            while pbuffer and len(connect_futures) < 7:
                 dbpeer = pbuffer.pop()
                 connect_c = self._connect_peer(dbpeer)
 
@@ -416,23 +404,10 @@ class ChordEngine():
 
             connect_futures = list(pending)
 
-            for task in connected:
-                if task.result():
-                    needed -= 1
-
-            if needed <= 0:
-                log.info("Connected to requested amount of PeerS.")
-                if connect_futures:
-                    yield from asyncio.wait(connect_futures, loop=self.loop)
-                log.info("Finished connecting.")
-                return
-
-            distance += 1
-
-        log.info("No more available PeerS to fetch.")
+        log.info("Finished refreshing all buckets.")
         if connect_futures:
             yield from asyncio.wait(connect_futures, loop=self.loop)
-        log.info("Finished connecting all PeerS we could find.")
+        log.info("Finished connecting all PeerS we tried.")
 
     @asyncio.coroutine
     def _connect_peer(self, dbpeer):
