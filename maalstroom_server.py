@@ -90,6 +90,8 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
             self.send_response(200)
             if data_rw.data[0] == 0xFF and data_rw.data[1] == 0xD8:
                 self.send_header("Content-Type", "image/jpg")
+            elif data_rw.data[0] == 0x89 and data_rw.data[1:4] == b"PNG":
+                self.send_header("Content-Type", "image/png")
             else:
                 self.send_header("Content-Type", "text/html")
             self.send_header("Content-Length", len(data_rw.data))
