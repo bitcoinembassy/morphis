@@ -879,6 +879,8 @@ class SshProtocol(asyncio.Protocol):
             self._process_buffer()
         except:
             log.exception("_process_buffer() threw:")
+            self.close()
+            return
 
     def _process_buffer(self):
         if log.isEnabledFor(logging.DEBUG):
@@ -905,9 +907,10 @@ class SshProtocol(asyncio.Protocol):
                     log.debug("packet_length=[{}].".format(packet_length))
 
                 if packet_length > MAX_PACKET_LENGTH:
-                    log.warning("Illegal packet_length [{}] received.".format(packet_length))
-                    self.close()
-                    return
+                    errmsg = "Illegal packet_length [{}] received."\
+                        .format(packet_length)
+                    log.warning(errmsg)
+                    raise SshException(errmsg)
 
                 self.bpLength = packet_length + 4 # Add size of packet_length as we leave it in buf.
             else:
@@ -996,7 +999,6 @@ class SshProtocol(asyncio.Protocol):
                 if packet_length > MAX_PACKET_LENGTH:
                     errmsg = "Illegal packet_length [{}] received.".format(packet_length)
                     log.warning(errmsg)
-                    self.close()
                     raise SshException(errmsg)
                 self.bpLength = packet_length + 4 # Add size of packet_length as we leave it in buf.
                 if self.bpLength == blksize:
@@ -1015,6 +1017,11 @@ class SshProtocol(asyncio.Protocol):
             bl = (l - l % blksize) + offset
             blks = self.buf[offset:bl]
             self.buf = self.buf[bl:]
+            assert len(blks) % blksize == 0,\
+                "len(blks)=[{}], l=[{}], offset=[{}], bl=[{},"\
+                " len(self.buf)=[{}], len(self.cbuf)=[{}], blksize=[{}]."\
+                    .format(len(blks), l, offset, bl, len(self.buf),\
+                        len(self.cbuf), blksize)
             out = self.inCipher.decrypt(blks)
             self.cbuf += out
 
