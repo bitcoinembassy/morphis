@@ -174,7 +174,7 @@ class ChordTasks(object):
             self.send_find_node(node_id, input_trie)
 
         if not conn_nodes:
-            return
+            return None, False
 
         for node in conn_nodes:
             # Do not trust hearsay node_id; add_peers will recalculate it from
@@ -529,7 +529,7 @@ class ChordTasks(object):
                     yield from done_all.wait()
                     done_all.clear()
 
-                    if data_rw.data:
+                    if data_rw.data is not None: # Handle the 'blank data' blk.
                         # If the data was read and validated successfully, then
                         # break out of the loop and clean up.
                         break
@@ -1413,8 +1413,12 @@ class ChordTasks(object):
 
             if data_key == data_rw.data_key:
                 data_rw.data = data
+                if log.isEnabledFor(logging.DEBUG):
+                    log.debug("DataResponse is valid.")
                 return True
             else:
+                if log.isEnabledFor(logging.DEBUG):
+                    log.debug("DataResponse is invalid!")
                 return False
 
         return (yield from self.loop.run_in_executor(None, threadcall))
