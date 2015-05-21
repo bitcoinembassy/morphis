@@ -56,5 +56,7 @@ def decrypt_data_block(enc_data, data_key):
 
     assert not remainer_len
 
-    # Unlike encrypt(..), decrypt(..) accepts a bytearray.
+    if type(enc_data) is bytearray:
+        enc_data = bytes(enc_data) # Silly pycrypto.
+
     return cipher.decrypt(enc_data)
