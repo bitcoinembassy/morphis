@@ -359,7 +359,8 @@ class ChordEngine():
                 break
 
             peer_bucket = self.peer_buckets[distance - 1]
-            bucket_needs = BUCKET_SIZE - len(peer_bucket)
+            # Divide by two in order to reserve space for connecting nodes.
+            bucket_needs = (BUCKET_SIZE >> 1) - len(peer_bucket)
             if bucket_needs <= 0:
                 distance += 1
                 continue
@@ -374,7 +375,7 @@ class ChordEngine():
                             or_(Peer.last_connect_attempt == None,\
                                 Peer.last_connect_attempt < grace))\
                         .order_by(func.random())\
-                        .limit(bucket_needs * 2)
+                        .limit(bucket_needs)
 
                     r = q.all()
 
@@ -394,6 +395,9 @@ class ChordEngine():
 
             while pbuffer and len(connect_futures) < 7:
                 dbpeer = pbuffer.pop()
+                if len(self.peer_buckets[dbpeer.distance - 1]) >= BUCKET_SIZE:
+                    continue
+
                 connect_c = self._connect_peer(dbpeer)
 
                 connect_futures.append(connect_c)
