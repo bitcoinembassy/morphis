@@ -105,19 +105,24 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         log.info(self.headers)
-        form = cgi.FieldStorage(\
-            fp=self.rfile,\
-            headers=self.headers,\
-            environ={\
-                "REQUEST_METHOD": "POST",\
-                "CONTENT_TYPE": self.headers["Content-Type"]})
 
-        log.info("form=[{}].".format(form))
+        if self.headers["Content-Type"] == "application/x-www-form-urlencoded":
+            data = self.rfile.read(int(self.headers["Content-Length"]))
+        else:
+            form = cgi.FieldStorage(\
+                fp=self.rfile,\
+                headers=self.headers,\
+                environ={\
+                    "REQUEST_METHOD": "POST",\
+                    "CONTENT_TYPE": self.headers["Content-Type"]})
 
-        formelement = form["fileToUpload"]
-        filename = formelement.filename
-        data = formelement.file.read()
-        log.info("filename=[{}].".format(filename))
+            log.info("form=[{}].".format(form))
+
+            formelement = form["fileToUpload"]
+            filename = formelement.filename
+            data = formelement.file.read()
+            log.info("filename=[{}].".format(filename))
+
         log.info("data=[{}].".format(data))
 
         data_rw = DataResponseWrapper()
