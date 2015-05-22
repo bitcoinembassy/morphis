@@ -274,6 +274,9 @@ class Shell(cmd.Cmd):
             if arg == 'i':
                 peers = sorted(peers, key=\
                     lambda peer: peer.dbid)
+            elif arg == 'd':
+                peers = sorted(peers, key=\
+                    lambda peer: peer.distance)
             elif arg == 'p':
                 peers = sorted(peers, key=\
                     lambda peer: peer.address.split(':')[1])
