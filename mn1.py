@@ -987,41 +987,45 @@ class SshProtocol(asyncio.Protocol):
             if len(self.buf) < blksize:
                 return
 
-            offset = 0
             if len(self.cbuf) == 0:
-                offset = blksize
-                out = self.inCipher.decrypt(self.buf[:offset])
+                out = self.inCipher.decrypt(self.buf[:blksize])
                 if log.isEnabledFor(logging.DEBUG):
-                    log.debug("Decrypted [\n{}] to [\n{}].".format(hex_dump(self.buf[:offset]), hex_dump(out)))
+                    log.debug("Decrypted [\n{}] to [\n{}]."\
+                        .format(hex_dump(self.buf[:blksize]), hex_dump(out)))
                 self.cbuf += out
                 packet_length = struct.unpack(">L", out[:4])[0]
                 log.debug("packet_length=[{}].".format(packet_length))
                 if packet_length > MAX_PACKET_LENGTH:
-                    errmsg = "Illegal packet_length [{}] received.".format(packet_length)
+                    errmsg = "Illegal packet_length [{}] received."\
+                        .format(packet_length)
                     log.warning(errmsg)
                     raise SshException(errmsg)
-                self.bpLength = packet_length + 4 # Add size of packet_length as we leave it in buf.
+
+                # Add size of packet_length as we leave it in buf.
+                self.bpLength = packet_length + 4
+
+                self.buf = self.buf[blksize:]
+
                 if self.bpLength == blksize:
-                    self.buf = self.buf[offset:]
                     return
 
-            if len(self.buf) - offset < min(1024, self.bpLength - len(self.cbuf) + self.inHmacSize):
-                if offset:
-                    self.buf = self.buf[offset:]
+            if len(self.buf) < min(\
+                    1024, self.bpLength - len(self.cbuf) + self.inHmacSize):
                 return
 
             l = min(len(self.buf), self.bpLength - len(self.cbuf))
             if not l:
                 return
 
-            bl = (l - l % blksize) + offset
-            blks = self.buf[offset:bl]
-            self.buf = self.buf[bl:]
+            dsize = l - (l % blksize)
+            blks = self.buf[:dsize]
+            self.buf = self.buf[dsize:]
             assert len(blks) % blksize == 0,\
-                "len(blks)=[{}], l=[{}], offset=[{}], bl=[{},"\
-                " len(self.buf)=[{}], len(self.cbuf)=[{}], blksize=[{}]."\
-                    .format(len(blks), l, offset, bl, len(self.buf),\
-                        len(self.cbuf), blksize)
+                "len(blks)=[{}], dsize=[{}], l=[{}],"\
+                " len(self.buf)=[{}], len(self.cbuf)=[{}], blksize=[{}],"\
+                " self.bpLength=[{}], type(blks)=[{}]."\
+                    .format(len(blks), dsize, l, len(self.buf),\
+                        len(self.cbuf), blksize, self.bpLength, type(blks))
             out = self.inCipher.decrypt(blks)
             self.cbuf += out
 
