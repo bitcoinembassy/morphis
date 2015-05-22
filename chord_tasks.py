@@ -1329,6 +1329,11 @@ class ChordTasks(object):
 
     @asyncio.coroutine
     def _check_has_data(self, data_id):
+        distance = self.engine.calc_raw_distance(self.engine.node_id, data_id)
+
+        if distance > self.engine.furthest_data_block:
+            return False
+
         def dbcall():
             with self.engine.node.db.open_session() as sess:
                 q = sess.query(func.count("*"))
@@ -1356,6 +1361,10 @@ class ChordTasks(object):
                 " closer than enough stored blocks to fit with a purge.")
 
         distance = self.engine.calc_raw_distance(self.engine.node_id, data_id)
+
+        if distance > self.engine.furthest_data_block:
+            return False, False
+
         current_datastore_size = self.engine.node.datastore_size
         current_datastore_max_size = self.engine.node.datastore_max_size
 
@@ -1616,6 +1625,9 @@ class ChordTasks(object):
                     new_file.write(enc_data_remainder)
 
             yield from self.loop.run_in_executor(None, iocall)
+
+            if distance > self.engine.furthest_data_block:
+                self.engine.furthest_data_block = distance
 
             if log.isEnabledFor(logging.INFO):
                 log.info("Stored data for data_id=[{}] as [{}.blk]."\

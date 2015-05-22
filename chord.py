@@ -73,6 +73,8 @@ class ChordEngine():
 
         self.tasks = ct.ChordTasks(self)
 
+        self.furthest_data_block = b""
+
     @property
     def bind_address(self):
         return self._bind_address

@@ -127,12 +127,28 @@ class Node():
                         .first()
 
                     if node_state:
-                        return int(node_state.value)
+                        datastore_size = int(node_state.value)
                     else:
-                        return 0
+                        datastore_size = 0
 
-            self.datastore_size =\
+                    max_distance = sess.query(db.DataBlock.distance)\
+                        .order_by(db.DataBlock.distance.desc())\
+                        .first()
+
+                    if max_distance:
+                        max_distance = max_distance[0]
+                    else:
+                        max_distance = b""
+
+                    if log.isEnabledFor(logging.INFO):
+                        log.info("max_distance=[{}].".format(max_distance))
+
+                    return datastore_size, max_distance
+
+            self.datastore_size, self.chord_engine.furthest_data_block =\
                 yield from self.loop.run_in_executor(None, dbcall)
+
+        assert type(self.chord_engine.furthest_data_block) is bytes
 
     @asyncio.coroutine
     def create_schema(self):
@@ -317,10 +333,10 @@ def __main():
             else:
                 node.load_key()
 
+            node.init_chord()
+
             yield from\
                 node.init_store(dssize << 20, reinitds) # Convert MBs to bytes.
-
-            node.init_chord()
 
             if args.maxconn:
                 node.chord_engine.maximum_connections = args.maxconn
