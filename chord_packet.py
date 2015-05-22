@@ -34,7 +34,7 @@ class ChordMessage(object):
     def parse_type(buf):
         return struct.unpack("B", buf[0:1])[0]
 
-    def __init__(self, packet_type = None, buf = None):
+    def __init__(self, packet_type=None, buf=None):
         self.buf = buf
         self.packet_type = packet_type
 
