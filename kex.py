@@ -57,6 +57,8 @@ class KexGroup14():
 #            self.transport._expect_packet(_MSG_KEXDH_INIT)
 
             pkt = yield from self.protocol.read_packet()
+            if not pkt:
+                return False
             m = mnetpacket.SshKexdhInitMessage(pkt)
             if log.isEnabledFor(logging.DEBUG):
                 log.debug("Client sent e=[{}].".format(m.e))
@@ -82,6 +84,8 @@ class KexGroup14():
 
 #        self.transport._expect_packet(_MSG_KEXDH_REPLY)
         pkt = yield from self.protocol.read_packet()
+        if not pkt:
+            return False
         m = mnetpacket.SshKexdhReplyMessage(pkt)
 
         r = yield from self._parse_kexdh_reply(m)
