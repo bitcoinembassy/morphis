@@ -7,6 +7,7 @@ import logging
 from socketserver import ThreadingMixIn
 from threading import Event
 
+import base58
 import enc
 from mutil import hex_string
 
@@ -41,39 +42,60 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
         self.protocol_version = "HTTP/1.1"
 
     def do_GET(self):
-        try:
-            data_key_hex = self.path[1:]
-            if data_key_hex[-1] == '/':
-                data_key_hex = data_key_hex[:-1]
+        rpath = self.path[1:]
+        if rpath[-1] == '/':
+            rpath = rpath[:-1]
 
-            if data_key_hex == "upload":
-                if self.headers["If-None-Match"] == upload_page_content_id:
-                    self.send_response(304)
-                    self.send_header("ETag", upload_page_content_id)
-                    self.end_headers()
-                    return
-
-                self.send_response(200)
-                self.send_header("Content-Length", len(upload_page_content))
-                self.send_header("Cache-Control", "public")
+        if rpath == "upload":
+            if self.headers["If-None-Match"] == upload_page_content_id:
+                self.send_response(304)
                 self.send_header("ETag", upload_page_content_id)
                 self.end_headers()
-                self.wfile.write(upload_page_content)
                 return
 
-            if self.headers["If-None-Match"] == data_key_hex:
-                self.send_response(304)
-                self.send_header("ETag", data_key_hex)
+            self.send_response(200)
+            self.send_header("Content-Length", len(upload_page_content))
+            self.send_header("Cache-Control", "public")
+            self.send_header("ETag", upload_page_content_id)
+            self.end_headers()
+            self.wfile.write(upload_page_content)
+            return
+
+        if self.headers["If-None-Match"] == rpath:
+            self.send_response(304)
+            self.send_header("ETag", rpath)
+            self.end_headers()
+            return
+
+        if log.isEnabledFor(logging.INFO):
+            log.info("rpath=[{}].".format(rpath))
+
+        error = False
+        try:
+            if len(rpath) == 128:
+                data_key = bytes.fromhex(rpath)
+            elif len(rpath) == 88 + 4 and rpath.startswith("get/"):
+                data_key = base58.decode(rpath[4:])
+
+                hex_key = hex_string(data_key)
+
+                self.send_response(301)
+                self.send_header("Location", "morphis://{}".format(hex_key))
                 self.end_headers()
+
+                self.wfile.write(\
+                    ("<a href=\"morphis://{}\">{}</a>\n{}"\
+                        .format(hex_key, hex_key, hex_key))\
+                            .encode())
                 return
-
-            if log.isEnabledFor(logging.INFO):
-                log.info("data_key_hex=[{}].".format(data_key_hex))
-
-            data_key = bytes.fromhex(data_key_hex)
+            else:
+                error = True
+                log.warning("Invalid request: [{}].".format(rpath))
         except:
-            log.exception("fromhex(..)")
+            error = True
+            log.exception("decode")
 
+        if error:
             self.send_response(400)
             self.end_headers()
             self.wfile.write(b"400 Bad Request.")
@@ -96,7 +118,7 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
                 self.send_header("Content-Type", "text/html")
             self.send_header("Content-Length", len(data_rw.data))
             self.send_header("Cache-Control", "public")
-            self.send_header("ETag", data_key_hex)
+            self.send_header("ETag", rpath)
             self.end_headers()
 
             self.wfile.write(data_rw.data)
@@ -133,10 +155,12 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
         data_rw.is_done.wait()
 
         if data_rw.data_key:
-            message = hex_string(data_rw.data_key)
+            hex_key = hex_string(data_rw.data_key)
+            message = "<a href=\"morphis://{}\">perma link</a>\n{}\n{}"\
+                .format(hex_key, hex_key, base58.encode(data_rw.data_key))
 
             self.send_response(200)
-            self.send_header("Content-Type", "text/plain")
+            self.send_header("Content-Type", "text/html")
             self.send_header("Content-Length", len(message))
             self.end_headers()
 
