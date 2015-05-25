@@ -79,14 +79,17 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
 
                 hex_key = hex_string(data_key)
 
+                message = ("<a href=\"morphis://{}\">{}</a>\n{}"\
+                    .format(hex_key, hex_key, hex_key))\
+                        .encode()
+
                 self.send_response(301)
                 self.send_header("Location", "morphis://{}".format(hex_key))
+                self.send_header("Content-Type", "text/html")
+                self.send_header("Content-Length", len(message))
                 self.end_headers()
 
-                self.wfile.write(\
-                    ("<a href=\"morphis://{}\">{}</a>\n{}"\
-                        .format(hex_key, hex_key, hex_key))\
-                            .encode())
+                self.wfile.write(message)
                 return
             else:
                 error = True
