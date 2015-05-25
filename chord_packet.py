@@ -247,12 +247,24 @@ class ChordStoreData(ChordMessage):
         self.data_id = None # H(H(d))
         self.data = None
 
+        self.pubkey = None
+        self.path_hash = None
+        self.version = None
+        self.signature = None
+
         super().__init__(CHORD_MSG_STORE_DATA, buf)
 
     def encode(self):
         nbuf = super().encode()
         nbuf += sshtype.encodeBinary(self.data_id)
         nbuf += sshtype.encodeBinary(self.data)
+
+        if self.pubkey:
+            # Updateable keys.
+            nbuf += sshtype.encodeBinary(self.pubkey)
+            nbuf += sshtype.encodeBinary(self.path_hash)
+            nbuf += sshtype.encodeMpint(self.version)
+            nbuf += sshtype.encodeBinary(self.signature)
 
         return nbuf
 
@@ -262,6 +274,18 @@ class ChordStoreData(ChordMessage):
         l, self.data_id = sshtype.parseBinary(self.buf[i:])
         i += l
         l, self.data = sshtype.parseBinary(self.buf[i:])
+        i += l
+
+        if i == len(self.buf):
+            return
+
+        l, self.pubkey = sshtype.parseBinary(self.buf[i:])
+        i += l
+        l, self.path_hash = sshtype.parseBinary(self.buf[i:])
+        i += l
+        l, self.version = sshtype.parseMpint(self.buf[i:])
+        i += l
+        l, self.signature = sshtype.parseBinary(self.buf[i:])
 
 class ChordDataStored(ChordMessage):
     def __init__(self, buf = None):
