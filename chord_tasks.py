@@ -201,7 +201,41 @@ class ChordTasks(object):
     def send_store_updateable_key(\
             self, data, privatekey=None, path=None, version=None,\
             key_callback=None):
-        pass
+
+        public_key_bytes = privatekey.asbytes() # asbytes=public key.
+
+        hm = bytearray()
+        hm += sshtype.encodeBinary(public_key_bytes)
+        if path:
+            path_hash = enc.generate_ID(path)
+            hm += sshtype.encodeBinary(path_hash)
+
+        data_id = enc.generate_ID(hm)
+
+        key_callback(data_id)
+
+        hm.clear()
+        if path:
+            hm += sshtype.encodeBinary(path_hash)
+        hm += sshtype.encodeMpint(version)
+        hm += sshtype.encodeBinary(enc.generate_ID(data))
+
+        signature = privatekey.sign_ssh_data(hm)
+
+        sdmsg = cp.ChordStoreData()
+        sdmsg.data = data
+        sdmsg.data_id = data_id # Not used?
+        sdmsg.pubkey = public_key_bytes
+        if path:
+            sdmsg.path = path_hash
+        sdmsg.version = version
+        sdmsg.signature = signature
+
+        storing_nodes =\
+            yield from self.send_find_node(\
+                data_id, for_data=True, data_msg=sdmsg)
+
+        return storing_nodes
 
     @asyncio.coroutine
     def send_store_data(self, data, key_callback=None):
