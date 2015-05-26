@@ -198,6 +198,12 @@ class ChordTasks(object):
         return data
 
     @asyncio.coroutine
+    def send_store_updateable_key(\
+            self, data, privatekey=None, path=None, version=None,\
+            key_callback=None):
+        pass
+
+    @asyncio.coroutine
     def send_store_data(self, data, key_callback=None):
         "Sends a StoreData request, returning the count of nodes that claim"\
         " to have stored it."

@@ -10,6 +10,7 @@ from threading import Event
 import base58
 import enc
 from mutil import hex_string
+import rsakey
 
 log = logging.getLogger(__name__)
 
@@ -19,8 +20,9 @@ port = 4251
 node = None
 server = None
 
-upload_page_content = b'<html><head><title>Morphis Maalstroom Upload</title></head><body><p>Select the file to upload below:</p><form action="upload" method="post" enctype="multipart/form-data"><input type="file" name="fileToUpload" id="fileToUpload"/><input type="submit" value="Upload File" name="submit"/></form></body></html>'
-upload_page_content_id = hex_string(enc.generate_ID(upload_page_content))
+upload_page_content = None
+static_upload_page_content = None
+static_upload_page_content_id = None
 
 class DataResponseWrapper(object):
     def __init__(self):
@@ -46,19 +48,49 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
         if rpath[-1] == '/':
             rpath = rpath[:-1]
 
-        if rpath == "upload":
-            if self.headers["If-None-Match"] == upload_page_content_id:
-                self.send_response(304)
-                self.send_header("ETag", upload_page_content_id)
+        s_upload = "upload"
+        if rpath.startswith(s_upload):
+            if rpath.startswith("upload/generate"):
+                priv_key =\
+                    base58.encode(\
+                        rsakey.RsaKey.generate(bits=4096)._encode_key())
+
+                self.send_response(307)
+                self.send_header("Location", "{}".format(priv_key))
                 self.end_headers()
                 return
 
+            if self.headers["If-None-Match"] == static_upload_page_content_id:
+                self.send_response(304)
+                self.send_header("ETag", static_upload_page_content_id)
+                self.end_headers()
+                return
+
+            if len(rpath) == len(s_upload):
+                content = static_upload_page_content
+                content_id = static_upload_page_content_id
+            else:
+                content =\
+                    upload_page_content.replace(\
+                        b"${PRIVATE_KEY}",\
+                        rpath[len(s_upload)+1:].encode())
+                content =\
+                    content.replace(\
+                        b"${UPDATEABLE_KEY_MODE_DISPLAY}",\
+                        b"")
+                content =\
+                    content.replace(\
+                        b"${STATIC_MODE_DISPLAY}",\
+                        b"display: none")
+
+                content_id = enc.generate_ID(content)
+
             self.send_response(200)
-            self.send_header("Content-Length", len(upload_page_content))
+            self.send_header("Content-Length", len(content))
             self.send_header("Cache-Control", "public")
-            self.send_header("ETag", upload_page_content_id)
+            self.send_header("ETag", content_id)
             self.end_headers()
-            self.wfile.write(upload_page_content)
+            self.wfile.write(content)
             return
 
         if self.headers["If-None-Match"] == rpath:
@@ -141,19 +173,47 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
                     "REQUEST_METHOD": "POST",\
                     "CONTENT_TYPE": self.headers["Content-Type"]})
 
-            log.info("form=[{}].".format(form))
+
+            if log.isEnabledFor(logging.DEBUG):
+                log.debug("form=[{}].".format(form))
 
             formelement = form["fileToUpload"]
             filename = formelement.filename
             data = formelement.file.read()
-            log.info("filename=[{}].".format(filename))
 
-        log.info("data=[{}].".format(data))
+            if log.isEnabledFor(logging.INFO):
+                log.info("filename=[{}].".format(filename))
+
+            try:
+                privatekey = form["privateKey"].value
+
+                if privatekey == "${PRIVATE_KEY}":
+                    raise KeyError()
+
+                if log.isEnabledFor(logging.INFO):
+                    log.info("privatekey=[{}].".format(privatekey))
+
+                privatekey = base58.decode(privatekey)
+
+                privatekey = rsakey.RsaKey(privdata=privatekey)
+
+                path = form["path"].value
+                version = form["version"].value
+            except KeyError:
+                privatekey = None
+
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("data=[{}].".format(data))
 
         data_rw = DataResponseWrapper()
 
-        node.loop.call_soon_threadsafe(\
-            asyncio.async, _send_store_data(data, data_rw))
+        if privatekey:
+            node.loop.call_soon_threadsafe(\
+                asyncio.async, _send_store_data(\
+                    data, data_rw, privatekey, path, version))
+        else:
+            node.loop.call_soon_threadsafe(\
+                asyncio.async, _send_store_data(data, data_rw))
 
         data_rw.is_done.wait()
 
@@ -204,14 +264,20 @@ def _send_get_data(data_key, data_rw):
     data_rw.is_done.set()
 
 @asyncio.coroutine
-def _send_store_data(data, data_rw):
+def _send_store_data(data, data_rw, privatekey=None, path=None, version=None):
     try:
         def key_callback(data_key):
             data_rw.data_key = data_key
 
-        future = asyncio.async(\
-            node.chord_engine.tasks.send_store_data(data, key_callback),\
-            loop=node.loop)
+        if privatekey:
+            future = asyncio.async(\
+                node.chord_engine.tasks.send_store_updateable_key(\
+                    data, privatekey, path, version, key_callback),\
+                loop=node.loop)
+        else:
+            future = asyncio.async(\
+                node.chord_engine.tasks.send_store_data(data, key_callback),\
+                loop=node.loop)
 
         yield from asyncio.wait_for(future, 30.0, loop=node.loop)
     except asyncio.TimeoutError:
@@ -259,5 +325,24 @@ def set_upload_page(filepath):
     global upload_page_content
 
     upf = open(filepath, "rb")
-    upload_page_content = upf.read()
-    upload_page_content_id = enc.generate_ID(upload_page_content)
+    _set_upload_page(upf.read())
+
+def _set_upload_page(content):
+    global static_upload_page_content, static_upload_page_content_id,\
+        upload_page_content
+
+    static_upload_page_content =\
+        content.replace(\
+            b"${UPDATEABLE_KEY_MODE_DISPLAY}",\
+            b"display: none")
+    static_upload_page_content=\
+        static_upload_page_content.replace(\
+            b"${STATIC_MODE_DISPLAY}",\
+            b"")
+
+    static_upload_page_content_id =\
+        hex_string(enc.generate_ID(static_upload_page_content))
+
+    upload_page_content = content
+
+_set_upload_page(b'<html><head><title>Morphis Maalstroom Upload</title></head><body><p>Select the file to upload below:</p><form action="upload" method="post" enctype="multipart/form-data"><input type="file" name="fileToUpload" id="fileToUpload"/><br/><div style="${UPDATEABLE_KEY_MODE_DISPLAY}"><br/><label for="privateKey">Private Key</label><textarea name="privateKey" id="privateKey" rows="5" cols="80">${PRIVATE_KEY}</textarea><br/><label for="path">Path</label><input type="textfield" name="path"/><br/><label for="version">Version</label><input type="textfield" name="version"/></div><input type="submit" value="Upload File" name="submit"/></form><p style="${STATIC_MODE_DISPLAY}"><a href="morphis://upload/generate">switch to updateable key mode</a></p></body></html>')
