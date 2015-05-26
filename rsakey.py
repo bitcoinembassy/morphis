@@ -30,7 +30,7 @@ class RsaKey(asymkey.AsymKey):
     data.
     """
 
-    def __init__(self, data=None, filename=None, password=None, vals=None, file_obj=None):
+    def __init__(self, data=None, privdata=None, filename=None, password=None, vals=None, file_obj=None):
         self.n = None
         self.e = None
         self.d = None
@@ -46,13 +46,17 @@ class RsaKey(asymkey.AsymKey):
             self.e, self.n = vals
         else:
             if data is None:
-                raise SshException('Key object may not be empty')
-            i, v = sshtype.parseString(data)
-            if v != 'ssh-rsa':
-                raise SshException('Invalid key')
-            l, self.e = sshtype.parseMpint(data[i:])
-            i += l
-            l, self.n = sshtype.parseMpint(data[i:])
+                if privdata is None:
+                    raise SshException('Key object may not be empty')
+                else:
+                    self._decode_key(privdata)
+            else:
+                i, v = sshtype.parseString(data)
+                if v != 'ssh-rsa':
+                    raise SshException('Invalid key')
+                l, self.e = sshtype.parseMpint(data[i:])
+                i += l
+                l, self.n = sshtype.parseMpint(data[i:])
         self.size = util.bit_length(self.n)
 
     def asbytes(self):
