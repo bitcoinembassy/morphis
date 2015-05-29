@@ -1576,7 +1576,7 @@ class ChordTasks(object):
                     old_entry = sess.query(DataBlock)\
                         .filter(DataBlock.data_id == data_id)\
                         .first()
-                    if old_entry.version >= dmsg.version:
+                    if old_entry and old_entry.version >= dmsg.version:
                         # We only want to store newer versions.
                         return None, None
                 else:
