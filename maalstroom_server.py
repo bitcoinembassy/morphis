@@ -201,6 +201,10 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
 
                 path = form["path"].value
                 version = form["version"].value
+                if not version:
+                    version = 0
+                else:
+                    version = int(version)
             except KeyError:
                 privatekey = None
 

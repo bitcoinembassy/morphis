@@ -34,6 +34,8 @@ class DataResponseWrapper(object):
     def __init__(self, data_key):
         self.data_key = data_key
         self.data = None
+        self.pubkey = None
+        self.path_hash = b""
 
 class TunnelMeta(object):
     def __init__(self, peer=None, jobs=None):
@@ -206,23 +208,24 @@ class ChordTasks(object):
             self, data, privatekey=None, path=None, version=None,\
             key_callback=None):
 
+        assert not path or type(path) is bytes
+        assert not version or type(version) is int
+
         public_key_bytes = privatekey.asbytes() # asbytes=public key.
 
-        if path is None:
-            path = b""
-        path_hash = enc.generate_ID(path)
+        data_key = enc.generate_ID(public_key_bytes)
 
-        hm = bytearray()
-        hm += sshtype.encodeBinary(public_key_bytes)
-        hm += sshtype.encodeBinary(path_hash)
-
-        data_key = enc.generate_ID(hm)
+        if path:
+            path_hash = enc.generate_ID(path)
+            data_key = enc.generate_ID(data_key + path_hash)
+        else:
+            path_hash = b""
 
         key_callback(data_key)
 
         data_id = enc.generate_ID(data_key)
 
-        hm.clear()
+        hm = bytearray()
         hm += sshtype.encodeBinary(path_hash)
         hm += sshtype.encodeMpint(version)
         hm += sshtype.encodeBinary(enc.generate_ID(data))
@@ -347,6 +350,11 @@ class ChordTasks(object):
 
         sent_data_request = Counter(0)
         data_rw = DataResponseWrapper(data_key)
+        if data_msg:
+            if data_msg.pubkey:
+                data_rw.pubkey = data_msg.pubkey
+            if data_msg.path_hash:
+                data_rw.path_hash = data_msg.path_hash
 
         for depth in range(1, maximum_depth):
             direct_peers_lower = 0
@@ -474,12 +482,19 @@ class ChordTasks(object):
 
                         log.info("We have the data; fetching.")
 
-                        enc_data, data_l =\
-                            yield from self._retrieve_data(node_id)
+                        enc_data, data_l, version, signature, epubkey,\
+                            pubkeylen =\
+                                yield from self._retrieve_data(node_id)
 
                         drmsg = cp.ChordDataResponse()
                         drmsg.data = enc_data
                         drmsg.original_size = data_l
+                        if version is not None:
+                            drmsg.version = version
+                            drmsg.signature = signature
+                            if epubkey:
+                                drmsg.epubkey = epubkey
+                                drmsg.pubkeylen = pubkeylen
 
                         r = yield from self._process_data_response(\
                             drmsg, None, None, data_rw)
@@ -1157,11 +1172,18 @@ class ChordTasks(object):
                 if log.isEnabledFor(logging.INFO):
                     log.info("Received ChordGetData packet, fetching.")
 
-                data, data_l = yield from self._retrieve_data(fnmsg.node_id)
+                data, data_l, version, signature, epubkey, pubkeylen =\
+                    yield from self._retrieve_data(fnmsg.node_id)
 
                 drmsg = cp.ChordDataResponse()
                 drmsg.data = data
                 drmsg.original_size = data_l
+                if version is not None:
+                    drmsg.version = version
+                    drmsg.signature = signature
+                    if epubkey:
+                        drmsg.epubkey = epubkey
+                        drmsg.pubkeylen = pubkeylen
 
                 peer.protocol.write_channel_data(local_cid, drmsg.encode())
 
@@ -1448,8 +1470,8 @@ class ChordTasks(object):
         return (yield from self.loop.run_in_executor(None, dbcall)), True
 
     @asyncio.coroutine
-    def _process_data_response(self, data_response, tun_meta, path, data_rw):
-        "Processes the DataResponse packet, storing the decrypted data into"\
+    def _process_data_response(self, drmsg, tun_meta, path, data_rw):
+        "Processes the DataResponse message, storing the decrypted data into"\
         " data_rw if it matches the original key. Returns True on success,"\
         " False otherwise."
 
@@ -1459,15 +1481,45 @@ class ChordTasks(object):
                 .format(peer_dbid, path))
 
         def threadcall():
-            data = enc.decrypt_data_block(data_response.data, data_rw.data_key)
+            data = enc.decrypt_data_block(drmsg.data, data_rw.data_key)
 
             # Truncate the data to exclude the cipher padding.
-            data = data[:data_response.original_size]
+            data = data[:drmsg.original_size]
 
-            # Verify that the decrypted data matches the original hash of it.
-            data_key = enc.generate_ID(data)
+            data_hash = enc.generate_ID(data)
 
-            if data_key == data_rw.data_key:
+            if drmsg.version is not None:
+                # Updateable key mode.
+                if data_rw.pubkey:
+                    pubkey = data_rw.pubkey
+                else:
+                    pubkey = enc.decrypt_data_block(\
+                        drmsg.epubkey, data_rw.data_key)
+                    # Truncate the key data to exclude the cipher padding.
+                    pubkey = pubkey[:drmsg.pubkeylen]
+
+                    data_key = enc.generate_ID(pubkey)
+                    if data_rw.path_hash:
+                        data_key = enc.generate_ID(data_key + data_rw.path_hash)
+
+                    if data_key != data_rw.data_key:
+                        if log.isEnabledFor(logging.DEBUG):
+                            log.debug("DataResponse is invalid!")
+                        return False
+
+                hm = bytearray()
+                hm += sshtype.encodeBinary(data_rw.path_hash)
+                hm += sshtype.encodeMpint(drmsg.version)
+                hm += sshtype.encodeBinary(data_hash)
+
+                valid =\
+                    rsakey.RsaKey(pubkey).verify_ssh_sig(hm, drmsg.signature)
+            else:
+                # Verify that the decrypted data matches the original hash of
+                # it.
+                valid = data_hash == data_rw.data_key
+
+            if valid:
                 data_rw.data = data
                 if log.isEnabledFor(logging.DEBUG):
                     log.debug("DataResponse is valid.")
@@ -1483,8 +1535,10 @@ class ChordTasks(object):
     def _retrieve_data(self, data_id):
         "Retrieve data for data_id from the file system (and meta data from"\
         " the database."\
-        "returns: data, original_size"\
-        "   original_size is the size of the data before it was encrypted."
+        "returns: data, original_size,\
+                <version, signature, epubkey, pubkeylen>"\
+        "   original_size is the size of the data before it was encrypted."\
+        "   version, Etc. are for updateable keys."
 
         def dbcall():
             with self.engine.node.db.open_session() as sess:
@@ -1513,7 +1567,8 @@ class ChordTasks(object):
 
         enc_data = yield from self.loop.run_in_executor(None, iocall)
 
-        return enc_data, data_block.original_size
+        return enc_data, data_block.original_size, data_block.version,\
+            data_block.signature, data_block.epubkey, data_block.pubkeylen
 
     @asyncio.coroutine
     def _store_data(self, peer, dmsg, need_pruning):
@@ -1537,13 +1592,18 @@ class ChordTasks(object):
         if dmsg.pubkey:
             pubkey = rsakey.RsaKey(dmsg.pubkey)
 
-            hm = bytearray()
-            hm += sshtype.encodeBinary(dmsg.pubkey)
-            hm += sshtype.encodeBinary(dmsg.path_hash)
-            data_key = enc.generate_ID(hm)
+            data_key = enc.generate_ID(dmsg.pubkey)
+            if dmsg.path_hash:
+                data_key = enc.generate_ID(data_key + dmsg.path_hash)
             data_id = enc.generate_ID(data_key)
 
-            hm.clear()
+            if data_id != dmsg.data_id:
+                errmsg = "Peer (dbid=[{}]) sent a data_id that didn't match"\
+                    " the updateable key id!".format(peer_dbid)
+                log.warning(errmsg)
+                raise ChordException(errmsg)
+
+            hm = bytearray()
             hm += sshtype.encodeBinary(dmsg.path_hash)
             hm += sshtype.encodeMpint(dmsg.version)
             hm += sshtype.encodeBinary(enc.generate_ID(data))
@@ -1627,6 +1687,11 @@ class ChordTasks(object):
 
                 if pubkey:
                     data_block.version = dmsg.version
+                    data_block.signature = dmsg.signature
+                    if dmsg.path_hash == b'':
+                        a, b = enc.encrypt_data_block(dmsg.pubkey, data_key)
+                        data_block.epubkey = a + b
+                        data_block.pubkeylen = len(dmsg.pubkey)
 
                 data_block.original_size = original_size
                 data_block.insert_timestamp = datetime.today()
