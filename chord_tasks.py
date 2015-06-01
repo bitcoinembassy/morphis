@@ -861,8 +861,8 @@ class ChordTasks(object):
                             continue
                         else:
                             if log.isEnabledFor(logging.DEBUG):
-                                log.debug("Received DataStored message from"\
-                                    " Peer (dbid={})."\
+                                log.debug("Received DataStored (stored=[{}])"\
+                                    " message from Peer (dbid={})."\
                                         .format(tun_meta.peer.dbid, path))
 
                     query_cntr.value -= 1
