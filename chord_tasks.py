@@ -36,6 +36,7 @@ class DataResponseWrapper(object):
         self.data = None
         self.pubkey = None
         self.path_hash = b""
+        self.version = None
 
 class TunnelMeta(object):
     def __init__(self, peer=None, jobs=None):
@@ -636,6 +637,10 @@ class ChordTasks(object):
 
                 if not data_rw.data:
                     log.info("Failed to find the data!")
+                else:
+                    if data_rw.version:
+                        if log.isEnabledFor(logging.INFO):
+                            log.info("version=[{}].".format(data_rw.version))
 
                 return data_rw.data
 
@@ -1490,6 +1495,8 @@ class ChordTasks(object):
 
             if drmsg.version is not None:
                 # Updateable key mode.
+                data_rw.version = drmsg.version
+
                 if data_rw.pubkey:
                     pubkey = data_rw.pubkey
                 else:
