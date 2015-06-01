@@ -16,8 +16,10 @@ from chordexception import ChordException
 from db import Peer, DataBlock, NodeState
 from mutil import hex_string, page_query
 import enc
-import peer as mnpeer
 import node as mnnode
+import peer as mnpeer
+import rsakey
+import sshtype
 
 log = logging.getLogger(__name__)
 
@@ -32,6 +34,9 @@ class DataResponseWrapper(object):
     def __init__(self, data_key):
         self.data_key = data_key
         self.data = None
+        self.pubkey = None
+        self.path_hash = b""
+        self.version = None
 
 class TunnelMeta(object):
     def __init__(self, peer=None, jobs=None):
@@ -58,6 +63,8 @@ class VPeer(object):
 
 EMPTY_PEER_LIST_MESSAGE = cp.ChordPeerList(peers=[])
 EMPTY_PEER_LIST_PACKET = EMPTY_PEER_LIST_MESSAGE.encode()
+EMPTY_GET_DATA_MESSAGE = cp.ChordGetData()
+EMPTY_GET_DATA_PACKET = EMPTY_GET_DATA_MESSAGE.encode()
 
 class ChordTasks(object):
     def __init__(self, engine):
@@ -198,6 +205,49 @@ class ChordTasks(object):
         return data
 
     @asyncio.coroutine
+    def send_store_updateable_key(\
+            self, data, privatekey=None, path=None, version=None,\
+            key_callback=None):
+
+        assert not path or type(path) is bytes
+        assert not version or type(version) is int
+
+        public_key_bytes = privatekey.asbytes() # asbytes=public key.
+
+        data_key = enc.generate_ID(public_key_bytes)
+
+        if path:
+            path_hash = enc.generate_ID(path)
+            data_key = enc.generate_ID(data_key + path_hash)
+        else:
+            path_hash = b""
+
+        key_callback(data_key)
+
+        data_id = enc.generate_ID(data_key)
+
+        hm = bytearray()
+        hm += sshtype.encodeBinary(path_hash)
+        hm += sshtype.encodeMpint(version)
+        hm += sshtype.encodeBinary(enc.generate_ID(data))
+
+        signature = privatekey.sign_ssh_data(hm)
+
+        sdmsg = cp.ChordStoreData()
+        sdmsg.data = data
+        sdmsg.data_id = data_id # Not used?
+        sdmsg.pubkey = public_key_bytes
+        sdmsg.path_hash = path_hash
+        sdmsg.version = version
+        sdmsg.signature = signature
+
+        storing_nodes =\
+            yield from self.send_find_node(\
+                data_id, for_data=True, data_msg=sdmsg)
+
+        return storing_nodes
+
+    @asyncio.coroutine
     def send_store_data(self, data, key_callback=None):
         "Sends a StoreData request, returning the count of nodes that claim"\
         " to have stored it."
@@ -208,22 +258,28 @@ class ChordTasks(object):
             key_callback(data_key)
         data_id = enc.generate_ID(data_key)
 
+        sdmsg = cp.ChordStoreData()
+        sdmsg.data = data
+        sdmsg.data_id = data_id
+
         storing_nodes =\
-            yield from self.send_find_node(data_id, for_data=True, data=data)
+            yield from self.send_find_node(\
+                data_id, for_data=True, data_msg=sdmsg)
 
         return storing_nodes
 
     @asyncio.coroutine
     def send_find_node(self, node_id, input_trie=None, for_data=False,\
-            data=None, data_key=None):
+            data_msg=None, data_key=None):
         "Returns found nodes sorted by closets. If for_data is True then"\
-        " this is really {get/store}_data instead of find_node. If data is"\
-        " None than it is get_data and the data is returned. Store data"\
+        " this is really {get/store}_data instead of find_node. If data_msg"\
+        " is None than it is get_data and the data is returned. Store data"\
         " currently returns the count of nodes that claim to have stored the"\
         " data."
 
         if for_data:
-            data_mode = cp.DataMode.get if data is None else cp.DataMode.store
+            data_mode = cp.DataMode.get if data_msg is None\
+                else cp.DataMode.store
         else:
             data_mode = cp.DataMode.none
 
@@ -295,6 +351,11 @@ class ChordTasks(object):
 
         sent_data_request = Counter(0)
         data_rw = DataResponseWrapper(data_key)
+        if data_msg:
+            if data_msg.pubkey:
+                data_rw.pubkey = data_msg.pubkey
+            if data_msg.path_hash:
+                data_rw.path_hash = data_msg.path_hash
 
         for depth in range(1, maximum_depth):
             direct_peers_lower = 0
@@ -368,8 +429,13 @@ class ChordTasks(object):
         if data_mode.value:
             storing_nodes = 0
 
-            msg_name = "GetData" if data_mode is cp.DataMode.get\
-                else "StoreData"
+            if data_mode is cp.DataMode.get:
+                msg_name = "GetData"
+            else:
+                assert data_mode is cp.DataMode.store
+                msg_name = "StoreData"
+
+                data_msg_pkt = data_msg.encode()
 
             # If in get_data mode, then send a GetData message to each Peer
             # that indicated data presence, one at a time, stopping upon first
@@ -417,12 +483,19 @@ class ChordTasks(object):
 
                         log.info("We have the data; fetching.")
 
-                        enc_data, data_l =\
-                            yield from self._retrieve_data(node_id)
+                        enc_data, data_l, version, signature, epubkey,\
+                            pubkeylen =\
+                                yield from self._retrieve_data(node_id)
 
                         drmsg = cp.ChordDataResponse()
                         drmsg.data = enc_data
                         drmsg.original_size = data_l
+                        if version is not None:
+                            drmsg.version = version
+                            drmsg.signature = signature
+                            if epubkey:
+                                drmsg.epubkey = epubkey
+                                drmsg.pubkeylen = pubkeylen
 
                         r = yield from self._process_data_response(\
                             drmsg, None, None, data_rw)
@@ -447,12 +520,8 @@ class ChordTasks(object):
                         log.info("We are choosing to additionally store the"\
                             " data locally.")
 
-                        dmsg = cp.ChordStoreData()
-                        dmsg.data = data
-                        dmsg.data_id = node_id
-
                         r = yield from self._store_data(\
-                            None, dmsg, need_pruning)
+                            None, data_msg, need_pruning)
 
                         if not r:
                             log.info("We failed to store the data.")
@@ -486,23 +555,17 @@ class ChordTasks(object):
                         .format(msg_name, row.peer.address, row.path))
 
                 if data_mode is cp.DataMode.get:
-                    msg = cp.ChordGetData()
+                    pkt = EMPTY_GET_DATA_PACKET
                 else:
                     assert data_mode is cp.DataMode.store
-
-                    msg = cp.ChordStoreData()
-                    msg.data_id = node_id
-                    msg.data = data
+                    pkt = data_msg_pkt
 
                 if tun_meta:
                     # Then this is a Peer reached through a tunnel.
-                    pkt = self._generate_relay_packets(\
-                        row.path, msg.encode())
+                    pkt = self._generate_relay_packets(row.path, pkt)
                     tun_meta.jobs += 1
                 else:
                     # Then this is an immediate Peer.
-                    pkt = msg.encode()
-
                     tun_meta = used_tunnels.get(row)
 
                     if tun_meta.task_running:
@@ -574,6 +637,10 @@ class ChordTasks(object):
 
                 if not data_rw.data:
                     log.info("Failed to find the data!")
+                else:
+                    if data_rw.version:
+                        if log.isEnabledFor(logging.INFO):
+                            log.info("version=[{}].".format(data_rw.version))
 
                 return data_rw.data
 
@@ -799,8 +866,8 @@ class ChordTasks(object):
                             continue
                         else:
                             if log.isEnabledFor(logging.DEBUG):
-                                log.debug("Received DataStored message from"\
-                                    " Peer (dbid={})."\
+                                log.debug("Received DataStored (stored=[{}])"\
+                                    " message from Peer (dbid={})."\
                                         .format(tun_meta.peer.dbid, path))
 
                     query_cntr.value -= 1
@@ -1110,11 +1177,18 @@ class ChordTasks(object):
                 if log.isEnabledFor(logging.INFO):
                     log.info("Received ChordGetData packet, fetching.")
 
-                data, data_l = yield from self._retrieve_data(fnmsg.node_id)
+                data, data_l, version, signature, epubkey, pubkeylen =\
+                    yield from self._retrieve_data(fnmsg.node_id)
 
                 drmsg = cp.ChordDataResponse()
                 drmsg.data = data
                 drmsg.original_size = data_l
+                if version is not None:
+                    drmsg.version = version
+                    drmsg.signature = signature
+                    if epubkey:
+                        drmsg.epubkey = epubkey
+                        drmsg.pubkeylen = pubkeylen
 
                 peer.protocol.write_channel_data(local_cid, drmsg.encode())
 
@@ -1401,8 +1475,8 @@ class ChordTasks(object):
         return (yield from self.loop.run_in_executor(None, dbcall)), True
 
     @asyncio.coroutine
-    def _process_data_response(self, data_response, tun_meta, path, data_rw):
-        "Processes the DataResponse packet, storing the decrypted data into"\
+    def _process_data_response(self, drmsg, tun_meta, path, data_rw):
+        "Processes the DataResponse message, storing the decrypted data into"\
         " data_rw if it matches the original key. Returns True on success,"\
         " False otherwise."
 
@@ -1412,15 +1486,47 @@ class ChordTasks(object):
                 .format(peer_dbid, path))
 
         def threadcall():
-            data = enc.decrypt_data_block(data_response.data, data_rw.data_key)
+            data = enc.decrypt_data_block(drmsg.data, data_rw.data_key)
 
             # Truncate the data to exclude the cipher padding.
-            data = data[:data_response.original_size]
+            data = data[:drmsg.original_size]
 
-            # Verify that the decrypted data matches the original hash of it.
-            data_key = enc.generate_ID(data)
+            data_hash = enc.generate_ID(data)
 
-            if data_key == data_rw.data_key:
+            if drmsg.version is not None:
+                # Updateable key mode.
+                data_rw.version = drmsg.version
+
+                if data_rw.pubkey:
+                    pubkey = data_rw.pubkey
+                else:
+                    pubkey = enc.decrypt_data_block(\
+                        drmsg.epubkey, data_rw.data_key)
+                    # Truncate the key data to exclude the cipher padding.
+                    pubkey = pubkey[:drmsg.pubkeylen]
+
+                    data_key = enc.generate_ID(pubkey)
+                    if data_rw.path_hash:
+                        data_key = enc.generate_ID(data_key + data_rw.path_hash)
+
+                    if data_key != data_rw.data_key:
+                        if log.isEnabledFor(logging.DEBUG):
+                            log.debug("DataResponse is invalid!")
+                        return False
+
+                hm = bytearray()
+                hm += sshtype.encodeBinary(data_rw.path_hash)
+                hm += sshtype.encodeMpint(drmsg.version)
+                hm += sshtype.encodeBinary(data_hash)
+
+                valid =\
+                    rsakey.RsaKey(pubkey).verify_ssh_sig(hm, drmsg.signature)
+            else:
+                # Verify that the decrypted data matches the original hash of
+                # it.
+                valid = data_hash == data_rw.data_key
+
+            if valid:
                 data_rw.data = data
                 if log.isEnabledFor(logging.DEBUG):
                     log.debug("DataResponse is valid.")
@@ -1436,8 +1542,10 @@ class ChordTasks(object):
     def _retrieve_data(self, data_id):
         "Retrieve data for data_id from the file system (and meta data from"\
         " the database."\
-        "returns: data, original_size"\
-        "   original_size is the size of the data before it was encrypted."
+        "returns: data, original_size,\
+                <version, signature, epubkey, pubkeylen>"\
+        "   original_size is the size of the data before it was encrypted."\
+        "   version, Etc. are for updateable keys."
 
         def dbcall():
             with self.engine.node.db.open_session() as sess:
@@ -1466,7 +1574,8 @@ class ChordTasks(object):
 
         enc_data = yield from self.loop.run_in_executor(None, iocall)
 
-        return enc_data, data_block.original_size
+        return enc_data, data_block.original_size, data_block.version,\
+            data_block.signature, data_block.epubkey, data_block.pubkeylen
 
     @asyncio.coroutine
     def _store_data(self, peer, dmsg, need_pruning):
@@ -1486,12 +1595,41 @@ class ChordTasks(object):
 
         data = dmsg.data
 
-        data_key = enc.generate_ID(data)
-        data_id = enc.generate_ID(data_key)
+        pubkey = None
+        if dmsg.pubkey:
+            pubkey = rsakey.RsaKey(dmsg.pubkey)
+
+            data_key = enc.generate_ID(dmsg.pubkey)
+            if dmsg.path_hash:
+                data_key = enc.generate_ID(data_key + dmsg.path_hash)
+            data_id = enc.generate_ID(data_key)
+
+            if data_id != dmsg.data_id:
+                errmsg = "Peer (dbid=[{}]) sent a data_id that didn't match"\
+                    " the updateable key id!".format(peer_dbid)
+                log.warning(errmsg)
+                raise ChordException(errmsg)
+
+            hm = bytearray()
+            hm += sshtype.encodeBinary(dmsg.path_hash)
+            hm += sshtype.encodeMpint(dmsg.version)
+            hm += sshtype.encodeBinary(enc.generate_ID(data))
+
+            r = pubkey.verify_ssh_sig(hm, dmsg.signature)
+            if not r:
+                errmsg = "Peer (dbid=[{}]) sent an invalid signature."\
+                    .format(peer_dbid)
+                log.warning(errmsg)
+                raise ChordException(errmsg)
+        else:
+            data_key = enc.generate_ID(data)
+            data_id = enc.generate_ID(data_key)
 
         if data_id != dmsg.data_id:
-            log.warning("Peer (dbid=[{}]) sent a data_id that didn't match"\
-                " the data!".format(peer_dbid))
+            errmsg = "Peer (dbid=[{}]) sent a data_id that didn't match"\
+                " the data!".format(peer_dbid)
+            log.warning(errmsg)
+            raise ChordException(errmsg)
 
         distance = self.engine.calc_raw_distance(self.engine.node_id, data_id)
         original_size = len(data)
@@ -1500,12 +1638,21 @@ class ChordTasks(object):
             with self.engine.node.db.open_session() as sess:
                 self.engine.node.db.lock_table(sess, DataBlock)
 
-                q = sess.query(func.count("*"))
-                q = q.filter(DataBlock.data_id == data_id)
+                old_entry = None
+                if pubkey:
+                    old_entry = sess.query(DataBlock)\
+                        .filter(DataBlock.data_id == data_id)\
+                        .first()
+                    if old_entry and old_entry.version >= dmsg.version:
+                        # We only want to store newer versions.
+                        return None, None
+                else:
+                    q = sess.query(func.count("*"))
+                    q = q.filter(DataBlock.data_id == data_id)
 
-                if q.scalar() > 0:
-                    # We already have this block.
-                    return None, None
+                    if q.scalar() > 0:
+                        # We already have this block.
+                        return None, None
 
                 if need_pruning:
                     freeable_space = 0
@@ -1534,13 +1681,30 @@ class ChordTasks(object):
                             .filter(DataBlock.id == anid)\
                             .delete(synchronize_session=False)
 
-                data_block = DataBlock()
-                data_block.data_id = data_id
-                data_block.distance = distance
+                updateable_size_diff = None
+                if old_entry:
+                    data_block = old_entry
+                    assert data_block.data_id == data_id
+                    updateable_size_diff =\
+                        original_size - data_block.original_size
+                else:
+                    data_block = DataBlock()
+                    data_block.data_id = data_id
+                    data_block.distance = distance
+
+                if pubkey:
+                    data_block.version = dmsg.version
+                    data_block.signature = dmsg.signature
+                    if dmsg.path_hash == b'':
+                        a, b = enc.encrypt_data_block(dmsg.pubkey, data_key)
+                        data_block.epubkey = a + b
+                        data_block.pubkeylen = len(dmsg.pubkey)
+
                 data_block.original_size = original_size
                 data_block.insert_timestamp = datetime.today()
 
-                sess.add(data_block)
+                if not old_entry:
+                    sess.add(data_block)
 
                 # Rule: only update this NodeState row when holding a lock on
                 # the DataBlock table.
@@ -1554,7 +1718,10 @@ class ChordTasks(object):
                     node_state.value = 0
                     sess.add(node_state)
 
-                size_diff = original_size
+                if updateable_size_diff is not None:
+                    size_diff = updateable_size_diff
+                else:
+                    size_diff = original_size
 
                 if need_pruning:
                     size_diff -= freeable_space
@@ -1564,7 +1731,7 @@ class ChordTasks(object):
                 sess.commit()
 
                 if need_pruning:
-                    for andid in blocks_to_prune:
+                    for anid in blocks_to_prune:
                         os.remove(self.engine.node.data_block_file_path\
                             .format(self.engine.node.instance, anid))
 

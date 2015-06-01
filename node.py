@@ -230,8 +230,9 @@ def _main():
 
     try:
         yield from __main()
-    except:
-        log.exception("__main()")
+    except BaseException as e:
+        if type(e) is not SystemExit:
+            log.exception("__main()")
         loop.stop()
 
 @asyncio.coroutine
