@@ -58,6 +58,7 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
 
                 self.send_response(307)
                 self.send_header("Location", "{}".format(priv_key))
+                self.send_header("Content-Length", 0)
                 self.end_headers()
                 return
 
