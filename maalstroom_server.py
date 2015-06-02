@@ -39,9 +39,9 @@ class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
 
 class MaalstroomHandler(BaseHTTPRequestHandler):
     def __init__(self, a, b, c):
-        super().__init__(a, b, c)
-
         self.protocol_version = "HTTP/1.1"
+
+        super().__init__(a, b, c)
 
     def do_GET(self):
         rpath = self.path[1:]
