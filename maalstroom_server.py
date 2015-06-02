@@ -36,7 +36,7 @@ class DataResponseWrapper(object):
         self.timed_out = False
 
 class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
-    pass
+    daemon_threads = True
 
 class MaalstroomHandler(BaseHTTPRequestHandler):
     def __init__(self, a, b, c):
