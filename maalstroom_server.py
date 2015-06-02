@@ -155,6 +155,8 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
                 self.send_header("Content-Type", "image/gif")
             elif data_rw.data[:5] == b"/*CSS":
                 self.send_header("Content-Type", "text/css")
+            elif data_rw.data[:12] == b"/*JAVASCRIPT":
+                self.send_header("Content-Type", "application/javascript")
             else:
                 self.send_header("Content-Type", "text/html")
             self.send_header("Content-Length", len(data_rw.data))
