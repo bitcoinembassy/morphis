@@ -317,9 +317,10 @@ class Shell(cmd.Cmd):
         data_key = bytes.fromhex(arg)
 
         start = datetime.today()
-        data = yield from self.peer.engine.tasks.send_get_data(data_key)
+        data_rw = yield from self.peer.engine.tasks.send_get_data(data_key)
         diff = datetime.today() - start
-        self.writeln("data=[{}].".format(data))
+        self.writeln("data=[{}].".format(data_rw.data))
+        self.writeln("version=[{}].".format(data_rw.version))
         self.writeln("send_get_data(..) took: {}.".format(diff))
 
     @asyncio.coroutine

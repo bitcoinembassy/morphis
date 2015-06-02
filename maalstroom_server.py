@@ -28,6 +28,7 @@ class DataResponseWrapper(object):
     def __init__(self):
         self.data = None
         self.data_key = None
+        self.version = None
 
         self.is_done = Event()
 
@@ -151,11 +152,16 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
                 self.send_header("Content-Type", "image/png")
             elif data_rw.data[:5] == b"GIF89":
                 self.send_header("Content-Type", "image/gif")
+            elif data_rw.data[:5] == b"/*CSS":
+                self.send_header("Content-Type", "text/css")
             else:
                 self.send_header("Content-Type", "text/html")
             self.send_header("Content-Length", len(data_rw.data))
-            self.send_header("Cache-Control", "public")
-            self.send_header("ETag", rpath)
+            if data_rw.version:
+                self.send_header("Cache-Control", "public, max-age=15")
+            else:
+                self.send_header("Cache-Control", "public")
+                self.send_header("ETag", rpath)
             self.end_headers()
 
             self.wfile.write(data_rw.data)
@@ -260,7 +266,10 @@ def _send_get_data(data_key, data_rw):
 
         yield from asyncio.wait_for(future, 15.0, loop=node.loop)
 
-        data_rw.data = future.result()
+        ct_data_rw = future.result()
+
+        data_rw.data = ct_data_rw.data
+        data_rw.version = ct_data_rw.version
     except asyncio.TimeoutError:
         data_rw.timed_out = True
     except:

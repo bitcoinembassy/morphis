@@ -199,10 +199,10 @@ class ChordTasks(object):
 
         data_id = enc.generate_ID(data_key)
 
-        data = yield from self.send_find_node(\
+        data_rw = yield from self.send_find_node(\
             data_id, for_data=True, data_key=data_key)
 
-        return data
+        return data_rw
 
     @asyncio.coroutine
     def send_store_updateable_key(\
@@ -642,7 +642,7 @@ class ChordTasks(object):
                         if log.isEnabledFor(logging.INFO):
                             log.info("version=[{}].".format(data_rw.version))
 
-                return data_rw.data
+                return data_rw
 
         rnodes = [vpeer.peer for vpeer in result_trie if vpeer and vpeer.path]
 
