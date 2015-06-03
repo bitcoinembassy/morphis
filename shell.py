@@ -288,6 +288,11 @@ class Shell(cmd.Cmd):
         self.writeln("Count: {}.".format(len(peers)))
 
     @asyncio.coroutine
+    def do_fn(self, arg):
+        "findnode alias."
+        yield from self.do_findnode(arg)
+
+    @asyncio.coroutine
     def do_findnode(self, arg):
         "[ID] find the node with hex encoded id."
 
