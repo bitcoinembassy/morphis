@@ -299,8 +299,8 @@ class Shell(cmd.Cmd):
         self.writeln("send_find_node(..) took: {}.".format(diff))
 
         for r in result:
-            self.writeln("nid[{}] FOUND: {:22} diff=[{}]"\
-                .format(r.id, r.address,\
+            self.writeln("nid[{}] FOUND: {:22} id=[{}] diff=[{}]"\
+                .format(r.id, r.address, hex_string(r.node_id),\
                     hex_string(\
                         self.peer.engine.calc_raw_distance(\
                             r.node_id, node_id))))

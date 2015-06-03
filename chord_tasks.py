@@ -305,8 +305,9 @@ class ChordTasks(object):
         maximum_depth = int(math.log(known_peer_cnt, 2))
 
         if log.isEnabledFor(logging.INFO):
-            log.info("Performing FindNode (data_mode={}) to a max depth of"\
-                " [{}].".format(data_mode, maximum_depth))
+            log.info("Performing FindNode (data_key=[{}], data_mode={}) to a"\
+                " max depth of [{}]."\
+                    .format(hex_string(data_key), data_mode, maximum_depth))
 
         result_trie = bittrie.BitTrie()
 
