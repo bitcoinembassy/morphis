@@ -175,6 +175,7 @@ class ChordFindNode(ChordMessage):
     def __init__(self, buf = None):
         self.node_id = None
         self.data_mode = DataMode.none
+        self.significant_bits = None
 
         super().__init__(CHORD_MSG_FIND_NODE, buf)
 
@@ -182,6 +183,9 @@ class ChordFindNode(ChordMessage):
         nbuf = super().encode()
         nbuf += sshtype.encodeBinary(self.node_id)
         nbuf += struct.pack("B", self.data_mode.value)
+
+        if self.significant_bits:
+            nbuf += struct.pack(">H", self.significant_bits)
 
         return nbuf
 
@@ -191,6 +195,12 @@ class ChordFindNode(ChordMessage):
         l, self.node_id = sshtype.parseBinary(self.buf[i:])
         i += l
         self.data_mode = DataMode(struct.unpack("B", self.buf[i:i+1])[0])
+        i += 1
+
+        if i == len(self.buf):
+            return
+
+        self.significant_bits = struct.unpack(">H", self.buf[i:i+2])[0]
 
 class ChordGetData(ChordMessage):
     def __init__(self, buf = None):
@@ -255,19 +265,27 @@ class ChordDataResponse(ChordMessage):
 class ChordDataPresence(ChordMessage):
     def __init__(self, buf = None):
         self.data_present = False
+        self.first_id = None
 
         super().__init__(CHORD_MSG_DATA_PRESENCE, buf)
 
     def encode(self):
         nbuf = super().encode()
-        nbuf += struct.pack("?", self.data_present)
+        if self.first_id is None:
+            nbuf += struct.pack("?", self.data_present)
+        else:
+            nbuf += sshtype.encodeBinary(self.first_id)
 
         return nbuf
 
     def parse(self):
         super().parse()
         i = 1
-        self.data_present = struct.unpack("?", self.buf[i:i+1])[0]
+
+        if i + 1 == len(self.buf):
+            self.data_present = struct.unpack("?", self.buf[i:i+1])[0]
+        else:
+            l, self.first_id = sshtype.parseBinary(self.buf[i:])
 
 class ChordStoreData(ChordMessage):
     def __init__(self, buf = None):

@@ -178,7 +178,7 @@ class ChordTasks(object):
         "   new_nodes: if any found were new."
 
         conn_nodes = yield from\
-            self.send_find_node(node_id, input_trie)
+            self.send_find_node(node_id, input_trie=input_trie)
 
         if not conn_nodes:
             return None, False
@@ -194,13 +194,24 @@ class ChordTasks(object):
         return conn_nodes, bool(new_nodes)
 
     @asyncio.coroutine
-    def send_get_data(self, data_key):
-        assert type(data_key) is bytes
+    def send_get_data(self, data_key, significant_bits=None):
+        assert type(data_key) is bytes\
+            and len(data_key) is chord.NODE_ID_BYTES,\
+            "type(data_key)=[{}], len={}."\
+                .format(type(data_key), len(data_key))
 
-        data_id = enc.generate_ID(data_key)
+        if significant_bits and significant_bits != chord.NODE_ID_BITS:
+            if log.isEnabledFor(logging.INFO):
+                log.info("Performing wildcard search (significant_bits=[{}])."\
+                    .format(significant_bits))
 
-        data_rw = yield from self.send_find_node(\
-            data_id, for_data=True, data_key=data_key)
+            data_rw = yield from self.send_find_node(\
+                data_key, for_data=True, data_key=None)
+        else:
+            data_id = enc.generate_ID(data_key)
+
+            data_rw = yield from self.send_find_node(\
+                data_id, for_data=True, data_key=data_key)
 
         return data_rw
 
@@ -269,8 +280,8 @@ class ChordTasks(object):
         return storing_nodes
 
     @asyncio.coroutine
-    def send_find_node(self, node_id, input_trie=None, for_data=False,\
-            data_msg=None, data_key=None):
+    def send_find_node(self, node_id, significant_bits=None, input_trie=None,\
+            for_data=False, data_msg=None, data_key=None):
         "Returns found nodes sorted by closets. If for_data is True then"\
         " this is really {get/store}_data instead of find_node. If data_msg"\
         " is None than it is get_data and the data is returned. Store data"\
@@ -318,6 +329,12 @@ class ChordTasks(object):
         used_tunnels = {}
         far_peers_by_path = {}
 
+        fnmsg = cp.ChordFindNode()
+        fnmsg.node_id = node_id
+        fnmsg.data_mode = data_mode
+        if significant_bits:
+            fnmsg.significant_bits = significant_bits
+
         for peer in input_trie:
             key = bittrie.XorKey(node_id, peer.node_id)
             vpeer = VPeer(peer)
@@ -333,7 +350,7 @@ class ChordTasks(object):
             used_tunnels[vpeer] = tun_meta
 
             tasks.append(self._send_find_node(\
-                vpeer, node_id, result_trie, tun_meta, data_mode,\
+                vpeer, fnmsg, result_trie, tun_meta, data_mode,\
                 far_peers_by_path))
 
         if not tasks:
@@ -477,7 +494,8 @@ class ChordTasks(object):
                     # Row is ourself.
                     if data_mode is cp.DataMode.get:
                         data_present =\
-                            yield from self._check_has_data(node_id)
+                            yield from self._check_has_data(\
+                                node_id, significant_bits)
 
                         if not data_present:
                             continue
@@ -695,7 +713,7 @@ class ChordTasks(object):
         return pkt
 
     @asyncio.coroutine
-    def _send_find_node(self, vpeer, node_id, result_trie, tun_meta,\
+    def _send_find_node(self, vpeer, fnmsg, result_trie, tun_meta,\
             data_mode, far_peers_by_path):
         "Opens a channel and sends a 'root level' FIND_NODE to the passed"\
         " connected peer, adding results to the passed result_trie, and then"\
@@ -709,15 +727,11 @@ class ChordTasks(object):
         if not queue:
             return
 
-        msg = cp.ChordFindNode()
-        msg.node_id = node_id
-        msg.data_mode = data_mode
-
         if log.isEnabledFor(logging.DEBUG):
             log.debug("Sending root level FindNode msg to Peer (dbid=[{}])."\
                 .format(peer.dbid))
 
-        peer.protocol.write_channel_data(local_cid, msg.encode())
+        peer.protocol.write_channel_data(local_cid, fnmsg.encode())
 
         pkt = yield from queue.get()
         if not pkt:
@@ -747,6 +761,8 @@ class ChordTasks(object):
         if log.isEnabledFor(logging.DEBUG):
             log.debug("Root level FindNode to Peer (id=[{}]) returned {}"\
                 " PeerS.".format(peer.dbid, len(msg.peers)))
+
+        node_id = fnmsg.node_id
 
         idx = 0
         for rpeer in msg.peers:
@@ -1106,7 +1122,9 @@ class ChordTasks(object):
         if fnmsg.data_mode.value:
             # In for_data mode we respond with two packets.
             if fnmsg.data_mode is cp.DataMode.get:
-                data_present = yield from self._check_has_data(fnmsg.node_id)
+                data_present = yield from self._check_has_data(\
+                    fnmsg.node_id, fnmsg.significant_bits)
+
                 pmsg = cp.ChordDataPresence()
                 pmsg.data_present = data_present
 
@@ -1403,16 +1421,30 @@ class ChordTasks(object):
                 tun_meta.peer.protocol.close_channel(tun_meta.local_cid)
 
     @asyncio.coroutine
-    def _check_has_data(self, data_id):
+    def _check_has_data(self, data_id, significant_bits):
         distance = self.engine.calc_raw_distance(self.engine.node_id, data_id)
 
-        if distance > self.engine.furthest_data_block:
-            return False
+        if significant_bits and significant_bits >= 7:
+            end_id =\
+                data_id | ((1 << (chord.NODE_ID_BITS - significant_bits)) - 1)
+
+            if distance > self.engine.furthest_data_block:
+                d2 = self.engine.calc_raw_distance(self.engine.node_id, end_id)
+                if d2 > self.engine.furthest_data_block:
+                    return False
+        else:
+            if distance > self.engine.furthest_data_block:
+                return False
 
         def dbcall():
             with self.engine.node.db.open_session() as sess:
                 q = sess.query(func.count("*"))
-                q = q.filter(DataBlock.data_id == data_id)
+
+                if significant_bits:
+                    q = q.filter(DataBlock.data_id > data_id\
+                        and DataBlock.data_id <= end_id)
+                else:
+                    q = q.filter(DataBlock.data_id == data_id)
 
                 if q.scalar() > 0:
                     return True
