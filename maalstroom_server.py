@@ -66,6 +66,7 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
             if self.headers["If-None-Match"] == static_upload_page_content_id:
                 self.send_response(304)
                 self.send_header("ETag", static_upload_page_content_id)
+                self.send_header("Content-Length", 0)
                 self.end_headers()
                 return
 
@@ -99,6 +100,7 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
         if self.headers["If-None-Match"] == rpath:
             self.send_response(304)
             self.send_header("ETag", rpath)
+            self.send_header("Content-Length", 0)
             self.end_headers()
             return
 
@@ -106,12 +108,14 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
             log.info("rpath=[{}].".format(rpath))
 
         error = False
+
+        lrp = len(rpath)
         try:
-            if len(rpath) == 128:
+            if lrp == 128:
                 data_key = bytes.fromhex(rpath)
-            elif len(rpath) == 103:
+            elif lrp in (103, 102):
                 data_key = zbase32.decode(rpath, 64)
-            elif len(rpath) == 88 + 4 and rpath.startswith("get/"):
+            elif lrp == 88 + 4 and rpath.startswith("get/"):
                 data_key = base58.decode(rpath[4:])
 
                 hex_key = hex_string(data_key)
@@ -136,9 +140,11 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
             log.exception("decode")
 
         if error:
+            errmsg = b"400 Bad Request."
             self.send_response(400)
+            self.send_header("Content-Length", len(errmsg))
             self.end_headers()
-            self.wfile.write(b"400 Bad Request.")
+            self.wfile.write(errmsg)
             return
 
         data_rw = DataResponseWrapper()
@@ -252,17 +258,18 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
 
     def handle_error(self, data_rw):
         if data_rw.exception:
+            errmsg = b"500 Internal Server Error."
             self.send_response(500)
-            self.end_headers()
-            self.wfile.write(b"500 Internal Server Error.")
         elif data_rw.timed_out:
+            errmsg = b"408 Request Timeout."
             self.send_response(408)
-            self.end_headers()
-            self.wfile.write(b"408 Request Timeout.")
         else:
+            errmsg = b"404 Not Found."
             self.send_response(404)
-            self.end_headers()
-            self.wfile.write(b"404 Not Found.")
+
+        self.send_header("Content-Length", len(errmsg))
+        self.end_headers()
+        self.wfile.write(errmsg)
 
 @asyncio.coroutine
 def _send_get_data(data_key, data_rw):
