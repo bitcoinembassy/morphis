@@ -11,6 +11,7 @@ import base58
 import enc
 from mutil import hex_string
 import rsakey
+import zbase32
 
 log = logging.getLogger(__name__)
 
@@ -108,6 +109,8 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
         try:
             if len(rpath) == 128:
                 data_key = bytes.fromhex(rpath)
+            elif len(rpath) == 103:
+                data_key = zbase32.decode(rpath, 64)
             elif len(rpath) == 88 + 4 and rpath.startswith("get/"):
                 data_key = base58.decode(rpath[4:])
 
@@ -235,7 +238,8 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
         if data_rw.data_key:
             hex_key = hex_string(data_rw.data_key)
             message = "<a href=\"morphis://{}\">perma link</a>\n{}\n{}"\
-                .format(hex_key, hex_key, base58.encode(data_rw.data_key))
+                .format(zbase32.encode(data_rw.data_key), hex_key,\
+                    base58.encode(data_rw.data_key))
 
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
