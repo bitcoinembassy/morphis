@@ -750,7 +750,11 @@ class ChordTasks(object):
                     return
             elif data_mode is cp.DataMode.get:
                 msg = cp.ChordDataPresence(pkt)
-                vpeer.data_present = msg.data_present
+
+                if fnmsg.significant_bits:
+                    vpeer.data_present = msg.first_id
+                else:
+                    vpeer.data_present = msg.data_present
 
                 pkt = yield from queue.get()
                 if not pkt:
@@ -1126,7 +1130,10 @@ class ChordTasks(object):
                     fnmsg.node_id, fnmsg.significant_bits)
 
                 pmsg = cp.ChordDataPresence()
-                pmsg.data_present = data_present
+                if fnmsg.significant_bits:
+                    pmsg.first_id = data_present
+                else:
+                    pmsg.data_present = data_present
 
                 log.info("Writing DataPresence (data_present=[{}]) response."\
                     .format(data_present))
@@ -1196,8 +1203,14 @@ class ChordTasks(object):
                 if log.isEnabledFor(logging.INFO):
                     log.info("Received ChordGetData packet, fetching.")
 
+                if fnmsg.significant_bits:
+                    # data_present was set to the closest that we have.
+                    data_id = data_present
+                else:
+                    data_id = fnmsg.node_id
+
                 data, data_l, version, signature, epubkey, pubkeylen =\
-                    yield from self._retrieve_data(fnmsg.node_id)
+                    yield from self._retrieve_data(data_id)
 
                 drmsg = cp.ChordDataResponse()
                 drmsg.data = data
@@ -1438,18 +1451,28 @@ class ChordTasks(object):
 
         def dbcall():
             with self.engine.node.db.open_session() as sess:
-                q = sess.query(func.count("*"))
-
                 if significant_bits:
+                    q = sess.query(DataBlock.data_id)
+
                     q = q.filter(DataBlock.data_id > data_id\
                         and DataBlock.data_id <= end_id)
+                    q = q.order_by(DataBlock.data_id)
+
+                    next_block_id = q.first()
+
+                    if next_block:
+                        return next_block_id[0]
+                    else:
+                        return False
                 else:
+                    q = sess.query(func.count("*"))
+
                     q = q.filter(DataBlock.data_id == data_id)
 
-                if q.scalar() > 0:
-                    return True
-                else:
-                    return False
+                    if q.scalar() > 0:
+                        return True
+                    else:
+                        return False
 
         return (yield from self.loop.run_in_executor(None, dbcall))
 
