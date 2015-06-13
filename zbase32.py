@@ -1,3 +1,5 @@
+# Public Domain.
+
 charset = "ybndrfg8ejkmcpqxot1uwisza345h769"
 
 def encode(val):
