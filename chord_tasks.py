@@ -449,6 +449,23 @@ class ChordTasks(object):
 
             if data_mode is cp.DataMode.get:
                 msg_name = "GetData"
+
+                if significant_bits:
+                    closest_datas = bittrie.BitTrie()
+
+                    for vpeer in result_trie:
+                        if vpeer.data_present:
+                            vpk = bittrie.XorKey(node_id, vpeer.data_present)
+                            closest_datas[vpk] = vpeer
+
+                    result_tree = closest_datas
+
+                    data_present = yield from self._check_has_data(\
+                            node_id, significant_bits)
+
+                    if data_present:
+                        self_key = bittrie.XorKey(node_id, data_present)
+                        result_trie[self_key] = False
             else:
                 assert data_mode is cp.DataMode.store
                 msg_name = "StoreData"
@@ -493,18 +510,24 @@ class ChordTasks(object):
                 if row is False:
                     # Row is ourself.
                     if data_mode is cp.DataMode.get:
-                        data_present =\
-                            yield from self._check_has_data(\
-                                node_id, significant_bits)
+                        if significant_bits:
+                            assert data_present
+                            fetch_id = data_present
+                        else:
+                            data_present =\
+                                yield from self._check_has_data(\
+                                    node_id, significant_bits)
 
-                        if not data_present:
-                            continue
+                            if not data_present:
+                                continue
+
+                            fetch_id = node_id
 
                         log.info("We have the data; fetching.")
 
                         enc_data, data_l, version, signature, epubkey,\
                             pubkeylen =\
-                                yield from self._retrieve_data(node_id)
+                                yield from self._retrieve_data(fetch_id)
 
                         drmsg = cp.ChordDataResponse()
                         drmsg.data = enc_data
@@ -1460,7 +1483,7 @@ class ChordTasks(object):
 
                     next_block_id = q.first()
 
-                    if next_block:
+                    if next_block_id:
                         return next_block_id[0]
                     else:
                         return False
