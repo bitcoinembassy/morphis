@@ -1704,11 +1704,11 @@ class ChordTasks(object):
             data_key = enc.generate_ID(data)
             data_id = enc.generate_ID(data_key)
 
-        if data_id != dmsg.data_id:
-            errmsg = "Peer (dbid=[{}]) sent a data_id that didn't match"\
-                " the data!".format(peer_dbid)
-            log.warning(errmsg)
-            raise ChordException(errmsg)
+            if data_id != dmsg.data_id:
+                errmsg = "Peer (dbid=[{}]) sent a data_id that didn't match"\
+                    " the data!".format(peer_dbid)
+                log.warning(errmsg)
+                raise ChordException(errmsg)
 
         distance = self.engine.calc_raw_distance(self.engine.node_id, data_id)
         original_size = len(data)
