@@ -19,6 +19,7 @@ CHORD_MSG_GET_DATA = 160
 CHORD_MSG_DATA_RESPONSE = 162
 CHORD_MSG_DATA_PRESENCE = 165
 CHORD_MSG_STORE_DATA = 170
+CHORD_MSG_STORE_KEY = 171
 CHORD_MSG_DATA_STORED = 172
 CHORD_MSG_STORAGE_INTEREST = 175
 
@@ -331,6 +332,23 @@ class ChordStoreData(ChordMessage):
         l, self.version = sshtype.parseMpint(self.buf[i:])
         i += l
         l, self.signature = sshtype.parseBinary(self.buf[i:])
+
+class ChordStoreKey(ChordMessage):
+    def __init__(self, buf = None):
+        self.data = None
+
+        super().__init__(CHORD_MSG_STORE_KEY, buf)
+
+    def encode(self):
+        nbuf = super().encode()
+        nbuf += sshtype.encodeBinary(self.data)
+
+        return nbuf
+
+    def parse(self):
+        super().parse()
+        i = 1
+        l, self.data = sshtype.parseBinary(self.buf[i:])
 
 class ChordDataStored(ChordMessage):
     def __init__(self, buf = None):

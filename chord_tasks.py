@@ -259,6 +259,19 @@ class ChordTasks(object):
         return storing_nodes
 
     @asyncio.coroutine
+    def send_store_key(self, data):
+        data_key = enc.generate_ID(data)
+
+        skmsg = cp.ChordStoreKey()
+        skmsg.data = data
+
+        storing_nodes =\
+            yield from self.self_find_node(\
+                data_key, for_data=True, data_msg=skmsg)
+
+        return storing_nodes
+
+    @asyncio.coroutine
     def send_store_data(self, data, key_callback=None):
         "Sends a StoreData request, returning the count of nodes that claim"\
         " to have stored it."
@@ -369,7 +382,8 @@ class ChordTasks(object):
 
         sent_data_request = Counter(0)
         data_rw = DataResponseWrapper(data_key)
-        if data_msg:
+        data_msg_type = type(data_msg)
+        if data_msg_type is cp.ChordStoreData:
             if data_msg.pubkey:
                 data_rw.pubkey = data_msg.pubkey
             if data_msg.path_hash:
@@ -468,7 +482,12 @@ class ChordTasks(object):
                         result_trie[self_key] = False
             else:
                 assert data_mode is cp.DataMode.store
-                msg_name = "StoreData"
+
+                if data_msg_type is cp.ChordStoreData:
+                    msg_name = "StoreData"
+                else:
+                    assert data_msg_type is cp.ChordStoreKey
+                    msg_name = "StoreKey"
 
                 data_msg_pkt = data_msg.encode()
 
@@ -562,8 +581,14 @@ class ChordTasks(object):
                         log.info("We are choosing to additionally store the"\
                             " data locally.")
 
-                        r = yield from self._store_data(\
-                            None, data_msg, need_pruning)
+                        if data_msg_type is cp.ChordStoreData:
+                            r = yield from\
+                                self._store_data(None, data_msg, need_pruning)
+                        else:
+                            assert data_msg_type is cp.ChordStoreKey
+
+                            r = yield from\
+                                self._store_key(peer, rmsg, fnmsg.node_id)
 
                         if not r:
                             log.info("We failed to store the data.")
@@ -1209,19 +1234,35 @@ class ChordTasks(object):
                 return
 
             packet_type = cp.ChordMessage.parse_type(pkt)
-            if will_store and packet_type == cp.CHORD_MSG_STORE_DATA:
-                if log.isEnabledFor(logging.INFO):
-                    log.info("Received ChordStoreData packet, storing.")
+            if will_store:
+                if packet_type == cp.CHORD_MSG_STORE_DATA:
+                    if log.isEnabledFor(logging.INFO):
+                        log.info("Received ChordStoreData packet, storing.")
 
-                rmsg = cp.ChordStoreData(pkt)
+                    rmsg = cp.ChordStoreData(pkt)
 
-                r = yield from self._store_data(peer, rmsg, need_pruning)
+                    r = yield from self._store_data(peer, rmsg, need_pruning)
 
-                dsmsg = cp.ChordDataStored()
-                dsmsg.stored = r
+                    dsmsg = cp.ChordDataStored()
+                    dsmsg.stored = r
 
-                peer.protocol.write_channel_data(local_cid, dsmsg.encode())
-                continue
+                    peer.protocol.write_channel_data(local_cid, dsmsg.encode())
+                    continue
+                elif packet_type == cp.CHORD_MSG_STORE_KEY:
+                    if log.isEnabledFor(logging.INFO):
+                        log.info("Received ChordStoreKey packet, storing.")
+
+                    rmsg = cp.ChordStoreKey(pkt)
+
+                    r = yield from self._store_key(peer, rmsg, fnmsg.node_id)
+
+                    dsmsg = cp.ChordDataStored()
+                    dsmsg.stored = r
+
+                    peer.protocol.write_channel_data(local_cid, dsmsg.encode())
+                    continue
+                else:
+                    rmsg = cp.ChordRelay(pkt)
             elif data_present and packet_type == cp.CHORD_MSG_GET_DATA:
                 if log.isEnabledFor(logging.INFO):
                     log.info("Received ChordGetData packet, fetching.")
@@ -1657,6 +1698,53 @@ class ChordTasks(object):
             data_block.signature, data_block.epubkey, data_block.pubkeylen
 
     @asyncio.coroutine
+    def _store_key(self, peer, dmsg, data_id):
+        data_key = enc.generate_ID(dmsg.data)
+
+        if data_key != data_id:
+            errmsg = "Peer (dbid=[{}]) sent a data that didn't match the"\
+                "data_id."
+            log.warning(errmsg)
+            raise ChordException(errmsg)
+
+        distance = self.engine.calc_raw_distance(self.engine.node_id, data_id)
+
+        def dbcall():
+            with self.engine.node.db.open_session() as sess:
+                self.engine.node.db.lock_table(sess, DataBlock)
+
+                q = sess.query(func.count("*"))
+                q = q.filter(DataBlock.data_id == data_id)
+
+                if q.scalar() > 0:
+                    # We already have this key.
+                    return False
+
+                data_block = DataBlock()
+                data_block.data_id = data_id
+                data_block.distance = distance
+                data_block.original_size = 0
+                data_block.insert_timestamp = datetime.today()
+
+                sess.add(data_block)
+
+                # For now we don't track space used by keys.
+
+                sess.commit()
+
+                return True
+
+        r = yield from self.loop.run_in_executor(None, dbcall)
+
+        if not r:
+            if log.isEnabledFor(logging.INFO):
+                log.info("Not storing key we already have.")
+
+            return False
+
+        return True
+
+    @asyncio.coroutine
     def _store_data(self, peer, dmsg, need_pruning):
         "Store the data block on disk and meta in the database. Returns True"
         " if the data was stored, False otherwise."
@@ -1785,18 +1873,6 @@ class ChordTasks(object):
                 if not old_entry:
                     sess.add(data_block)
 
-                # Rule: only update this NodeState row when holding a lock on
-                # the DataBlock table.
-                node_state = sess.query(NodeState)\
-                    .filter(NodeState.key == mnnode.NSK_DATASTORE_SIZE)\
-                    .first()
-
-                if not node_state:
-                    node_state = NodeState()
-                    node_state.key = mnnode.NSK_DATASTORE_SIZE
-                    node_state.value = 0
-                    sess.add(node_state)
-
                 if updateable_size_diff is not None:
                     size_diff = updateable_size_diff
                 else:
@@ -1805,7 +1881,7 @@ class ChordTasks(object):
                 if need_pruning:
                     size_diff -= freeable_space
 
-                node_state.value = str(int(node_state.value) + size_diff)
+                self._update_nodestate(sess, size_diff)
 
                 sess.commit()
 
@@ -1920,3 +1996,18 @@ class ChordTasks(object):
                 pass
 
             return False
+
+    def _update_nodestate(self, sess, size_diff):
+        # Rule: only update this NodeState row when holding a lock on
+        # the DataBlock table.
+        node_state = sess.query(NodeState)\
+            .filter(NodeState.key == mnnode.NSK_DATASTORE_SIZE)\
+            .first()
+
+        if not node_state:
+            node_state = NodeState()
+            node_state.key = mnnode.NSK_DATASTORE_SIZE
+            node_state.value = 0
+            sess.add(node_state)
+
+        node_state.value = str(int(node_state.value) + size_diff)
