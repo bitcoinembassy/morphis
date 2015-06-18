@@ -490,7 +490,7 @@ class ChordTasks(object):
                         self._check_has_data(node_id, significant_bits)
 
                     if data_present:
-                        closest_datas += data_present
+                        closest_datas.append(data_present)
 
                     #TODO: This could be optimized to be built as peers sent
                     # the present message instead of iterating the whole list.
