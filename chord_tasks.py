@@ -208,9 +208,12 @@ class ChordTasks(object):
         return data_rw
 
     @asyncio.coroutine
-    def send_get_key(self, data_key_prefix, significant_bits):
+    def send_find_key(self, data_key_prefix, significant_bits=None):
         assert type(data_key_prefix) is bytes,\
             "type(data_key_prefix)=[{}].".format(type(data_key_prefix))
+
+        if not significant_bits:
+            significant_bits = len(data_key_prefix) * 8
 
         if log.isEnabledFor(logging.INFO):
             log.info("Performing wildcard (key) search (significant_bits"\
@@ -271,14 +274,16 @@ class ChordTasks(object):
         return storing_nodes
 
     @asyncio.coroutine
-    def send_store_key(self, data):
+    def send_store_key(self, data, key_callback=None):
         data_key = enc.generate_ID(data)
+        if key_callback:
+            key_callback(data_key)
 
         skmsg = cp.ChordStoreKey()
         skmsg.data = data
 
         storing_nodes =\
-            yield from self.self_find_node(\
+            yield from self.send_find_node(\
                 data_key, for_data=True, data_msg=skmsg)
 
         return storing_nodes
@@ -449,8 +454,8 @@ class ChordTasks(object):
                     task_cntr.value += 1
                     asyncio.async(\
                         self._process_find_node_relay(\
-                            node_id, tun_meta, query_cntr, done_all,\
-                            task_cntr, result_trie, data_mode,\
+                            node_id, significant_bits, tun_meta, query_cntr,\
+                            done_all, task_cntr, result_trie, data_mode,\
                             far_peers_by_path, sent_data_request, data_rw),\
                         loop=self.loop)
                 else:
@@ -481,15 +486,24 @@ class ChordTasks(object):
                 if significant_bits:
                     closest_datas = []
 
+                    data_present = yield from\
+                        self._check_has_data(node_id, significant_bits)
+
+                    if data_present:
+                        closest_datas += data_present
+
                     #TODO: This could be optimized to be built as peers sent
                     # the present message instead of iterating the whole list.
                     for vpeer in result_trie:
+                        if not vpeer:
+                            continue
                         if vpeer.data_present:
                             closest_datas.append(vpeer.data_present)
 
                     closest_datas.sort()
 
-                    data_rw.data_key = closest_datas[0]
+                    if len(closest_datas):
+                        data_rw.data_key = closest_datas[0]
 
                     result_trie = []
             else:
@@ -541,11 +555,6 @@ class ChordTasks(object):
                 if row is False:
                     # Row is ourself.
                     if data_mode is cp.DataMode.get:
-                        if significant_bits:
-                            assert data_present
-                            data_rw.data_key = data_present
-                            break
-
                         data_present =\
                             yield from self._check_has_data(\
                                 node_id, significant_bits)
@@ -848,9 +857,9 @@ class ChordTasks(object):
 
     @asyncio.coroutine
     def _process_find_node_relay(\
-            self, node_id, tun_meta, query_cntr, done_all, task_cntr,\
-            result_trie, data_mode, far_peers_by_path, sent_data_request,\
-            data_rw):
+            self, node_id, significant_bits, tun_meta, query_cntr, done_all,\
+            task_cntr, result_trie, data_mode, far_peers_by_path,\
+            sent_data_request, data_rw):
         "This method processes an open tunnel's responses, processing the"\
         " incoming messages and appending the PeerS in those messages to the"\
         " result_trie. This method does not close any channel to the tunnel,"\
@@ -863,9 +872,9 @@ class ChordTasks(object):
 
         try:
             r = yield from self.__process_find_node_relay(\
-                node_id, tun_meta, query_cntr, done_all, task_cntr,\
-                result_trie, data_mode, far_peers_by_path, sent_data_request,\
-                data_rw)
+                node_id, significant_bits, tun_meta, query_cntr, done_all,\
+                task_cntr, result_trie, data_mode, far_peers_by_path,\
+                sent_data_request, data_rw)
 
             if not r:
                 return
@@ -889,9 +898,9 @@ class ChordTasks(object):
 
     @asyncio.coroutine
     def __process_find_node_relay(\
-            self, node_id, tun_meta, query_cntr, done_all, task_cntr,\
-            result_trie, data_mode, far_peers_by_path, sent_data_request,\
-            data_rw):
+            self, node_id, significant_bits, tun_meta, query_cntr, done_all,\
+            task_cntr, result_trie, data_mode, far_peers_by_path,\
+            sent_data_request, data_rw):
         "Inner function for above call."
         while True:
             pkt = yield from tun_meta.queue.get()
@@ -963,7 +972,12 @@ class ChordTasks(object):
 
                 if data_mode is cp.DataMode.get:
                     pmsg = cp.ChordDataPresence(pkts[0])
-                    if pmsg.data_present:
+                    if significant_bits:
+                        t = pmsg.first_id
+                    else:
+                        t = pmsg.data_present
+
+                    if t:
                         apath = (tun_meta.peer.dbid,) + path
                         rvpeer = far_peers_by_path.get(apath)
                         if rvpeer is None:
@@ -971,7 +985,11 @@ class ChordTasks(object):
                             log.warning("Far node not found in dict for apath"\
                                 "[{}].".format(apath))
                         else:
-                            rvpeer.data_present = True
+                            if significant_bits:
+                                rvpeer.data_present = pmsg.first_id
+                            else:
+                                assert pmsg.data_present
+                                rvpeer.data_present = True
                 else:
                     assert data_mode is cp.DataMode.store
 
@@ -1193,7 +1211,7 @@ class ChordTasks(object):
                     fnmsg.node_id, fnmsg.significant_bits)
 
                 pmsg = cp.ChordDataPresence()
-                if fnmsg.significant_bits:
+                if fnmsg.significant_bits and data_present:
                     pmsg.first_id = data_present
                 else:
                     pmsg.data_present = data_present
@@ -1518,9 +1536,14 @@ class ChordTasks(object):
     def _check_has_data(self, data_id, significant_bits):
         distance = self.engine.calc_raw_distance(self.engine.node_id, data_id)
 
-        if significant_bits and significant_bits >= 7:
-            end_id =\
-                data_id | ((1 << (chord.NODE_ID_BITS - significant_bits)) - 1)
+        if significant_bits and significant_bits >= 32:
+            mask = ((1 << (chord.NODE_ID_BITS - significant_bits)) - 1)\
+                .to_bytes(chord.NODE_ID_BYTES, "big")
+
+            end_id = bytearray()
+
+            for c1, c2 in zip(data_id, mask):
+                end_id.append(c1 | c2)
 
             if distance > self.engine.furthest_data_block:
                 d2 = self.engine.calc_raw_distance(self.engine.node_id, end_id)
@@ -1532,11 +1555,11 @@ class ChordTasks(object):
 
         def dbcall():
             with self.engine.node.db.open_session() as sess:
-                if significant_bits:
+                if significant_bits and significant_bits >= 32:
                     q = sess.query(DataBlock.data_id)
 
-                    q = q.filter(DataBlock.data_id > data_id\
-                        and DataBlock.data_id <= end_id)
+                    q = q.filter(DataBlock.data_id > data_id)
+                    q = q.filter(DataBlock.data_id <= end_id)
                     q = q.filter(DataBlock.original_size == 0)
                     q = q.order_by(DataBlock.data_id)
 
