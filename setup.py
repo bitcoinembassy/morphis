@@ -7,11 +7,13 @@ modules = [\
     "chord_packet",
     "enc",
     "llog",
+    "mbase32",
     "mutil",
     "putil",
     "packet",
     "rsakey",
-    "sshtype"\
+    "sshtype",
+    "zbase32"\
 ]
 
 setup(
