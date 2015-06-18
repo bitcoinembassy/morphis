@@ -202,8 +202,8 @@ class ChordTasks(object):
 
         if significant_bits and significant_bits != chord.NODE_ID_BITS:
             if log.isEnabledFor(logging.INFO):
-                log.info("Performing wildcard search (significant_bits=[{}])."\
-                    .format(significant_bits))
+                log.info("Performing wildcard (key) search (significant_bits"\
+                    "=[{}]).".format(significant_bits))
 
             data_rw = yield from self.send_find_node(\
                 data_key, for_data=True, data_key=None)
@@ -467,6 +467,8 @@ class ChordTasks(object):
                 if significant_bits:
                     closest_datas = bittrie.BitTrie()
 
+                    #TODO: This could be optimized to be built as peers sent
+                    # the present message instead of iterating the whole list.
                     for vpeer in result_trie:
                         if vpeer.data_present:
                             vpk = bittrie.XorKey(node_id, vpeer.data_present)
@@ -540,13 +542,16 @@ class ChordTasks(object):
                             if not data_present:
                                 continue
 
-                            fetch_id = node_id
+                            log.info("We have the data; fetching.")
 
-                        log.info("We have the data; fetching.")
+                            fetch_id = node_id
 
                         enc_data, data_l, version, signature, epubkey,\
                             pubkeylen =\
                                 yield from self._retrieve_data(fetch_id)
+
+                        if enc_data is None:
+                            continue
 
                         drmsg = cp.ChordDataResponse()
                         drmsg.data = enc_data
@@ -1276,6 +1281,8 @@ class ChordTasks(object):
                 data, data_l, version, signature, epubkey, pubkeylen =\
                     yield from self._retrieve_data(data_id)
 
+                assert data is not None
+
                 drmsg = cp.ChordDataResponse()
                 drmsg.data = data
                 drmsg.original_size = data_l
@@ -1682,7 +1689,7 @@ class ChordTasks(object):
         data_block = yield from self.loop.run_in_executor(None, dbcall)
 
         if not data_block:
-            return None, None
+            return None
 
         def iocall():
             data_file = open(
