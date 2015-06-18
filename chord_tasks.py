@@ -479,23 +479,19 @@ class ChordTasks(object):
                 msg_name = "GetData"
 
                 if significant_bits:
-                    closest_datas = bittrie.BitTrie()
+                    closest_datas = []
 
                     #TODO: This could be optimized to be built as peers sent
                     # the present message instead of iterating the whole list.
                     for vpeer in result_trie:
                         if vpeer.data_present:
-                            vpk = bittrie.XorKey(node_id, vpeer.data_present)
-                            closest_datas[vpk] = vpeer
+                            closest_datas.append(vpeer.data_present)
 
-                    result_tree = closest_datas
+                    closest_datas.sort()
 
-                    data_present = yield from self._check_has_data(\
-                            node_id, significant_bits)
+                    data_rw.data_key = closest_datas[0]
 
-                    if data_present:
-                        self_key = bittrie.XorKey(node_id, data_present)
-                        result_trie[self_key] = False
+                    result_trie = []
             else:
                 assert data_mode is cp.DataMode.store
 
@@ -547,22 +543,21 @@ class ChordTasks(object):
                     if data_mode is cp.DataMode.get:
                         if significant_bits:
                             assert data_present
-                            fetch_id = data_present
-                        else:
-                            data_present =\
-                                yield from self._check_has_data(\
-                                    node_id, significant_bits)
+                            data_rw.data_key = data_present
+                            break
 
-                            if not data_present:
-                                continue
+                        data_present =\
+                            yield from self._check_has_data(\
+                                node_id, significant_bits)
 
-                            log.info("We have the data; fetching.")
+                        if not data_present:
+                            continue
 
-                            fetch_id = node_id
+                        log.info("We have the data; fetching.")
 
                         enc_data, data_l, version, signature, epubkey,\
                             pubkeylen =\
-                                yield from self._retrieve_data(fetch_id)
+                                yield from self._retrieve_data(node_id)
 
                         if enc_data is None:
                             continue
@@ -721,7 +716,8 @@ class ChordTasks(object):
             else:
                 assert data_mode is cp.DataMode.get
 
-                if not data_rw.data:
+                if not data_rw.data\
+                        and (not significant_bits or not data_rw.data_key):
                     log.info("Failed to find the data!")
                 else:
                     if data_rw.version:
@@ -1223,7 +1219,7 @@ class ChordTasks(object):
 
         if not rlist:
             log.info("No nodes closer than ourselves.")
-            if not will_store and not data_present:
+            if not will_store and (fnmsg.significant_bits or not data_present):
                 yield from peer.protocol.close_channel(local_cid)
                 return
 
@@ -1541,6 +1537,7 @@ class ChordTasks(object):
 
                     q = q.filter(DataBlock.data_id > data_id\
                         and DataBlock.data_id <= end_id)
+                    q = q.filter(DataBlock.original_size == 0)
                     q = q.order_by(DataBlock.data_id)
 
                     next_block_id = q.first()
