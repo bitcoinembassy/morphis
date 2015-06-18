@@ -8,10 +8,11 @@ from socketserver import ThreadingMixIn
 from threading import Event
 
 import base58
+import chord
 import enc
 from mutil import hex_string
 import rsakey
-import zbase32
+import mbase32
 
 log = logging.getLogger(__name__)
 
@@ -109,32 +110,36 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
 
         error = False
 
+        significant_bits = chord.NODE_ID_BITS
+
         lrp = len(rpath)
         try:
             if lrp == 128:
                 data_key = bytes.fromhex(rpath)
             elif lrp in (103, 102):
-                data_key = zbase32.decode(rpath, 64)
-            elif lrp == 88 + 4 and rpath.startswith("get/"):
-                data_key = base58.decode(rpath[4:])
-
-                hex_key = hex_string(data_key)
-
-                message = ("<a href=\"morphis://{}\">{}</a>\n{}"\
-                    .format(hex_key, hex_key, hex_key))\
-                        .encode()
-
-                self.send_response(301)
-                self.send_header("Location", "morphis://{}".format(hex_key))
-                self.send_header("Content-Type", "text/html")
-                self.send_header("Content-Length", len(message))
-                self.end_headers()
-
-                self.wfile.write(message)
-                return
+                data_key = mbase32.decode(rpath)
+#            elif lrp == 88 + 4 and rpath.startswith("get/"):
+#                data_key = base58.decode(rpath[4:])
+#
+#                hex_key = hex_string(data_key)
+#
+#                message = ("<a href=\"morphis://{}\">{}</a>\n{}"\
+#                    .format(hex_key, hex_key, hex_key))\
+#                        .encode()
+#
+#                self.send_response(301)
+#                self.send_header("Location", "morphis://{}".format(hex_key))
+#                self.send_header("Content-Type", "text/html")
+#                self.send_header("Content-Length", len(message))
+#                self.end_headers()
+#
+#                self.wfile.write(message)
+#                return
             else:
-                error = True
-                log.warning("Invalid request: [{}].".format(rpath))
+#                error = True
+#                log.warning("Invalid request: [{}].".format(rpath))
+                data_key = mbase32.decode(rpath, False)
+                significant_bits = 5 * len(rpath)
         except:
             error = True
             log.exception("decode")
@@ -150,7 +155,7 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
         data_rw = DataResponseWrapper()
 
         node.loop.call_soon_threadsafe(\
-            asyncio.async, _send_get_data(data_key, data_rw))
+            asyncio.async, _send_get_data(data_key, significant_bits, data_rw))
 
         data_rw.is_done.wait()
 
@@ -272,8 +277,28 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
         self.wfile.write(errmsg)
 
 @asyncio.coroutine
-def _send_get_data(data_key, data_rw):
+def _send_get_data(data_key, significant_bits, data_rw):
     try:
+        if significant_bits < chord.NODE_ID_BITS:
+            future = asyncio.async(\
+                node.chord_engine.tasks.send_find_key(\
+                    data_key, significant_bits),
+                loop=node.loop)
+
+            yield from asyncio.wait_for(future, 15.0, loop=node.loop)
+
+            ct_data_rw = future.result()
+
+            data_key = ct_data_rw.data_key
+
+            if log.isEnabledFor(logging.INFO):
+                log.info("Found key=[{}].".format(hex_string(data_key)))
+
+            if not data_key:
+                data_rw.data = b"Key Not Found"
+                data_rw.version = -1
+                return
+
         future = asyncio.async(\
             node.chord_engine.tasks.send_get_data(data_key),\
             loop=node.loop)
