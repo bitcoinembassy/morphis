@@ -7,6 +7,7 @@ import logging
 from socketserver import ThreadingMixIn
 from threading import Event
 
+import base58
 import chord
 import enc
 from mutil import hex_string
