@@ -195,7 +195,7 @@ class ChordTasks(object):
 
     @asyncio.coroutine
     def send_get_data(self, data_key):
-        assert type(data_key) is bytes\
+        assert type(data_key) in (bytes, bytearray)\
             and len(data_key) == chord.NODE_ID_BYTES,\
             "type(data_key)=[{}], len={}."\
                 .format(type(data_key), len(data_key))
@@ -209,7 +209,7 @@ class ChordTasks(object):
 
     @asyncio.coroutine
     def send_find_key(self, data_key_prefix, significant_bits=None):
-        assert type(data_key_prefix) is bytes,\
+        assert type(data_key_prefix) in (bytes, bytearray),\
             "type(data_key_prefix)=[{}].".format(type(data_key_prefix))
 
         if not significant_bits:
