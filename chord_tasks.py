@@ -319,6 +319,7 @@ class ChordTasks(object):
         " data."
 
         assert len(node_id) == chord.NODE_ID_BYTES
+        assert data_key is None or type(data_key) is bytes, type(data_key)
 
         if for_data:
             data_mode = cp.DataMode.get if data_msg is None\

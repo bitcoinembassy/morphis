@@ -7,7 +7,6 @@ import logging
 from socketserver import ThreadingMixIn
 from threading import Event
 
-import base58
 import chord
 import enc
 from mutil import hex_string
@@ -117,7 +116,7 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
             if lrp == 128:
                 data_key = bytes.fromhex(rpath)
             elif lrp in (103, 102):
-                data_key = mbase32.decode(rpath)
+                data_key = bytes(mbase32.decode(rpath))
 #            elif lrp == 88 + 4 and rpath.startswith("get/"):
 #                data_key = base58.decode(rpath[4:])
 #
@@ -198,7 +197,6 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
                     "REQUEST_METHOD": "POST",\
                     "CONTENT_TYPE": self.headers["Content-Type"]})
 
-
             if log.isEnabledFor(logging.DEBUG):
                 log.debug("form=[{}].".format(form))
 
@@ -248,9 +246,8 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
 
         if data_rw.data_key:
             hex_key = hex_string(data_rw.data_key)
-            message = "<a href=\"morphis://{}\">perma link</a>\n{}\n{}"\
-                .format(zbase32.encode(data_rw.data_key), hex_key,\
-                    base58.encode(data_rw.data_key))
+            message = "<a href=\"morphis://{}\">perma link</a>\n{}"\
+                .format(mbase32.encode(data_rw.data_key), hex_key)
 
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
@@ -299,6 +296,8 @@ def _send_get_data(data_key, significant_bits, data_rw):
                 data_rw.version = -1
                 return
 
+            data_key = bytes(data_key)
+
         future = asyncio.async(\
             node.chord_engine.tasks.send_get_data(data_key),\
             loop=node.loop)
@@ -328,12 +327,20 @@ def _send_store_data(data, data_rw, privatekey=None, path=None, version=None):
                 node.chord_engine.tasks.send_store_updateable_key(\
                     data, privatekey, path, version, key_callback),\
                 loop=node.loop)
+
+            yield from asyncio.wait_for(future, 30.0, loop=node.loop)
         else:
             future = asyncio.async(\
                 node.chord_engine.tasks.send_store_data(data, key_callback),\
                 loop=node.loop)
 
-        yield from asyncio.wait_for(future, 30.0, loop=node.loop)
+            yield from asyncio.wait_for(future, 30.0, loop=node.loop)
+
+            future = asyncio.async(\
+                node.chord_engine.tasks.send_store_key(data),\
+                loop=node.loop)
+
+            yield from asyncio.wait_for(future, 30.0, loop=node.loop)
     except asyncio.TimeoutError:
         data_rw.timed_out = True
     except:
