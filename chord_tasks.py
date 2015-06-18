@@ -194,24 +194,36 @@ class ChordTasks(object):
         return conn_nodes, bool(new_nodes)
 
     @asyncio.coroutine
-    def send_get_data(self, data_key, significant_bits=None):
+    def send_get_data(self, data_key):
         assert type(data_key) is bytes\
-            and len(data_key) is chord.NODE_ID_BYTES,\
+            and len(data_key) == chord.NODE_ID_BYTES,\
             "type(data_key)=[{}], len={}."\
                 .format(type(data_key), len(data_key))
 
-        if significant_bits and significant_bits != chord.NODE_ID_BITS:
-            if log.isEnabledFor(logging.INFO):
-                log.info("Performing wildcard (key) search (significant_bits"\
-                    "=[{}]).".format(significant_bits))
+        data_id = enc.generate_ID(data_key)
 
-            data_rw = yield from self.send_find_node(\
-                data_key, for_data=True, data_key=None)
-        else:
-            data_id = enc.generate_ID(data_key)
+        data_rw = yield from\
+            self.send_find_node(data_id, for_data=True, data_key=data_key)
 
-            data_rw = yield from self.send_find_node(\
-                data_id, for_data=True, data_key=data_key)
+        return data_rw
+
+    @asyncio.coroutine
+    def send_get_key(self, data_key_prefix, significant_bits):
+        assert type(data_key_prefix) is bytes,\
+            "type(data_key_prefix)=[{}].".format(type(data_key_prefix))
+
+        if log.isEnabledFor(logging.INFO):
+            log.info("Performing wildcard (key) search (significant_bits"\
+                "=[{}]).".format(significant_bits))
+
+        ldiff = chord.NODE_ID_BYTES - len(data_key_prefix)
+        if ldiff > 0:
+            data_key_prefix += b'\x00' * ldiff
+
+        data_rw = yield from\
+            self.send_find_node(data_key_prefix,\
+                significant_bits=significant_bits, for_data=True,\
+                data_key=None)
 
         return data_rw
 
@@ -300,6 +312,8 @@ class ChordTasks(object):
         " is None than it is get_data and the data is returned. Store data"\
         " currently returns the count of nodes that claim to have stored the"\
         " data."
+
+        assert len(node_id) == chord.NODE_ID_BYTES
 
         if for_data:
             data_mode = cp.DataMode.get if data_msg is None\
@@ -593,7 +607,7 @@ class ChordTasks(object):
                             assert data_msg_type is cp.ChordStoreKey
 
                             r = yield from\
-                                self._store_key(peer, rmsg, fnmsg.node_id)
+                                self._store_key(peer, data_msg, fnmsg.node_id)
 
                         if not r:
                             log.info("We failed to store the data.")
