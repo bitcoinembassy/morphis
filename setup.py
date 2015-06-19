@@ -12,8 +12,7 @@ modules = [\
     "putil",
     "packet",
     "rsakey",
-    "sshtype",
-    "zbase32"\
+    "sshtype"\
 ]
 
 setup(
