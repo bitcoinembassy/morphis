@@ -178,7 +178,7 @@ class ChordTasks(object):
         "   new_nodes: if any found were new."
 
         conn_nodes = yield from\
-            self.send_find_node(node_id, input_trie)
+            self.send_find_node(node_id, input_trie=input_trie)
 
         if not conn_nodes:
             return None, False
@@ -195,18 +195,44 @@ class ChordTasks(object):
 
     @asyncio.coroutine
     def send_get_data(self, data_key):
-        assert type(data_key) is bytes
+        assert type(data_key) in (bytes, bytearray)\
+            and len(data_key) == chord.NODE_ID_BYTES,\
+            "type(data_key)=[{}], len={}."\
+                .format(type(data_key), len(data_key))
 
         data_id = enc.generate_ID(data_key)
 
-        data_rw = yield from self.send_find_node(\
-            data_id, for_data=True, data_key=data_key)
+        data_rw = yield from\
+            self.send_find_node(data_id, for_data=True, data_key=data_key)
+
+        return data_rw
+
+    @asyncio.coroutine
+    def send_find_key(self, data_key_prefix, significant_bits=None):
+        assert type(data_key_prefix) in (bytes, bytearray),\
+            "type(data_key_prefix)=[{}].".format(type(data_key_prefix))
+
+        if not significant_bits:
+            significant_bits = len(data_key_prefix) * 8
+
+        if log.isEnabledFor(logging.INFO):
+            log.info("Performing wildcard (key) search (significant_bits"\
+                "=[{}]).".format(significant_bits))
+
+        ldiff = chord.NODE_ID_BYTES - len(data_key_prefix)
+        if ldiff > 0:
+            data_key_prefix += b'\x00' * ldiff
+
+        data_rw = yield from\
+            self.send_find_node(data_key_prefix,\
+                significant_bits=significant_bits, for_data=True,\
+                data_key=None)
 
         return data_rw
 
     @asyncio.coroutine
     def send_store_updateable_key(\
-            self, data, privatekey=None, path=None, version=None,\
+            self, data, privatekey, path=None, version=None,\
             key_callback=None):
 
         assert not path or type(path) is bytes
@@ -248,6 +274,38 @@ class ChordTasks(object):
         return storing_nodes
 
     @asyncio.coroutine
+    def send_store_key(self, data, key_callback=None):
+        data_key = enc.generate_ID(data)
+        if key_callback:
+            key_callback(data_key)
+
+        skmsg = cp.ChordStoreKey()
+        skmsg.data = data
+
+        storing_nodes =\
+            yield from self.send_find_node(\
+                data_key, for_data=True, data_msg=skmsg)
+
+        return storing_nodes
+
+    @asyncio.coroutine
+    def send_store_updateable_key_key(self, data, privatekey, path=None,\
+            key_callback=None):
+
+        assert not path or type(path) is bytes
+
+        public_key_bytes = privatekey.asbytes() # asbytes=public key.
+
+        if path:
+            key_hash = enc.generate_ID(public_key_bytes)
+            path_hash = enc.generate_ID(path)
+            data_key = key_hash + path_hash
+        else:
+            data_key = public_key_bytes
+
+        yield from self.send_store_key(data_key, key_callback)
+
+    @asyncio.coroutine
     def send_store_data(self, data, key_callback=None):
         "Sends a StoreData request, returning the count of nodes that claim"\
         " to have stored it."
@@ -269,13 +327,16 @@ class ChordTasks(object):
         return storing_nodes
 
     @asyncio.coroutine
-    def send_find_node(self, node_id, input_trie=None, for_data=False,\
-            data_msg=None, data_key=None):
+    def send_find_node(self, node_id, significant_bits=None, input_trie=None,\
+            for_data=False, data_msg=None, data_key=None):
         "Returns found nodes sorted by closets. If for_data is True then"\
         " this is really {get/store}_data instead of find_node. If data_msg"\
         " is None than it is get_data and the data is returned. Store data"\
         " currently returns the count of nodes that claim to have stored the"\
         " data."
+
+        assert len(node_id) == chord.NODE_ID_BYTES
+        assert data_key is None or type(data_key) is bytes, type(data_key)
 
         if for_data:
             data_mode = cp.DataMode.get if data_msg is None\
@@ -305,8 +366,9 @@ class ChordTasks(object):
         maximum_depth = int(math.log(known_peer_cnt, 2))
 
         if log.isEnabledFor(logging.INFO):
-            log.info("Performing FindNode (data_mode={}) to a max depth of"\
-                " [{}].".format(data_mode, maximum_depth))
+            log.info("Performing FindNode (data_key=[{}], data_mode={}) to a"\
+                " max depth of [{}]."\
+                    .format(hex_string(data_key), data_mode, maximum_depth))
 
         result_trie = bittrie.BitTrie()
 
@@ -316,6 +378,12 @@ class ChordTasks(object):
         tasks = []
         used_tunnels = {}
         far_peers_by_path = {}
+
+        fnmsg = cp.ChordFindNode()
+        fnmsg.node_id = node_id
+        fnmsg.data_mode = data_mode
+        if significant_bits:
+            fnmsg.significant_bits = significant_bits
 
         for peer in input_trie:
             key = bittrie.XorKey(node_id, peer.node_id)
@@ -332,7 +400,7 @@ class ChordTasks(object):
             used_tunnels[vpeer] = tun_meta
 
             tasks.append(self._send_find_node(\
-                vpeer, node_id, result_trie, tun_meta, data_mode,\
+                vpeer, fnmsg, result_trie, tun_meta, data_mode,\
                 far_peers_by_path))
 
         if not tasks:
@@ -351,7 +419,8 @@ class ChordTasks(object):
 
         sent_data_request = Counter(0)
         data_rw = DataResponseWrapper(data_key)
-        if data_msg:
+        data_msg_type = type(data_msg)
+        if data_msg_type is cp.ChordStoreData:
             if data_msg.pubkey:
                 data_rw.pubkey = data_msg.pubkey
             if data_msg.path_hash:
@@ -403,8 +472,8 @@ class ChordTasks(object):
                     task_cntr.value += 1
                     asyncio.async(\
                         self._process_find_node_relay(\
-                            node_id, tun_meta, query_cntr, done_all,\
-                            task_cntr, result_trie, data_mode,\
+                            node_id, significant_bits, tun_meta, query_cntr,\
+                            done_all, task_cntr, result_trie, data_mode,\
                             far_peers_by_path, sent_data_request, data_rw),\
                         loop=self.loop)
                 else:
@@ -431,9 +500,38 @@ class ChordTasks(object):
 
             if data_mode is cp.DataMode.get:
                 msg_name = "GetData"
+
+                if significant_bits:
+                    closest_datas = []
+
+                    data_present = yield from\
+                        self._check_has_data(node_id, significant_bits)
+
+                    if data_present:
+                        closest_datas.append(data_present)
+
+                    #TODO: This could be optimized to be built as peers sent
+                    # the present message instead of iterating the whole list.
+                    for vpeer in result_trie:
+                        if not vpeer:
+                            continue
+                        if vpeer.data_present:
+                            closest_datas.append(vpeer.data_present)
+
+                    closest_datas.sort()
+
+                    if len(closest_datas):
+                        data_rw.data_key = closest_datas[0]
+
+                    result_trie = []
             else:
                 assert data_mode is cp.DataMode.store
-                msg_name = "StoreData"
+
+                if data_msg_type is cp.ChordStoreData:
+                    msg_name = "StoreData"
+                else:
+                    assert data_msg_type is cp.ChordStoreKey
+                    msg_name = "StoreKey"
 
                 data_msg_pkt = data_msg.encode()
 
@@ -476,7 +574,8 @@ class ChordTasks(object):
                     # Row is ourself.
                     if data_mode is cp.DataMode.get:
                         data_present =\
-                            yield from self._check_has_data(node_id)
+                            yield from self._check_has_data(\
+                                node_id, significant_bits)
 
                         if not data_present:
                             continue
@@ -486,6 +585,9 @@ class ChordTasks(object):
                         enc_data, data_l, version, signature, epubkey,\
                             pubkeylen =\
                                 yield from self._retrieve_data(node_id)
+
+                        if enc_data is None:
+                            continue
 
                         drmsg = cp.ChordDataResponse()
                         drmsg.data = enc_data
@@ -520,8 +622,14 @@ class ChordTasks(object):
                         log.info("We are choosing to additionally store the"\
                             " data locally.")
 
-                        r = yield from self._store_data(\
-                            None, data_msg, need_pruning)
+                        if data_msg_type is cp.ChordStoreData:
+                            r = yield from\
+                                self._store_data(None, data_msg, need_pruning)
+                        else:
+                            assert data_msg_type is cp.ChordStoreKey
+
+                            r = yield from\
+                                self._store_key(peer, data_msg, fnmsg.node_id)
 
                         if not r:
                             log.info("We failed to store the data.")
@@ -635,7 +743,8 @@ class ChordTasks(object):
             else:
                 assert data_mode is cp.DataMode.get
 
-                if not data_rw.data:
+                if not data_rw.data\
+                        and (not significant_bits or not data_rw.data_key):
                     log.info("Failed to find the data!")
                 else:
                     if data_rw.version:
@@ -694,7 +803,7 @@ class ChordTasks(object):
         return pkt
 
     @asyncio.coroutine
-    def _send_find_node(self, vpeer, node_id, result_trie, tun_meta,\
+    def _send_find_node(self, vpeer, fnmsg, result_trie, tun_meta,\
             data_mode, far_peers_by_path):
         "Opens a channel and sends a 'root level' FIND_NODE to the passed"\
         " connected peer, adding results to the passed result_trie, and then"\
@@ -708,15 +817,11 @@ class ChordTasks(object):
         if not queue:
             return
 
-        msg = cp.ChordFindNode()
-        msg.node_id = node_id
-        msg.data_mode = data_mode
-
         if log.isEnabledFor(logging.DEBUG):
             log.debug("Sending root level FindNode msg to Peer (dbid=[{}])."\
                 .format(peer.dbid))
 
-        peer.protocol.write_channel_data(local_cid, msg.encode())
+        peer.protocol.write_channel_data(local_cid, fnmsg.encode())
 
         pkt = yield from queue.get()
         if not pkt:
@@ -735,7 +840,11 @@ class ChordTasks(object):
                     return
             elif data_mode is cp.DataMode.get:
                 msg = cp.ChordDataPresence(pkt)
-                vpeer.data_present = msg.data_present
+
+                if fnmsg.significant_bits:
+                    vpeer.data_present = msg.first_id
+                else:
+                    vpeer.data_present = msg.data_present
 
                 pkt = yield from queue.get()
                 if not pkt:
@@ -746,6 +855,8 @@ class ChordTasks(object):
         if log.isEnabledFor(logging.DEBUG):
             log.debug("Root level FindNode to Peer (id=[{}]) returned {}"\
                 " PeerS.".format(peer.dbid, len(msg.peers)))
+
+        node_id = fnmsg.node_id
 
         idx = 0
         for rpeer in msg.peers:
@@ -764,9 +875,9 @@ class ChordTasks(object):
 
     @asyncio.coroutine
     def _process_find_node_relay(\
-            self, node_id, tun_meta, query_cntr, done_all, task_cntr,\
-            result_trie, data_mode, far_peers_by_path, sent_data_request,\
-            data_rw):
+            self, node_id, significant_bits, tun_meta, query_cntr, done_all,\
+            task_cntr, result_trie, data_mode, far_peers_by_path,\
+            sent_data_request, data_rw):
         "This method processes an open tunnel's responses, processing the"\
         " incoming messages and appending the PeerS in those messages to the"\
         " result_trie. This method does not close any channel to the tunnel,"\
@@ -779,9 +890,9 @@ class ChordTasks(object):
 
         try:
             r = yield from self.__process_find_node_relay(\
-                node_id, tun_meta, query_cntr, done_all, task_cntr,\
-                result_trie, data_mode, far_peers_by_path, sent_data_request,\
-                data_rw)
+                node_id, significant_bits, tun_meta, query_cntr, done_all,\
+                task_cntr, result_trie, data_mode, far_peers_by_path,\
+                sent_data_request, data_rw)
 
             if not r:
                 return
@@ -805,9 +916,9 @@ class ChordTasks(object):
 
     @asyncio.coroutine
     def __process_find_node_relay(\
-            self, node_id, tun_meta, query_cntr, done_all, task_cntr,\
-            result_trie, data_mode, far_peers_by_path, sent_data_request,\
-            data_rw):
+            self, node_id, significant_bits, tun_meta, query_cntr, done_all,\
+            task_cntr, result_trie, data_mode, far_peers_by_path,\
+            sent_data_request, data_rw):
         "Inner function for above call."
         while True:
             pkt = yield from tun_meta.queue.get()
@@ -879,7 +990,12 @@ class ChordTasks(object):
 
                 if data_mode is cp.DataMode.get:
                     pmsg = cp.ChordDataPresence(pkts[0])
-                    if pmsg.data_present:
+                    if significant_bits:
+                        t = pmsg.first_id
+                    else:
+                        t = pmsg.data_present
+
+                    if t:
                         apath = (tun_meta.peer.dbid,) + path
                         rvpeer = far_peers_by_path.get(apath)
                         if rvpeer is None:
@@ -887,7 +1003,11 @@ class ChordTasks(object):
                             log.warning("Far node not found in dict for apath"\
                                 "[{}].".format(apath))
                         else:
-                            rvpeer.data_present = True
+                            if significant_bits:
+                                rvpeer.data_present = pmsg.first_id
+                            else:
+                                assert pmsg.data_present
+                                rvpeer.data_present = True
                 else:
                     assert data_mode is cp.DataMode.store
 
@@ -1105,9 +1225,14 @@ class ChordTasks(object):
         if fnmsg.data_mode.value:
             # In for_data mode we respond with two packets.
             if fnmsg.data_mode is cp.DataMode.get:
-                data_present = yield from self._check_has_data(fnmsg.node_id)
+                data_present = yield from self._check_has_data(\
+                    fnmsg.node_id, fnmsg.significant_bits)
+
                 pmsg = cp.ChordDataPresence()
-                pmsg.data_present = data_present
+                if fnmsg.significant_bits and data_present:
+                    pmsg.first_id = data_present
+                else:
+                    pmsg.data_present = data_present
 
                 log.info("Writing DataPresence (data_present=[{}]) response."\
                     .format(data_present))
@@ -1130,7 +1255,7 @@ class ChordTasks(object):
 
         if not rlist:
             log.info("No nodes closer than ourselves.")
-            if not will_store and not data_present:
+            if not will_store and (fnmsg.significant_bits or not data_present):
                 yield from peer.protocol.close_channel(local_cid)
                 return
 
@@ -1160,25 +1285,49 @@ class ChordTasks(object):
                 return
 
             packet_type = cp.ChordMessage.parse_type(pkt)
-            if will_store and packet_type == cp.CHORD_MSG_STORE_DATA:
-                if log.isEnabledFor(logging.INFO):
-                    log.info("Received ChordStoreData packet, storing.")
+            if will_store:
+                if packet_type == cp.CHORD_MSG_STORE_DATA:
+                    if log.isEnabledFor(logging.INFO):
+                        log.info("Received ChordStoreData packet, storing.")
 
-                rmsg = cp.ChordStoreData(pkt)
+                    rmsg = cp.ChordStoreData(pkt)
 
-                r = yield from self._store_data(peer, rmsg, need_pruning)
+                    r = yield from self._store_data(peer, rmsg, need_pruning)
 
-                dsmsg = cp.ChordDataStored()
-                dsmsg.stored = r
+                    dsmsg = cp.ChordDataStored()
+                    dsmsg.stored = r
 
-                peer.protocol.write_channel_data(local_cid, dsmsg.encode())
-                continue
+                    peer.protocol.write_channel_data(local_cid, dsmsg.encode())
+                    continue
+                elif packet_type == cp.CHORD_MSG_STORE_KEY:
+                    if log.isEnabledFor(logging.INFO):
+                        log.info("Received ChordStoreKey packet, storing.")
+
+                    rmsg = cp.ChordStoreKey(pkt)
+
+                    r = yield from self._store_key(peer, rmsg, fnmsg.node_id)
+
+                    dsmsg = cp.ChordDataStored()
+                    dsmsg.stored = r
+
+                    peer.protocol.write_channel_data(local_cid, dsmsg.encode())
+                    continue
+                else:
+                    rmsg = cp.ChordRelay(pkt)
             elif data_present and packet_type == cp.CHORD_MSG_GET_DATA:
                 if log.isEnabledFor(logging.INFO):
                     log.info("Received ChordGetData packet, fetching.")
 
+                if fnmsg.significant_bits:
+                    # data_present was set to the closest that we have.
+                    data_id = data_present
+                else:
+                    data_id = fnmsg.node_id
+
                 data, data_l, version, signature, epubkey, pubkeylen =\
-                    yield from self._retrieve_data(fnmsg.node_id)
+                    yield from self._retrieve_data(data_id)
+
+                assert data is not None
 
                 drmsg = cp.ChordDataResponse()
                 drmsg.data = data
@@ -1402,21 +1551,51 @@ class ChordTasks(object):
                 tun_meta.peer.protocol.close_channel(tun_meta.local_cid)
 
     @asyncio.coroutine
-    def _check_has_data(self, data_id):
+    def _check_has_data(self, data_id, significant_bits):
         distance = self.engine.calc_raw_distance(self.engine.node_id, data_id)
 
-        if distance > self.engine.furthest_data_block:
-            return False
+        if significant_bits and significant_bits >= 32:
+            mask = ((1 << (chord.NODE_ID_BITS - significant_bits)) - 1)\
+                .to_bytes(chord.NODE_ID_BYTES, "big")
+
+            end_id = bytearray()
+
+            for c1, c2 in zip(data_id, mask):
+                end_id.append(c1 | c2)
+
+            if distance > self.engine.furthest_data_block:
+                d2 = self.engine.calc_raw_distance(self.engine.node_id, end_id)
+                if d2 > self.engine.furthest_data_block:
+                    return False
+        else:
+            if distance > self.engine.furthest_data_block:
+                return False
 
         def dbcall():
             with self.engine.node.db.open_session() as sess:
-                q = sess.query(func.count("*"))
-                q = q.filter(DataBlock.data_id == data_id)
+                if significant_bits and significant_bits >= 32:
+                    q = sess.query(DataBlock.data_id)
 
-                if q.scalar() > 0:
-                    return True
+                    q = q.filter(DataBlock.data_id > data_id)
+                    q = q.filter(DataBlock.data_id <= end_id)
+                    q = q.filter(DataBlock.original_size == 0)
+                    q = q.order_by(DataBlock.data_id)
+
+                    next_block_id = q.first()
+
+                    if next_block_id:
+                        return next_block_id[0]
+                    else:
+                        return False
                 else:
-                    return False
+                    q = sess.query(func.count("*"))
+
+                    q = q.filter(DataBlock.data_id == data_id)
+
+                    if q.scalar() > 0:
+                        return True
+                    else:
+                        return False
 
         return (yield from self.loop.run_in_executor(None, dbcall))
 
@@ -1562,7 +1741,7 @@ class ChordTasks(object):
         data_block = yield from self.loop.run_in_executor(None, dbcall)
 
         if not data_block:
-            return None, None
+            return None
 
         def iocall():
             data_file = open(
@@ -1576,6 +1755,53 @@ class ChordTasks(object):
 
         return enc_data, data_block.original_size, data_block.version,\
             data_block.signature, data_block.epubkey, data_block.pubkeylen
+
+    @asyncio.coroutine
+    def _store_key(self, peer, dmsg, data_id):
+        data_key = enc.generate_ID(dmsg.data)
+
+        if data_key != data_id:
+            errmsg = "Peer (dbid=[{}]) sent a data that didn't match the"\
+                "data_id."
+            log.warning(errmsg)
+            raise ChordException(errmsg)
+
+        distance = self.engine.calc_raw_distance(self.engine.node_id, data_id)
+
+        def dbcall():
+            with self.engine.node.db.open_session() as sess:
+                self.engine.node.db.lock_table(sess, DataBlock)
+
+                q = sess.query(func.count("*"))
+                q = q.filter(DataBlock.data_id == data_id)
+
+                if q.scalar() > 0:
+                    # We already have this key.
+                    return False
+
+                data_block = DataBlock()
+                data_block.data_id = data_id
+                data_block.distance = distance
+                data_block.original_size = 0
+                data_block.insert_timestamp = datetime.today()
+
+                sess.add(data_block)
+
+                # For now we don't track space used by keys.
+
+                sess.commit()
+
+                return True
+
+        r = yield from self.loop.run_in_executor(None, dbcall)
+
+        if not r:
+            if log.isEnabledFor(logging.INFO):
+                log.info("Not storing key we already have.")
+
+            return False
+
+        return True
 
     @asyncio.coroutine
     def _store_data(self, peer, dmsg, need_pruning):
@@ -1625,11 +1851,11 @@ class ChordTasks(object):
             data_key = enc.generate_ID(data)
             data_id = enc.generate_ID(data_key)
 
-        if data_id != dmsg.data_id:
-            errmsg = "Peer (dbid=[{}]) sent a data_id that didn't match"\
-                " the data!".format(peer_dbid)
-            log.warning(errmsg)
-            raise ChordException(errmsg)
+            if data_id != dmsg.data_id:
+                errmsg = "Peer (dbid=[{}]) sent a data_id that didn't match"\
+                    " the data!".format(peer_dbid)
+                log.warning(errmsg)
+                raise ChordException(errmsg)
 
         distance = self.engine.calc_raw_distance(self.engine.node_id, data_id)
         original_size = len(data)
@@ -1706,18 +1932,6 @@ class ChordTasks(object):
                 if not old_entry:
                     sess.add(data_block)
 
-                # Rule: only update this NodeState row when holding a lock on
-                # the DataBlock table.
-                node_state = sess.query(NodeState)\
-                    .filter(NodeState.key == mnnode.NSK_DATASTORE_SIZE)\
-                    .first()
-
-                if not node_state:
-                    node_state = NodeState()
-                    node_state.key = mnnode.NSK_DATASTORE_SIZE
-                    node_state.value = 0
-                    sess.add(node_state)
-
                 if updateable_size_diff is not None:
                     size_diff = updateable_size_diff
                 else:
@@ -1726,7 +1940,7 @@ class ChordTasks(object):
                 if need_pruning:
                     size_diff -= freeable_space
 
-                node_state.value = str(int(node_state.value) + size_diff)
+                self._update_nodestate(sess, size_diff)
 
                 sess.commit()
 
@@ -1841,3 +2055,18 @@ class ChordTasks(object):
                 pass
 
             return False
+
+    def _update_nodestate(self, sess, size_diff):
+        # Rule: only update this NodeState row when holding a lock on
+        # the DataBlock table.
+        node_state = sess.query(NodeState)\
+            .filter(NodeState.key == mnnode.NSK_DATASTORE_SIZE)\
+            .first()
+
+        if not node_state:
+            node_state = NodeState()
+            node_state.key = mnnode.NSK_DATASTORE_SIZE
+            node_state.value = 0
+            sess.add(node_state)
+
+        node_state.value = str(int(node_state.value) + size_diff)

@@ -288,6 +288,11 @@ class Shell(cmd.Cmd):
         self.writeln("Count: {}.".format(len(peers)))
 
     @asyncio.coroutine
+    def do_fn(self, arg):
+        "findnode alias."
+        yield from self.do_findnode(arg)
+
+    @asyncio.coroutine
     def do_findnode(self, arg):
         "[ID] find the node with hex encoded id."
 
@@ -299,8 +304,8 @@ class Shell(cmd.Cmd):
         self.writeln("send_find_node(..) took: {}.".format(diff))
 
         for r in result:
-            self.writeln("nid[{}] FOUND: {:22} diff=[{}]"\
-                .format(r.id, r.address,\
+            self.writeln("nid[{}] FOUND: {:22} id=[{}] diff=[{}]"\
+                .format(r.id, r.address, hex_string(r.node_id),\
                     hex_string(\
                         self.peer.engine.calc_raw_distance(\
                             r.node_id, node_id))))
@@ -322,6 +327,23 @@ class Shell(cmd.Cmd):
         self.writeln("data=[{}].".format(data_rw.data))
         self.writeln("version=[{}].".format(data_rw.version))
         self.writeln("send_get_data(..) took: {}.".format(diff))
+
+    @asyncio.coroutine
+    def do_fk(self, arg):
+        "findkey alias."
+        yield from self.do_findkey(arg)
+
+    @asyncio.coroutine
+    def do_findkey(self, arg):
+        "[DATA_KEY_PREFIX] search the network for the given key."
+
+        data_key = bytes.fromhex(arg)
+
+        start = datetime.today()
+        data_rw = yield from self.peer.engine.tasks.send_find_key(data_key)
+        diff = datetime.today() - start
+        self.writeln("data_key=[{}].".format(hex_string(data_rw.data_key)))
+        self.writeln("send_find_key(..) took: {}.".format(diff))
 
     @asyncio.coroutine
     def do_sd(self, arg):
@@ -351,6 +373,35 @@ class Shell(cmd.Cmd):
         diff = datetime.today() - start
         self.writeln("storing_nodes=[{}].".format(storing_nodes))
         self.writeln("send_store_data(..) took: {}.".format(diff))
+
+    @asyncio.coroutine
+    def do_sk(self, arg):
+        "storekey alias."
+        yield from self.do_storekey(arg)
+
+    @asyncio.coroutine
+    def do_storekey(self, arg):
+        "[DATA] store DATA's key into the network."
+
+        data = bytes(arg, "UTF8")
+
+        max_len = node.MAX_DATA_BLOCK_SIZE
+
+        if len(data) > max_len:
+            self.writeln("ERROR: data cannot be greater than {} bytes."\
+                .format(max_len))
+            return
+
+        def key_callback(data_key):
+            self.writeln("data_key=[{}].".format(hex_string(data_key)))
+
+        start = datetime.today()
+        storing_nodes =\
+            yield from self.peer.engine.tasks.send_store_key(\
+                data, key_callback)
+        diff = datetime.today() - start
+        self.writeln("storing_nodes=[{}].".format(storing_nodes))
+        self.writeln("send_store_key(..) took: {}.".format(diff))
 
     @asyncio.coroutine
     def do_conn(self, arg):

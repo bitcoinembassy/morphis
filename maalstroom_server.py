@@ -8,9 +8,11 @@ from socketserver import ThreadingMixIn
 from threading import Event
 
 import base58
+import chord
 import enc
 from mutil import hex_string
 import rsakey
+import mbase32
 
 log = logging.getLogger(__name__)
 
@@ -65,6 +67,7 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
             if self.headers["If-None-Match"] == static_upload_page_content_id:
                 self.send_response(304)
                 self.send_header("ETag", static_upload_page_content_id)
+                self.send_header("Content-Length", 0)
                 self.end_headers()
                 return
 
@@ -98,6 +101,7 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
         if self.headers["If-None-Match"] == rpath:
             self.send_response(304)
             self.send_header("ETag", rpath)
+            self.send_header("Content-Length", 0)
             self.end_headers()
             return
 
@@ -105,45 +109,72 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
             log.info("rpath=[{}].".format(rpath))
 
         error = False
-        try:
-            if len(rpath) == 128:
-                data_key = bytes.fromhex(rpath)
-            elif len(rpath) == 88 + 4 and rpath.startswith("get/"):
-                data_key = base58.decode(rpath[4:])
 
-                hex_key = hex_string(data_key)
+        significant_bits = chord.NODE_ID_BITS
+
+        lrp = len(rpath)
+        try:
+            if lrp == 128:
+                data_key = bytes.fromhex(rpath)
+            elif lrp in (103, 102):
+                data_key = bytes(mbase32.decode(rpath))
+#            elif lrp == 88 + 4 and rpath.startswith("get/"):
+#                data_key = base58.decode(rpath[4:])
+#
+#                hex_key = hex_string(data_key)
+#
+#                message = ("<a href=\"morphis://{}\">{}</a>\n{}"\
+#                    .format(hex_key, hex_key, hex_key))\
+#                        .encode()
+#
+#                self.send_response(301)
+#                self.send_header("Location", "morphis://{}".format(hex_key))
+#                self.send_header("Content-Type", "text/html")
+#                self.send_header("Content-Length", len(message))
+#                self.end_headers()
+#
+#                self.wfile.write(message)
+#                return
+            else:
+#                error = True
+#                log.warning("Invalid request: [{}].".format(rpath))
+                data_key = mbase32.decode(rpath, False)
+                significant_bits = 5 * len(rpath)
+        except:
+            error = True
+            log.exception("decode")
+
+        if error:
+            errmsg = b"400 Bad Request."
+            self.send_response(400)
+            self.send_header("Content-Length", len(errmsg))
+            self.end_headers()
+            self.wfile.write(errmsg)
+            return
+
+        data_rw = DataResponseWrapper()
+
+        node.loop.call_soon_threadsafe(\
+            asyncio.async, _send_get_data(data_key, significant_bits, data_rw))
+
+        data_rw.is_done.wait()
+
+        if significant_bits:
+            if data_rw.data_key:
+                key = mbase32.encode(data_rw.data_key)
 
                 message = ("<a href=\"morphis://{}\">{}</a>\n{}"\
-                    .format(hex_key, hex_key, hex_key))\
+                    .format(key, key, key))\
                         .encode()
 
                 self.send_response(301)
-                self.send_header("Location", "morphis://{}".format(hex_key))
+                self.send_header("Location", "morphis://{}".format(key))
                 self.send_header("Content-Type", "text/html")
                 self.send_header("Content-Length", len(message))
                 self.end_headers()
 
                 self.wfile.write(message)
                 return
-            else:
-                error = True
-                log.warning("Invalid request: [{}].".format(rpath))
-        except:
-            error = True
-            log.exception("decode")
-
-        if error:
-            self.send_response(400)
-            self.end_headers()
-            self.wfile.write(b"400 Bad Request.")
-            return
-
-        data_rw = DataResponseWrapper()
-
-        node.loop.call_soon_threadsafe(\
-            asyncio.async, _send_get_data(data_key, data_rw))
-
-        data_rw.is_done.wait()
 
         if data_rw.data:
             self.send_response(200)
@@ -183,7 +214,6 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
                 environ={\
                     "REQUEST_METHOD": "POST",\
                     "CONTENT_TYPE": self.headers["Content-Type"]})
-
 
             if log.isEnabledFor(logging.DEBUG):
                 log.debug("form=[{}].".format(form))
@@ -234,8 +264,8 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
 
         if data_rw.data_key:
             hex_key = hex_string(data_rw.data_key)
-            message = "<a href=\"morphis://{}\">perma link</a>\n{}\n{}"\
-                .format(hex_key, hex_key, base58.encode(data_rw.data_key))
+            message = "<a href=\"morphis://{}\">perma link</a>\n{}"\
+                .format(mbase32.encode(data_rw.data_key), hex_key)
 
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
@@ -248,21 +278,47 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
 
     def handle_error(self, data_rw):
         if data_rw.exception:
+            errmsg = b"500 Internal Server Error."
             self.send_response(500)
-            self.end_headers()
-            self.wfile.write(b"500 Internal Server Error.")
         elif data_rw.timed_out:
+            errmsg = b"408 Request Timeout."
             self.send_response(408)
-            self.end_headers()
-            self.wfile.write(b"408 Request Timeout.")
         else:
+            errmsg = b"404 Not Found."
             self.send_response(404)
-            self.end_headers()
-            self.wfile.write(b"404 Not Found.")
+
+        self.send_header("Content-Length", len(errmsg))
+        self.end_headers()
+        self.wfile.write(errmsg)
 
 @asyncio.coroutine
-def _send_get_data(data_key, data_rw):
+def _send_get_data(data_key, significant_bits, data_rw):
     try:
+        if significant_bits < chord.NODE_ID_BITS:
+            future = asyncio.async(\
+                node.chord_engine.tasks.send_find_key(\
+                    data_key, significant_bits),
+                loop=node.loop)
+
+            yield from asyncio.wait_for(future, 15.0, loop=node.loop)
+
+            ct_data_rw = future.result()
+
+            data_key = ct_data_rw.data_key
+
+            if log.isEnabledFor(logging.INFO):
+                log.info("Found key=[{}].".format(hex_string(data_key)))
+
+            if not data_key:
+                data_rw.data = b"Key Not Found"
+                data_rw.version = -1
+                data_rw.is_done.set()
+                return
+
+            data_rw.data_key = bytes(data_key)
+            data_rw.is_done.set()
+            return
+
         future = asyncio.async(\
             node.chord_engine.tasks.send_get_data(data_key),\
             loop=node.loop)
@@ -292,12 +348,27 @@ def _send_store_data(data, data_rw, privatekey=None, path=None, version=None):
                 node.chord_engine.tasks.send_store_updateable_key(\
                     data, privatekey, path, version, key_callback),\
                 loop=node.loop)
+
+            yield from asyncio.wait_for(future, 30.0, loop=node.loop)
+
+            future = asyncio.async(\
+                node.chord_engine.tasks.send_store_updateable_key_key(\
+                    data, privatekey, path, key_callback),\
+                loop=node.loop)
+
+            yield from asyncio.wait_for(future, 30.0, loop=node.loop)
         else:
             future = asyncio.async(\
                 node.chord_engine.tasks.send_store_data(data, key_callback),\
                 loop=node.loop)
 
-        yield from asyncio.wait_for(future, 30.0, loop=node.loop)
+            yield from asyncio.wait_for(future, 30.0, loop=node.loop)
+
+            future = asyncio.async(\
+                node.chord_engine.tasks.send_store_key(data),\
+                loop=node.loop)
+
+            yield from asyncio.wait_for(future, 30.0, loop=node.loop)
     except asyncio.TimeoutError:
         data_rw.timed_out = True
     except:

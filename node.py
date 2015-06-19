@@ -11,7 +11,7 @@ import packet as mnetpacket
 import rsakey
 import maalstroom_server as maalstroom
 import mn1
-from mutil import hex_dump
+from mutil import hex_dump, hex_string
 import chord
 import peer
 import db
@@ -141,7 +141,8 @@ class Node():
                         max_distance = b""
 
                     if log.isEnabledFor(logging.INFO):
-                        log.info("max_distance=[{}].".format(max_distance))
+                        log.info("max_distance=[{}]."\
+                            .format(hex_string(max_distance)))
 
                     return datastore_size, max_distance
 
