@@ -159,6 +159,23 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
 
         data_rw.is_done.wait()
 
+        if significant_bits:
+            if data_rw.data_key:
+                key = mbase32.encode(data_rw.data_key)
+
+                message = ("<a href=\"morphis://{}\">{}</a>\n{}"\
+                    .format(key, key, key))\
+                        .encode()
+
+                self.send_response(301)
+                self.send_header("Location", "morphis://{}".format(key))
+                self.send_header("Content-Type", "text/html")
+                self.send_header("Content-Length", len(message))
+                self.end_headers()
+
+                self.wfile.write(message)
+                return
+
         if data_rw.data:
             self.send_response(200)
             if data_rw.data[0] == 0xFF and data_rw.data[1] == 0xD8:
@@ -295,9 +312,12 @@ def _send_get_data(data_key, significant_bits, data_rw):
             if not data_key:
                 data_rw.data = b"Key Not Found"
                 data_rw.version = -1
+                data_rw.is_done.set()
                 return
 
-            data_key = bytes(data_key)
+            data_rw.data_key = bytes(data_key)
+            data_rw.is_done.set()
+            return
 
         future = asyncio.async(\
             node.chord_engine.tasks.send_get_data(data_key),\
