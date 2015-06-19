@@ -330,6 +330,13 @@ def _send_store_data(data, data_rw, privatekey=None, path=None, version=None):
                 loop=node.loop)
 
             yield from asyncio.wait_for(future, 30.0, loop=node.loop)
+
+            future = asyncio.async(\
+                node.chord_engine.tasks.send_store_updateable_key_key(\
+                    data, privatekey, path, key_callback),\
+                loop=node.loop)
+
+            yield from asyncio.wait_for(future, 30.0, loop=node.loop)
         else:
             future = asyncio.async(\
                 node.chord_engine.tasks.send_store_data(data, key_callback),\
