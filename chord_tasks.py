@@ -1814,7 +1814,7 @@ class ChordTasks(object):
 
                 if q.scalar() > 0:
                     # We already have this key.
-                    return False
+                    return False, None
 
                 data_block = DataBlock()
                 data_block.data_id = data_id
@@ -1828,15 +1828,22 @@ class ChordTasks(object):
 
                 sess.commit()
 
-                return True
+                return True, data_block.id
 
-        r = yield from self.loop.run_in_executor(None, dbcall)
+        r, data_block_id = yield from self.loop.run_in_executor(None, dbcall)
 
         if not r:
             if log.isEnabledFor(logging.INFO):
                 log.info("Not storing key we already have.")
 
             return False
+
+        if distance > self.engine.furthest_data_block:
+            self.engine.furthest_data_block = distance
+
+        if log.isEnabledFor(logging.INFO):
+            log.info("Stored key=[{}] as id=[{}]."\
+                .format(hex_string(data_id), data_block_id))
 
         return True
 
