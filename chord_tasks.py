@@ -231,48 +231,6 @@ class ChordTasks(object):
         return data_rw
 
     @asyncio.coroutine
-    def send_store_updateable_key(\
-            self, data, privatekey, path=None, version=None,\
-            key_callback=None):
-
-        assert not path or type(path) is bytes
-        assert not version or type(version) is int
-
-        public_key_bytes = privatekey.asbytes() # asbytes=public key.
-
-        data_key = enc.generate_ID(public_key_bytes)
-
-        if path:
-            path_hash = enc.generate_ID(path)
-            data_key = enc.generate_ID(data_key + path_hash)
-        else:
-            path_hash = b""
-
-        key_callback(data_key)
-
-        data_id = enc.generate_ID(data_key)
-
-        hm = bytearray()
-        hm += sshtype.encodeBinary(path_hash)
-        hm += sshtype.encodeMpint(version)
-        hm += sshtype.encodeBinary(enc.generate_ID(data))
-
-        signature = privatekey.sign_ssh_data(hm)
-
-        sdmsg = cp.ChordStoreData()
-        sdmsg.data = data
-        sdmsg.pubkey = public_key_bytes
-        sdmsg.path_hash = path_hash
-        sdmsg.version = version
-        sdmsg.signature = signature
-
-        storing_nodes =\
-            yield from self.send_find_node(\
-                data_id, for_data=True, data_msg=sdmsg)
-
-        return storing_nodes
-
-    @asyncio.coroutine
     def send_store_key(self, data, key_callback=None):
         data_key = enc.generate_ID(data)
         if key_callback:
@@ -317,6 +275,48 @@ class ChordTasks(object):
 
         sdmsg = cp.ChordStoreData()
         sdmsg.data = data
+
+        storing_nodes =\
+            yield from self.send_find_node(\
+                data_id, for_data=True, data_msg=sdmsg)
+
+        return storing_nodes
+
+    @asyncio.coroutine
+    def send_store_updateable_key(\
+            self, data, privatekey, path=None, version=None,\
+            key_callback=None):
+
+        assert not path or type(path) is bytes
+        assert not version or type(version) is int
+
+        public_key_bytes = privatekey.asbytes() # asbytes=public key.
+
+        data_key = enc.generate_ID(public_key_bytes)
+
+        if path:
+            path_hash = enc.generate_ID(path)
+            data_key = enc.generate_ID(data_key + path_hash)
+        else:
+            path_hash = b""
+
+        key_callback(data_key)
+
+        data_id = enc.generate_ID(data_key)
+
+        hm = bytearray()
+        hm += sshtype.encodeBinary(path_hash)
+        hm += sshtype.encodeMpint(version)
+        hm += sshtype.encodeBinary(enc.generate_ID(data))
+
+        signature = privatekey.sign_ssh_data(hm)
+
+        sdmsg = cp.ChordStoreData()
+        sdmsg.data = data
+        sdmsg.pubkey = public_key_bytes
+        sdmsg.path_hash = path_hash
+        sdmsg.version = version
+        sdmsg.signature = signature
 
         storing_nodes =\
             yield from self.send_find_node(\
