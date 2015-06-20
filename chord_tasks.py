@@ -834,21 +834,25 @@ class ChordTasks(object):
             if data_mode is cp.DataMode.store:
                 msg = cp.ChordStorageInterest(pkt)
                 vpeer.will_store = msg.will_store
-
-                pkt = yield from queue.get()
-                if not pkt:
-                    return
             elif data_mode is cp.DataMode.get:
                 msg = cp.ChordDataPresence(pkt)
+
+                if log.isEnabledFor(logging.DEBUG):
+                    log.debug("Peer (dbid=[{}]) said data_present=[{}],"\
+                        " first_id=[{}]."\
+                            .format(vpeer.peer.dbid, msg.data_present,\
+                                msg.first_id))
 
                 if fnmsg.significant_bits:
                     vpeer.data_present = msg.first_id
                 else:
                     vpeer.data_present = msg.data_present
+            else:
+                assert False
 
-                pkt = yield from queue.get()
-                if not pkt:
-                    return
+            pkt = yield from queue.get()
+            if not pkt:
+                return
 
         msg = cp.ChordPeerList(pkt)
 
@@ -990,6 +994,12 @@ class ChordTasks(object):
 
                 if data_mode is cp.DataMode.get:
                     pmsg = cp.ChordDataPresence(pkts[0])
+
+                    if log.isEnabledFor(logging.DEBUG):
+                        log.debug("Peer (dbid=[??]) said data_present=[{}],"\
+                            " first_id=[{}]."\
+                                .format(pmsg.data_present, pmsg.first_id))
+
                     if significant_bits:
                         t = pmsg.first_id
                     else:
@@ -1008,6 +1018,16 @@ class ChordTasks(object):
                             else:
                                 assert pmsg.data_present
                                 rvpeer.data_present = True
+
+                    if len(pkts) == 1:
+                        # If a node has no closer peers, it may close channel
+                        # after sending the DataPresence message instead of
+                        # also sending a PeerList.
+                        tun_meta.jobs -= 1
+                        query_cntr.value -= 1
+                        if not query_cntr.value:
+                            done_all.set()
+                        continue
                 else:
                     assert data_mode is cp.DataMode.store
 
@@ -1028,8 +1048,9 @@ class ChordTasks(object):
 
             pmsg = cp.ChordPeerList(pkt)
 
-            log.info("Peer (id=[{}]) returned PeerList of size {}."\
-                .format(tun_meta.peer.dbid, len(pmsg.peers)))
+            if log.isEnabledFor(logging.INFO):
+                log.info("Peer (id=[{}]) returned PeerList of size {}."\
+                    .format(tun_meta.peer.dbid, len(pmsg.peers)))
 
             # Add returned PeerS to result_trie.
             idx = 0
@@ -1078,13 +1099,17 @@ class ChordTasks(object):
                 pkt = pkts[0]
 
                 packet_type = cp.ChordMessage.parse_type(pkt)
-                if packet_type == cp.CHORD_MSG_PEER_LIST\
+                if packet_type == cp.CHORD_MSG_RELAY:
+                    continue
+                elif packet_type == cp.CHORD_MSG_PEER_LIST\
                         or (data_mode is cp.DataMode.get\
-                            and packet_type == cp.CHORD_MSG_DATA_RESPONSE)\
+                            and (packet_type == cp.CHORD_MSG_DATA_RESPONSE\
+                                or packet_type == cp.CHORD_MSG_DATA_PRESENCE))\
                         or (data_mode is cp.DataMode.store\
                             and packet_type == cp.CHORD_MSG_DATA_STORED):
+                    # Break as we reached deepest packet.
                     break
-                elif packet_type != cp.CHORD_MSG_RELAY:
+                else:
                     log.warning("Unexpected packet_type [{}]; ignoring."\
                         .format(packet_type))
                     invalid = True
@@ -1466,6 +1491,8 @@ class ChordTasks(object):
             self, rpeer, rlocal_cid, index, tun_meta, req_cntr, data_mode):
         "Process the responses from a tunnel and relay them back to rpeer."
 
+        tunnel_closed = False
+
         while True:
             pkt = yield from tun_meta.queue.get()
             if not tun_meta.jobs:
@@ -1499,7 +1526,14 @@ class ChordTasks(object):
                     if not tun_meta.jobs:
                         return
                     if not pkt2:
-                        break
+                        # FindNode for key can send just one packet and then
+                        # close the tunnel if it had no closer nodes.
+                        if pkt_type != cp.CHORD_MSG_DATA_PRESENCE:
+                            log.warning("Tunnel closed before expected second"\
+                                " packet; first pkt_type=[{}]."\
+                                    .format(pkt_type))
+                            break
+                        tunnel_closed = True
 
             if log.isEnabledFor(logging.DEBUG):
                 log.debug("Relaying response (index={}) from Peer (id=[{}])"\
@@ -1516,6 +1550,9 @@ class ChordTasks(object):
             rpeer.protocol.write_channel_data(rlocal_cid, msg.encode())
 
             req_cntr.value -= 1
+
+            if tunnel_closed:
+                break
 
         outstanding = tun_meta.jobs.qsize() + req_cntr.value
         yield from\
