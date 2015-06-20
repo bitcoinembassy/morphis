@@ -191,8 +191,8 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
             else:
                 self.send_header("Content-Type", "text/html")
             self.send_header("Content-Length", len(data_rw.data))
-            if data_rw.version:
-                self.send_header("Cache-Control", "public, max-age=15")
+            if data_rw.version is not None:
+                self.send_header("Cache-Control", "max-age=15, public")
             else:
                 self.send_header("Cache-Control", "public")
                 self.send_header("ETag", rpath)
