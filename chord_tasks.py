@@ -261,7 +261,6 @@ class ChordTasks(object):
 
         sdmsg = cp.ChordStoreData()
         sdmsg.data = data
-        sdmsg.data_id = data_id # Not used?
         sdmsg.pubkey = public_key_bytes
         sdmsg.path_hash = path_hash
         sdmsg.version = version
@@ -318,7 +317,6 @@ class ChordTasks(object):
 
         sdmsg = cp.ChordStoreData()
         sdmsg.data = data
-        sdmsg.data_id = data_id
 
         storing_nodes =\
             yield from self.send_find_node(\
@@ -629,7 +627,7 @@ class ChordTasks(object):
                             assert data_msg_type is cp.ChordStoreKey
 
                             r = yield from\
-                                self._store_key(peer, data_msg, fnmsg.node_id)
+                                self._store_key(peer, fnmsg.node_id, data_msg)
 
                         if not r:
                             log.info("We failed to store the data.")
@@ -1317,7 +1315,9 @@ class ChordTasks(object):
 
                     rmsg = cp.ChordStoreData(pkt)
 
-                    r = yield from self._store_data(peer, rmsg, need_pruning)
+                    r = yield from\
+                        self._store_data(\
+                            peer, fnmsg.node_id, rmsg, need_pruning)
 
                     dsmsg = cp.ChordDataStored()
                     dsmsg.stored = r
@@ -1330,7 +1330,7 @@ class ChordTasks(object):
 
                     rmsg = cp.ChordStoreKey(pkt)
 
-                    r = yield from self._store_key(peer, rmsg, fnmsg.node_id)
+                    r = yield from self._store_key(peer, fnmsg.node_id, rmsg)
 
                     dsmsg = cp.ChordDataStored()
                     dsmsg.stored = r
@@ -1794,7 +1794,7 @@ class ChordTasks(object):
             data_block.signature, data_block.epubkey, data_block.pubkeylen
 
     @asyncio.coroutine
-    def _store_key(self, peer, dmsg, data_id):
+    def _store_key(self, peer, data_id, dmsg):
         data_key = enc.generate_ID(dmsg.data)
 
         if data_key != data_id:
@@ -1848,7 +1848,7 @@ class ChordTasks(object):
         return True
 
     @asyncio.coroutine
-    def _store_data(self, peer, dmsg, need_pruning):
+    def _store_data(self, peer, data_id, dmsg, need_pruning):
         "Store the data block on disk and meta in the database. Returns True"
         " if the data was stored, False otherwise."
 
@@ -1872,9 +1872,7 @@ class ChordTasks(object):
             data_key = enc.generate_ID(dmsg.pubkey)
             if dmsg.path_hash:
                 data_key = enc.generate_ID(data_key + dmsg.path_hash)
-            data_id = enc.generate_ID(data_key)
-
-            if data_id != dmsg.data_id:
+            if data_id != enc.generate_ID(data_key):
                 errmsg = "Peer (dbid=[{}]) sent a data_id that didn't match"\
                     " the updateable key id!".format(peer_dbid)
                 log.warning(errmsg)
@@ -1893,9 +1891,7 @@ class ChordTasks(object):
                 raise ChordException(errmsg)
         else:
             data_key = enc.generate_ID(data)
-            data_id = enc.generate_ID(data_key)
-
-            if data_id != dmsg.data_id:
+            if data_id != enc.generate_ID(data_key):
                 errmsg = "Peer (dbid=[{}]) sent a data_id that didn't match"\
                     " the data!".format(peer_dbid)
                 log.warning(errmsg)

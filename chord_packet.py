@@ -290,7 +290,6 @@ class ChordDataPresence(ChordMessage):
 
 class ChordStoreData(ChordMessage):
     def __init__(self, buf = None):
-        self.data_id = None # H(H(d))
         self.data = None
 
         self.pubkey = None
@@ -300,9 +299,12 @@ class ChordStoreData(ChordMessage):
 
         super().__init__(CHORD_MSG_STORE_DATA, buf)
 
+    @property
+    def data_id(self):
+        raise Exception("No more such property.")
+
     def encode(self):
         nbuf = super().encode()
-        nbuf += sshtype.encodeBinary(self.data_id)
         nbuf += sshtype.encodeBinary(self.data)
 
         if self.pubkey:
@@ -317,8 +319,6 @@ class ChordStoreData(ChordMessage):
     def parse(self):
         super().parse()
         i = 1
-        l, self.data_id = sshtype.parseBinary(self.buf[i:])
-        i += l
         l, self.data = sshtype.parseBinary(self.buf[i:])
         i += l
 
