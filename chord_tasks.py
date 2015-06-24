@@ -621,8 +621,8 @@ class ChordTasks(object):
                             " data locally.")
 
                         if data_msg_type is cp.ChordStoreData:
-                            r = yield from\
-                                self._store_data(None, data_msg, need_pruning)
+                            r = yield from self._store_data(\
+                                    None, node_id, data_msg, need_pruning)
                         else:
                             assert data_msg_type is cp.ChordStoreKey
 
