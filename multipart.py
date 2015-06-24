@@ -29,19 +29,21 @@ def store_data(engine, data, privatekey=None, path=None, version=None,\
             yield from engine.tasks.send_store_updateable_key(\
                 data, privatekey, path, version, key_callback)
 
-            yield from engine.tasks.send_store_updateable_key_key(\
-                data, privatekey, path, key_callback)
+            if store_key:
+                yield from engine.tasks.send_store_updateable_key_key(\
+                    data, privatekey, path, key_callback)
         else:
             yield from engine.tasks.send_store_data(data, key_callback)
 
-            yield from engine.tasks.send_store_key(data)
+            if store_key:
+                yield from engine.tasks.send_store_key(data)
 
         if log.isEnabledFor(logging.INFO):
             log.info("Simple store complete.")
 
         return
 
-    yield from _store_data(engine, data, key_callback, concurrency)
+    yield from _store_data(engine, data, key_callback, store_key, concurrency)
 
 def __key_callback(keys, idx, key):
     key_len = len(key)
@@ -49,7 +51,7 @@ def __key_callback(keys, idx, key):
     keys[idx:idx+key_len] = key
 
 @asyncio.coroutine
-def _store_data(engine, data, key_callback, concurrency):
+def _store_data(engine, data, key_callback, store_key, concurrency):
     depth = 1
     task_semaphore = asyncio.Semaphore(concurrency)
 
@@ -109,8 +111,14 @@ def _store_data(engine, data, key_callback, concurrency):
     block.depth = depth
     block.data = keys
 
+    block_data = block.encode()
+
     yield from\
-        _store_block(engine, block.encode(), _key_callback, task_semaphore)
+        engine.tasks.send_store_data(block_data, key_callback)
+
+    if store_key:
+        yield from\
+            engine.tasks.send_store_key(block_data)
 
 @asyncio.coroutine
 def _store_block(engine, i, block_data, key_callback, task_semaphore):
