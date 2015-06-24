@@ -1650,9 +1650,9 @@ class ChordTasks(object):
 
             # We only store stuff closer than 2^2 less then the maximum
             # distance.
-            if log_dist <= chord.NODE_ID_BITS - 2:
-                return True, False
-            return False, False
+#            if log_dist <= chord.NODE_ID_BITS - 2:
+            return True, False
+#            return False, False
 
         if log.isEnabledFor(logging.DEBUG):
             log.debug("Datastore is full, checking if proposed block is"\

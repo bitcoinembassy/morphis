@@ -208,6 +208,7 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
 
         if self.headers["Content-Type"] == "application/x-www-form-urlencoded":
             data = self.rfile.read(int(self.headers["Content-Length"]))
+            privatekey = None
         else:
             form = cgi.FieldStorage(\
                 fp=self.rfile,\
