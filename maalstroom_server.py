@@ -13,6 +13,7 @@ import enc
 from mutil import hex_string
 import rsakey
 import mbase32
+import multipart
 
 log = logging.getLogger(__name__)
 
@@ -343,32 +344,12 @@ def _send_store_data(data, data_rw, privatekey=None, path=None, version=None):
         def key_callback(data_key):
             data_rw.data_key = data_key
 
-        if privatekey:
-            future = asyncio.async(\
-                node.chord_engine.tasks.send_store_updateable_key(\
-                    data, privatekey, path, version, key_callback),\
-                loop=node.loop)
+        future = asyncio.async(\
+            multipart.store_data(node.chord_engine, data, privatekey, path,\
+                version, key_callback),\
+            loop=node.loop)
 
-            yield from asyncio.wait_for(future, 30.0, loop=node.loop)
-
-            future = asyncio.async(\
-                node.chord_engine.tasks.send_store_updateable_key_key(\
-                    data, privatekey, path, key_callback),\
-                loop=node.loop)
-
-            yield from asyncio.wait_for(future, 30.0, loop=node.loop)
-        else:
-            future = asyncio.async(\
-                node.chord_engine.tasks.send_store_data(data, key_callback),\
-                loop=node.loop)
-
-            yield from asyncio.wait_for(future, 30.0, loop=node.loop)
-
-            future = asyncio.async(\
-                node.chord_engine.tasks.send_store_key(data),\
-                loop=node.loop)
-
-            yield from asyncio.wait_for(future, 30.0, loop=node.loop)
+        yield from asyncio.wait_for(future, 30.0, loop=node.loop)
     except asyncio.TimeoutError:
         data_rw.timed_out = True
     except:
