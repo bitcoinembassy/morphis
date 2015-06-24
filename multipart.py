@@ -59,7 +59,7 @@ def _store_data(engine, data, key_callback, store_key, concurrency):
     assert data_len > mnnode.MAX_DATA_BLOCK_SIZE
 
     while True:
-        nblocks = data_len / mnnode.MAX_DATA_BLOCK_SIZE
+        nblocks = int(data_len / mnnode.MAX_DATA_BLOCK_SIZE)
         if data_len % mnnode.MAX_DATA_BLOCK_SIZE:
             nblocks += 1
 
@@ -73,24 +73,30 @@ def _store_data(engine, data, key_callback, store_key, concurrency):
         for i in range(nblocks):
             _key_callback = functools.partial(__key_callback, keys, i)
 
-            tasks += asyncio.async(\
-                _store_block(\
-                    engine, data[start:end], i, _key_callback, task_semaphore))
+            tasks.append(\
+                asyncio.async(\
+                    _store_block(\
+                        engine, i, data[start:end], _key_callback,\
+                        task_semaphore),\
+                    loop=engine.loop))
+
+            if task_semaphore.locked():
+                done, pending = yield from asyncio.wait(tasks,\
+                    loop=engine.loop, return_when=futures.FIRST_COMPLETED)
+
+                tasks = list(pending)
+
+                for task in done:
+                    if not task.result():
+                        log.warning("Upload failed!")
+                        return False
 
             yield from task_semaphore.acquire()
-
-            done, pending = yield from asyncio.wait(tasks, loop=engine.loop,\
-                return_when=futures.FIRST_COMPLETED)
-
-            for task in done:
-                if not task.result():
-                    log.warning("Upload failed!")
-                    return False
 
             start = end
             end += mnnode.MAX_DATA_BLOCK_SIZE
             if end > data_len:
-                assert i == (nblocks - 1)
+                assert i >= (nblocks - 2)
                 end = data_len
 
         # Wait for all previous hashes to be done. This simplifies the code, as
@@ -126,8 +132,11 @@ def _store_block(engine, i, block_data, key_callback, task_semaphore):
 
     if not snodes:
         log.warning("Failed to upload block #{}.".format(i))
+        return False
 
     task_semaphore.release()
+
+    return True
 
 class BlockType(Enum):
     hash_tree = 0
@@ -141,6 +150,7 @@ class MorphisBlock(object):
     def __init__(self, block_type=None, buf=None):
         self.buf = buf
         self.block_type = block_type
+        self.ext_type = 0
 
         if not buf:
             return
@@ -151,6 +161,7 @@ class MorphisBlock(object):
         nbuf = bytearray()
 
         nbuf += MorphisBlock.uuid
+        nbuf += b"MORPHiS"
         nbuf += struct.pack(">L", self.block_type)
         nbuf += struct.pack(">L", self.ext_type)
 
@@ -161,6 +172,8 @@ class MorphisBlock(object):
     def parse(self):
         assert self.buf[:16] == MorphisBlock.uuid
         i = 16
+
+        i += 7 # morphis
 
         block_type = struct.unpack_from(">L", self.buf, i)[0]
         if self.block_type:
@@ -178,6 +191,7 @@ class MorphisBlock(object):
 class HashTreeBlock(MorphisBlock):
     def __init__(self, buf=None):
         self.depth = 0
+        self.data = None
 
         super().__init__(BlockType.hash_tree.value, buf)
 
@@ -186,6 +200,8 @@ class HashTreeBlock(MorphisBlock):
         nbuf += struct.pack(">L", self.depth)
 
         nbuf += b' ' * (chord.NODE_ID_BYTES - len(nbuf))
+
+        nbuf += self.data
 
         return nbuf
 
