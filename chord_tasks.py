@@ -1674,6 +1674,7 @@ class ChordTasks(object):
 
                 q = sess.query(DataBlock.original_size)\
                     .filter(DataBlock.distance > distance)\
+                    .filter(DataBlock.original_size != 0)\
                     .order_by(DataBlock.distance.desc())
 
                 freeable_space = 0
@@ -1934,6 +1935,7 @@ class ChordTasks(object):
 
                     q = sess.query(DataBlock.id, DataBlock.original_size)\
                         .filter(DataBlock.distance > distance)\
+                        .filter(DataBlock.original_size != 0)\
                         .order_by(DataBlock.distance.desc())
 
                     for block in page_query(q):
