@@ -1793,12 +1793,12 @@ class ChordTasks(object):
             return None
 
         def iocall():
-            data_file = open(
-                self.engine.node.data_block_file_path\
-                    .format(self.engine.node.instance, data_block.id),
-                "rb")
+            filename = self.engine.node.data_block_file_path.format(\
+                self.engine.node.instance, data_block.id)
 
-            return data_file.read()
+            with open(filename, "rb") as data_file:
+                data = data_file.read()
+                return data
 
         enc_data = yield from self.loop.run_in_executor(None, iocall)
 
@@ -2049,14 +2049,13 @@ class ChordTasks(object):
                 log.info("Storing [{}] bytes of data.".format(tlen))
 
             def iocall():
-                new_file = open(
-                    self.engine.node.data_block_file_path\
-                        .format(self.engine.node.instance, data_block_id),
-                    "wb")
+                filename = self.engine.node.data_block_file_path.format(\
+                    self.engine.node.instance, data_block_id)
 
-                new_file.write(enc_data)
-                if enc_data_remainder:
-                    new_file.write(enc_data_remainder)
+                with open(filename, "wb") as new_file:
+                    new_file.write(enc_data)
+                    if enc_data_remainder:
+                        new_file.write(enc_data_remainder)
 
             yield from self.loop.run_in_executor(None, iocall)
 

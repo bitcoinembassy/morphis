@@ -391,8 +391,8 @@ def shutdown():
 def set_upload_page(filepath):
     global upload_page_content
 
-    upf = open(filepath, "rb")
-    _set_upload_page(upf.read())
+    with open(filepath, "rb") as upf:
+        _set_upload_page(upf.read())
 
 def _set_upload_page(content):
     global static_upload_page_content, static_upload_page_content_id,\
