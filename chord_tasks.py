@@ -692,6 +692,7 @@ class ChordTasks(object):
                     tun_meta.local_cid, pkt)
 
                 query_cntr.value += 1
+                done_all.clear()
 
                 if data_mode is cp.DataMode.get:
                     # We only send one at a time, stopping at success.
@@ -706,9 +707,11 @@ class ChordTasks(object):
                         # If the data was not validated correctly, then we ask
                         # the next Peer.
                         continue
+                else:
+                    assert data_mode is cp.DataMode.store
 
-                if query_cntr.value == max_concurrent_queries:
-                    break
+                    if storing_nodes == max_concurrent_queries:
+                        break
 
             if data_mode is cp.DataMode.store:
                 storing_nodes += query_cntr.value
