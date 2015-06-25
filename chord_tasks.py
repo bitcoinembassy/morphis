@@ -722,7 +722,7 @@ class ChordTasks(object):
                 yield from done_all.wait()
                 done_all.clear()
 
-            assert query_cntr.value == 0
+            assert query_cntr.value == 0, query_cntr.value
 
             if log.isEnabledFor(logging.INFO):
                 log.info("Finished waiting for {} operations; now"\
