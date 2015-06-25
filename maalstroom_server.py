@@ -345,12 +345,8 @@ def _send_store_data(data, data_rw, privatekey=None, path=None, version=None):
         def key_callback(data_key):
             data_rw.data_key = data_key
 
-        future = asyncio.async(\
-            multipart.store_data(node.chord_engine, data, privatekey, path,\
-                version, key_callback),\
-            loop=node.loop)
-
-        yield from asyncio.wait_for(future, 30.0, loop=node.loop)
+        yield from multipart.store_data(node.chord_engine, data, privatekey,\
+            path, version, key_callback)
     except asyncio.TimeoutError:
         data_rw.timed_out = True
     except:
