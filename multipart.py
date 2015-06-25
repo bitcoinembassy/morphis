@@ -80,16 +80,16 @@ def _store_data(engine, data, key_callback, store_key, concurrency):
                         task_semaphore),\
                     loop=engine.loop))
 
-            if task_semaphore.locked():
-                done, pending = yield from asyncio.wait(tasks,\
-                    loop=engine.loop, return_when=futures.FIRST_COMPLETED)
-
-                tasks = list(pending)
-
-                for task in done:
-                    if not task.result():
-                        log.warning("Upload failed!")
-                        return False
+#            if task_semaphore.locked():
+#                done, pending = yield from asyncio.wait(tasks,\
+#                    loop=engine.loop, return_when=futures.FIRST_COMPLETED)
+#
+#                tasks = list(pending)
+#
+#                for task in done:
+#                    if not task.result():
+#                        log.warning("Upload failed!")
+#                        return False
 
             yield from task_semaphore.acquire()
 
@@ -131,8 +131,8 @@ def _store_block(engine, i, block_data, key_callback, task_semaphore):
     snodes = yield from engine.tasks.send_store_data(block_data, key_callback)
 
     if not snodes:
-        log.warning("Failed to upload block #{}.".format(i))
-        return False
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("Failed to upload block #{}.".format(i))
 
     task_semaphore.release()
 
