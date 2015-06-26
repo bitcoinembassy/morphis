@@ -1647,15 +1647,13 @@ class ChordTasks(object):
 
         if self.engine.node.datastore_size\
                 < self.engine.node.datastore_max_size:
-
-            log_dist, direction =\
-                self.engine.calc_log_distance(self.engine.node_id, data_id)
-
             # We only store stuff closer than 2^2 less then the maximum
             # distance.
-#            if log_dist <= chord.NODE_ID_BITS - 2:
+            log_dist, direction =\
+                self.engine.calc_log_distance(self.engine.node_id, data_id)
+            if log_dist > chord.NODE_ID_BITS - 2:
+                return False, False
             return True, False
-#            return False, False
 
         if log.isEnabledFor(logging.DEBUG):
             log.debug("Datastore is full, checking if proposed block is"\
