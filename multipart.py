@@ -17,7 +17,7 @@ log = logging.getLogger(__name__)
 
 @asyncio.coroutine
 def store_data(engine, data, privatekey=None, path=None, version=None,\
-        key_callback=None, store_key=True, concurrency=32):
+        key_callback=None, store_key=True, concurrency=64):
 
     data_len = len(data)
 
@@ -80,12 +80,11 @@ def _store_data(engine, data, key_callback, store_key, concurrency):
                         task_semaphore),\
                     loop=engine.loop))
 
-#            if task_semaphore.locked():
-#                done, pending = yield from asyncio.wait(tasks,\
-#                    loop=engine.loop, return_when=futures.FIRST_COMPLETED)
-#
-#                tasks = list(pending)
-#
+            if task_semaphore.locked():
+                done, pending = yield from asyncio.wait(tasks,\
+                    loop=engine.loop, return_when=futures.FIRST_COMPLETED)
+                tasks = list(pending)
+
 #                for task in done:
 #                    if not task.result():
 #                        log.warning("Upload failed!")
@@ -103,6 +102,7 @@ def _store_data(engine, data, key_callback, store_key, concurrency):
         # otherwise we have to track which are done to make sure we are not
         # uploading a block of hashes that is not complete.
         done, pending = yield from asyncio.wait(tasks, loop=engine.loop)
+        tasks = list()
 
         data = keys
         data_len = len(data)
