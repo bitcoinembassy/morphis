@@ -16,6 +16,89 @@ import sshtype
 log = logging.getLogger(__name__)
 
 @asyncio.coroutine
+def get_data(engine, data_key, significant_bits=None, concurrency=64):
+    if significant_bits:
+        data_rw = yield from\
+            engine.tasks.send_find_key(data_key, significant_bits)
+
+        data_key = data_rw.data_key
+
+        if not data_key:
+            return None
+
+    data_rw = yield from engine.tasks.send_get_data(data_key)
+
+    data = data_rw.data
+
+    if not data:
+        return None
+
+    if not data.startswith(MorphisBlock.UUID):
+        return data
+
+    if MorphisBlock.parse_block_type(data) != BlockType.hash_tree.value:
+        return data
+
+    fetch = HashTreeFetch(engine, concurrency)
+    return fetch.get(HashTreeBlock(data))
+
+class HashTreeFetch(object):
+    def __init__(self, engine, concurrency):
+        self.engine = engine
+        self.concurrency = concurrency
+
+        self._task_semaphore = asyncio.Semaphore(concurrency)
+        self._failed = []
+
+    @asyncio.coroutine
+    def fetch(self, root_block, data_callback):
+        depth = block.depth
+        buf = block.buf
+
+        i = HashTreeBlock.HEADER_BYTES
+
+        datas = yield from self._get_hash_tree_data(buf, i, depth)
+
+        #TODO: YOU_ARE_HERE: wait combine datas.
+
+    @asyncio.coroutine
+    def _get_hash_tree_data(self, hash_tree_data, idx, depth):
+        data_len = len(hash_tree_data)
+
+        key_cnt = (data_len - idx) / chord.NODE_ID_BYTES
+        datas = [None] * key_cnt
+
+        for i in range(key_cnt):
+            end = idx + chord.NODE_ID_BYTES
+            data_key = hash_tree_data[idx:end]
+
+            yield from self._task_semaphore.acquire()
+
+            asyncio.async(\
+                self.__get_hash_tree_data(data_key, datas, i),\
+                loop=self.engine.loop)
+
+            idx = end
+
+        return datas
+
+    @asyncio.coroutine
+    def __get_hash_tree_data(self, datas, i):
+        data_rw = yield from self.engine.tasks.send_get_data(data_key)
+        if not data_rw.data:
+            self._failed += {\
+                depth: depth,
+                idx: idx,
+                data_key: data_key}
+            continue
+
+        if not depth:
+            datas[i] += data_rw.data
+        else:
+            datas[i] = yield from\
+                _get_hash_tree_data(data_rw.data, 0, depth - 1)
+
+@asyncio.coroutine
 def store_data(engine, data, privatekey=None, path=None, version=None,\
         key_callback=None, store_key=True, concurrency=64):
 
@@ -43,10 +126,14 @@ def store_data(engine, data, privatekey=None, path=None, version=None,\
 
         return
 
+    if log.isEnabledFor(logging.INFO):
+        log.info("Storing multipart.")
+
     yield from _store_data(engine, data, key_callback, store_key, concurrency)
 
 def __key_callback(keys, idx, key):
     key_len = len(key)
+    assert key_len == chord.NODE_ID_BYTES
     idx = key_len * idx
     keys[idx:idx+key_len] = key
 
@@ -107,7 +194,7 @@ def _store_data(engine, data, key_callback, store_key, concurrency):
         data = keys
         data_len = len(data)
         if data_len\
-                <= (mnnode.MAX_DATA_BLOCK_SIZE - MorphisBlock.HEADER_BYTES):
+                <= (mnnode.MAX_DATA_BLOCK_SIZE - HashTreeBlock.HEADER_BYTES):
             break
 
         depth += 1
@@ -143,9 +230,11 @@ class BlockType(Enum):
     user = 1
 
 class MorphisBlock(object):
-    HEADER_BYTES = 64
+    UUID = b'\x86\xa0\x47\x79\xc1\x2e\x4f\x48\x90\xc3\xee\x27\x53\x6d\x26\x96'
 
-    uuid = b'\x86\xa0\x47\x79\xc1\x2e\x4f\x48\x90\xc3\xee\x27\x53\x6d\x26\x96'
+    @staticmethod
+    def parse_block_type(buf):
+        return struct.unpack_from(">L", buf, 16 + 7)[0]
 
     def __init__(self, block_type=None, buf=None):
         self.buf = buf
@@ -160,7 +249,7 @@ class MorphisBlock(object):
     def encode(self):
         nbuf = bytearray()
 
-        nbuf += MorphisBlock.uuid
+        nbuf += MorphisBlock.UUID
         nbuf += b"MORPHiS"
         nbuf += struct.pack(">L", self.block_type)
         nbuf += struct.pack(">L", self.ext_type)
@@ -170,7 +259,7 @@ class MorphisBlock(object):
         return nbuf
 
     def parse(self):
-        assert self.buf[:16] == MorphisBlock.uuid
+        assert self.buf[:16] == MorphisBlock.UUID
         i = 16
 
         i += 7 # morphis
@@ -189,6 +278,8 @@ class MorphisBlock(object):
         return i
 
 class HashTreeBlock(MorphisBlock):
+    HEADER_BYTES = 64
+
     def __init__(self, buf=None):
         self.depth = 0
         self.data = None
