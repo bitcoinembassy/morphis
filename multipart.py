@@ -16,16 +16,8 @@ import sshtype
 log = logging.getLogger(__name__)
 
 @asyncio.coroutine
-def get_data(engine, data_key, significant_bits=None, concurrency=64):
-    if significant_bits:
-        data_rw = yield from\
-            engine.tasks.send_find_key(data_key, significant_bits)
-
-        data_key = data_rw.data_key
-
-        if not data_key:
-            return None
-
+def get_data(engine, data_key, data_callback, ordered=False,\
+        positions=[(0,-1)], concurrency=64):
     data_rw = yield from engine.tasks.send_get_data(data_key)
 
     data = data_rw.data
@@ -35,68 +27,89 @@ def get_data(engine, data_key, significant_bits=None, concurrency=64):
 
     if not data.startswith(MorphisBlock.UUID):
         return data
-
     if MorphisBlock.parse_block_type(data) != BlockType.hash_tree.value:
         return data
 
-    fetch = HashTreeFetch(engine, concurrency)
-    return fetch.get(HashTreeBlock(data))
+    fetch = HashTreeFetch(engine, ordered, concurrency)
+    fetch.get(HashTreeBlock(data, positions, data_callback))
 
 class HashTreeFetch(object):
-    def __init__(self, engine, concurrency):
+    def __init__(self, engine, data_callback, ordered=False, positions=None,\
+            concurrency=64):
         self.engine = engine
+        self.data_callback = data_callback
+        self.ordered = ordered
+        self.positions = positions
         self.concurrency = concurrency
 
         self._task_semaphore = asyncio.Semaphore(concurrency)
         self._failed = []
 
     @asyncio.coroutine
-    def fetch(self, root_block, data_callback):
-        depth = block.depth
-        buf = block.buf
+    def fetch(self, root_block):
+        depth = root_block.depth
+        buf = root_block.buf
 
         i = HashTreeBlock.HEADER_BYTES
 
-        datas = yield from self._get_hash_tree_data(buf, i, depth)
-
-        #TODO: YOU_ARE_HERE: wait combine datas.
+        yield from\
+            self._fetch_hash_tree_refs(buf, i, depth, 0)
 
     @asyncio.coroutine
-    def _get_hash_tree_data(self, hash_tree_data, idx, depth):
-        data_len = len(hash_tree_data)
+    def _fetch_hash_tree_refs(self, hash_tree_data, offset, depth, position):
+        data_len = len(hash_tree_data) - offset
 
-        key_cnt = (data_len - idx) / chord.NODE_ID_BYTES
+        key_cnt = data_len / chord.NODE_ID_BYTES
         datas = [None] * key_cnt
 
+        if depth == 1:
+            pdiff = node.MAX_DATA_BLOCK_SIZE
+        else:
+            pdiff = pow(node.MAX_DATA_BLOCK_SIZE, depth) / node.NODE_ID_BYTES
+
+        subdepth = depth - 1
+
         for i in range(key_cnt):
-            end = idx + chord.NODE_ID_BYTES
-            data_key = hash_tree_data[idx:end]
+            end = offset + chord.NODE_ID_BYTES
+            data_key = hash_tree_data[offset:end]
 
             yield from self._task_semaphore.acquire()
 
             asyncio.async(\
-                self.__get_hash_tree_data(data_key, datas, i),\
+                self.__fetch_hash_tree_ref(\
+                    data_key, datas, i, subdepth, position),\
                 loop=self.engine.loop)
 
-            idx = end
+            offset = end
+            position += pdiff
 
         return datas
 
     @asyncio.coroutine
-    def __get_hash_tree_data(self, datas, i):
+    def __fetch_hash_tree_ref(self, data_key, datas, idx, depth, position):
         data_rw = yield from self.engine.tasks.send_get_data(data_key)
+
+        self._task_semaphore.release()
+
         if not data_rw.data:
             self._failed += {\
+                position: position,
                 depth: depth,
                 idx: idx,
                 data_key: data_key}
             continue
 
+        if self.ordered:
+            if position != self.next_position:
+                waiter = asyncio.futures.Future(loop=self.engine.loop)
+                yield from self._wait(position, waiter)
+
         if not depth:
-            datas[i] += data_rw.data
+            datas[idx] = data_rw.data
+            self.data_callback(position, data_rw.data)
         else:
-            datas[i] = yield from\
-                _get_hash_tree_data(data_rw.data, 0, depth - 1)
+            datas[idx] = yield from\
+                _fetch_hash_tree_refs(data_rw.data, 0, depth, position)
 
 @asyncio.coroutine
 def store_data(engine, data, privatekey=None, path=None, version=None,\
