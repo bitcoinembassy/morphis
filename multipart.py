@@ -60,7 +60,6 @@ class HashTreeFetch(object):
         data_len = len(hash_tree_data) - offset
 
         key_cnt = data_len / chord.NODE_ID_BYTES
-        datas = [None] * key_cnt
 
         if depth == 1:
             pdiff = node.MAX_DATA_BLOCK_SIZE
@@ -79,13 +78,23 @@ class HashTreeFetch(object):
                     position = eposition
                     continue
 
+            if self._failed:
+                retry = random.choice(self._failed)
+
+                data_key = retry.data_key
+                yield from self._task_semaphore.acquire()
+
+                asyncio.async(\
+                    self.__fetch_hash_tree_ref(\
+                        data_key, retry.depth, retry.position, retry)
+                    loop=self.engine.loop)
+
             data_key = hash_tree_data[offset:end]
 
             yield from self._task_semaphore.acquire()
 
             asyncio.async(\
-                self.__fetch_hash_tree_ref(\
-                    data_key, datas, i, subdepth, position),\
+                self.__fetch_hash_tree_ref(data_key, subdepth, position),\
                 loop=self.engine.loop)
 
             offset = end
@@ -98,18 +107,23 @@ class HashTreeFetch(object):
         raise Exception("Not Implemented!")
 
     @asyncio.coroutine
-    def __fetch_hash_tree_ref(self, data_key, datas, idx, depth, position):
+    def __fetch_hash_tree_ref(self, data_key, depth, position, retry=None):
         data_rw = yield from self.engine.tasks.send_get_data(data_key)
 
         self._task_semaphore.release()
 
         if not data_rw.data:
+            if retry:
+                return
+
             self._failed += {\
-                position: position,
                 depth: depth,
-                idx: idx,
+                position: position,
                 data_key: data_key}
-            continue
+            return
+        else:
+            if retry:
+                del self._failed[retry]
 
         if self.ordered:
             if position != self.next_position:
@@ -117,11 +131,9 @@ class HashTreeFetch(object):
                 yield from self._wait(position, waiter)
 
         if not depth:
-            datas[idx] = data_rw.data
             self.data_callback(position, data_rw.data)
         else:
-            datas[idx] = yield from\
-                _fetch_hash_tree_refs(data_rw.data, 0, depth, position)
+            yield from _fetch_hash_tree_refs(data_rw.data, 0, depth, position)
 
     def __wait(self, position, waiter):
         #TODO: YOU_ARE_HERE: implement.
