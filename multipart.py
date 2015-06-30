@@ -16,8 +16,8 @@ import sshtype
 log = logging.getLogger(__name__)
 
 @asyncio.coroutine
-def get_data(engine, data_key, data_callback, ordered=False,\
-        positions=[(0,-1)], concurrency=64):
+def get_data(engine, data_key, data_callback, ordered=False, positions=None,\
+        concurrency=64):
     data_rw = yield from engine.tasks.send_get_data(data_key)
 
     data = data_rw.data
@@ -71,6 +71,14 @@ class HashTreeFetch(object):
 
         for i in range(key_cnt):
             end = offset + chord.NODE_ID_BYTES
+            eposition = position + pdiff
+
+            if self.positions:
+                if not self.__need_range(position, eposition):
+                    offset = end
+                    position = eposition
+                    continue
+
             data_key = hash_tree_data[offset:end]
 
             yield from self._task_semaphore.acquire()
@@ -81,9 +89,13 @@ class HashTreeFetch(object):
                 loop=self.engine.loop)
 
             offset = end
-            position += pdiff
+            position = eposition
 
         return datas
+
+    def __need_range(self, start, end):
+        #TODO: YOU_ARE_HERE: Check if overlap with self.positions.
+        raise Exception("Not Implemented!")
 
     @asyncio.coroutine
     def __fetch_hash_tree_ref(self, data_key, datas, idx, depth, position):
@@ -110,6 +122,9 @@ class HashTreeFetch(object):
         else:
             datas[idx] = yield from\
                 _fetch_hash_tree_refs(data_rw.data, 0, depth, position)
+
+    def __wait(self, position, waiter):
+        #TODO: YOU_ARE_HERE: implement.
 
 @asyncio.coroutine
 def store_data(engine, data, privatekey=None, path=None, version=None,\
