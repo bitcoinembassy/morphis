@@ -10,7 +10,7 @@ import chord
 import db
 import enc
 import mn1
-from mutil import hex_dump, hex_string
+from mutil import hex_dump, hex_string, decode_key
 import node
 import sshtype
 
@@ -319,7 +319,11 @@ class Shell(cmd.Cmd):
     def do_getdata(self, arg):
         "[DATA_KEY] retrieve data for DATA_KEY from the network."
 
-        data_key = bytes.fromhex(arg)
+        data_key, significant_bits = decode_key(arg)
+
+        if significant_bits:
+            self.writeln("Incomplete key, use findkey.")
+            return
 
         start = datetime.today()
         data_rw = yield from self.peer.engine.tasks.send_get_data(data_key)
@@ -337,10 +341,11 @@ class Shell(cmd.Cmd):
     def do_findkey(self, arg):
         "[DATA_KEY_PREFIX] search the network for the given key."
 
-        data_key = bytes.fromhex(arg)
+        data_key, significant_bits = decode_key(arg)
 
         start = datetime.today()
-        data_rw = yield from self.peer.engine.tasks.send_find_key(data_key)
+        data_rw = yield from\
+            self.peer.engine.tasks.send_find_key(data_key, significant_bits)
         diff = datetime.today() - start
         self.writeln("data_key=[{}].".format(hex_string(data_rw.data_key)))
         self.writeln("send_find_key(..) took: {}.".format(diff))
