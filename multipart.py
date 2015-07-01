@@ -117,7 +117,7 @@ class HashTreeFetch(object):
             pdiff = mnnode.MAX_DATA_BLOCK_SIZE
         else:
             pdiff =\
-                pow(mnnode.MAX_DATA_BLOCK_SIZE, depth) / mnnode.NODE_ID_BYTES
+                pow(mnnode.MAX_DATA_BLOCK_SIZE, depth) / chord.NODE_ID_BYTES
 
         subdepth = depth - 1
 
