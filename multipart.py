@@ -35,7 +35,7 @@ def get_data_buffered(engine, data_key, retry_seconds=30, concurrency=64):
     if not r:
         if log.isEnabledFor(logging.INFO):
             log.info("Download failed, aborting.")
-        return None
+        return None, None
 
     if log.isEnabledFor(logging.INFO):
         log.info("Download complete; len=[{}].".format(len(cb.buf)))

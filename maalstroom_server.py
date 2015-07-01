@@ -295,13 +295,19 @@ def _send_get_data(data_key, significant_bits, data_rw):
             data_rw.is_done.set()
             return
 
-        future = asyncio.async(\
-            node.chord_engine.tasks.send_get_data(data_key),\
-            loop=node.loop)
+#        future = asyncio.async(\
+#            node.chord_engine.tasks.send_get_data(data_key),\
+#            loop=node.loop)
+#
+#        yield from asyncio.wait_for(future, 15.0, loop=node.loop)
+#
+#        ct_data_rw = future.result()
 
-        yield from asyncio.wait_for(future, 15.0, loop=node.loop)
+        data_rw.data, data_rw.version =\
+            yield from multipart.get_data_buffered(node.chord_engine, data_key)
 
-        ct_data_rw = future.result()
+        if data_rw.data is None:
+            raise asyncio.TimeoutError()
 
         data_rw.data = ct_data_rw.data
         data_rw.version = ct_data_rw.version
