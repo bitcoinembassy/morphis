@@ -2,6 +2,7 @@ import llog
 
 import asyncio
 from concurrent import futures
+from datetime import datetime, timedelta
 import functools
 import heapq
 import logging
@@ -17,36 +18,77 @@ import sshtype
 
 log = logging.getLogger(__name__)
 
+class DataCallback(object):
+    def meta(self, version):
+        pass
+
+    def data(self, position, data):
+        pass
+
+@asyncio.coroutine
+def get_data_buffered(engine, data_key, retry_seconds=30, concurrency=64):
+    cb = BufferingDataCallback()
+
+    r = yield from\
+        get_data(engine, data_key, cb, ordered=True, concurrency=concurrency)
+
+    if not r:
+        if log.isEnabledFor(logging.INFO):
+            log.info("Download failed, aborting.")
+        return None
+
+    if log.isEnabledFor(logging.INFO):
+        log.info("Download complete; len=[{}].".format(len(cb.buf)))
+
+    return cb.buf, cb.version
+
 @asyncio.coroutine
 def get_data(engine, data_key, data_callback, ordered=False, positions=None,\
-        concurrency=64):
+        retry_seconds=30, concurrency=64):
+    assert isinstance(data_callback, DataCallback)
+
     data_rw = yield from engine.tasks.send_get_data(data_key)
 
     data = data_rw.data
 
     if not data:
-        return None
+        return False
 
-    if not data.startswith(MorphisBlock.UUID):
-        return data
-    if MorphisBlock.parse_block_type(data) != BlockType.hash_tree.value:
-        return data
+    if data_rw.version:
+        data_callback.meta(data_rw.version)
 
-    fetch = HashTreeFetch(engine, ordered, concurrency)
-    fetch.get(HashTreeBlock(data, positions, data_callback))
+    if not data.startswith(MorphisBlock.UUID)\
+            or MorphisBlock.parse_block_type(data)\
+                != BlockType.hash_tree.value:
+        data_callback.data(0, data)
+        return True
+
+    fetch = HashTreeFetch(\
+        engine, data_callback, ordered, positions, retry_seconds,\
+            concurrency)
+
+    yield from fetch.fetch(HashTreeBlock(data))
+
+    return True
 
 class HashTreeFetch(object):
     def __init__(self, engine, data_callback, ordered=False, positions=None,\
-            concurrency=64):
+            retry_seconds=30, concurrency=64):
         self.engine = engine
         self.data_callback = data_callback
         self.ordered = ordered
         self.positions = positions
+        self.retry_seconds = retry_seconds
         self.concurrency = concurrency
 
         self._task_semaphore = asyncio.Semaphore(concurrency)
         self._next_position = 0
         self._failed = []
+        self._ordered_waiters = []
+        self._ordered_waiters_dc = {}
+
+        self._task_cnt = 0
+        self._tasks_done = asyncio.Event()
 
     @asyncio.coroutine
     def fetch(self, root_block):
@@ -62,7 +104,7 @@ class HashTreeFetch(object):
     def _fetch_hash_tree_refs(self, hash_tree_data, offset, depth, position):
         data_len = len(hash_tree_data) - offset
 
-        key_cnt = data_len / chord.NODE_ID_BYTES
+        key_cnt = int(data_len / chord.NODE_ID_BYTES)
 
         if depth == 1:
             pdiff = mnnode.MAX_DATA_BLOCK_SIZE
@@ -83,26 +125,42 @@ class HashTreeFetch(object):
                     continue
 
             if self._failed:
-                retry = random.choice(self._failed)
-
-                data_key = retry.data_key
                 yield from self._task_semaphore.acquire()
-
-                asyncio.async(\
-                    self.__fetch_hash_tree_ref(\
-                        data_key, retry.depth, retry.position, retry),\
-                    loop=self.engine.loop)
-
-            data_key = hash_tree_data[offset:end]
+                self._schedule_retry()
 
             yield from self._task_semaphore.acquire()
-
+            data_key = hash_tree_data[offset:end]
             asyncio.async(\
                 self.__fetch_hash_tree_ref(data_key, subdepth, position),\
                 loop=self.engine.loop)
 
+            self._task_cnt += 1
+
             offset = end
             position = eposition
+
+        yield from self._tasks_done.wait()
+
+        if self._failed:
+            delta = timedelta(seconds=self.retry_seconds)
+            start = datetime.today()
+
+            while self._failed\
+                    and ((datetime.today() - start) < delta):
+                yield from self._task_semaphore.acquire()
+                self._schedule_retry()
+
+    def _schedule_retry(self):
+        retry = random.choice(self._failed)
+        retry_depth, retry_position, data_key = retry
+
+        asyncio.async(\
+            self.__fetch_hash_tree_ref(\
+                data_key, retry_depth, retry_position, retry),\
+            loop=self.engine.loop)
+
+        self._task_cnt += 1
+        self._tasks_done.clear()
 
     def __need_range(self, start, end):
         #TODO: YOU_ARE_HERE: Check if overlap with self.positions.
@@ -115,29 +173,29 @@ class HashTreeFetch(object):
         self._task_semaphore.release()
 
         if not data_rw.data:
-            if retry:
-                return
-
-            self._failed += {\
-                depth: depth,
-                position: position,
-                data_key: data_key}
-            return
+            if not retry:
+                self._failed += [depth, position, data_key]
         else:
             if retry:
                 del self._failed[retry]
 
-        if self.ordered:
-            if position != self._next_position:
-                waiter = asyncio.futures.Future(loop=self.engine.loop)
-                yield from self.__wait(position, waiter)
+            if self.ordered:
+                if position != self._next_position:
+                    waiter = asyncio.futures.Future(loop=self.engine.loop)
+                    yield from self.__wait(position, waiter)
 
-        if not depth:
-            self.data_callback(position, data_rw.data)
-            self.__notify_position_complete(position + len(data_rw.data))
-        else:
-            yield from\
-                self._fetch_hash_tree_refs(data_rw.data, 0, depth, position)
+            if not depth:
+                self.data_callback.data(position, data_rw.data)
+                self.__notify_position_complete(position + len(data_rw.data))
+            else:
+                yield from\
+                    self._fetch_hash_tree_refs(\
+                        data_rw.data, 0, depth, position)
+
+        self._task_cnt -= 1
+        if self._task_cnt <= 0:
+            assert self._task_cnt == 0
+            self._tasks_done.set()
 
     def __wait(self, position, waiter):
         entry = [position, waiter]
@@ -360,4 +418,26 @@ class HashTreeBlock(MorphisBlock):
     def parse(self):
         i = super().parse()
 
-        self.depth = struct.unpack_from(">L", self.buf, i)
+        self.depth = struct.unpack_from(">L", self.buf, i)[0]
+
+class BufferingDataCallback(DataCallback):
+    def __init__(self):
+        self.version = None
+        self.buf = bytearray()
+        self.position = 0
+
+    def meta(self, version):
+        self.version = version
+
+    def data(self, position, data):
+        if position != self.position:
+            raise Exception("Incomplete download.")
+
+        data_len = len(data)
+
+        if log.isEnabledFor(logging.INFO):
+            log.info("Received data; position=[{}], len=[{}]."\
+                .format(position, data_len))
+
+        self.buf += data
+        self.position += data_len
