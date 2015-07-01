@@ -748,9 +748,10 @@ class ChordTasks(object):
                         and (not significant_bits or not data_rw.data_key):
                     log.info("Failed to find the data!")
                 else:
-                    if data_rw.version:
+                    if data_rw.version is not None:
                         if log.isEnabledFor(logging.INFO):
-                            log.info("version=[{}].".format(data_rw.version))
+                            log.info("Found updateable key data;"\
+                                " version=[{}].".format(data_rw.version))
 
                 return data_rw
 
