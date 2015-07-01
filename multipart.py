@@ -3,7 +3,9 @@ import llog
 import asyncio
 from concurrent import futures
 import functools
+import heapq
 import logging
+import random
 import struct
 from enum import Enum
 
@@ -43,6 +45,7 @@ class HashTreeFetch(object):
         self.concurrency = concurrency
 
         self._task_semaphore = asyncio.Semaphore(concurrency)
+        self._next_position = 0
         self._failed = []
 
     @asyncio.coroutine
@@ -62,9 +65,10 @@ class HashTreeFetch(object):
         key_cnt = data_len / chord.NODE_ID_BYTES
 
         if depth == 1:
-            pdiff = node.MAX_DATA_BLOCK_SIZE
+            pdiff = mnnode.MAX_DATA_BLOCK_SIZE
         else:
-            pdiff = pow(node.MAX_DATA_BLOCK_SIZE, depth) / node.NODE_ID_BYTES
+            pdiff =\
+                pow(mnnode.MAX_DATA_BLOCK_SIZE, depth) / mnnode.NODE_ID_BYTES
 
         subdepth = depth - 1
 
@@ -86,7 +90,7 @@ class HashTreeFetch(object):
 
                 asyncio.async(\
                     self.__fetch_hash_tree_ref(\
-                        data_key, retry.depth, retry.position, retry)
+                        data_key, retry.depth, retry.position, retry),\
                     loop=self.engine.loop)
 
             data_key = hash_tree_data[offset:end]
@@ -99,8 +103,6 @@ class HashTreeFetch(object):
 
             offset = end
             position = eposition
-
-        return datas
 
     def __need_range(self, start, end):
         #TODO: YOU_ARE_HERE: Check if overlap with self.positions.
@@ -126,17 +128,36 @@ class HashTreeFetch(object):
                 del self._failed[retry]
 
         if self.ordered:
-            if position != self.next_position:
+            if position != self._next_position:
                 waiter = asyncio.futures.Future(loop=self.engine.loop)
-                yield from self._wait(position, waiter)
+                yield from self.__wait(position, waiter)
 
         if not depth:
             self.data_callback(position, data_rw.data)
+            self.__notify_position_complete(position + len(data_rw.data))
         else:
-            yield from _fetch_hash_tree_refs(data_rw.data, 0, depth, position)
+            yield from\
+                self._fetch_hash_tree_refs(data_rw.data, 0, depth, position)
 
     def __wait(self, position, waiter):
-        #TODO: YOU_ARE_HERE: implement.
+        entry = [position, waiter]
+
+        r = self._ordered_waiters_dc.setdefault(position, entry)
+        assert r is entry
+
+        heapq.heappush(self._ordered_waiters, entry)
+
+        yield from waiter
+
+    def __notify_position_complete(self, next_position):
+        self._next_position = next_position
+
+        while self._ordered_waiters:
+            position, waiter = self._ordered_waiters[0]
+            if position > next_position:
+                return
+            waiter.set_result(False)
+            heapq.heappop(self._ordered_waiters)
 
 @asyncio.coroutine
 def store_data(engine, data, privatekey=None, path=None, version=None,\
