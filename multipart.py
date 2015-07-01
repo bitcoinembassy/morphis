@@ -142,6 +142,7 @@ class HashTreeFetch(object):
                 loop=self.engine.loop)
 
             self._task_cnt += 1
+            self._tasks_done.clear()
 
             offset = end
             position = eposition
@@ -156,6 +157,8 @@ class HashTreeFetch(object):
                     and ((datetime.today() - start) < delta):
                 yield from self._task_semaphore.acquire()
                 self._schedule_retry()
+
+            yield from self._tasks_done.wait()
 
             if self._failed:
                 return False
