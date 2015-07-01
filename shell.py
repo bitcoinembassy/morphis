@@ -216,9 +216,6 @@ class Shell(cmd.Cmd):
             self._write(str(val))
 
     def _write(self, val):
-        if len(val) + len(self.out_buffer) > mn1.MAX_PACKET_LENGTH:
-            self.flush()
-
         if isinstance(val, bytearray) or isinstance(val, bytes):
             val = val.replace(b'\n', b"\r\n")
             self.out_buffer += val
@@ -226,15 +223,26 @@ class Shell(cmd.Cmd):
             val = val.replace('\n', "\r\n")
             self.out_buffer += val.encode("UTF-8")
 
+        if len(self.out_buffer) > mn1.MAX_PACKET_LENGTH:
+            self.flush()
+
     def flush(self):
         if not self.out_buffer:
             return
 
-        rmsg = BinaryMessage()
-        rmsg.value = self.out_buffer
-        self.peer.protocol.write_channel_data(self.local_cid, rmsg.encode())
+        while True:
+            outbuf = self.out_buffer
+            if len(outbuf) > mn1.MAX_PACKET_LENGTH:
+                outbuf = outbuf[:mn1.MAX_PACKET_LENGTH]
+                self.out_buffer = outbuf[mn1.MAX_PACKET_LENGTH:]
 
-        self.out_buffer.clear()
+            rmsg = BinaryMessage()
+            rmsg.value = outbuf
+            self.peer.protocol.write_channel_data(self.local_cid, rmsg.encode())
+
+            if outbuf is self.out_buffer:
+                self.out_buffer.clear()
+                break
 
     def do_test(self, arg):
         "Test thing."
