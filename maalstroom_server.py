@@ -10,7 +10,7 @@ from threading import Event
 import base58
 import chord
 import enc
-from mutil import hex_string
+from mutil import hex_string, decode_key
 import rsakey
 import mbase32
 import multipart
@@ -111,36 +111,10 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
 
         error = False
 
-        significant_bits = chord.NODE_ID_BITS
+        significant_bits = None
 
-        lrp = len(rpath)
         try:
-            if lrp == 128:
-                data_key = bytes.fromhex(rpath)
-            elif lrp in (103, 102):
-                data_key = bytes(mbase32.decode(rpath))
-#            elif lrp == 88 + 4 and rpath.startswith("get/"):
-#                data_key = base58.decode(rpath[4:])
-#
-#                hex_key = hex_string(data_key)
-#
-#                message = ("<a href=\"morphis://{}\">{}</a>\n{}"\
-#                    .format(hex_key, hex_key, hex_key))\
-#                        .encode()
-#
-#                self.send_response(301)
-#                self.send_header("Location", "morphis://{}".format(hex_key))
-#                self.send_header("Content-Type", "text/html")
-#                self.send_header("Content-Length", len(message))
-#                self.end_headers()
-#
-#                self.wfile.write(message)
-#                return
-            else:
-#                error = True
-#                log.warning("Invalid request: [{}].".format(rpath))
-                data_key = mbase32.decode(rpath, False)
-                significant_bits = 5 * len(rpath)
+            data_key, significant_bits = decode_key(rpath)
         except:
             error = True
             log.exception("decode")
@@ -296,7 +270,7 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
 @asyncio.coroutine
 def _send_get_data(data_key, significant_bits, data_rw):
     try:
-        if significant_bits < chord.NODE_ID_BITS:
+        if significant_bits:
             future = asyncio.async(\
                 node.chord_engine.tasks.send_find_key(\
                     data_key, significant_bits),

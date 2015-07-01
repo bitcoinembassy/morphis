@@ -1,5 +1,8 @@
 from bisect import bisect_left
 
+import mbase32
+import chord
+
 accept_chars = b" !\"#$%&`()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_'abcdefghijklmnopqrstuvwxyz{|}~"
 
 accept_chars = sorted(accept_chars)
@@ -91,3 +94,20 @@ def page_query(query, page_size=10):
             break
 
         offset += page_size
+
+def decode_key(encoded):
+    assert chord.NODE_ID_BITS == 512
+
+    significant_bits = None
+
+    kl = len(encoded)
+
+    if kl == 128:
+        data_key = bytes.fromhex(encoded)
+    elif kl in (103, 102):
+        data_key = bytes(mbase32.decode(encoded))
+    else:
+        data_key = mbase32.decode(encoded, False)
+        significant_bits = 5 * kl
+
+    return data_key, significant_bits
