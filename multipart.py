@@ -102,10 +102,25 @@ class HashTreeFetch(object):
 
         i = HashTreeBlock.HEADER_BYTES
 
-        r = yield from\
-            self._fetch_hash_tree_refs(buf, i, depth, 0)
+        yield from self._fetch_hash_tree_refs(buf, i, depth, 0)
 
-        return r
+        yield from self._tasks_done.wait()
+
+        if self._failed:
+            delta = timedelta(seconds=self.retry_seconds)
+            start = datetime.today()
+
+            while self._failed\
+                    and ((datetime.today() - start) < delta):
+                yield from self._task_semaphore.acquire()
+                self._schedule_retry()
+
+            yield from self._tasks_done.wait()
+
+            if self._failed:
+                return False
+
+        return True
 
     @asyncio.coroutine
     def _fetch_hash_tree_refs(self, hash_tree_data, offset, depth, position):
@@ -146,24 +161,6 @@ class HashTreeFetch(object):
 
             offset = end
             position = eposition
-
-        yield from self._tasks_done.wait()
-
-        if self._failed:
-            delta = timedelta(seconds=self.retry_seconds)
-            start = datetime.today()
-
-            while self._failed\
-                    and ((datetime.today() - start) < delta):
-                yield from self._task_semaphore.acquire()
-                self._schedule_retry()
-
-            yield from self._tasks_done.wait()
-
-            if self._failed:
-                return False
-
-        return True
 
     def _schedule_retry(self):
         retry = random.choice(self._failed)
