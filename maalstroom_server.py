@@ -306,11 +306,8 @@ def _send_get_data(data_key, significant_bits, data_rw):
         data_rw.data, data_rw.version =\
             yield from multipart.get_data_buffered(node.chord_engine, data_key)
 
-        if data_rw.data is None:
+        if data_rw.data is False:
             raise asyncio.TimeoutError()
-
-        data_rw.data = ct_data_rw.data
-        data_rw.version = ct_data_rw.version
     except asyncio.TimeoutError:
         data_rw.timed_out = True
     except:

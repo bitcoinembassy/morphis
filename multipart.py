@@ -33,9 +33,14 @@ def get_data_buffered(engine, data_key, retry_seconds=30, concurrency=64):
         get_data(engine, data_key, cb, ordered=True, concurrency=concurrency)
 
     if not r:
-        if log.isEnabledFor(logging.INFO):
-            log.info("Download failed, aborting.")
-        return None, None
+        if r is None:
+            if log.isEnabledFor(logging.INFO):
+                log.info("Key not found.")
+            return None, None
+        else:
+            if log.isEnabledFor(logging.INFO):
+                log.info("Download timed out.")
+            return False, None
 
     if log.isEnabledFor(logging.INFO):
         log.info("Download complete; len=[{}].".format(len(cb.buf)))
@@ -52,7 +57,7 @@ def get_data(engine, data_key, data_callback, ordered=False, positions=None,\
     data = data_rw.data
 
     if not data:
-        return False
+        return None
 
     if data_rw.version:
         data_callback.meta(data_rw.version)
@@ -67,9 +72,9 @@ def get_data(engine, data_key, data_callback, ordered=False, positions=None,\
         engine, data_callback, ordered, positions, retry_seconds,\
             concurrency)
 
-    yield from fetch.fetch(HashTreeBlock(data))
+    r = yield from fetch.fetch(HashTreeBlock(data))
 
-    return True
+    return r
 
 class HashTreeFetch(object):
     def __init__(self, engine, data_callback, ordered=False, positions=None,\
@@ -97,8 +102,10 @@ class HashTreeFetch(object):
 
         i = HashTreeBlock.HEADER_BYTES
 
-        yield from\
+        r = yield from\
             self._fetch_hash_tree_refs(buf, i, depth, 0)
+
+        return r
 
     @asyncio.coroutine
     def _fetch_hash_tree_refs(self, hash_tree_data, offset, depth, position):
@@ -149,6 +156,11 @@ class HashTreeFetch(object):
                     and ((datetime.today() - start) < delta):
                 yield from self._task_semaphore.acquire()
                 self._schedule_retry()
+
+            if self._failed:
+                return False
+
+        return True
 
     def _schedule_retry(self):
         retry = random.choice(self._failed)
