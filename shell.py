@@ -10,6 +10,7 @@ import chord
 import db
 import enc
 import mn1
+import multipart
 from mutil import hex_dump, hex_string, decode_key
 import node
 import sshtype
@@ -326,10 +327,12 @@ class Shell(cmd.Cmd):
             return
 
         start = datetime.today()
-        data_rw = yield from self.peer.engine.tasks.send_get_data(data_key)
+        data, version =\
+            yield from multipart.get_data_buffered(self.peer.engine, data_key)
         diff = datetime.today() - start
-        self.writeln("data=[{}].".format(data_rw.data))
-        self.writeln("version=[{}].".format(data_rw.version))
+
+        self.writeln("data=[{}].".format(data))
+        self.writeln("version=[{}].".format(version))
         self.writeln("send_get_data(..) took: {}.".format(diff))
 
     @asyncio.coroutine
