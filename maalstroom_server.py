@@ -167,6 +167,9 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
                 self.send_header("Content-Type", "text/css")
             elif data[:12] == b"/*JAVASCRIPT":
                 self.send_header("Content-Type", "application/javascript")
+            elif data[:8] == bytes(\
+                    [0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70]):
+                self.send_header("Content-Type", "video/mp4")
             else:
                 self.send_header("Content-Type", "text/html")
 
