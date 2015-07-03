@@ -19,7 +19,10 @@ import sshtype
 log = logging.getLogger(__name__)
 
 class DataCallback(object):
-    def meta(self, version):
+    def version(self, version):
+        pass
+
+    def size(self, size):
         pass
 
     def data(self, position, data):
@@ -29,8 +32,8 @@ class DataCallback(object):
 def get_data_buffered(engine, data_key, retry_seconds=30, concurrency=64):
     cb = BufferingDataCallback()
 
-    r = yield from\
-        get_data(engine, data_key, cb, ordered=True, concurrency=concurrency)
+    r = yield from get_data(engine, data_key, cb, ordered=True,\
+            retry_seconds=retry_seconds, concurrency=concurrency)
 
     if not r:
         if r is None:
@@ -60,11 +63,12 @@ def get_data(engine, data_key, data_callback, ordered=False, positions=None,\
         return None
 
     if data_rw.version:
-        data_callback.meta(data_rw.version)
+        data_callback.version(data_rw.version)
 
     if not data.startswith(MorphisBlock.UUID)\
             or MorphisBlock.parse_block_type(data)\
                 != BlockType.hash_tree.value:
+        data_callback.size(len(data))
         data_callback.data(0, data)
         return True
 
@@ -97,6 +101,8 @@ class HashTreeFetch(object):
 
     @asyncio.coroutine
     def fetch(self, root_block):
+        self.data_callback.size(root_block.size)
+
         depth = root_block.depth
         buf = root_block.buf
 
@@ -273,7 +279,7 @@ def _store_data(engine, data, key_callback, store_key, concurrency):
     depth = 1
     task_semaphore = asyncio.Semaphore(concurrency)
 
-    data_len = len(data)
+    full_data_len = data_len = len(data)
     assert data_len > mnnode.MAX_DATA_BLOCK_SIZE
 
     while True:
@@ -333,6 +339,7 @@ def _store_data(engine, data, key_callback, store_key, concurrency):
     # Store root MorphisBlock.
     block = HashTreeBlock()
     block.depth = depth
+    block.size = full_data_len
     block.data = keys
 
     block_data = block.encode()
@@ -358,7 +365,7 @@ def _store_block(engine, i, block_data, key_callback, task_semaphore):
 
 class BlockType(Enum):
     hash_tree = 0
-    user = 1
+    user = 0x80000000
 
 class MorphisBlock(object):
     UUID = b'\x86\xa0\x47\x79\xc1\x2e\x4f\x48\x90\xc3\xee\x27\x53\x6d\x26\x96'
@@ -413,6 +420,7 @@ class HashTreeBlock(MorphisBlock):
 
     def __init__(self, buf=None):
         self.depth = 0
+        self.size = 0
         self.data = None
 
         super().__init__(BlockType.hash_tree.value, buf)
@@ -420,6 +428,7 @@ class HashTreeBlock(MorphisBlock):
     def encode(self):
         nbuf = super().encode()
         nbuf += struct.pack(">L", self.depth)
+        nbuf += struct.pack(">Q", self.size)
 
         nbuf += b' ' * (chord.NODE_ID_BYTES - len(nbuf))
 
@@ -431,6 +440,8 @@ class HashTreeBlock(MorphisBlock):
         i = super().parse()
 
         self.depth = struct.unpack_from(">L", self.buf, i)[0]
+        i += 4
+        self.size = struct.unpack_from(">Q", self.buf, i)[0]
 
 class BufferingDataCallback(DataCallback):
     def __init__(self):
@@ -438,7 +449,7 @@ class BufferingDataCallback(DataCallback):
         self.buf = bytearray()
         self.position = 0
 
-    def meta(self, version):
+    def version(self, version):
         self.version = version
 
     def data(self, position, data):
