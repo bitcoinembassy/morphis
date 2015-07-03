@@ -4,6 +4,7 @@ import asyncio
 import cgi
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import logging
+import queue
 from socketserver import ThreadingMixIn
 from threading import Event
 
@@ -30,10 +31,12 @@ static_upload_page_content_id = None
 class DataResponseWrapper(object):
     def __init__(self):
         self.data = None
+        self.size = None
         self.data_key = None
         self.version = None
 
         self.is_done = Event()
+        self.data_queue = queue.Queue()
 
         self.exception = None
         self.timed_out = False
@@ -130,9 +133,10 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
         data_rw = DataResponseWrapper()
 
         node.loop.call_soon_threadsafe(\
-            asyncio.async, _send_get_data(data_key, significant_bits, data_rw))
+            asyncio.async,\
+            _send_get_data(data_key, significant_bits, data_rw))
 
-        data_rw.is_done.wait()
+        data = data_rw.data_queue.get()
 
         if significant_bits:
             if data_rw.data_key:
@@ -151,21 +155,23 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
                 self.wfile.write(message)
                 return
 
-        if data_rw.data:
+        if data:
             self.send_response(200)
-            if data_rw.data[0] == 0xFF and data_rw.data[1] == 0xD8:
+            if data[0] == 0xFF and data[1] == 0xD8:
                 self.send_header("Content-Type", "image/jpg")
-            elif data_rw.data[0] == 0x89 and data_rw.data[1:4] == b"PNG":
+            elif data[0] == 0x89 and data[1:4] == b"PNG":
                 self.send_header("Content-Type", "image/png")
-            elif data_rw.data[:5] == b"GIF89":
+            elif data[:5] == b"GIF89":
                 self.send_header("Content-Type", "image/gif")
-            elif data_rw.data[:5] == b"/*CSS":
+            elif data[:5] == b"/*CSS":
                 self.send_header("Content-Type", "text/css")
-            elif data_rw.data[:12] == b"/*JAVASCRIPT":
+            elif data[:12] == b"/*JAVASCRIPT":
                 self.send_header("Content-Type", "application/javascript")
             else:
                 self.send_header("Content-Type", "text/html")
-            self.send_header("Content-Length", len(data_rw.data))
+
+            self.send_header("Content-Length", data_rw.size)
+
             if data_rw.version is not None:
                 self.send_header("Cache-Control", "max-age=15, public")
             else:
@@ -173,7 +179,13 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
                 self.send_header("ETag", rpath)
             self.end_headers()
 
-            self.wfile.write(data_rw.data)
+            while True:
+                self.wfile.write(data)
+
+                data = data_rw.data_queue.get()
+
+                if data is None:
+                    break
         else:
             self.handle_error(data_rw)
 
@@ -267,6 +279,23 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(errmsg)
 
+class Downloader(multipart.DataCallback):
+    def __init__(self, data_rw):
+        super().__init__()
+
+        self.data_rw = data_rw
+
+    def version(self, version):
+        self.data_rw.version = version
+
+    def size(self, size):
+        if log.isEnabledFor(logging.INFO):
+            log.info("Download size=[{}].".format(size))
+        self.data_rw.size = size
+
+    def data(self, position, data):
+        self.data_rw.data_queue.put(data)
+
 @asyncio.coroutine
 def _send_get_data(data_key, significant_bits, data_rw):
     try:
@@ -288,11 +317,11 @@ def _send_get_data(data_key, significant_bits, data_rw):
             if not data_key:
                 data_rw.data = b"Key Not Found"
                 data_rw.version = -1
-                data_rw.is_done.set()
+                data_rw.data_queue.put(None)
                 return
 
             data_rw.data_key = bytes(data_key)
-            data_rw.is_done.set()
+            data_rw.data_queue.put(None)
             return
 
 #        future = asyncio.async(\
@@ -303,10 +332,12 @@ def _send_get_data(data_key, significant_bits, data_rw):
 #
 #        ct_data_rw = future.result()
 
-        data_rw.data, data_rw.version =\
-            yield from multipart.get_data_buffered(node.chord_engine, data_key)
+        data_callback = Downloader(data_rw)
 
-        if data_rw.data is False:
+        r = yield from multipart.get_data(\
+                node.chord_engine, data_key, data_callback, True)
+
+        if r is False:
             raise asyncio.TimeoutError()
     except asyncio.TimeoutError:
         data_rw.timed_out = True
@@ -314,7 +345,7 @@ def _send_get_data(data_key, significant_bits, data_rw):
         log.exception("send_get_data()")
         data_rw.exception = True
 
-    data_rw.is_done.set()
+    data_rw.data_queue.put(None)
 
 @asyncio.coroutine
 def _send_store_data(data, data_rw, privatekey=None, path=None, version=None):
