@@ -192,6 +192,8 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
                 else:
                     self.send_header("Content-Type", "text/html")
 
+            self.send_header("Accept-Ranges", "bytes")
+
             self.send_header("Content-Length", data_rw.size)
 
             if data_rw.version is not None:
@@ -203,7 +205,10 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
             self.end_headers()
 
             while True:
-                self.wfile.write(data)
+                try:
+                    self.wfile.write(data)
+                except BrokenPipeError:
+                    #TODO: YOU_ARE_HERE: Signal above task to cancel.
 
                 data = data_rw.data_queue.get()
 
