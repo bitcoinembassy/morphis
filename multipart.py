@@ -98,8 +98,6 @@ class MorphisBlock(object):
         self.block_type = block_type
         i += 4
 
-        self.user_type = struct.unpack_from(">L", self.buf, i)[0]
-        i += 4
         self.ext_type = struct.unpack_from(">L", self.buf, i)[0]
         i += 4
 
