@@ -24,9 +24,10 @@ port = 4251
 node = None
 server = None
 
+home_page_content = [b'<html><head><title>Morphis</title></head><body><a href="morphis://3syweaeb7xwm4q3hxfp9w4nynhcnuob6r1mhj19ntu4gikjr7nhypezti4t1kacp4eyy3hcbxdbm4ria5bayb4rrfsafkscbik7c5ue/">Morphis Homepage</a><br/><br/><a href="morphis://upload">Upload</a><br/></body></html>', None]
+
 upload_page_content = None
-static_upload_page_content = None
-static_upload_page_content_id = None
+static_upload_page_content = [None, None]
 
 class DataResponseWrapper(object):
     def __init__(self):
@@ -52,6 +53,11 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         rpath = self.path[1:]
+
+        if not rpath:
+            self._send_content(home_page_content)
+            return
+
         if rpath[-1] == '/':
             rpath = rpath[:-1]
 
@@ -68,16 +74,8 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
                 self.end_headers()
                 return
 
-            if self.headers["If-None-Match"] == static_upload_page_content_id:
-                self.send_response(304)
-                self.send_header("ETag", static_upload_page_content_id)
-                self.send_header("Content-Length", 0)
-                self.end_headers()
-                return
-
             if len(rpath) == len(s_upload):
-                content = static_upload_page_content
-                content_id = static_upload_page_content_id
+                self._send_content(static_upload_page_content)
             else:
                 content =\
                     upload_page_content.replace(\
@@ -92,14 +90,10 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
                         b"${STATIC_MODE_DISPLAY}",\
                         b"display: none")
 
-                content_id = enc.generate_ID(content)
+                content_id = mbase32.encode(enc.generate_ID(content))
 
-            self.send_response(200)
-            self.send_header("Content-Length", len(content))
-            self.send_header("Cache-Control", "public")
-            self.send_header("ETag", content_id)
-            self.end_headers()
-            self.wfile.write(content)
+                self._send_content((content, content_id))
+
             return
 
         if self.headers["If-None-Match"] == rpath:
@@ -190,7 +184,7 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
                 if data is None:
                     break
         else:
-            self.handle_error(data_rw)
+            self._handle_error(data_rw)
 
     def do_POST(self):
         log.info(self.headers)
@@ -265,9 +259,38 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
 
             self.wfile.write(bytes(message, "UTF-8"))
         else:
-            self.handle_error(data_rw)
+            self._handle_error(data_rw)
 
-    def handle_error(self, data_rw):
+    def _send_content(self, content_entry):
+        content = content_entry[0]
+        content_id = content_entry[1]
+
+        if not content_id:
+            if callable(content):
+                content = content()
+
+            content_id = mbase32.encode(enc.generate_ID(content))
+            content_entry[1] = content_id
+
+        if self.headers["If-None-Match"] == content_id:
+            self.send_response(304)
+            self.send_header("ETag", content_id)
+            self.send_header("Content-Length", 0)
+            self.end_headers()
+            return
+
+        if callable(content):
+            content = content()
+
+        self.send_response(200)
+        self.send_header("Content-Length", len(content))
+        self.send_header("Cache-Control", "public")
+        self.send_header("ETag", content_id)
+        self.end_headers()
+        self.wfile.write(content)
+        return
+
+    def _handle_error(self, data_rw):
         if data_rw.exception:
             errmsg = b"500 Internal Server Error."
             self.send_response(500)
@@ -315,7 +338,7 @@ def _send_get_data(data_key, significant_bits, data_rw):
             data_key = ct_data_rw.data_key
 
             if log.isEnabledFor(logging.INFO):
-                log.info("Found key=[{}].".format(hex_string(data_key)))
+                log.info("Found key=[{}].".format(mbase32.encode(data_key)))
 
             if not data_key:
                 data_rw.data = b"Key Not Found"
@@ -406,21 +429,19 @@ def set_upload_page(filepath):
         _set_upload_page(upf.read())
 
 def _set_upload_page(content):
-    global static_upload_page_content, static_upload_page_content_id,\
-        upload_page_content
-
-    static_upload_page_content =\
-        content.replace(\
-            b"${UPDATEABLE_KEY_MODE_DISPLAY}",\
-            b"display: none")
-    static_upload_page_content=\
-        static_upload_page_content.replace(\
-            b"${STATIC_MODE_DISPLAY}",\
-            b"")
-
-    static_upload_page_content_id =\
-        hex_string(enc.generate_ID(static_upload_page_content))
+    global static_upload_page_content, upload_page_content
 
     upload_page_content = content
+
+    content = content.replace(\
+        b"${UPDATEABLE_KEY_MODE_DISPLAY}",\
+        b"display: none")
+    content = content.replace(\
+        b"${STATIC_MODE_DISPLAY}",\
+        b"")
+
+    static_upload_page_content[0] = content
+    static_upload_page_content[1] =\
+        mbase32.encode(enc.generate_ID(static_upload_page_content[1]))
 
 _set_upload_page(b'<html><head><title>Morphis Maalstroom Upload</title></head><body><p>Select the file to upload below:</p><form action="upload" method="post" enctype="multipart/form-data"><input type="file" name="fileToUpload" id="fileToUpload"/><div style="${UPDATEABLE_KEY_MODE_DISPLAY}"><br/><br/><label for="privateKey">Private Key</label><textarea name="privateKey" id="privateKey" rows="5" cols="80">${PRIVATE_KEY}</textarea><br/><label for="path">Path</label><input type="textfield" name="path" id="path"/><br/><label for="version">Version</label><input type="textfield" name="version" id="version"/></div><input type="submit" value="Upload File" name="submit"/></form><p style="${STATIC_MODE_DISPLAY}"><a href="morphis://upload/generate">switch to updateable key mode</a></p><p style="${UPDATEABLE_KEY_MODE_DISPLAY}"><a href="morphis://upload">switch to static key mode</a></p></body></html>')
