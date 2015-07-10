@@ -4,15 +4,17 @@ import asyncio
 import cgi
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import logging
+import queue
 from socketserver import ThreadingMixIn
 from threading import Event
 
 import base58
 import chord
 import enc
-from mutil import hex_string
+from mutil import hex_string, decode_key
 import rsakey
 import mbase32
+import multipart
 
 log = logging.getLogger(__name__)
 
@@ -29,10 +31,12 @@ static_upload_page_content_id = None
 class DataResponseWrapper(object):
     def __init__(self):
         self.data = None
+        self.size = None
         self.data_key = None
         self.version = None
 
         self.is_done = Event()
+        self.data_queue = queue.Queue()
 
         self.exception = None
         self.timed_out = False
@@ -110,36 +114,10 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
 
         error = False
 
-        significant_bits = chord.NODE_ID_BITS
+        significant_bits = None
 
-        lrp = len(rpath)
         try:
-            if lrp == 128:
-                data_key = bytes.fromhex(rpath)
-            elif lrp in (103, 102):
-                data_key = bytes(mbase32.decode(rpath))
-#            elif lrp == 88 + 4 and rpath.startswith("get/"):
-#                data_key = base58.decode(rpath[4:])
-#
-#                hex_key = hex_string(data_key)
-#
-#                message = ("<a href=\"morphis://{}\">{}</a>\n{}"\
-#                    .format(hex_key, hex_key, hex_key))\
-#                        .encode()
-#
-#                self.send_response(301)
-#                self.send_header("Location", "morphis://{}".format(hex_key))
-#                self.send_header("Content-Type", "text/html")
-#                self.send_header("Content-Length", len(message))
-#                self.end_headers()
-#
-#                self.wfile.write(message)
-#                return
-            else:
-#                error = True
-#                log.warning("Invalid request: [{}].".format(rpath))
-                data_key = mbase32.decode(rpath, False)
-                significant_bits = 5 * len(rpath)
+            data_key, significant_bits = decode_key(rpath)
         except:
             error = True
             log.exception("decode")
@@ -155,9 +133,10 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
         data_rw = DataResponseWrapper()
 
         node.loop.call_soon_threadsafe(\
-            asyncio.async, _send_get_data(data_key, significant_bits, data_rw))
+            asyncio.async,\
+            _send_get_data(data_key, significant_bits, data_rw))
 
-        data_rw.is_done.wait()
+        data = data_rw.data_queue.get()
 
         if significant_bits:
             if data_rw.data_key:
@@ -176,21 +155,26 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
                 self.wfile.write(message)
                 return
 
-        if data_rw.data:
+        if data:
             self.send_response(200)
-            if data_rw.data[0] == 0xFF and data_rw.data[1] == 0xD8:
+            if data[0] == 0xFF and data[1] == 0xD8:
                 self.send_header("Content-Type", "image/jpg")
-            elif data_rw.data[0] == 0x89 and data_rw.data[1:4] == b"PNG":
+            elif data[0] == 0x89 and data[1:4] == b"PNG":
                 self.send_header("Content-Type", "image/png")
-            elif data_rw.data[:5] == b"GIF89":
+            elif data[:5] == b"GIF89":
                 self.send_header("Content-Type", "image/gif")
-            elif data_rw.data[:5] == b"/*CSS":
+            elif data[:5] == b"/*CSS":
                 self.send_header("Content-Type", "text/css")
-            elif data_rw.data[:12] == b"/*JAVASCRIPT":
+            elif data[:12] == b"/*JAVASCRIPT":
                 self.send_header("Content-Type", "application/javascript")
+            elif data[:8] == bytes(\
+                    [0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70]):
+                self.send_header("Content-Type", "video/mp4")
             else:
                 self.send_header("Content-Type", "text/html")
-            self.send_header("Content-Length", len(data_rw.data))
+
+            self.send_header("Content-Length", data_rw.size)
+
             if data_rw.version is not None:
                 self.send_header("Cache-Control", "max-age=15, public")
             else:
@@ -198,7 +182,13 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
                 self.send_header("ETag", rpath)
             self.end_headers()
 
-            self.wfile.write(data_rw.data)
+            while True:
+                self.wfile.write(data)
+
+                data = data_rw.data_queue.get()
+
+                if data is None:
+                    break
         else:
             self.handle_error(data_rw)
 
@@ -207,6 +197,7 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
 
         if self.headers["Content-Type"] == "application/x-www-form-urlencoded":
             data = self.rfile.read(int(self.headers["Content-Length"]))
+            privatekey = None
         else:
             form = cgi.FieldStorage(\
                 fp=self.rfile,\
@@ -291,10 +282,27 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(errmsg)
 
+class Downloader(multipart.DataCallback):
+    def __init__(self, data_rw):
+        super().__init__()
+
+        self.data_rw = data_rw
+
+    def version(self, version):
+        self.data_rw.version = version
+
+    def size(self, size):
+        if log.isEnabledFor(logging.INFO):
+            log.info("Download size=[{}].".format(size))
+        self.data_rw.size = size
+
+    def data(self, position, data):
+        self.data_rw.data_queue.put(data)
+
 @asyncio.coroutine
 def _send_get_data(data_key, significant_bits, data_rw):
     try:
-        if significant_bits < chord.NODE_ID_BITS:
+        if significant_bits:
             future = asyncio.async(\
                 node.chord_engine.tasks.send_find_key(\
                     data_key, significant_bits),
@@ -312,30 +320,35 @@ def _send_get_data(data_key, significant_bits, data_rw):
             if not data_key:
                 data_rw.data = b"Key Not Found"
                 data_rw.version = -1
-                data_rw.is_done.set()
+                data_rw.data_queue.put(None)
                 return
 
             data_rw.data_key = bytes(data_key)
-            data_rw.is_done.set()
+            data_rw.data_queue.put(None)
             return
 
-        future = asyncio.async(\
-            node.chord_engine.tasks.send_get_data(data_key),\
-            loop=node.loop)
+#        future = asyncio.async(\
+#            node.chord_engine.tasks.send_get_data(data_key),\
+#            loop=node.loop)
+#
+#        yield from asyncio.wait_for(future, 15.0, loop=node.loop)
+#
+#        ct_data_rw = future.result()
 
-        yield from asyncio.wait_for(future, 15.0, loop=node.loop)
+        data_callback = Downloader(data_rw)
 
-        ct_data_rw = future.result()
+        r = yield from multipart.get_data(\
+                node.chord_engine, data_key, data_callback, True)
 
-        data_rw.data = ct_data_rw.data
-        data_rw.version = ct_data_rw.version
+        if r is False:
+            raise asyncio.TimeoutError()
     except asyncio.TimeoutError:
         data_rw.timed_out = True
     except:
         log.exception("send_get_data()")
         data_rw.exception = True
 
-    data_rw.is_done.set()
+    data_rw.data_queue.put(None)
 
 @asyncio.coroutine
 def _send_store_data(data, data_rw, privatekey=None, path=None, version=None):
@@ -343,32 +356,8 @@ def _send_store_data(data, data_rw, privatekey=None, path=None, version=None):
         def key_callback(data_key):
             data_rw.data_key = data_key
 
-        if privatekey:
-            future = asyncio.async(\
-                node.chord_engine.tasks.send_store_updateable_key(\
-                    data, privatekey, path, version, key_callback),\
-                loop=node.loop)
-
-            yield from asyncio.wait_for(future, 30.0, loop=node.loop)
-
-            future = asyncio.async(\
-                node.chord_engine.tasks.send_store_updateable_key_key(\
-                    data, privatekey, path, key_callback),\
-                loop=node.loop)
-
-            yield from asyncio.wait_for(future, 30.0, loop=node.loop)
-        else:
-            future = asyncio.async(\
-                node.chord_engine.tasks.send_store_data(data, key_callback),\
-                loop=node.loop)
-
-            yield from asyncio.wait_for(future, 30.0, loop=node.loop)
-
-            future = asyncio.async(\
-                node.chord_engine.tasks.send_store_key(data),\
-                loop=node.loop)
-
-            yield from asyncio.wait_for(future, 30.0, loop=node.loop)
+        yield from multipart.store_data(node.chord_engine, data, privatekey,\
+            path, version, key_callback)
     except asyncio.TimeoutError:
         data_rw.timed_out = True
     except:
@@ -413,8 +402,8 @@ def shutdown():
 def set_upload_page(filepath):
     global upload_page_content
 
-    upf = open(filepath, "rb")
-    _set_upload_page(upf.read())
+    with open(filepath, "rb") as upf:
+        _set_upload_page(upf.read())
 
 def _set_upload_page(content):
     global static_upload_page_content, static_upload_page_content_id,\
@@ -434,4 +423,4 @@ def _set_upload_page(content):
 
     upload_page_content = content
 
-_set_upload_page(b'<html><head><title>Morphis Maalstroom Upload</title></head><body><p>Select the file to upload below:</p><form action="upload" method="post" enctype="multipart/form-data"><input type="file" name="fileToUpload" id="fileToUpload"/><div style="${UPDATEABLE_KEY_MODE_DISPLAY}"><br/><br/><label for="privateKey">Private Key</label><textarea name="privateKey" id="privateKey" rows="5" cols="80">${PRIVATE_KEY}</textarea><br/><label for="path">Path</label><input type="textfield" name="path" id="path"/><br/><label for="version">Version</label><input type="textfield" name="version" id="version"/></div><input type="submit" value="Upload File" name="submit"/></form><p style="${STATIC_MODE_DISPLAY}"><a href="morphis://upload/generate">switch to updateable key mode</a></p></body></html>')
+_set_upload_page(b'<html><head><title>Morphis Maalstroom Upload</title></head><body><p>Select the file to upload below:</p><form action="upload" method="post" enctype="multipart/form-data"><input type="file" name="fileToUpload" id="fileToUpload"/><div style="${UPDATEABLE_KEY_MODE_DISPLAY}"><br/><br/><label for="privateKey">Private Key</label><textarea name="privateKey" id="privateKey" rows="5" cols="80">${PRIVATE_KEY}</textarea><br/><label for="path">Path</label><input type="textfield" name="path" id="path"/><br/><label for="version">Version</label><input type="textfield" name="version" id="version"/></div><input type="submit" value="Upload File" name="submit"/></form><p style="${STATIC_MODE_DISPLAY}"><a href="morphis://upload/generate">switch to updateable key mode</a></p><p style="${UPDATEABLE_KEY_MODE_DISPLAY}"><a href="morphis://upload">switch to static key mode</a></p></body></html>')

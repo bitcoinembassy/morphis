@@ -231,48 +231,6 @@ class ChordTasks(object):
         return data_rw
 
     @asyncio.coroutine
-    def send_store_updateable_key(\
-            self, data, privatekey, path=None, version=None,\
-            key_callback=None):
-
-        assert not path or type(path) is bytes
-        assert not version or type(version) is int
-
-        public_key_bytes = privatekey.asbytes() # asbytes=public key.
-
-        data_key = enc.generate_ID(public_key_bytes)
-
-        if path:
-            path_hash = enc.generate_ID(path)
-            data_key = enc.generate_ID(data_key + path_hash)
-        else:
-            path_hash = b""
-
-        key_callback(data_key)
-
-        data_id = enc.generate_ID(data_key)
-
-        hm = bytearray()
-        hm += sshtype.encodeBinary(path_hash)
-        hm += sshtype.encodeMpint(version)
-        hm += sshtype.encodeBinary(enc.generate_ID(data))
-
-        signature = privatekey.sign_ssh_data(hm)
-
-        sdmsg = cp.ChordStoreData()
-        sdmsg.data = data
-        sdmsg.pubkey = public_key_bytes
-        sdmsg.path_hash = path_hash
-        sdmsg.version = version
-        sdmsg.signature = signature
-
-        storing_nodes =\
-            yield from self.send_find_node(\
-                data_id, for_data=True, data_msg=sdmsg)
-
-        return storing_nodes
-
-    @asyncio.coroutine
     def send_store_key(self, data, key_callback=None):
         data_key = enc.generate_ID(data)
         if key_callback:
@@ -317,6 +275,48 @@ class ChordTasks(object):
 
         sdmsg = cp.ChordStoreData()
         sdmsg.data = data
+
+        storing_nodes =\
+            yield from self.send_find_node(\
+                data_id, for_data=True, data_msg=sdmsg)
+
+        return storing_nodes
+
+    @asyncio.coroutine
+    def send_store_updateable_key(\
+            self, data, privatekey, path=None, version=None,\
+            key_callback=None):
+
+        assert not path or type(path) is bytes
+        assert not version or type(version) is int
+
+        public_key_bytes = privatekey.asbytes() # asbytes=public key.
+
+        data_key = enc.generate_ID(public_key_bytes)
+
+        if path:
+            path_hash = enc.generate_ID(path)
+            data_key = enc.generate_ID(data_key + path_hash)
+        else:
+            path_hash = b""
+
+        key_callback(data_key)
+
+        data_id = enc.generate_ID(data_key)
+
+        hm = bytearray()
+        hm += sshtype.encodeBinary(path_hash)
+        hm += sshtype.encodeMpint(version)
+        hm += sshtype.encodeBinary(enc.generate_ID(data))
+
+        signature = privatekey.sign_ssh_data(hm)
+
+        sdmsg = cp.ChordStoreData()
+        sdmsg.data = data
+        sdmsg.pubkey = public_key_bytes
+        sdmsg.path_hash = path_hash
+        sdmsg.version = version
+        sdmsg.signature = signature
 
         storing_nodes =\
             yield from self.send_find_node(\
@@ -621,8 +621,8 @@ class ChordTasks(object):
                             " data locally.")
 
                         if data_msg_type is cp.ChordStoreData:
-                            r = yield from\
-                                self._store_data(None, data_msg, need_pruning)
+                            r = yield from self._store_data(\
+                                    None, node_id, data_msg, need_pruning)
                         else:
                             assert data_msg_type is cp.ChordStoreKey
 
@@ -692,6 +692,7 @@ class ChordTasks(object):
                     tun_meta.local_cid, pkt)
 
                 query_cntr.value += 1
+                done_all.clear()
 
                 if data_mode is cp.DataMode.get:
                     # We only send one at a time, stopping at success.
@@ -706,9 +707,11 @@ class ChordTasks(object):
                         # If the data was not validated correctly, then we ask
                         # the next Peer.
                         continue
+                else:
+                    assert data_mode is cp.DataMode.store
 
-                if query_cntr.value == max_concurrent_queries:
-                    break
+                    if storing_nodes == max_concurrent_queries:
+                        break
 
             if data_mode is cp.DataMode.store:
                 storing_nodes += query_cntr.value
@@ -722,7 +725,7 @@ class ChordTasks(object):
                 yield from done_all.wait()
                 done_all.clear()
 
-            assert query_cntr.value == 0
+            assert query_cntr.value == 0, query_cntr.value
 
             if log.isEnabledFor(logging.INFO):
                 log.info("Finished waiting for {} operations; now"\
@@ -745,9 +748,10 @@ class ChordTasks(object):
                         and (not significant_bits or not data_rw.data_key):
                     log.info("Failed to find the data!")
                 else:
-                    if data_rw.version:
+                    if data_rw.version is not None:
                         if log.isEnabledFor(logging.INFO):
-                            log.info("version=[{}].".format(data_rw.version))
+                            log.info("Found updateable key data;"\
+                                " version=[{}].".format(data_rw.version))
 
                 return data_rw
 
@@ -1644,6 +1648,12 @@ class ChordTasks(object):
 
         if self.engine.node.datastore_size\
                 < self.engine.node.datastore_max_size:
+            # We only store stuff closer than 2^2 less then the maximum
+            # distance.
+            log_dist, direction =\
+                self.engine.calc_log_distance(self.engine.node_id, data_id)
+            if log_dist > chord.NODE_ID_BITS - 2:
+                return False, False
             return True, False
 
         if log.isEnabledFor(logging.DEBUG):
@@ -1666,6 +1676,7 @@ class ChordTasks(object):
 
                 q = sess.query(DataBlock.original_size)\
                     .filter(DataBlock.distance > distance)\
+                    .filter(DataBlock.original_size != 0)\
                     .order_by(DataBlock.distance.desc())
 
                 freeable_space = 0
@@ -1781,12 +1792,12 @@ class ChordTasks(object):
             return None
 
         def iocall():
-            data_file = open(
-                self.engine.node.data_block_file_path\
-                    .format(self.engine.node.instance, data_block.id),
-                "rb")
+            filename = self.engine.node.data_block_file_path.format(\
+                self.engine.node.instance, data_block.id)
 
-            return data_file.read()
+            with open(filename, "rb") as data_file:
+                data = data_file.read()
+                return data
 
         enc_data = yield from self.loop.run_in_executor(None, iocall)
 
@@ -1926,6 +1937,7 @@ class ChordTasks(object):
 
                     q = sess.query(DataBlock.id, DataBlock.original_size)\
                         .filter(DataBlock.distance > distance)\
+                        .filter(DataBlock.original_size != 0)\
                         .order_by(DataBlock.distance.desc())
 
                     for block in page_query(q):
@@ -2036,14 +2048,13 @@ class ChordTasks(object):
                 log.info("Storing [{}] bytes of data.".format(tlen))
 
             def iocall():
-                new_file = open(
-                    self.engine.node.data_block_file_path\
-                        .format(self.engine.node.instance, data_block_id),
-                    "wb")
+                filename = self.engine.node.data_block_file_path.format(\
+                    self.engine.node.instance, data_block_id)
 
-                new_file.write(enc_data)
-                if enc_data_remainder:
-                    new_file.write(enc_data_remainder)
+                with open(filename, "wb") as new_file:
+                    new_file.write(enc_data)
+                    if enc_data_remainder:
+                        new_file.write(enc_data_remainder)
 
             yield from self.loop.run_in_executor(None, iocall)
 

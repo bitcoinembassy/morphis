@@ -10,7 +10,8 @@ import chord
 import db
 import enc
 import mn1
-from mutil import hex_dump, hex_string
+import multipart
+from mutil import hex_dump, hex_string, decode_key
 import node
 import sshtype
 
@@ -215,9 +216,6 @@ class Shell(cmd.Cmd):
             self._write(str(val))
 
     def _write(self, val):
-        if len(val) + len(self.out_buffer) > mn1.MAX_PACKET_LENGTH:
-            self.flush()
-
         if isinstance(val, bytearray) or isinstance(val, bytes):
             val = val.replace(b'\n', b"\r\n")
             self.out_buffer += val
@@ -225,15 +223,26 @@ class Shell(cmd.Cmd):
             val = val.replace('\n', "\r\n")
             self.out_buffer += val.encode("UTF-8")
 
+        if len(self.out_buffer) > mn1.MAX_PACKET_LENGTH:
+            self.flush()
+
     def flush(self):
         if not self.out_buffer:
             return
 
-        rmsg = BinaryMessage()
-        rmsg.value = self.out_buffer
-        self.peer.protocol.write_channel_data(self.local_cid, rmsg.encode())
+        while True:
+            outbuf = self.out_buffer
+            if len(outbuf) > mn1.MAX_PACKET_LENGTH:
+                outbuf = outbuf[:mn1.MAX_PACKET_LENGTH]
+                self.out_buffer = outbuf[mn1.MAX_PACKET_LENGTH:]
 
-        self.out_buffer.clear()
+            rmsg = BinaryMessage()
+            rmsg.value = outbuf
+            self.peer.protocol.write_channel_data(self.local_cid, rmsg.encode())
+
+            if outbuf is self.out_buffer:
+                self.out_buffer.clear()
+                break
 
     def do_test(self, arg):
         "Test thing."
@@ -319,13 +328,19 @@ class Shell(cmd.Cmd):
     def do_getdata(self, arg):
         "[DATA_KEY] retrieve data for DATA_KEY from the network."
 
-        data_key = bytes.fromhex(arg)
+        data_key, significant_bits = decode_key(arg)
+
+        if significant_bits:
+            self.writeln("Incomplete key, use findkey.")
+            return
 
         start = datetime.today()
-        data_rw = yield from self.peer.engine.tasks.send_get_data(data_key)
+        data, version =\
+            yield from multipart.get_data_buffered(self.peer.engine, data_key)
         diff = datetime.today() - start
-        self.writeln("data=[{}].".format(data_rw.data))
-        self.writeln("version=[{}].".format(data_rw.version))
+
+        self.writeln("data=[{}].".format(data))
+        self.writeln("version=[{}].".format(version))
         self.writeln("send_get_data(..) took: {}.".format(diff))
 
     @asyncio.coroutine
@@ -337,10 +352,11 @@ class Shell(cmd.Cmd):
     def do_findkey(self, arg):
         "[DATA_KEY_PREFIX] search the network for the given key."
 
-        data_key = bytes.fromhex(arg)
+        data_key, significant_bits = decode_key(arg)
 
         start = datetime.today()
-        data_rw = yield from self.peer.engine.tasks.send_find_key(data_key)
+        data_rw = yield from\
+            self.peer.engine.tasks.send_find_key(data_key, significant_bits)
         diff = datetime.today() - start
         self.writeln("data_key=[{}].".format(hex_string(data_rw.data_key)))
         self.writeln("send_find_key(..) took: {}.".format(diff))

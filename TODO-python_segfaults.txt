@@ -46,3 +46,21 @@ Traceback (most recent call last):
     if select._order_by_clause.clauses:
 AttributeError: 'Future' object has no attribute 'clauses'
 
+[COMMIT:9a8a2b7e584b9012c061decf356111dc6ef379f2]
+(no segfault yet, but froze upload and is similar to above exception and is strange!)
+future: Task(<do_stabilize>)<exception=AttributeError("'Future' object has no attribute 'path'",)>
+Traceback (most recent call last):
+  File "/usr/lib64/python3.4/asyncio/tasks.py", line 319, in _step
+    result = coro.send(value)
+  File "/home/mdev/src/l/morphis/chord.py", line 296, in do_stabilize
+    yield from self.tasks.perform_stabilize()
+  File "/home/mdev/src/l/morphis/chord_tasks.py", line 121, in perform_stabilize
+    furthest_nodes, new_nodes = yield from self._perform_stabilize(node_id)
+  File "/home/mdev/src/l/morphis/chord_tasks.py", line 181, in _perform_stabilize
+    self.send_find_node(node_id, input_trie=input_trie)
+  File "/home/mdev/src/l/morphis/chord_tasks.py", line 758, in send_find_node
+    rnodes = [vpeer.peer for vpeer in result_trie if vpeer and vpeer.path]
+  File "/home/mdev/src/l/morphis/chord_tasks.py", line 758, in <listcomp>
+    rnodes = [vpeer.peer for vpeer in result_trie if vpeer and vpeer.path]
+AttributeError: 'Future' object has no attribute 'path'
+
