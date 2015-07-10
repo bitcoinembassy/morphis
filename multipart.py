@@ -51,8 +51,9 @@ class BufferingDataCallback(DataCallback):
         self.position += data_len
 
 class BlockType(Enum):
-    hash_tree = 0
-    targeted = 0xA0
+    hash_tree = 0x2D4100
+    link = 0x2D4200
+    targeted = 0x2D4300
     user = 0x80000000
 
 class MorphisBlock(object):
