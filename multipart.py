@@ -365,6 +365,7 @@ def _store_block(engine, i, block_data, key_callback, task_semaphore):
 
 class BlockType(Enum):
     hash_tree = 0
+    targeted = 0xA0
     user = 0x80000000
 
 class MorphisBlock(object):
@@ -411,6 +412,8 @@ class MorphisBlock(object):
         i += 4
 
         self.user_type = struct.unpack_from(">L", self.buf, i)[0]
+        i += 4
+        self.ext_type = struct.unpack_from(">L", self.buf, i)[0]
         i += 4
 
         return i
