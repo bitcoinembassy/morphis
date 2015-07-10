@@ -243,7 +243,7 @@ class HashTreeFetch(object):
 
         if not data_rw.data:
             if not retry:
-                self._failed += [depth, position, data_key]
+                self._failed.append((depth, position, data_key))
         else:
             if retry:
                 del self._failed[retry]
