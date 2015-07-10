@@ -54,12 +54,12 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         rpath = self.path[1:]
 
+        if rpath and rpath[-1] == '/':
+            rpath = rpath[:-1]
+
         if not rpath:
             self._send_content(home_page_content)
             return
-
-        if rpath[-1] == '/':
-            rpath = rpath[:-1]
 
         s_upload = "upload"
         if rpath.startswith(s_upload):
