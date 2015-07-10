@@ -11,6 +11,7 @@ import struct
 from enum import Enum
 
 import chord
+import mbase32
 from mutil import hex_string
 import node as mnnode
 import peer as mnpeer
@@ -23,6 +24,9 @@ class DataCallback(object):
         pass
 
     def size(self, size):
+        pass
+
+    def mime_type(self, value):
         pass
 
     def data(self, position, data):
@@ -131,6 +135,27 @@ class HashTreeBlock(MorphisBlock):
         self.depth = struct.unpack_from(">L", self.buf, i)[0]
         i += 4
         self.size = struct.unpack_from(">Q", self.buf, i)[0]
+
+class LinkBlock(MorphisBlock):
+    def __init__(self, buf=None):
+        self.mime_type = None
+        self.destination = None
+
+        super().__init__(BlockType.link.value, buf)
+
+    def encode(self):
+        nbuf = super().encode()
+        nbuf += sshtype.encodeString(self.mime_type)
+        nbuf += self.destination
+
+        return nbuf
+
+    def parse(self):
+        i = super().parse()
+
+        l, self.mime_type = sshtype.parse_string_from(self.buf, i)
+        i += l
+        self.destination = self.buf[i:]
 
 class HashTreeFetch(object):
     def __init__(self, engine, data_callback, ordered=False, positions=None,\
@@ -313,11 +338,10 @@ def get_data_buffered(engine, data_key, retry_seconds=30, concurrency=64):
 
 @asyncio.coroutine
 def get_data(engine, data_key, data_callback, ordered=False, positions=None,\
-        retry_seconds=30, concurrency=64):
+        retry_seconds=30, concurrency=64, max_link_depth=1):
     assert isinstance(data_callback, DataCallback)
 
     data_rw = yield from engine.tasks.send_get_data(data_key)
-
     data = data_rw.data
 
     if not data:
@@ -326,24 +350,54 @@ def get_data(engine, data_key, data_callback, ordered=False, positions=None,\
     if data_rw.version:
         data_callback.version(data_rw.version)
 
-    if not data.startswith(MorphisBlock.UUID)\
-            or MorphisBlock.parse_block_type(data)\
-                != BlockType.hash_tree.value:
-        data_callback.size(len(data))
-        data_callback.data(0, data)
-        return True
+    link_depth = 0
 
-    fetch = HashTreeFetch(\
-        engine, data_callback, ordered, positions, retry_seconds,\
-            concurrency)
+    while True:
+        if not data.startswith(MorphisBlock.UUID):
+            data_callback.size(len(data))
+            data_callback.data(0, data)
+            return True
 
-    r = yield from fetch.fetch(HashTreeBlock(data))
+        block_type = MorphisBlock.parse_block_type(data)
 
-    return r
+        if block_type == BlockType.link.value:
+            link_depth += 1
+
+            if link_depth > max_link_depth:
+                if log.isEnabledFor(logging.WARNING):
+                    log.warning(\
+                        "Exceeded maximum link depth [{}] for key [{}]."\
+                            .format(max_link_depth, mbase32.encode(data_key)))
+                return False
+
+            block = LinkBlock(data)
+
+            data_callback.mime_type(block.mime_type)
+
+            data_rw = yield from engine.tasks.send_get_data(block.destination)
+            data = data_rw.data
+
+            if not data:
+                return None
+
+            continue
+
+        if block_type != BlockType.hash_tree.value:
+            data_callback.size(len(data))
+            data_callback.data(0, data)
+            return True
+
+        fetch = HashTreeFetch(\
+            engine, data_callback, ordered, positions, retry_seconds,\
+                concurrency)
+
+        r = yield from fetch.fetch(HashTreeBlock(data))
+
+        return r
 
 @asyncio.coroutine
 def store_data(engine, data, privatekey=None, path=None, version=None,\
-        key_callback=None, store_key=True, concurrency=64):
+        key_callback=None, store_key=True, mime_type="", concurrency=64):
 
     data_len = len(data)
 
@@ -357,7 +411,7 @@ def store_data(engine, data, privatekey=None, path=None, version=None,\
 
             if store_key:
                 yield from engine.tasks.send_store_updateable_key_key(\
-                    data, privatekey, path, key_callback)
+                    data, privatekey, path)
         else:
             yield from engine.tasks.send_store_data(data, key_callback)
 
@@ -372,7 +426,29 @@ def store_data(engine, data, privatekey=None, path=None, version=None,\
     if log.isEnabledFor(logging.INFO):
         log.info("Storing multipart.")
 
-    yield from _store_data(engine, data, key_callback, store_key, concurrency)
+    if privatekey:
+        root_block_key = None
+        def new_key_callback(key):
+            nonlocal root_block_key
+            root_block_key = key
+
+        yield from\
+            _store_data(engine, data, new_key_callback, False, concurrency)
+
+        block = LinkBlock()
+        block.mime_type = mime_type
+        block.destination = root_block_key
+        link_data = block.encode()
+
+        yield from engine.tasks.send_store_updateable_key(\
+            link_data, privatekey, path, version, key_callback)
+
+        if store_key:
+            yield from engine.tasks.send_store_updateable_key_key(\
+                data, privatekey, path)
+    else:
+        yield from\
+            _store_data(engine, data, key_callback, store_key, concurrency)
 
 def __key_callback(keys, idx, key):
     key_len = len(key)
