@@ -28,57 +28,110 @@ class DataCallback(object):
     def data(self, position, data):
         pass
 
-@asyncio.coroutine
-def get_data_buffered(engine, data_key, retry_seconds=30, concurrency=64):
-    cb = BufferingDataCallback()
+class BufferingDataCallback(DataCallback):
+    def __init__(self):
+        self.version = None
+        self.buf = bytearray()
+        self.position = 0
 
-    r = yield from get_data(engine, data_key, cb, ordered=True,\
-            retry_seconds=retry_seconds, concurrency=concurrency)
+    def version(self, version):
+        self.version = version
 
-    if not r:
-        if r is None:
-            if log.isEnabledFor(logging.INFO):
-                log.info("Key not found.")
-            return None, None
-        else:
-            if log.isEnabledFor(logging.INFO):
-                log.info("Download timed out.")
-            return False, None
+    def data(self, position, data):
+        if position != self.position:
+            raise Exception("Incomplete download.")
 
-    if log.isEnabledFor(logging.INFO):
-        log.info("Download complete; len=[{}].".format(len(cb.buf)))
+        data_len = len(data)
 
-    return cb.buf, cb.version
+        if log.isEnabledFor(logging.INFO):
+            log.info("Received data; position=[{}], len=[{}]."\
+                .format(position, data_len))
 
-@asyncio.coroutine
-def get_data(engine, data_key, data_callback, ordered=False, positions=None,\
-        retry_seconds=30, concurrency=64):
-    assert isinstance(data_callback, DataCallback)
+        self.buf += data
+        self.position += data_len
 
-    data_rw = yield from engine.tasks.send_get_data(data_key)
+class BlockType(Enum):
+    hash_tree = 0
+    targeted = 0xA0
+    user = 0x80000000
 
-    data = data_rw.data
+class MorphisBlock(object):
+    UUID = b'\x86\xa0\x47\x79\xc1\x2e\x4f\x48\x90\xc3\xee\x27\x53\x6d\x26\x96'
 
-    if not data:
-        return None
+    @staticmethod
+    def parse_block_type(buf):
+        return struct.unpack_from(">L", buf, 16 + 7)[0]
 
-    if data_rw.version:
-        data_callback.version(data_rw.version)
+    def __init__(self, block_type=None, buf=None):
+        self.buf = buf
+        self.block_type = block_type
+        self.ext_type = 0
 
-    if not data.startswith(MorphisBlock.UUID)\
-            or MorphisBlock.parse_block_type(data)\
-                != BlockType.hash_tree.value:
-        data_callback.size(len(data))
-        data_callback.data(0, data)
-        return True
+        if not buf:
+            return
 
-    fetch = HashTreeFetch(\
-        engine, data_callback, ordered, positions, retry_seconds,\
-            concurrency)
+        self.parse()
 
-    r = yield from fetch.fetch(HashTreeBlock(data))
+    def encode(self):
+        nbuf = bytearray()
 
-    return r
+        nbuf += MorphisBlock.UUID
+        nbuf += b"MORPHiS"
+        nbuf += struct.pack(">L", self.block_type)
+        nbuf += struct.pack(">L", self.ext_type)
+
+        self.buf = nbuf
+
+        return nbuf
+
+    def parse(self):
+        assert self.buf[:16] == MorphisBlock.UUID
+        i = 16
+
+        i += 7 # morphis
+
+        block_type = struct.unpack_from(">L", self.buf, i)[0]
+        if self.block_type:
+            if block_type != self.block_type:
+                raise Exception("Expecting block_type [{}] but got [{}]."\
+                    .format(self.block_type, block_type))
+        self.block_type = block_type
+        i += 4
+
+        self.user_type = struct.unpack_from(">L", self.buf, i)[0]
+        i += 4
+        self.ext_type = struct.unpack_from(">L", self.buf, i)[0]
+        i += 4
+
+        return i
+
+class HashTreeBlock(MorphisBlock):
+    HEADER_BYTES = 64
+
+    def __init__(self, buf=None):
+        self.depth = 0
+        self.size = 0
+        self.data = None
+
+        super().__init__(BlockType.hash_tree.value, buf)
+
+    def encode(self):
+        nbuf = super().encode()
+        nbuf += struct.pack(">L", self.depth)
+        nbuf += struct.pack(">Q", self.size)
+
+        nbuf += b' ' * (chord.NODE_ID_BYTES - len(nbuf))
+
+        nbuf += self.data
+
+        return nbuf
+
+    def parse(self):
+        i = super().parse()
+
+        self.depth = struct.unpack_from(">L", self.buf, i)[0]
+        i += 4
+        self.size = struct.unpack_from(">Q", self.buf, i)[0]
 
 class HashTreeFetch(object):
     def __init__(self, engine, data_callback, ordered=False, positions=None,\
@@ -235,6 +288,60 @@ class HashTreeFetch(object):
             waiter.set_result(False)
             heapq.heappop(self._ordered_waiters)
 
+## Functions:
+
+@asyncio.coroutine
+def get_data_buffered(engine, data_key, retry_seconds=30, concurrency=64):
+    cb = BufferingDataCallback()
+
+    r = yield from get_data(engine, data_key, cb, ordered=True,\
+            retry_seconds=retry_seconds, concurrency=concurrency)
+
+    if not r:
+        if r is None:
+            if log.isEnabledFor(logging.INFO):
+                log.info("Key not found.")
+            return None, None
+        else:
+            if log.isEnabledFor(logging.INFO):
+                log.info("Download timed out.")
+            return False, None
+
+    if log.isEnabledFor(logging.INFO):
+        log.info("Download complete; len=[{}].".format(len(cb.buf)))
+
+    return cb.buf, cb.version
+
+@asyncio.coroutine
+def get_data(engine, data_key, data_callback, ordered=False, positions=None,\
+        retry_seconds=30, concurrency=64):
+    assert isinstance(data_callback, DataCallback)
+
+    data_rw = yield from engine.tasks.send_get_data(data_key)
+
+    data = data_rw.data
+
+    if not data:
+        return None
+
+    if data_rw.version:
+        data_callback.version(data_rw.version)
+
+    if not data.startswith(MorphisBlock.UUID)\
+            or MorphisBlock.parse_block_type(data)\
+                != BlockType.hash_tree.value:
+        data_callback.size(len(data))
+        data_callback.data(0, data)
+        return True
+
+    fetch = HashTreeFetch(\
+        engine, data_callback, ordered, positions, retry_seconds,\
+            concurrency)
+
+    r = yield from fetch.fetch(HashTreeBlock(data))
+
+    return r
+
 @asyncio.coroutine
 def store_data(engine, data, privatekey=None, path=None, version=None,\
         key_callback=None, store_key=True, concurrency=64):
@@ -362,108 +469,3 @@ def _store_block(engine, i, block_data, key_callback, task_semaphore):
     task_semaphore.release()
 
     return True
-
-class BlockType(Enum):
-    hash_tree = 0
-    targeted = 0xA0
-    user = 0x80000000
-
-class MorphisBlock(object):
-    UUID = b'\x86\xa0\x47\x79\xc1\x2e\x4f\x48\x90\xc3\xee\x27\x53\x6d\x26\x96'
-
-    @staticmethod
-    def parse_block_type(buf):
-        return struct.unpack_from(">L", buf, 16 + 7)[0]
-
-    def __init__(self, block_type=None, buf=None):
-        self.buf = buf
-        self.block_type = block_type
-        self.ext_type = 0
-
-        if not buf:
-            return
-
-        self.parse()
-
-    def encode(self):
-        nbuf = bytearray()
-
-        nbuf += MorphisBlock.UUID
-        nbuf += b"MORPHiS"
-        nbuf += struct.pack(">L", self.block_type)
-        nbuf += struct.pack(">L", self.ext_type)
-
-        self.buf = nbuf
-
-        return nbuf
-
-    def parse(self):
-        assert self.buf[:16] == MorphisBlock.UUID
-        i = 16
-
-        i += 7 # morphis
-
-        block_type = struct.unpack_from(">L", self.buf, i)[0]
-        if self.block_type:
-            if block_type != self.block_type:
-                raise Exception("Expecting block_type [{}] but got [{}]."\
-                    .format(self.block_type, block_type))
-        self.block_type = block_type
-        i += 4
-
-        self.user_type = struct.unpack_from(">L", self.buf, i)[0]
-        i += 4
-        self.ext_type = struct.unpack_from(">L", self.buf, i)[0]
-        i += 4
-
-        return i
-
-class HashTreeBlock(MorphisBlock):
-    HEADER_BYTES = 64
-
-    def __init__(self, buf=None):
-        self.depth = 0
-        self.size = 0
-        self.data = None
-
-        super().__init__(BlockType.hash_tree.value, buf)
-
-    def encode(self):
-        nbuf = super().encode()
-        nbuf += struct.pack(">L", self.depth)
-        nbuf += struct.pack(">Q", self.size)
-
-        nbuf += b' ' * (chord.NODE_ID_BYTES - len(nbuf))
-
-        nbuf += self.data
-
-        return nbuf
-
-    def parse(self):
-        i = super().parse()
-
-        self.depth = struct.unpack_from(">L", self.buf, i)[0]
-        i += 4
-        self.size = struct.unpack_from(">Q", self.buf, i)[0]
-
-class BufferingDataCallback(DataCallback):
-    def __init__(self):
-        self.version = None
-        self.buf = bytearray()
-        self.position = 0
-
-    def version(self, version):
-        self.version = version
-
-    def data(self, position, data):
-        if position != self.position:
-            raise Exception("Incomplete download.")
-
-        data_len = len(data)
-
-        if log.isEnabledFor(logging.INFO):
-            log.info("Received data; position=[{}], len=[{}]."\
-                .format(position, data_len))
-
-        self.buf += data
-        self.position += data_len
