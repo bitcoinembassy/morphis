@@ -33,9 +33,12 @@ class DataResponseWrapper(object):
     def __init__(self):
         self.data = None
         self.size = None
+
         self.data_key = None
+
         self.path = None
         self.version = None
+        self.mime_type = None
 
         self.is_done = Event()
         self.data_queue = queue.Queue()
@@ -166,24 +169,28 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
 
         if data:
             self.send_response(200)
-            if data[0] == 0xFF and data[1] == 0xD8:
-                self.send_header("Content-Type", "image/jpg")
-            elif data[0] == 0x89 and data[1:4] == b"PNG":
-                self.send_header("Content-Type", "image/png")
-            elif data[:5] == b"GIF89":
-                self.send_header("Content-Type", "image/gif")
-            elif data[:5] == b"/*CSS":
-                self.send_header("Content-Type", "text/css")
-            elif data[:12] == b"/*JAVASCRIPT":
-                self.send_header("Content-Type", "application/javascript")
-            elif data[:8] == bytes(\
-                    [0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70]):
-                self.send_header("Content-Type", "video/mp4")
-            elif data[:8] == bytes(\
-                    [0x50, 0x4b, 0x03, 0x04, 0x0a, 0x00, 0x00, 0x00]):
-                self.send_header("Content-Type", "application/zip")
+
+            if data_rw.mime_type:
+                self.send_header("Content-Type", data_rw.mime_type)
             else:
-                self.send_header("Content-Type", "text/html")
+                if data[0] == 0xFF and data[1] == 0xD8:
+                    self.send_header("Content-Type", "image/jpg")
+                elif data[0] == 0x89 and data[1:4] == b"PNG":
+                    self.send_header("Content-Type", "image/png")
+                elif data[:5] == b"GIF89":
+                    self.send_header("Content-Type", "image/gif")
+                elif data[:5] == b"/*CSS":
+                    self.send_header("Content-Type", "text/css")
+                elif data[:12] == b"/*JAVASCRIPT":
+                    self.send_header("Content-Type", "application/javascript")
+                elif data[:8] == bytes(\
+                        [0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70]):
+                    self.send_header("Content-Type", "video/mp4")
+                elif data[:8] == bytes(\
+                        [0x50, 0x4b, 0x03, 0x04, 0x0a, 0x00, 0x00, 0x00]):
+                    self.send_header("Content-Type", "application/zip")
+                else:
+                    self.send_header("Content-Type", "text/html")
 
             self.send_header("Content-Length", data_rw.size)
 
@@ -192,6 +199,7 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
             else:
                 self.send_header("Cache-Control", "public")
                 self.send_header("ETag", rpath)
+
             self.end_headers()
 
             while True:
@@ -247,6 +255,7 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
                     version = 0
                 else:
                     version = int(version)
+                mime_type = form["mime_type"].value
             except KeyError:
                 privatekey = None
 
@@ -258,7 +267,7 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
         if privatekey:
             node.loop.call_soon_threadsafe(\
                 asyncio.async, _send_store_data(\
-                    data, data_rw, privatekey, path, version))
+                    data, data_rw, privatekey, path, version, mime_type))
         else:
             node.loop.call_soon_threadsafe(\
                 asyncio.async, _send_store_data(data, data_rw))
@@ -341,6 +350,11 @@ class Downloader(multipart.DataCallback):
             log.info("Download size=[{}].".format(size))
         self.data_rw.size = size
 
+    def mime_type(self, val):
+        if log.isEnabledFor(logging.INFO):
+            log.info("mime_type=[{}].".format(val))
+        self.data_rw.mime_type = val
+
     def data(self, position, data):
         self.data_rw.data_queue.put(data)
 
@@ -402,13 +416,15 @@ def _send_get_data(data_key, significant_bits, path, data_rw):
     data_rw.data_queue.put(None)
 
 @asyncio.coroutine
-def _send_store_data(data, data_rw, privatekey=None, path=None, version=None):
+def _send_store_data(data, data_rw, privatekey=None, path=None, version=None,\
+        mime_type=""):
     try:
         def key_callback(data_key):
             data_rw.data_key = data_key
 
-        yield from multipart.store_data(node.chord_engine, data, privatekey,\
-            path, version, key_callback)
+        yield from multipart.store_data(\
+            node.chord_engine, data, privatekey=privatekey, path=path,\
+            version=version, key_callback=key_callback, mime_type=mime_type)
     except asyncio.TimeoutError:
         data_rw.timed_out = True
     except:
@@ -472,4 +488,4 @@ def _set_upload_page(content):
     static_upload_page_content[1] =\
         mbase32.encode(enc.generate_ID(static_upload_page_content[1]))
 
-_set_upload_page(b'<html><head><title>Morphis Maalstroom Upload</title></head><body><p>Select the file to upload below:</p><form action="upload" method="post" enctype="multipart/form-data"><input type="file" name="fileToUpload" id="fileToUpload"/><div style="${UPDATEABLE_KEY_MODE_DISPLAY}"><br/><br/><label for="privateKey">Private Key</label><textarea name="privateKey" id="privateKey" rows="5" cols="80">${PRIVATE_KEY}</textarea><br/><label for="path">Path</label><input type="textfield" name="path" id="path"/><br/><label for="version">Version</label><input type="textfield" name="version" id="version"/></div><input type="submit" value="Upload File" name="submit"/></form><p style="${STATIC_MODE_DISPLAY}"><a href="morphis://upload/generate">switch to updateable key mode</a></p><p style="${UPDATEABLE_KEY_MODE_DISPLAY}"><a href="morphis://upload">switch to static key mode</a></p></body></html>')
+_set_upload_page(b'<html><head><title>Morphis Maalstroom Upload</title></head><body><p>Select the file to upload below:</p><form action="upload" method="post" enctype="multipart/form-data"><input type="file" name="fileToUpload" id="fileToUpload"/><div style="${UPDATEABLE_KEY_MODE_DISPLAY}"><br/><br/><label for="privateKey">Private Key</label><textarea name="privateKey" id="privateKey" rows="5" cols="80">${PRIVATE_KEY}</textarea><br/><label for="path">Path</label><input type="textfield" name="path" id="path"/><br/><label for="version">Version</label><input type="textfield" name="version" id="version"/><br/><label for="mime_type">Mime Type</label><input type="textfield" name="mime_type" id="mime_type"/><br/></div><input type="submit" value="Upload File" name="submit"/></form><p style="${STATIC_MODE_DISPLAY}"><a href="morphis://upload/generate">switch to updateable key mode</a></p><p style="${UPDATEABLE_KEY_MODE_DISPLAY}"><a href="morphis://upload">switch to static key mode</a></p></body></html>')

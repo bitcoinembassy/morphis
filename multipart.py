@@ -374,7 +374,8 @@ def get_data(engine, data_key, data_callback, path=None, ordered=False,\
 
             block = LinkBlock(data)
 
-            data_callback.mime_type(block.mime_type)
+            if block.mime_type:
+                data_callback.mime_type(block.mime_type)
 
             data_rw = yield from engine.tasks.send_get_data(block.destination)
             data = data_rw.data
@@ -400,14 +401,23 @@ def get_data(engine, data_key, data_callback, path=None, ordered=False,\
 @asyncio.coroutine
 def store_data(engine, data, privatekey=None, path=None, version=None,\
         key_callback=None, store_key=True, mime_type="", concurrency=64):
-
     data_len = len(data)
 
-    if data_len <= mnnode.MAX_DATA_BLOCK_SIZE and not mime_type:
+    if mime_type or (privatekey and data_len > mnnode.MAX_DATA_BLOCK_SIZE):
+        store_link = True
+
+        root_block_key = None
+
+        orig_key_callback = key_callback
+        def key_callback(key):
+            nonlocal root_block_key
+            root_block_key = key
+
+    if data_len <= mnnode.MAX_DATA_BLOCK_SIZE:
         if log.isEnabledFor(logging.INFO):
             log.info("Data fits in one block, performing simple store.")
 
-        if privatekey:
+        if privatekey and not store_link:
             yield from engine.tasks.send_store_updateable_key(\
                 data, privatekey, path, version, key_callback)
 
@@ -422,28 +432,18 @@ def store_data(engine, data, privatekey=None, path=None, version=None,\
 
         if log.isEnabledFor(logging.INFO):
             log.info("Simple store complete.")
-
-        return
-
-    if log.isEnabledFor(logging.INFO):
-        log.info("Storing multipart.")
-
-    if privatekey or mime_type:
-        store_link = True
-
-        root_block_key = None
-        orig_key_callback = key_callback
-        def key_callback(key):
-            nonlocal root_block_key
-            root_block_key = key
     else:
-        store_link = False
+        if log.isEnabledFor(logging.INFO):
+            log.info("Storing multipart.")
 
-    yield from\
-        _store_data_multipart(engine, data, key_callback,\
-            store_key and not store_link, concurrency)
+        yield from _store_data_multipart(\
+                engine, data, key_callback, store_key, concurrency)
+
+        log.info("Multipart storage complete.")
 
     if store_link:
+        log.info("Storing link.")
+
         block = LinkBlock()
         block.mime_type = mime_type
         block.destination = root_block_key
@@ -462,6 +462,8 @@ def store_data(engine, data, privatekey=None, path=None, version=None,\
 
             if store_key:
                 yield from engine.tasks.send_store_key(link_data)
+
+        log.info("Link stored.")
 
 def __key_callback(keys, idx, key):
     key_len = len(key)
