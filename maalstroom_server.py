@@ -223,7 +223,7 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
 
                 privatekey = rsakey.RsaKey(privdata=privatekey)
 
-                path = form["path"].value
+                path = form["path"].value.encode()
                 version = form["version"].value
                 if not version:
                     version = 0
