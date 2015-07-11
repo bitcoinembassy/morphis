@@ -364,14 +364,14 @@ def _send_get_data(data_key, significant_bits, path, data_rw):
 
             data_key = ct_data_rw.data_key
 
-            if log.isEnabledFor(logging.INFO):
-                log.info("Found key=[{}].".format(mbase32.encode(data_key)))
-
             if not data_key:
                 data_rw.data = b"Key Not Found"
                 data_rw.version = -1
                 data_rw.data_queue.put(None)
                 return
+
+            if log.isEnabledFor(logging.INFO):
+                log.info("Found key=[{}].".format(mbase32.encode(data_key)))
 
             data_rw.data_key = bytes(data_key)
             data_rw.data_queue.put(None)
