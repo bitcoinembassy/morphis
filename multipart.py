@@ -412,6 +412,8 @@ def store_data(engine, data, privatekey=None, path=None, version=None,\
         def key_callback(key):
             nonlocal root_block_key
             root_block_key = key
+    else:
+        store_link = False
 
     if data_len <= mnnode.MAX_DATA_BLOCK_SIZE:
         if log.isEnabledFor(logging.INFO):
