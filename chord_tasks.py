@@ -682,6 +682,11 @@ class ChordTasks(object):
                         # Then this immediate Peer is not an open tunnel and we
                         # will have to start a task to process its DataStored
                         # message.
+                        if tun_meta.jobs is None:
+                            tun_meta.jobs = 1
+                        else:
+                            tun_meta.jobs += 1
+
                         asyncio.async(\
                             self._wait_for_data_stored(\
                                 data_mode, row, tun_meta, query_cntr,\
@@ -1188,6 +1193,7 @@ class ChordTasks(object):
                     # Peer (or possibly tunnel).
                     log.info("Data in response did not match request"\
                         " key.")
+                    tun_meta.jobs -= 1
                     query_cntr.value -= 1
                     assert not query_cntr.value
                     done_all.set()
@@ -1199,9 +1205,12 @@ class ChordTasks(object):
 
             break
 
-        query_cntr.value -= 1
-        if not query_cntr.value:
-            done_all.set()
+        if tun_meta.jobs:
+            assert tun_meta.jobs == 1
+            tun_meta.jobs -= 1
+            query_cntr.value -= 1
+            if not query_cntr.value:
+                done_all.set()
 
     @asyncio.coroutine
     def process_find_node_request(self, fnmsg, fndata, peer, queue, local_cid):
