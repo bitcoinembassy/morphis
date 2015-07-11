@@ -267,7 +267,7 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
 
         if data_rw.data_key:
             enckey = mbase32.encode(data_rw.data_key)
-            if path:
+            if privatekey and path:
                 url = "morphis://{}/{}".format(enckey, path.decode("UTF-8"))
             else:
                 url = "morphis://{}".format(enckey)
