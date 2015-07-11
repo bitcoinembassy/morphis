@@ -287,8 +287,8 @@ class ChordTasks(object):
             self, data, privatekey, path=None, version=None,\
             key_callback=None):
 
-        assert not path or type(path) is bytes
-        assert not version or type(version) is int
+        assert not path or type(path) is bytes, type(path)
+        assert not version or type(version) is int, type(version)
 
         public_key_bytes = privatekey.asbytes() # asbytes=public key.
 
