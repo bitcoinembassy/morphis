@@ -253,21 +253,10 @@ class ChordTasks(object):
         return storing_nodes
 
     @asyncio.coroutine
-    def send_store_updateable_key_key(self, data, privatekey, path=None,\
-            key_callback=None):
-
-        assert not path or type(path) is bytes
-
+    def send_store_updateable_key_key(self, privatekey, key_callback=None):
         public_key_bytes = privatekey.asbytes() # asbytes=public key.
 
-        if path:
-            key_hash = enc.generate_ID(public_key_bytes)
-            path_hash = enc.generate_ID(path)
-            data_key = key_hash + path_hash
-        else:
-            data_key = public_key_bytes
-
-        yield from self.send_store_key(data_key, key_callback)
+        yield from self.send_store_key(public_key_bytes, key_callback)
 
     @asyncio.coroutine
     def send_store_data(self, data, key_callback=None):
