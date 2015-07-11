@@ -403,7 +403,7 @@ def store_data(engine, data, privatekey=None, path=None, version=None,\
 
     data_len = len(data)
 
-    if data_len <= mnnode.MAX_DATA_BLOCK_SIZE:
+    if data_len <= mnnode.MAX_DATA_BLOCK_SIZE and not mime_type:
         if log.isEnabledFor(logging.INFO):
             log.info("Data fits in one block, performing simple store.")
 
@@ -428,29 +428,40 @@ def store_data(engine, data, privatekey=None, path=None, version=None,\
     if log.isEnabledFor(logging.INFO):
         log.info("Storing multipart.")
 
-    if privatekey:
+    if privatekey or mime_type:
+        store_link = True
+
         root_block_key = None
-        def new_key_callback(key):
+        orig_key_callback = key_callback
+        def key_callback(key):
             nonlocal root_block_key
             root_block_key = key
+    else:
+        store_link = False
 
-        yield from\
-            _store_data(engine, data, new_key_callback, False, concurrency)
+    yield from\
+        _store_data_multipart(engine, data, key_callback,\
+            store_key and not store_link, concurrency)
 
+    if store_link:
         block = LinkBlock()
         block.mime_type = mime_type
         block.destination = root_block_key
         link_data = block.encode()
 
-        yield from engine.tasks.send_store_updateable_key(\
-            link_data, privatekey, path, version, key_callback)
+        if privatekey:
+            yield from engine.tasks.send_store_updateable_key(\
+                link_data, privatekey, path, version, orig_key_callback)
 
-        if store_key:
-            yield from engine.tasks.send_store_updateable_key_key(\
-                data, privatekey, path)
-    else:
-        yield from\
-            _store_data(engine, data, key_callback, store_key, concurrency)
+            if store_key:
+                yield from\
+                    engine.tasks.send_store_updateable_key_key(privatekey)
+        else:
+            yield from\
+                engine.tasks.send_store_data(link_data, orig_key_callback)
+
+            if store_key:
+                yield from engine.tasks.send_store_key(link_data)
 
 def __key_callback(keys, idx, key):
     key_len = len(key)
@@ -459,7 +470,7 @@ def __key_callback(keys, idx, key):
     keys[idx:idx+key_len] = key
 
 @asyncio.coroutine
-def _store_data(engine, data, key_callback, store_key, concurrency):
+def _store_data_multipart(engine, data, key_callback, store_key, concurrency):
     depth = 1
     task_semaphore = asyncio.Semaphore(concurrency)
 
