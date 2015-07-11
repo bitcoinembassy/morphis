@@ -315,10 +315,11 @@ class HashTreeFetch(object):
 ## Functions:
 
 @asyncio.coroutine
-def get_data_buffered(engine, data_key, retry_seconds=30, concurrency=64):
+def get_data_buffered(engine, data_key, path=None, retry_seconds=30,\
+        concurrency=64, max_link_depth=1):
     cb = BufferingDataCallback()
 
-    r = yield from get_data(engine, data_key, cb, ordered=True,\
+    r = yield from get_data(engine, data_key, path, cb, ordered=True,\
             retry_seconds=retry_seconds, concurrency=concurrency)
 
     if not r:
@@ -337,11 +338,12 @@ def get_data_buffered(engine, data_key, retry_seconds=30, concurrency=64):
     return cb.buf, cb.version
 
 @asyncio.coroutine
-def get_data(engine, data_key, data_callback, ordered=False, positions=None,\
-        retry_seconds=30, concurrency=64, max_link_depth=1):
-    assert isinstance(data_callback, DataCallback)
+def get_data(engine, data_key, data_callback, path=None, ordered=False,\
+        positions=None, retry_seconds=30, concurrency=64, max_link_depth=1):
+    assert not path or type(path) is bytes, type(path)
+    assert isinstance(data_callback, DataCallback), type(data_callback)
 
-    data_rw = yield from engine.tasks.send_get_data(data_key)
+    data_rw = yield from engine.tasks.send_get_data(data_key, path)
     data = data_rw.data
 
     if not data:

@@ -194,16 +194,23 @@ class ChordTasks(object):
         return conn_nodes, bool(new_nodes)
 
     @asyncio.coroutine
-    def send_get_data(self, data_key):
+    def send_get_data(self, data_key, path=None):
         assert type(data_key) in (bytes, bytearray)\
             and len(data_key) == chord.NODE_ID_BYTES,\
             "type(data_key)=[{}], len={}."\
                 .format(type(data_key), len(data_key))
 
+        if path:
+            path_hash = enc.generate_ID(path)
+            data_key = enc.generate_ID(data_key + path_hash)
+        else:
+            path_hash = None
+
         data_id = enc.generate_ID(data_key)
 
         data_rw = yield from\
-            self.send_find_node(data_id, for_data=True, data_key=data_key)
+            self.send_find_node(data_id, for_data=True, data_key=data_key,\
+                path_hash=path_hash)
 
         return data_rw
 
@@ -326,7 +333,7 @@ class ChordTasks(object):
 
     @asyncio.coroutine
     def send_find_node(self, node_id, significant_bits=None, input_trie=None,\
-            for_data=False, data_msg=None, data_key=None):
+            for_data=False, data_msg=None, data_key=None, path_hash=None):
         "Returns found nodes sorted by closets. If for_data is True then"\
         " this is really {get/store}_data instead of find_node. If data_msg"\
         " is None than it is get_data and the data is returned. Store data"\
@@ -423,6 +430,9 @@ class ChordTasks(object):
                 data_rw.pubkey = data_msg.pubkey
             if data_msg.path_hash:
                 data_rw.path_hash = data_msg.path_hash
+        else:
+            if path_hash:
+                data_rw.path_hash = path_hash
 
         for depth in range(1, maximum_depth):
             direct_peers_lower = 0

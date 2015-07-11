@@ -34,6 +34,7 @@ class DataResponseWrapper(object):
         self.data = None
         self.size = None
         self.data_key = None
+        self.path = None
         self.version = None
 
         self.is_done = Event()
@@ -110,6 +111,15 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
 
         significant_bits = None
 
+        # At this point we assume it is a key URL.
+
+        path_sep_idx = rpath.find('/')
+        if path_sep_idx != -1:
+            path = rpath[path_sep_idx+1:].encode()
+            rpath = rpath[:path_sep_idx]
+        else:
+            path = None
+
         try:
             data_key, significant_bits = decode_key(rpath)
         except:
@@ -128,7 +138,7 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
 
         node.loop.call_soon_threadsafe(\
             asyncio.async,\
-            _send_get_data(data_key, significant_bits, data_rw))
+            _send_get_data(data_key, significant_bits, path, data_rw))
 
         data = data_rw.data_queue.get()
 
@@ -136,12 +146,17 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
             if data_rw.data_key:
                 key = mbase32.encode(data_rw.data_key)
 
-                message = ("<a href=\"morphis://{}\">{}</a>\n{}"\
-                    .format(key, key, key))\
+                if path:
+                    url = "morphis://{}/{}".format(key, path.decode("UTF-8"))
+                else:
+                    url = "morphis://{}".format(key)
+
+                message = ("<a href=\"{}\">{}</a>\n{}"\
+                    .format(url, url, key))\
                         .encode()
 
                 self.send_response(301)
-                self.send_header("Location", "morphis://{}".format(key))
+                self.send_header("Location", url)
                 self.send_header("Content-Type", "text/html")
                 self.send_header("Content-Length", len(message))
                 self.end_headers()
@@ -323,7 +338,12 @@ class Downloader(multipart.DataCallback):
         self.data_rw.data_queue.put(data)
 
 @asyncio.coroutine
-def _send_get_data(data_key, significant_bits, data_rw):
+def _send_get_data(data_key, significant_bits, path, data_rw):
+    if log.isEnabledFor(logging.DEBUG):
+        log.debug(\
+            "Sending GetData: key=[{}], significant_bits=[{}], path=[{}]."\
+                .format(mbase32.encode(data_key), significant_bits, path))
+
     try:
         if significant_bits:
             future = asyncio.async(\
@@ -361,7 +381,8 @@ def _send_get_data(data_key, significant_bits, data_rw):
         data_callback = Downloader(data_rw)
 
         r = yield from multipart.get_data(\
-                node.chord_engine, data_key, data_callback, True)
+                node.chord_engine, data_key, data_callback, path=path,
+                ordered=True)
 
         if r is False:
             raise asyncio.TimeoutError()
