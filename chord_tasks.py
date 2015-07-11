@@ -1973,10 +1973,10 @@ class ChordTasks(object):
                 if pubkey:
                     data_block.version = dmsg.version
                     data_block.signature = dmsg.signature
-                    if dmsg.path_hash == b'':
-                        a, b = enc.encrypt_data_block(dmsg.pubkey, data_key)
-                        data_block.epubkey = a + b
-                        data_block.pubkeylen = len(dmsg.pubkey)
+
+                    a, b = enc.encrypt_data_block(dmsg.pubkey, data_key)
+                    data_block.epubkey = a + b
+                    data_block.pubkeylen = len(dmsg.pubkey)
 
                 data_block.original_size = original_size
                 data_block.insert_timestamp = datetime.today()
