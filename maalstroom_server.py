@@ -24,7 +24,7 @@ port = 4251
 node = None
 server = None
 
-home_page_content = [b'<html><head><title>Morphis</title></head><body><a href="morphis://3syweaeb7xwm4q3hxfp9w4nynhcnuob6r1mhj19ntu4gikjr7nhypezti4t1kacp4eyy3hcbxdbm4ria5bayb4rrfsafkscbik7c5ue/">Morphis Homepage</a><br/><br/><a href="morphis://upload">Upload</a><br/></body></html>', None]
+home_page_content = [b'<html><head><title>Morphis</title></head><body><p><a href="morphis://3syweaeb7xwm4q3hxfp9w4nynhcnuob6r1mhj19ntu4gikjr7nhypezti4t1kacp4eyy3hcbxdbm4ria5bayb4rrfsafkscbik7c5ue/">Morphis Homepage</a><br/><a href="morphis://3syweaeb7xwm4q3hxfp9w4nynhcnuob6r1mhj19ntu4gikjr7nhypezti4t1kacp4eyy3hcbxdbm4ria5bayb4rrfsafkscbik7c5ue/firefox_plugin">Morphis Firefox Plugin</a><br/></p><a href="morphis://upload">Upload</a><br/></body></html>', None]
 
 upload_page_content = None
 static_upload_page_content = [None, None]
