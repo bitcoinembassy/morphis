@@ -301,13 +301,13 @@ class ChordTasks(object):
 
         data_key = enc.generate_ID(public_key_bytes)
 
+        key_callback(data_key)
+
         if path:
             path_hash = enc.generate_ID(path)
             data_key = enc.generate_ID(data_key + path_hash)
         else:
             path_hash = b""
-
-        key_callback(data_key)
 
         data_id = enc.generate_ID(data_key)
 

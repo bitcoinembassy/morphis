@@ -11,7 +11,7 @@ from threading import Event
 import base58
 import chord
 import enc
-from mutil import hex_string, decode_key
+from mutil import decode_key
 import rsakey
 import mbase32
 import multipart
@@ -263,9 +263,13 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
         data_rw.is_done.wait()
 
         if data_rw.data_key:
-            hex_key = hex_string(data_rw.data_key)
-            message = "<a href=\"morphis://{}\">perma link</a>\n{}"\
-                .format(mbase32.encode(data_rw.data_key), hex_key)
+            enckey = mbase32.encode(data_rw.data_key)
+            if path:
+                url = "morphis://{}/{}".format(enckey, path.decode("UTF-8"))
+            else:
+                url = "morphis://{}".format(enckey)
+
+            message = '<a href="{}">perma link</a>'.format(url)
 
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
