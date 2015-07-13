@@ -1359,3 +1359,50 @@ def connectTaskSecure(protocol, server_mode):
 #        protocol.close()
 
     return True
+
+class ConnectionHandler(object):
+    def connection_made(self, protocol):
+        pass
+
+    def error_recieved(self, protocol, exc):
+        pass
+
+    def connection_lost(self, protocol, exc):
+        pass
+
+    @asyncio.coroutine
+    def peer_disconnected(self, protocol, msg):
+        pass
+
+    @asyncio.coroutine
+    def peer_authenticated(self, protocol):
+        pass
+
+    @asyncio.coroutine
+    def connection_ready(self, protocol):
+        pass
+
+class ChannelHandler(object):
+    @asyncio.coroutine
+    def request_open_channel(self, protocol, message):
+        pass
+
+    @asyncio.coroutine
+    def channel_open_failed(self, protocol, msg):
+        pass
+
+    @asyncio.coroutine
+    def channel_opened(self, protocol, channel_type, local_cid, queue):
+        pass
+
+    @asyncio.coroutine
+    def channel_closed(self, protocol, local_cid):
+        pass
+
+    @asyncio.coroutine
+    def channel_request(self, protocol, msg):
+        pass
+
+    @asyncio.coroutine
+    def channel_data(self, protocol, local_cid, data):
+        pass
