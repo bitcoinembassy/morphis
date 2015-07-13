@@ -477,14 +477,17 @@ class SshProtocol(asyncio.Protocol):
                 or t == mnetpacket.SSH_MSG_CHANNEL_EXTENDED_DATA:
             msg = None
 
+            remote_cid = None
             if self._implicit_channels_enabled:
                 if t == mnetpacket.SSH_MSG_CHANNEL_EXTENDED_DATA:
                     msg = mnetpacket.SshChannelExtendedDataMessage(packet)
                     if msg.data_type_code != 0xFE000000:
                         raise SshException()
 
+                    remote_cid = msg.recipient_channel
+
                     msg.recipient_channel =\
-                        self._reverse_channel_map[msg.recipient_channel]
+                        self._reverse_channel_map[remote_cid]
 
                     if msg.recipient_channel is None:
                         log.info("Received data for closed implicit channel;"\
@@ -501,7 +504,8 @@ class SshProtocol(asyncio.Protocol):
             log.info("P: Received CHANNEL_DATA recipient_channel=[{}]."\
                 .format(msg.recipient_channel))
 
-            remote_cid = self._channel_map[msg.recipient_channel]
+            if remote_cid is None:
+                remote_cid = self._channel_map[msg.recipient_channel]
             if remote_cid is None:
                 raise SshException(\
                     "Received data for unmapped channel.")
