@@ -417,8 +417,9 @@ class ChordEngine():
 
     @asyncio.coroutine
     def _connect_peer(self, dbpeer):
-        log.info("Connecting to peer (id={}, addr=[{}]).".format(dbpeer.id,\
-            dbpeer.address))
+        if log.isEnabledFor(logging.INFO):
+            log.info("Connecting to peer (id={}, addr=[{}])."\
+                .format(dbpeer.id, dbpeer.address))
 
         host, port = dbpeer.address.split(':')
 
