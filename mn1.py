@@ -416,18 +416,38 @@ class SshProtocol(asyncio.Protocol):
             if not packet:
                 return
 
-            m = mnetpacket.SshPacket(None, packet)
+            yield from self._process_ssh_packet(packet)
 
-            t = m.packet_type
-            log.info("Received packet, type=[{}].".format(t))
+    def _fix_implicit_msg(self, msg):
+        "Returns remote_cid."
 
-            yield from self._process_ssh_packet(t, packet)
+        assert self._implicit_channels_enabled
+
+        remote_cid = msg.recipient_channel
+
+        msg.recipient_channel =\
+            self._reverse_channel_map[remote_cid]
+
+        if msg.recipient_channel is None:
+            log.info("Received data for closed implicit channel;"\
+                " ignoring.")
+            return None
+
+        return remote_cid
 
     @asyncio.coroutine
     def _process_ssh_packet(self, t, packet):
+        t = mnetpacket.SshPacket.parse_type(packet)
+
+        if log.isEnabledFor(logging.INFO):
+            log.info("Received packet, type=[{}].".format(t))
+
         if t == mnetpacket.SSH_MSG_CHANNEL_OPEN:
             msg = mnetpacket.SshChannelOpenMessage(packet)
-            log.info("P: Received CHANNEL_OPEN: channel_type=[{}], sender_channel=[{}].".format(msg.channel_type, msg.sender_channel))
+            if log.isEnabledFor(logging.INFO):
+                log.info("P: Received CHANNEL_OPEN: channel_type=[{}],"\
+                    " sender_channel=[{}]."\
+                        .format(msg.channel_type, msg.sender_channel))
 
             if self._implicit_channels_enabled:
                 if msg.data_packet is None:
@@ -510,39 +530,27 @@ class SshProtocol(asyncio.Protocol):
                 yield from\
                     self.channel_handler.channel_open_failed(self, msg)
 
-        elif t == mnetpacket.SSH_MSG_CHANNEL_DATA\
-                or t == mnetpacket.SSH_MSG_CHANNEL_EXTENDED_DATA:
-            msg = None
+        elif t == mnetpacket.SSH_MSG_CHANNEL_IMPLICIT_WRAPPER:
+            msg = mnetpacket.SshChannelImplicitWrapper(packet, offset)
 
-            remote_cid = None
-            if self._implicit_channels_enabled:
-                if t == mnetpacket.SSH_MSG_CHANNEL_EXTENDED_DATA:
-                    msg = mnetpacket.SshChannelExtendedDataMessage(packet)
-                    if msg.data_type_code != 0xFE000000:
-                        raise SshException()
+            offset += mnetpacket.SshChannelImplicitWrapper.data_offset
 
-                    remote_cid = msg.recipient_channel
+            packet_type = mnetpacket.SshPacket.parse_type(packet, offset)
 
-                    msg.recipient_channel =\
-                        self._reverse_channel_map[remote_cid]
+            self._process_ssh_packet(packet_type, packet, offset)
+        elif t == mnetpacket.SSH_MSG_CHANNEL_EXTENDED_DATA:
+            raise SshException("Unimplemented.")
+        elif t == mnetpacket.SSH_MSG_CHANNEL_DATA:
+            msg = mnetpacket.SshChannelDataMessage(packet, offset)
 
-                    if msg.recipient_channel is None:
-                        log.info("Received data for closed implicit channel;"\
-                            " ignoring.")
-                        return
-                else:
-                    msg = mnetpacket.SshChannelDataMessage(packet)
+            if offset:
+                remote_cid = self._fix_implicit_msg(msg)
             else:
-                if t == mnetpacket.SSH_MSG_CHANNEL_EXTENDED_DATA:
-                    raise SshException()
-
-                msg = mnetpacket.SshChannelDataMessage(packet)
+                remote_cid = self._channel_map[msg.recipient_channel]
 
             log.info("P: Received CHANNEL_DATA recipient_channel=[{}]."\
                 .format(msg.recipient_channel))
 
-            if remote_cid is None:
-                remote_cid = self._channel_map[msg.recipient_channel]
             if remote_cid is None:
                 raise SshException(\
                     "Received data for unmapped channel.")
@@ -583,13 +591,18 @@ class SshProtocol(asyncio.Protocol):
                         self, local_cid)
 
         elif t == mnetpacket.SSH_MSG_CHANNEL_REQUEST:
-            msg = mnetpacket.SshChannelRequest(packet)
+            msg = mnetpacket.SshChannelRequest(packet, offset)
+
+            if offset:
+                self._fix_implicit_msg(msg)
+
             if log.isEnabledFor(logging.INFO):
                 log.info("Received SSH_MSG_CHANNEL_REQUEST:"\
                 " recipient_channel=[{}], request_type=[{}],"\
                 " want_reply=[{}]."\
                     .format(msg.recipient_channel, msg.request_type,\
                         msg.want_reply))
+
             yield from self.channel_handler.channel_request(self, msg)
         else:
             log.warning("Unhandled packet of type [{}].".format(t))
@@ -985,8 +998,8 @@ class SshProtocol(asyncio.Protocol):
                     self.cbuf = newbuf
 
                 if self.waitingForNewKeys:
-                    tp = mnetpacket.SshPacket(None, payload)
-                    if tp.packet_type == mnetpacket.SSH_MSG_NEWKEYS:
+                    packet_type = mnetpacket.SshPacket.parse_type(payload)
+                    if packet_type == mnetpacket.SSH_MSG_NEWKEYS:
                         if self.server_mode:
                             self.init_inbound_encryption()
                         else:
@@ -1193,9 +1206,9 @@ def connectTaskSecure(protocol, server_mode):
     if log.isEnabledFor(logging.DEBUG):
         log.debug("X: Received packet [{}].".format(hex_dump(packet)))
 
-    pobj = mnetpacket.SshPacket(None, packet)
-    packet_type = pobj.packet_type
-    log.info("packet_type=[{}].".format(packet_type))
+    if log.isEnabledFor(logging.INFO):
+        packet_type = mnetpacket.SshPacket.parse_type(packet)
+        log.info("packet_type=[{}].".format(packet_type))
 
     if packet_type != 20:
         log.warning("Peer sent unexpected packet_type[{}], disconnecting.".format(packet_type))
@@ -1207,7 +1220,8 @@ def connectTaskSecure(protocol, server_mode):
     pobj = mnetpacket.SshKexInitMessage(packet)
     if log.isEnabledFor(logging.DEBUG):
         log.debug("cookie=[{}].".format(pobj.cookie))
-    log.info("keyExchangeAlgorithms=[{}].".format(pobj.kex_algorithms))
+    if log.isEnabledFor(logging.INFO):
+        log.info("keyExchangeAlgorithms=[{}].".format(pobj.kex_algorithms))
 
     protocol.waitingForNewKeys = True
 

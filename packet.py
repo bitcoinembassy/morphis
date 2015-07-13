@@ -36,16 +36,16 @@ SSH_MSG_CHANNEL_REQUEST = 98
 SSH_MSG_CHANNEL_SUCCESS = 99
 SSH_MSG_CHANNEL_FAILURE = 100
 
-SSH_MSG_CHANNEL_IMPLICIT_REQUEST = 200
+SSH_MSG_CHANNEL_IMPLICIT_WRAPPER = 200
 
 log = logging.getLogger(__name__)
 
 class SshPacket():
     @staticmethod
-    def parse_type(buf):
-        return struct.unpack("B", buf[0:1])[0]
+    def parse_type(buf, offset=0):
+        return struct.unpack_from("B", buf, offset)[0]
 
-    def __init__(self, packet_type=None, buf=None):
+    def __init__(self, packet_type=None, buf=None, offset=0):
         self.buf = buf
         self.packet_type = packet_type
 
@@ -54,14 +54,20 @@ class SshPacket():
 
         self._packet_type = packet_type # Expected packet_type.
 
+        self.offset = offset
+
         self.parse();
 
     def parse(self):
-        self.packet_type = struct.unpack("B", self.buf[0:1])[0]
+        offset = self.offset
+
+        self.packet_type = struct.unpack_from("B", self.buf, offset)[0]
 
         if self._packet_type and self.packet_type != self._packet_type:
             raise Exception("Expecting packet type [{}] but got [{}]."\
                 .format(self._packet_type, self.packet_type))
+
+        return offset + 1
 
     def encode(self):
         nbuf = bytearray()
@@ -477,17 +483,16 @@ class SshChannelCloseMessage(SshPacket):
         return nbuf
 
 class SshChannelDataMessage(SshPacket):
-    def __init__(self, buf = None):
+    def __init__(self, buf=None, offset=0):
         self.recipient_channel = None
         self.data = None
 
-        super().__init__(SSH_MSG_CHANNEL_DATA, buf)
+        super().__init__(SSH_MSG_CHANNEL_DATA, buf, offset)
 
     def parse(self):
-        super().parse()
+        i = super().parse()
 
-        i = 1
-        self.recipient_channel = struct.unpack(">L", self.buf[i:i+4])[0]
+        self.recipient_channel = struct.unpack_from(">L", self.buf, i)[0]
         i += 4
         self.data = self.buf[i:]
 
@@ -502,28 +507,29 @@ class SshChannelDataMessage(SshPacket):
         return nbuf
 
 class SshChannelExtendedDataMessage(SshPacket):
-    def __init__(self, buf = None):
+    def __init__(self, buf=None, offset=0):
         self.recipient_channel = None
         self.data_type_code = None
-        self.data = None
+        self.data_offset = None
 
-        super().__init__(SSH_MSG_CHANNEL_EXTENDED_DATA, buf)
+        super().__init__(SSH_MSG_CHANNEL_EXTENDED_DATA, buf, offset)
 
     def parse(self):
         super().parse()
 
         i = 1
-        self.recipient_channel = struct.unpack(">L", self.buf[i:i+4])[0]
+        self.recipient_channel = struct.unpack_from(">L", self.buf, i)[0]
         i += 4
-        self.data_type_code = struct.unpack(">L", self.buf[i:i+4])[0]
+        self.data_type_code = struct.unpack(">L", self.buf, i)[0]
         i += 4
-        self.data = self.buf[i:]
+        self.data_offset = i
 
     def encode(self):
         nbuf = super().encode()
 
         nbuf += struct.pack(">L", self.recipient_channel)
         nbuf += struct.pack(">L", self.data_type_code)
+        self.data_offset = len(nbuf)
         if self.data:
             # Allow data to be stored separately.
             nbuf += self.data
@@ -531,24 +537,24 @@ class SshChannelExtendedDataMessage(SshPacket):
         return nbuf
 
 class SshChannelRequest(SshPacket):
-    def __init__(self, buf = None):
+    def __init__(self, buf=None, offset=0):
         self.recipient_channel = None
         self.request_type = None
         self.want_reply = False
         self.payload = None
 
-        super().__init__(SSH_MSG_CHANNEL_REQUEST, buf)
+        super().__init__(SSH_MSG_CHANNEL_REQUEST, buf, offset)
 
     def parse(self):
-        super().parse()
+        i = super().parse()
 
-        i = 1
         self.recipient_channel = struct.unpack(">L", self.buf[i:i+4])[0]
         i += 4
         l, self.request_type = sshtype.parseString(self.buf[i:])
         i += l
         self.want_reply = struct.unpack("?", self.buf[i:i+1])[0]
         i += 1
+
         if i == len(self.buf):
             return
         self.payload = self.buf[i:]
@@ -565,5 +571,7 @@ class SshChannelRequest(SshPacket):
         return nbuf
 
 class SshChannelImplicitWrapper(SshPacket):
-    def __init__(self, buf=None):
-        super().__init__(SSH_MSG_CHANNEL_IMPLICIT_WRAPPER, buf)
+    data_offset = 1
+
+    def __init__(self, buf=None, offset=0):
+        super().__init__(SSH_MSG_CHANNEL_IMPLICIT_WRAPPER, buf, offset)
