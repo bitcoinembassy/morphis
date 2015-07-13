@@ -36,6 +36,8 @@ SSH_MSG_CHANNEL_REQUEST = 98
 SSH_MSG_CHANNEL_SUCCESS = 99
 SSH_MSG_CHANNEL_FAILURE = 100
 
+SSH_MSG_CHANNEL_IMPLICIT_REQUEST = 200
+
 log = logging.getLogger(__name__)
 
 class SshPacket():
@@ -561,3 +563,7 @@ class SshChannelRequest(SshPacket):
             nbuf += self.payload
 
         return nbuf
+
+class SshChannelImplicitWrapper(SshPacket):
+    def __init__(self, buf=None):
+        super().__init__(SSH_MSG_CHANNEL_IMPLICIT_WRAPPER, buf)

@@ -184,6 +184,43 @@ class SshProtocol(asyncio.Protocol):
 
         return local_cid
 
+    def _wrap_channel_message(self, remote_cid, msg):
+#        edmsg = mnetpacket.SshChannelExtendedDataMessage()
+#        edmsg.data_type_code = 0xFE000000 # Implicit channel msg.
+#        edmsg.recipient_channel = local_cid # We only know ours.
+        edmsg = mnetpacket.SshChannelImplicitWrapper()
+
+        if remote_cid is ChannelStatus.implicit_data_sent:
+            self.write_data((edmsg.encode(), msg.encode()))
+        else:
+            assert type(remote_cid) is mnetpacket.SshChannelOpenMessage
+
+            self._channel_map[local_cid] =\
+                ChannelStatus.implicit_data_sent
+
+            # Chain data message to end of open msg that was stored.
+            self.write_data(\
+                (remote_cid.encode(), edmsg.encode(), msg.encode()))
+
+    def send_channel_request(self, local_cid, request_type, want_reply=False,\
+            payload=None):
+        remote_cid = self._channel_map.get(local_cid)
+
+        msg = mnetpacket.SshChannelRequest()
+        msg.request_type = request_type
+        msg.want_reply = want_reply
+        msg.payload = payload
+
+        if self._implicit_channels_enabled:
+            if type(remote_cid) is not int:
+                msg.recipient_channel = local_cid
+                self._wrap_channel_message(remote_cid, msg)
+                return
+
+        msg.recipient_channel = remote_cid
+
+        self.write_channel_data(local_cid, msg.encode())
+
     @asyncio.coroutine
     def close_channel(self, local_cid):
         if log.isEnabledFor(logging.INFO):
@@ -796,26 +833,14 @@ class SshProtocol(asyncio.Protocol):
         if remote_cid is None:
             return False
 
+        msg = mnetpacket.SshChannelDataMessage()
+
         if self._implicit_channels_enabled:
             if type(remote_cid) is not int:
-                msg = mnetpacket.SshChannelExtendedDataMessage()
-                msg.data_type_code = 0xFE000000 # Implicit channel msg.
-                msg.recipient_channel = local_cid # We only know ours.
-
-                if remote_cid is ChannelStatus.implicit_data_sent:
-                    self.write_data((msg.encode(), data))
-                else:
-                    assert type(remote_cid) is mnetpacket.SshChannelOpenMessage
-
-                    self._channel_map[local_cid] =\
-                        ChannelStatus.implicit_data_sent
-
-                    # Chain data message to end of open msg that was stored.
-                    self.write_data((remote_cid.encode(), msg.encode(), data))
-
+                msg.recipient_channel = local_cid
+                self._wrap_channel_message(remote_cid, msg)
                 return True
 
-        msg = mnetpacket.SshChannelDataMessage()
         msg.recipient_channel = remote_cid
 
         self.write_data((msg.encode(), data))
