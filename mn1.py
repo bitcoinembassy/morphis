@@ -95,10 +95,10 @@ class SshProtocol(asyncio.Protocol):
 
         self._implicit_channels_enabled = False
 
-    def set_connection_handler(self, value):
+    def connection_handler(self, value):
         self.connection_handler = value
 
-    def set_channel_handler(self, value):
+    def channel_handler(self, value):
         self.channel_handler = value
 
     def get_transport(self):
