@@ -184,10 +184,9 @@ class SshProtocol(asyncio.Protocol):
 
         return local_cid
 
-    def _wrap_channel_message(self, remote_cid, msg):
-#        edmsg = mnetpacket.SshChannelExtendedDataMessage()
-#        edmsg.data_type_code = 0xFE000000 # Implicit channel msg.
-#        edmsg.recipient_channel = local_cid # We only know ours.
+    def _write_implicit_channel_data(self, local_cid, remote_cid, msg):
+        msg.recipient_channel = local_cid
+
         edmsg = mnetpacket.SshChannelImplicitWrapper()
 
         if remote_cid is ChannelStatus.implicit_data_sent:
@@ -213,8 +212,7 @@ class SshProtocol(asyncio.Protocol):
 
         if self._implicit_channels_enabled:
             if type(remote_cid) is not int:
-                msg.recipient_channel = local_cid
-                self._wrap_channel_message(remote_cid, msg)
+                self._write_implicit_channel_data(local_cid, remote_cid, msg)
                 return
 
         msg.recipient_channel = remote_cid
@@ -436,8 +434,8 @@ class SshProtocol(asyncio.Protocol):
         return remote_cid
 
     @asyncio.coroutine
-    def _process_ssh_packet(self, t, packet):
-        t = mnetpacket.SshPacket.parse_type(packet)
+    def _process_ssh_packet(self, packet, offset=0):
+        t = mnetpacket.SshPacket.parse_type(packet, offset)
 
         if log.isEnabledFor(logging.INFO):
             log.info("Received packet, type=[{}].".format(t))
@@ -474,9 +472,7 @@ class SshProtocol(asyncio.Protocol):
                     self, msg.channel_type, local_cid, queue)
 
                 if self._implicit_channels_enabled:
-                    yield from self._process_ssh_packet(\
-                        mnetpacket.SshPacket.parse_type(msg.data_packet),
-                        msg.data_packet)
+                    yield from self._process_ssh_packet(msg.data_packet)
             elif not self._implicit_channels_enabled:
                 self._open_channel_reject(msg)
 
@@ -535,9 +531,7 @@ class SshProtocol(asyncio.Protocol):
 
             offset += mnetpacket.SshChannelImplicitWrapper.data_offset
 
-            packet_type = mnetpacket.SshPacket.parse_type(packet, offset)
-
-            self._process_ssh_packet(packet_type, packet, offset)
+            yield from self._process_ssh_packet(packet, offset)
         elif t == mnetpacket.SSH_MSG_CHANNEL_EXTENDED_DATA:
             raise SshException("Unimplemented.")
         elif t == mnetpacket.SSH_MSG_CHANNEL_DATA:
@@ -850,8 +844,7 @@ class SshProtocol(asyncio.Protocol):
 
         if self._implicit_channels_enabled:
             if type(remote_cid) is not int:
-                msg.recipient_channel = local_cid
-                self._wrap_channel_message(remote_cid, msg)
+                self._write_implicit_channel_data(local_cid, remote_cid, msg)
                 return True
 
         msg.recipient_channel = remote_cid
@@ -1206,8 +1199,9 @@ def connectTaskSecure(protocol, server_mode):
     if log.isEnabledFor(logging.DEBUG):
         log.debug("X: Received packet [{}].".format(hex_dump(packet)))
 
+    packet_type = mnetpacket.SshPacket.parse_type(packet)
+
     if log.isEnabledFor(logging.INFO):
-        packet_type = mnetpacket.SshPacket.parse_type(packet)
         log.info("packet_type=[{}].".format(packet_type))
 
     if packet_type != 20:

@@ -564,7 +564,7 @@ class SshChannelRequest(SshPacket):
 
         nbuf += struct.pack(">L", self.recipient_channel)
         nbuf += sshtype.encodeString(self.request_type)
-        nbuf += struct.pack("?", self.first_kex_packet_follows)
+        nbuf += struct.pack("?", self.want_reply)
         if self.payload:
             nbuf += self.payload
 
