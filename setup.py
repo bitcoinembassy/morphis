@@ -5,6 +5,7 @@ modules = [\
     "asymkey",
     "bittrie",
     "chord_packet",
+    "dhgroup14",
     "enc",
     "llog",
     "mbase32",

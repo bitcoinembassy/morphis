@@ -12,6 +12,7 @@ import hmac
 
 import packet as mnetpacket
 import kex
+import kexdhgroup14sha1
 import rsakey
 import sshtype
 from sshexception import SshException
@@ -1228,9 +1229,12 @@ def connectTaskSecure(protocol, server_mode):
 
     protocol.waitingForNewKeys = True
 
-    ke = kex.KexGroup14(protocol)
-    log.info("Calling start_kex()...")
-    r = yield from ke.do_kex()
+#    ke = kex.KexGroup14(protocol)
+#    log.info("Calling start_kex()...")
+#    r = yield from ke.do_kex()
+    ke = kexdhgroup14sha1.KexDhGroup14Sha1(protocol)
+    log.info("Calling kex->run()...")
+    r = yield from ke.run()
 
     if not r:
         # Client is rejected for some reason by higher level.
