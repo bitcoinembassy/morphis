@@ -58,6 +58,8 @@ class Client(object):
         self.cid = cid
         self.queue = queue
 
+        return True
+
     def _create_client_protocol(self):
         ph = mn1.SshClientProtocol(self.loop)
         ph.client_key = self.client_key
