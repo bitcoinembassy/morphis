@@ -70,7 +70,12 @@ def __main():
 
     # Connect a Morphis Client (lightweight Node) instance.
     mc = client.Client(loop, client_key=client_key, address=args.address)
-    yield from mc.connect()
+    r = yield from mc.connect()
+
+    if not r:
+        log.warning("Connection failed; exiting.")
+        loop.stop()
+        return
 
     log.info("Processing command requests...")
 
