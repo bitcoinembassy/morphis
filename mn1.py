@@ -184,13 +184,17 @@ class SshProtocol(asyncio.Protocol):
 
         return local_cid
 
-    def _write_implicit_channel_data(self, local_cid, remote_cid, msg):
+    def _write_implicit_channel_data(self, local_cid, remote_cid, msg,\
+            data=None):
         msg.recipient_channel = local_cid
 
         edmsg = mnetpacket.SshChannelImplicitWrapper()
 
         if remote_cid is ChannelStatus.implicit_data_sent:
-            self.write_data((edmsg.encode(), msg.encode()))
+            if data:
+                self.write_data((edmsg.encode(), msg.encode(), data))
+            else:
+                self.write_data((edmsg.encode(), msg.encode()))
         else:
             assert type(remote_cid) is mnetpacket.SshChannelOpenMessage
 
@@ -198,8 +202,12 @@ class SshProtocol(asyncio.Protocol):
                 ChannelStatus.implicit_data_sent
 
             # Chain data message to end of open msg that was stored.
-            self.write_data(\
-                (remote_cid.encode(), edmsg.encode(), msg.encode()))
+            if data:
+                self.write_data(\
+                    (remote_cid.encode(), edmsg.encode(), msg.encode(), data))
+            else:
+                self.write_data(\
+                    (remote_cid.encode(), edmsg.encode(), msg.encode()))
 
     def send_channel_request(self, local_cid, request_type, want_reply=False,\
             payload=None):
@@ -844,7 +852,8 @@ class SshProtocol(asyncio.Protocol):
 
         if self._implicit_channels_enabled:
             if type(remote_cid) is not int:
-                self._write_implicit_channel_data(local_cid, remote_cid, msg)
+                self._write_implicit_channel_data(\
+                    local_cid, remote_cid, msg, data)
                 return True
 
         msg.recipient_channel = remote_cid
