@@ -1,7 +1,6 @@
 from bisect import bisect_left
 
 import mbase32
-import chord
 
 accept_chars = b" !\"#$%&`()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_'abcdefghijklmnopqrstuvwxyz{|}~"
 
@@ -96,7 +95,7 @@ def page_query(query, page_size=10):
         offset += page_size
 
 def decode_key(encoded):
-    assert chord.NODE_ID_BITS == 512
+    #assert chord.NODE_ID_BITS == 512
 
     significant_bits = None
 

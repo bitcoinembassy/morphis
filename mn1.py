@@ -95,10 +95,10 @@ class SshProtocol(asyncio.Protocol):
 
         self._implicit_channels_enabled = False
 
-    def set_connection_handler(self, value):
+    def connection_handler(self, value):
         self.connection_handler = value
 
-    def set_channel_handler(self, value):
+    def channel_handler(self, value):
         self.channel_handler = value
 
     def get_transport(self):
@@ -183,6 +183,49 @@ class SshProtocol(asyncio.Protocol):
         self._channel_map[local_cid] = ChannelStatus.opening
 
         return local_cid
+
+    def _write_implicit_channel_data(self, local_cid, remote_cid, msg,\
+            data=None):
+        msg.recipient_channel = local_cid
+
+        edmsg = mnetpacket.SshChannelImplicitWrapper()
+
+        if remote_cid is ChannelStatus.implicit_data_sent:
+            if data:
+                self.write_data((edmsg.encode(), msg.encode(), data))
+            else:
+                self.write_data((edmsg.encode(), msg.encode()))
+        else:
+            assert type(remote_cid) is mnetpacket.SshChannelOpenMessage
+
+            self._channel_map[local_cid] =\
+                ChannelStatus.implicit_data_sent
+
+            # Chain data message to end of open msg that was stored.
+            if data:
+                self.write_data(\
+                    (remote_cid.encode(), edmsg.encode(), msg.encode(), data))
+            else:
+                self.write_data(\
+                    (remote_cid.encode(), edmsg.encode(), msg.encode()))
+
+    def send_channel_request(self, local_cid, request_type, want_reply=False,\
+            payload=None):
+        remote_cid = self._channel_map.get(local_cid)
+
+        msg = mnetpacket.SshChannelRequest()
+        msg.request_type = request_type
+        msg.want_reply = want_reply
+        msg.payload = payload
+
+        if self._implicit_channels_enabled:
+            if type(remote_cid) is not int:
+                self._write_implicit_channel_data(local_cid, remote_cid, msg)
+                return
+
+        msg.recipient_channel = remote_cid
+
+        self.write_channel_data(local_cid, msg.encode())
 
     @asyncio.coroutine
     def close_channel(self, local_cid):
@@ -379,18 +422,38 @@ class SshProtocol(asyncio.Protocol):
             if not packet:
                 return
 
-            m = mnetpacket.SshPacket(None, packet)
+            yield from self._process_ssh_packet(packet)
 
-            t = m.packet_type
-            log.info("Received packet, type=[{}].".format(t))
+    def _fix_implicit_msg(self, msg):
+        "Returns remote_cid."
 
-            yield from self._process_ssh_packet(t, packet)
+        assert self._implicit_channels_enabled
+
+        remote_cid = msg.recipient_channel
+
+        msg.recipient_channel =\
+            self._reverse_channel_map[remote_cid]
+
+        if msg.recipient_channel is None:
+            log.info("Received data for closed implicit channel;"\
+                " ignoring.")
+            return None
+
+        return remote_cid
 
     @asyncio.coroutine
-    def _process_ssh_packet(self, t, packet):
+    def _process_ssh_packet(self, packet, offset=0):
+        t = mnetpacket.SshPacket.parse_type(packet, offset)
+
+        if log.isEnabledFor(logging.INFO):
+            log.info("Received packet, type=[{}].".format(t))
+
         if t == mnetpacket.SSH_MSG_CHANNEL_OPEN:
             msg = mnetpacket.SshChannelOpenMessage(packet)
-            log.info("P: Received CHANNEL_OPEN: channel_type=[{}], sender_channel=[{}].".format(msg.channel_type, msg.sender_channel))
+            if log.isEnabledFor(logging.INFO):
+                log.info("P: Received CHANNEL_OPEN: channel_type=[{}],"\
+                    " sender_channel=[{}]."\
+                        .format(msg.channel_type, msg.sender_channel))
 
             if self._implicit_channels_enabled:
                 if msg.data_packet is None:
@@ -417,9 +480,7 @@ class SshProtocol(asyncio.Protocol):
                     self, msg.channel_type, local_cid, queue)
 
                 if self._implicit_channels_enabled:
-                    yield from self._process_ssh_packet(\
-                        mnetpacket.SshPacket.parse_type(msg.data_packet),
-                        msg.data_packet)
+                    yield from self._process_ssh_packet(msg.data_packet)
             elif not self._implicit_channels_enabled:
                 self._open_channel_reject(msg)
 
@@ -473,35 +534,25 @@ class SshProtocol(asyncio.Protocol):
                 yield from\
                     self.channel_handler.channel_open_failed(self, msg)
 
-        elif t == mnetpacket.SSH_MSG_CHANNEL_DATA\
-                or t == mnetpacket.SSH_MSG_CHANNEL_EXTENDED_DATA:
-            msg = None
+        elif t == mnetpacket.SSH_MSG_CHANNEL_IMPLICIT_WRAPPER:
+            msg = mnetpacket.SshChannelImplicitWrapper(packet, offset)
 
-            if self._implicit_channels_enabled:
-                if t == mnetpacket.SSH_MSG_CHANNEL_EXTENDED_DATA:
-                    msg = mnetpacket.SshChannelExtendedDataMessage(packet)
-                    if msg.data_type_code != 0xFE000000:
-                        raise SshException()
+            offset += mnetpacket.SshChannelImplicitWrapper.data_offset
 
-                    msg.recipient_channel =\
-                        self._reverse_channel_map[msg.recipient_channel]
+            yield from self._process_ssh_packet(packet, offset)
+        elif t == mnetpacket.SSH_MSG_CHANNEL_EXTENDED_DATA:
+            raise SshException("Unimplemented.")
+        elif t == mnetpacket.SSH_MSG_CHANNEL_DATA:
+            msg = mnetpacket.SshChannelDataMessage(packet, offset)
 
-                    if msg.recipient_channel is None:
-                        log.info("Received data for closed implicit channel;"\
-                            " ignoring.")
-                        return
-                else:
-                    msg = mnetpacket.SshChannelDataMessage(packet)
+            if offset:
+                remote_cid = self._fix_implicit_msg(msg)
             else:
-                if t == mnetpacket.SSH_MSG_CHANNEL_EXTENDED_DATA:
-                    raise SshException()
-
-                msg = mnetpacket.SshChannelDataMessage(packet)
+                remote_cid = self._channel_map[msg.recipient_channel]
 
             log.info("P: Received CHANNEL_DATA recipient_channel=[{}]."\
                 .format(msg.recipient_channel))
 
-            remote_cid = self._channel_map[msg.recipient_channel]
             if remote_cid is None:
                 raise SshException(\
                     "Received data for unmapped channel.")
@@ -542,13 +593,18 @@ class SshProtocol(asyncio.Protocol):
                         self, local_cid)
 
         elif t == mnetpacket.SSH_MSG_CHANNEL_REQUEST:
-            msg = mnetpacket.SshChannelRequest(packet)
+            msg = mnetpacket.SshChannelRequest(packet, offset)
+
+            if offset:
+                self._fix_implicit_msg(msg)
+
             if log.isEnabledFor(logging.INFO):
                 log.info("Received SSH_MSG_CHANNEL_REQUEST:"\
                 " recipient_channel=[{}], request_type=[{}],"\
                 " want_reply=[{}]."\
                     .format(msg.recipient_channel, msg.request_type,\
                         msg.want_reply))
+
             yield from self.channel_handler.channel_request(self, msg)
         else:
             log.warning("Unhandled packet of type [{}].".format(t))
@@ -792,26 +848,14 @@ class SshProtocol(asyncio.Protocol):
         if remote_cid is None:
             return False
 
+        msg = mnetpacket.SshChannelDataMessage()
+
         if self._implicit_channels_enabled:
             if type(remote_cid) is not int:
-                msg = mnetpacket.SshChannelExtendedDataMessage()
-                msg.data_type_code = 0xFE000000 # Implicit channel msg.
-                msg.recipient_channel = local_cid # We only know ours.
-
-                if remote_cid is ChannelStatus.implicit_data_sent:
-                    self.write_data((msg.encode(), data))
-                else:
-                    assert type(remote_cid) is mnetpacket.SshChannelOpenMessage
-
-                    self._channel_map[local_cid] =\
-                        ChannelStatus.implicit_data_sent
-
-                    # Chain data message to end of open msg that was stored.
-                    self.write_data((remote_cid.encode(), msg.encode(), data))
-
+                self._write_implicit_channel_data(\
+                    local_cid, remote_cid, msg, data)
                 return True
 
-        msg = mnetpacket.SshChannelDataMessage()
         msg.recipient_channel = remote_cid
 
         self.write_data((msg.encode(), data))
@@ -956,8 +1000,8 @@ class SshProtocol(asyncio.Protocol):
                     self.cbuf = newbuf
 
                 if self.waitingForNewKeys:
-                    tp = mnetpacket.SshPacket(None, payload)
-                    if tp.packet_type == mnetpacket.SSH_MSG_NEWKEYS:
+                    packet_type = mnetpacket.SshPacket.parse_type(payload)
+                    if packet_type == mnetpacket.SSH_MSG_NEWKEYS:
                         if self.server_mode:
                             self.init_inbound_encryption()
                         else:
@@ -1164,9 +1208,10 @@ def connectTaskSecure(protocol, server_mode):
     if log.isEnabledFor(logging.DEBUG):
         log.debug("X: Received packet [{}].".format(hex_dump(packet)))
 
-    pobj = mnetpacket.SshPacket(None, packet)
-    packet_type = pobj.packet_type
-    log.info("packet_type=[{}].".format(packet_type))
+    packet_type = mnetpacket.SshPacket.parse_type(packet)
+
+    if log.isEnabledFor(logging.INFO):
+        log.info("packet_type=[{}].".format(packet_type))
 
     if packet_type != 20:
         log.warning("Peer sent unexpected packet_type[{}], disconnecting.".format(packet_type))
@@ -1178,7 +1223,8 @@ def connectTaskSecure(protocol, server_mode):
     pobj = mnetpacket.SshKexInitMessage(packet)
     if log.isEnabledFor(logging.DEBUG):
         log.debug("cookie=[{}].".format(pobj.cookie))
-    log.info("keyExchangeAlgorithms=[{}].".format(pobj.kex_algorithms))
+    if log.isEnabledFor(logging.INFO):
+        log.info("keyExchangeAlgorithms=[{}].".format(pobj.kex_algorithms))
 
     protocol.waitingForNewKeys = True
 
@@ -1359,3 +1405,50 @@ def connectTaskSecure(protocol, server_mode):
 #        protocol.close()
 
     return True
+
+class ConnectionHandler(object):
+    def connection_made(self, protocol):
+        pass
+
+    def error_recieved(self, protocol, exc):
+        pass
+
+    def connection_lost(self, protocol, exc):
+        pass
+
+    @asyncio.coroutine
+    def peer_disconnected(self, protocol, msg):
+        pass
+
+    @asyncio.coroutine
+    def peer_authenticated(self, protocol):
+        pass
+
+    @asyncio.coroutine
+    def connection_ready(self, protocol):
+        pass
+
+class ChannelHandler(object):
+    @asyncio.coroutine
+    def request_open_channel(self, protocol, message):
+        pass
+
+    @asyncio.coroutine
+    def channel_open_failed(self, protocol, msg):
+        pass
+
+    @asyncio.coroutine
+    def channel_opened(self, protocol, channel_type, local_cid, queue):
+        pass
+
+    @asyncio.coroutine
+    def channel_closed(self, protocol, local_cid):
+        pass
+
+    @asyncio.coroutine
+    def channel_request(self, protocol, msg):
+        pass
+
+    @asyncio.coroutine
+    def channel_data(self, protocol, local_cid, data):
+        pass

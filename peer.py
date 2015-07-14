@@ -46,8 +46,8 @@ class Peer():
     def protocol(self, value):
         self._protocol = value
 
-        self._protocol.set_channel_handler(self.channel_handler)
-        self._protocol.set_connection_handler(self.connection_handler)
+        self._protocol.channel_handler = self.channel_handler
+        self._protocol.connection_handler = self.connection_handler
 
     def ready(self):
         return self._protocol.status is mn1.Status.ready
