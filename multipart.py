@@ -176,6 +176,8 @@ class HashTreeFetch(object):
         self._task_cnt = 0
         self._tasks_done = asyncio.Event()
 
+        self._abort = False
+
     @asyncio.coroutine
     def fetch(self, root_block):
         self.data_callback.size(root_block.size)
@@ -187,6 +189,9 @@ class HashTreeFetch(object):
 
         yield from self._fetch_hash_tree_refs(buf, i, depth, 0)
 
+        if self._abort:
+            return False
+
         yield from self._tasks_done.wait()
 
         if self._failed:
@@ -196,6 +201,8 @@ class HashTreeFetch(object):
             while self._failed\
                     and ((datetime.today() - start) < delta):
                 yield from self._task_semaphore.acquire()
+                if self._abort:
+                    return False
                 self._schedule_retry()
 
             yield from self._tasks_done.wait()
@@ -231,9 +238,16 @@ class HashTreeFetch(object):
 
             if self._failed:
                 yield from self._task_semaphore.acquire()
+                if self._abort:
+                    #FIXME: Cancel all async started tasks.
+                    return
                 self._schedule_retry()
 
             yield from self._task_semaphore.acquire()
+            if self._abort:
+                #FIXME: Cancel all async started tasks.
+                return
+
             data_key = hash_tree_data[offset:end]
             asyncio.async(\
                 self.__fetch_hash_tree_ref(data_key, subdepth, position),\
@@ -247,7 +261,7 @@ class HashTreeFetch(object):
 
     def _schedule_retry(self):
         retry = random.choice(self._failed)
-        retry_depth, retry_position, data_key = retry
+        retry_depth, retry_position, data_key, tries = retry
 
         asyncio.async(\
             self.__fetch_hash_tree_ref(\
@@ -268,8 +282,29 @@ class HashTreeFetch(object):
         self._task_semaphore.release()
 
         if not data_rw.data:
-            if not retry:
-                self._failed.append((depth, position, data_key))
+            if retry:
+                retry[3] += 1 # Tries.
+
+                if retry[3] >= 5:
+                    if log.isEnabledFor(logging.INFO):
+                        log.info("Block id [{}] failed too much; aborting."\
+                            .format(mbase32.encode(data_key)))
+                    self._abort = True
+                    self._task_semaphore.release()
+                    self._tasks_done.set()
+                    return
+            else:
+                retry = [depth, position, data_key, 1]
+                self._failed.append(retry)
+
+            if log.isEnabledFor(logging.INFO):
+                log.info("Block id [{}] failed, retrying (tries=[{}])."\
+                    .format(mbase32.encode(data_key), retry[3]))
+
+            if self.ordered:
+                # This very fetch is probably blocking future ones so retry
+                # immediately!
+                self._schedule_retry()
         else:
             if retry:
                 del self._failed[retry]
@@ -292,6 +327,7 @@ class HashTreeFetch(object):
             assert self._task_cnt == 0
             self._tasks_done.set()
 
+    @asyncio.coroutine
     def __wait(self, position, waiter):
         entry = [position, waiter]
 
