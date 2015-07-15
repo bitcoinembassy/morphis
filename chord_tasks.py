@@ -1661,8 +1661,24 @@ class ChordTasks(object):
             log_dist, direction =\
                 self.engine.calc_log_distance(self.engine.node_id, data_id)
             if log_dist > chord.NODE_ID_BITS - 2:
+                # Too far.
                 return False, False
-            return True, False
+
+            # Check if we have this block.
+            def dbcall():
+                with self.engine.node.db.open_session() as sess:
+                    q = sess.query(func.count("*"))
+                    q = q.filter(DataBlock.data_id == data_id)
+
+                    if q.scalar() > 0:
+                        # We already have this block.
+                        return False
+
+                    return True
+
+            r = yield from self.loop.run_in_executor(None, dbcall)
+
+            return r, False
 
         if log.isEnabledFor(logging.DEBUG):
             log.debug("Datastore is full, checking if proposed block is"\
@@ -1680,8 +1696,15 @@ class ChordTasks(object):
         # in order to see if we want to store it.
         def dbcall():
             with self.engine.node.db.open_session() as sess:
-                # We don't worry about inaccuracy caused by padding for now.
+                # First check if we have this block already.
+                q = sess.query(func.count("*"))
+                q = q.filter(DataBlock.data_id == data_id)
 
+                if q.scalar() > 0:
+                    # We already have this block.
+                    return False
+
+                # We don't worry about inaccuracy caused by padding for now.
                 q = sess.query(DataBlock.original_size)\
                     .filter(DataBlock.distance > distance)\
                     .filter(DataBlock.original_size != 0)\
