@@ -6,13 +6,16 @@ from datetime import datetime
 import logging
 import queue as tqueue
 
+import base58
 import chord
 import db
 import enc
+import mbase32
 import mn1
 import multipart
 from mutil import hex_dump, hex_string, decode_key
 import node
+import rsakey
 import sshtype
 
 log = logging.getLogger(__name__)
@@ -360,6 +363,32 @@ class Shell(cmd.Cmd):
         diff = datetime.today() - start
         self.writeln("data_key=[{}].".format(hex_string(data_rw.data_key)))
         self.writeln("send_find_key(..) took: {}.".format(diff))
+
+    @asyncio.coroutine
+    def do_storeukeyenc(self, arg):
+        "<key> <data> <version> <storekey> [path] store base58 encoded data"
+        " with base58 encoded private key."
+
+        args = arg.split(' ')
+
+        log.info("ARG=[{}].".format(args[0]))
+        key = rsakey.RsaKey(privdata=base58.decode(args[0]))
+        data = base58.decode(args[1])
+        version = int(args[2])
+        storekey = bool(args[3])
+        path = args[4] if len(args) > 4 else None
+
+        def key_callback(data_key):
+            self.writeln("data_key=[{}].".format(mbase32.encode(data_key)))
+
+        start = datetime.today()
+
+        yield from multipart.store_data(\
+            self.peer.engine, data, privatekey=key, path=path,\
+            version=version, key_callback=key_callback)
+
+        diff = datetime.today() - start
+        self.writeln("send_store_data(..) took: {}.".format(diff))
 
     @asyncio.coroutine
     def do_sd(self, arg):
