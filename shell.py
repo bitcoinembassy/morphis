@@ -342,9 +342,10 @@ class Shell(cmd.Cmd):
             yield from multipart.get_data_buffered(self.peer.engine, data_key)
         diff = datetime.today() - start
 
-        self.writeln("data=[{}].".format(data))
-        self.writeln("version=[{}].".format(version))
         self.writeln("send_get_data(..) took: {}.".format(diff))
+        self.writeln("version=[{}].".format(version))
+        self.writeln("data:")
+        self.writeln(data)
 
     @asyncio.coroutine
     def do_fk(self, arg):
