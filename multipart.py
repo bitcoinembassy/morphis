@@ -355,8 +355,9 @@ def get_data_buffered(engine, data_key, path=None, retry_seconds=30,\
         concurrency=64, max_link_depth=1):
     cb = BufferingDataCallback()
 
-    r = yield from get_data(engine, data_key, path, cb, ordered=True,\
-            retry_seconds=retry_seconds, concurrency=concurrency)
+    r = yield from get_data(engine, data_key, cb, path=path, ordered=True,\
+            retry_seconds=retry_seconds, concurrency=concurrency,\
+            max_link_depth=max_link_depth)
 
     if not r:
         if r is None:
