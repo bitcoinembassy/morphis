@@ -4,8 +4,11 @@ import argparse
 import asyncio
 import logging
 import os
+import time
 
+import base58
 import client
+import dmail
 import rsakey
 
 log = logging.getLogger(__name__)
@@ -49,6 +52,10 @@ def __main():
         help="The address of the Morphis node to connect to.",\
         default="127.0.0.1:4250")
     parser.add_argument(\
+        "--create-dmail",\
+        help="Generate and upload a new dmail site.",\
+        action="store_true")
+    parser.add_argument(\
         "--stat",\
         help="Report node status.",\
         action="store_true")
@@ -82,6 +89,25 @@ def __main():
     if args.stat:
         r = yield from mc.send_command("stat")
         print(r.decode("UTF-8"), end='')
+
+    if args.create_dmail:
+        print("SENDING")
+        key = rsakey.RsaKey.generate(bits=4096)
+        ekey = base58.encode(key._encode_key())
+
+        dms = dmail.DmailSite()
+        dms.generate()
+        edms = base58.encode(dms.export())
+
+        r = yield from mc.send_command(\
+            "storeukeyenc {} {} {} True"\
+                .format(ekey, edms, int(time.time()*1000)))
+
+        if r:
+            print("privkey: {}".format(ekey))
+            p1 = r.find(b']')
+            r = r[10:p1].decode("UTF-8")
+            print("dmail address: {}".format(r))
 
     log.info("Disconnecting.")
 
