@@ -65,7 +65,7 @@ def _init_daos(Base, d):
         original_size = Column(Integer, nullable=False)
         insert_timestamp = Column(DateTime, nullable=False)
         last_access = Column(DateTime, nullable=True)
-        version = Column(Integer, nullable=True)
+        version = Column(String, nullable=True) # str for sqlite bigint :(.
         signature = Column(LargeBinary, nullable=True)
         epubkey = Column(LargeBinary, nullable=True)
         pubkeylen = Column(Integer, nullable=True)

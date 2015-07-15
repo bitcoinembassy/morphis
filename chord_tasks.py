@@ -1540,7 +1540,8 @@ class ChordTasks(object):
                     if not pkt2:
                         # FindNode for key can send just one packet and then
                         # close the tunnel if it had no closer nodes.
-                        if pkt_type != cp.CHORD_MSG_DATA_PRESENCE:
+                        if pkt_type != cp.CHORD_MSG_DATA_PRESENCE\
+                                and pkt_type != cp.CHORD_MSG_STORAGE_INTEREST:
                             log.warning("Tunnel closed before expected second"\
                                 " packet; first pkt_type=[{}]."\
                                     .format(pkt_type))
@@ -1832,7 +1833,10 @@ class ChordTasks(object):
 
         enc_data = yield from self.loop.run_in_executor(None, iocall)
 
-        return enc_data, data_block.original_size, data_block.version,\
+        version =\
+            int(data_block.version) if data_block.version is not None else None
+
+        return enc_data, data_block.original_size, version,\
             data_block.signature, data_block.epubkey, data_block.pubkeylen
 
     @asyncio.coroutine
@@ -1951,9 +1955,11 @@ class ChordTasks(object):
                     old_entry = sess.query(DataBlock)\
                         .filter(DataBlock.data_id == data_id)\
                         .first()
-                    if old_entry and old_entry.version >= dmsg.version:
-                        # We only want to store newer versions.
-                        return None, None
+                    if old_entry:
+                        vint = int(old_entry.version)
+                        if vint >= dmsg.version:
+                            # We only want to store newer versions.
+                            return None, None
                 else:
                     q = sess.query(func.count("*"))
                     q = q.filter(DataBlock.data_id == data_id)
@@ -2002,7 +2008,7 @@ class ChordTasks(object):
                     data_block.distance = distance
 
                 if pubkey:
-                    data_block.version = dmsg.version
+                    data_block.version = str(dmsg.version)
                     data_block.signature = dmsg.signature
 
                     a, b = enc.encrypt_data_block(dmsg.pubkey, data_key)
