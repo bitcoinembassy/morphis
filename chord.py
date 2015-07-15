@@ -921,6 +921,8 @@ class ChordEngine():
             log.info("Received CHORD_MSG_NODE_INFO message.")
             msg = cp.ChordNodeInfo(data)
 
+            peer.full_node = True
+
             # Respond to them. Even though it doesn't make sense for now as
             # they (a client) knows our bind port obviously, but in the future
             # this message will contain the version and options of the protocol

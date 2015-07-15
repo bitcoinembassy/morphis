@@ -15,6 +15,8 @@ class Peer():
     def __init__(self, engine, dbpeer=None):
         self.engine = engine
 
+        self.full_node = False
+
         self.dbid = None
         self.distance = None
         self.direction = None

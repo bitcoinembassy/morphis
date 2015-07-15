@@ -92,6 +92,8 @@ class ChordTasks(object):
         msg = cp.ChordNodeInfo(data)
         log.info("Received ChordNodeInfo message.")
 
+        peer.full_node = True
+
         yield from peer.protocol.close_channel(local_cid)
 
         yield from self.engine._check_update_remote_address(msg, peer)
@@ -344,6 +346,8 @@ class ChordTasks(object):
         if not input_trie:
             input_trie = bittrie.BitTrie()
             for peer in self.engine.peer_trie:
+                if not peer.full_node:
+                    continue
                 key = bittrie.XorKey(node_id, peer.node_id)
                 input_trie[key] = peer
 
