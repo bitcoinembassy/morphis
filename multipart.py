@@ -153,8 +153,7 @@ class LinkBlock(MorphisBlock):
     def parse(self):
         i = super().parse()
 
-        l, self.mime_type = sshtype.parse_string_from(self.buf, i)
-        i += l
+        i, self.mime_type = sshtype.parse_string_from(self.buf, i)
         self.destination = self.buf[i:]
 
 class HashTreeFetch(object):

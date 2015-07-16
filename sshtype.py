@@ -10,23 +10,22 @@ def parseNameList(buf):
     return parseString(buf)
 
 def parse_string_from(buf, i):
-    length = struct.unpack_from(">L", buf, i)[0]
-
-    if log.isEnabledFor(logging.DEBUG):
-        log.debug("length={}".format(length))
-
-    start = i + 4
-    value = buf[start:start + length].decode()
-
-    return length + 4, value
+    l, v = parse_binary_from(buf, i)
+    return l, v.decode()
 
 def parseString(buf):
-    length = struct.unpack(">L", buf[0:4])[0]
-    if log.isEnabledFor(logging.DEBUG):
-        log.debug("length={}".format(length))
-    value = buf[4:4 + length].decode()
+    l, v = parseBinary(buf)
+    return l, v.decode()
 
-    return length + 4, value
+def parse_binary_from(buf, i):
+    length = struct.unpack_from(">L", buf, i)[0]
+
+    start = i + 4
+    end = start + length
+
+    value = buf[start:end]
+
+    return end, value
 
 def parseBinary(buf):
     length = struct.unpack(">L", buf[0:4])[0]
