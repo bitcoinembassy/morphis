@@ -366,13 +366,27 @@ class Shell(cmd.Cmd):
         self.writeln("send_find_key(..) took: {}.".format(diff))
 
     @asyncio.coroutine
+    def do_storedataenc(self, arg):
+        "<data> store base58 encoded data."
+
+        def key_callback(data_key):
+            self.writeln("data_key=[{}].".format(mbase32.encode(data_key)))
+
+        start = datetime.today()
+
+        yield from multipart.store_data(\
+            self.peer.engine, data, key_callback=key_callback)
+
+        diff = datetime.today() - start
+        self.writeln("send_store_data(..) took: {}.".format(diff))
+
+    @asyncio.coroutine
     def do_storeukeyenc(self, arg):
         "<key> <data> <version> <storekey> [path] store base58 encoded data"
         " with base58 encoded private key."
 
         args = arg.split(' ')
 
-        log.info("ARG=[{}].".format(args[0]))
         key = rsakey.RsaKey(privdata=base58.decode(args[0]))
         data = base58.decode(args[1])
         version = int(args[2])
