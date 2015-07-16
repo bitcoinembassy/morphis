@@ -1767,6 +1767,9 @@ class ChordTasks(object):
                     # Truncate the key data to exclude the cipher padding.
                     pubkey = pubkey[:drmsg.pubkeylen]
 
+                    # Return the pubkey to the original caller.
+                    data_rw.pubkey = pubkey
+
                     data_key = enc.generate_ID(pubkey)
                     if data_rw.path_hash:
                         data_key = enc.generate_ID(data_key + data_rw.path_hash)
