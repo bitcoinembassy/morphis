@@ -14,7 +14,7 @@ import chord
 import chord_packet as cp
 from chordexception import ChordException
 from db import Peer, DataBlock, NodeState
-from mutil import hex_string, page_query
+import mutil
 import enc
 import node as mnnode
 import peer as mnpeer
@@ -150,15 +150,15 @@ class ChordTasks(object):
             byte_ = chord.NODE_ID_BYTES - 1 - (bit >> 3)
             node_id[byte_] ^= 1 << (bit % 8)
 
-            assert self.engine.calc_log_distance(\
+            assert mutil.calc_log_distance(\
                 node_id, self.engine.node_id)[0] == (bit + 1),\
                 "calc={}, bit={}, diff={}."\
                     .format(\
-                        self.engine.calc_log_distance(\
+                        mutil.calc_log_distance(\
                             node_id, self.engine.node_id)[0],\
                         bit + 1,
-                        hex_string(\
-                            self.engine.calc_raw_distance(\
+                        mutil.hex_string(\
+                            mutil.calc_raw_distance(\
                                 self.engine.node_id, node_id)))
 
             nodes, new_nodes = yield from self._perform_stabilize(node_id)
@@ -365,7 +365,8 @@ class ChordTasks(object):
         if log.isEnabledFor(logging.INFO):
             log.info("Performing FindNode (data_key=[{}], data_mode={}) to a"\
                 " max depth of [{}]."\
-                    .format(hex_string(data_key), data_mode, maximum_depth))
+                    .format(mutil.hex_string(data_key), data_mode,\
+                        maximum_depth))
 
         result_trie = bittrie.BitTrie()
 
@@ -1242,9 +1243,9 @@ class ChordTasks(object):
             if log.isEnabledFor(logging.DEBUG):
                 log.debug("nn: {} FOUND: {:7} {:22} node_id=[{}] diff=[{}]"\
                     .format(self.engine.node.instance, r.dbid, r.address,\
-                        hex_string(r.node_id),\
-                        hex_string(\
-                            self.engine.calc_raw_distance(\
+                        mutil.hex_string(r.node_id),\
+                        mutil.hex_string(\
+                            mutil.calc_raw_distance(\
                                 r.node_id, fnmsg.node_id))))
 
             rlist.append(r)
@@ -1605,7 +1606,7 @@ class ChordTasks(object):
 
     @asyncio.coroutine
     def _check_has_data(self, data_id, significant_bits):
-        distance = self.engine.calc_raw_distance(self.engine.node_id, data_id)
+        distance = mutil.calc_raw_distance(self.engine.node_id, data_id)
 
         if significant_bits and significant_bits >= 32:
             mask = ((1 << (chord.NODE_ID_BITS - significant_bits)) - 1)\
@@ -1617,7 +1618,7 @@ class ChordTasks(object):
                 end_id.append(c1 | c2)
 
             if distance > self.engine.furthest_data_block:
-                d2 = self.engine.calc_raw_distance(self.engine.node_id, end_id)
+                d2 = mutil.calc_raw_distance(self.engine.node_id, end_id)
                 if d2 > self.engine.furthest_data_block:
                     return False
         else:
@@ -1663,7 +1664,7 @@ class ChordTasks(object):
             # We only store stuff closer than 2^2 less then the maximum
             # distance.
             log_dist, direction =\
-                self.engine.calc_log_distance(self.engine.node_id, data_id)
+                mutil.calc_log_distance(self.engine.node_id, data_id)
             if log_dist > chord.NODE_ID_BITS - 2:
                 # Too far.
                 return False, False
@@ -1688,7 +1689,7 @@ class ChordTasks(object):
             log.debug("Datastore is full, checking if proposed block is"\
                 " closer than enough stored blocks to fit with a purge.")
 
-        distance = self.engine.calc_raw_distance(self.engine.node_id, data_id)
+        distance = mutil.calc_raw_distance(self.engine.node_id, data_id)
 
         if distance > self.engine.furthest_data_block:
             return False, False
@@ -1715,7 +1716,7 @@ class ChordTasks(object):
                     .order_by(DataBlock.distance.desc())
 
                 freeable_space = 0
-                for block in page_query(q):
+                for block in mutil.page_query(q):
                     freeable_space += block.original_size
 
                     if current_datastore_size - freeable_space\
@@ -1855,7 +1856,7 @@ class ChordTasks(object):
             log.warning(errmsg)
             raise ChordException(errmsg)
 
-        distance = self.engine.calc_raw_distance(self.engine.node_id, data_id)
+        distance = mutil.calc_raw_distance(self.engine.node_id, data_id)
 
         def dbcall():
             with self.engine.node.db.open_session() as sess:
@@ -1895,7 +1896,7 @@ class ChordTasks(object):
 
         if log.isEnabledFor(logging.INFO):
             log.info("Stored key=[{}] as id=[{}]."\
-                .format(hex_string(data_id), data_block_id))
+                .format(mutil.hex_string(data_id), data_block_id))
 
         return True
 
@@ -1949,7 +1950,7 @@ class ChordTasks(object):
                 log.warning(errmsg)
                 raise ChordException(errmsg)
 
-        distance = self.engine.calc_raw_distance(self.engine.node_id, data_id)
+        distance = mutil.calc_raw_distance(self.engine.node_id, data_id)
         original_size = len(data)
 
         def dbcall():
@@ -1983,7 +1984,7 @@ class ChordTasks(object):
                         .filter(DataBlock.original_size != 0)\
                         .order_by(DataBlock.distance.desc())
 
-                    for block in page_query(q):
+                    for block in mutil.page_query(q):
                         freeable_space += block.original_size
                         blocks_to_prune.append(block.id)
 
@@ -2059,7 +2060,7 @@ class ChordTasks(object):
                 else:
                     log.info("Not storing data that we already have"\
                         " (data_id=[{}])."\
-                        .format(hex_string(data_id)))
+                        .format(mutil.hex_string(data_id)))
             return False
 
         self.engine.node.datastore_size += size_diff
@@ -2106,7 +2107,7 @@ class ChordTasks(object):
 
             if log.isEnabledFor(logging.INFO):
                 log.info("Stored data for data_id=[{}] as [{}.blk]."\
-                    .format(hex_string(data_id), data_block_id))
+                    .format(mutil.hex_string(data_id), data_block_id))
 
             return True
         except Exception as e:

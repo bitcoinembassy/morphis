@@ -11,10 +11,10 @@ from threading import Event
 import base58
 import chord
 import enc
-from mutil import decode_key
 import rsakey
 import mbase32
 import multipart
+import mutil
 
 log = logging.getLogger(__name__)
 
@@ -124,7 +124,7 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
             path = None
 
         try:
-            data_key, significant_bits = decode_key(rpath)
+            data_key, significant_bits = mutil.decode_key(rpath)
         except:
             error = True
             log.exception("decode")
