@@ -157,6 +157,33 @@ class LinkBlock(MorphisBlock):
         i, self.mime_type = sshtype.parse_string_from(self.buf, i)
         self.destination = self.buf[i:]
 
+class TargetedBlock(MorphisBlock):
+    NOONCE_OFFSET = MorphisBlock.HEADER_BYTES
+    NOONCE_SIZE = 64
+
+    def __init__(self, buf=None):
+        self.noonce = b' ' * NOONCE_SIZE
+        self.target = None
+        self.block = None
+
+        super().__init__(BlockType.targeted.value, buf)
+
+    def encode(self):
+        nbuf = super().encode()
+
+        assert len(self.noonce) == NOONCE_SIZE
+        nbuf += self.noonce
+        nbuf += sshtype.encodeBinary(self.target)
+        block.encode(nbuf)
+
+    def parse(self):
+        i = super().parse()
+
+        self.noonce = self.buf[i:i+NOONCE_SIZE]
+        i += NOONCE_SIZE
+        i, self.target = sshtype.parse_binary_from(self.buf, i)
+        self.block_offset = i
+
 class HashTreeFetch(object):
     def __init__(self, engine, data_callback, ordered=False, positions=None,\
             retry_seconds=30, concurrency=64):
