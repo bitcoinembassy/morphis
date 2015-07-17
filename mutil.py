@@ -1,9 +1,13 @@
+import llog
+
 from bisect import bisect_left
+import logging
 
 import mbase32
 
-accept_chars = b" !\"#$%&`()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_'abcdefghijklmnopqrstuvwxyz{|}~"
+log = logging.getLogger(__name__)
 
+accept_chars = b" !\"#$%&`()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_'abcdefghijklmnopqrstuvwxyz{|}~"
 accept_chars = sorted(accept_chars)
 
 width = 16
@@ -110,3 +114,44 @@ def decode_key(encoded):
         significant_bits = 5 * kl
 
     return data_key, significant_bits
+
+def calc_raw_distance(data1, data2):
+    "Calculates the XOR distance, return is absolute value."
+
+    assert type(data1) in (bytes, bytearray)\
+        and type(data2) in (bytes, bytearray)
+
+    buf = bytearray()
+
+    for i in range(len(data1)):
+        buf.append(data1[i] ^ data2[i])
+
+    return buf
+
+def calc_log_distance(nid, pid):
+    "Returns: distance, direction."
+    " distance is in log base2."
+
+    id_size = len(nid)
+    assert id_size >= len(pid)
+
+    if log.isEnabledFor(logging.DEBUG):
+        log.debug("pid=\n[{}], nid=\n[{}].".format(hex_dump(pid),\
+            hex_dump(nid)))
+
+    dist = 0
+    direction = 0
+
+    for i in range(id_size):
+        if pid[i] != nid[i]:
+            direction = 1 if pid[i] > nid[i] else -1
+
+            xv = pid[i] ^ nid[i]
+            xv = log_base2_8bit(xv) + 1
+
+            # (byte * 8) + bit.
+            dist = ((id_size - 1 - i) << 3) + xv
+
+            break
+
+    return dist, direction

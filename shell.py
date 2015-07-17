@@ -319,7 +319,7 @@ class Shell(cmd.Cmd):
             self.writeln("nid[{}] FOUND: {:22} id=[{}] diff=[{}]"\
                 .format(r.id, r.address, hex_string(r.node_id),\
                     hex_string(\
-                        self.peer.engine.calc_raw_distance(\
+                        calc_raw_distance(\
                             r.node_id, node_id))))
 
     @asyncio.coroutine
