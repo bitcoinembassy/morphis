@@ -26,17 +26,12 @@ def generate_targeted_block(prefix, nbits, data, noonce_offset, noonce_size):
 
     pool = mp.Pool(WORKERS)
 
-    def done(result):
-        nonlocal block
-        log.debug("done(..) called.")
-        pool.terminate()
-
-        block = result
-
     pipes = []
     refs = []
 
     try:
+        wid = 0
+
         for i in range(WORKERS):
             log.debug("Starting worker.")
 
@@ -44,21 +39,22 @@ def generate_targeted_block(prefix, nbits, data, noonce_offset, noonce_size):
 
             pool.apply_async(\
                 find_noonce,\
-                args=(rp,),\
-                callback=done)
+                args=(rp,))
 
             pipes.append(lp)
             refs.append(data)
             refs.append(rp)
 
-            lp.send((prefix, nbits, data, noonce_offset, noonce_size))
+            lp.send((wid, prefix, nbits, data, noonce_offset, noonce_size))
 
-        pool.close()
-        pool.join()
+            wid += 1
 
+        ready = mp.connection.wait(pipes)
+        block = ready[0].recv()
     except:
-        log.exception()
-        pool.terminate()
+        log.exception("")
+
+    pool.terminate()
 
     return block
 
@@ -71,7 +67,7 @@ def find_noonce(rp):
 def _find_noonce(rp):
     log.debug("Worker running.")
 
-    prefix, nbits, data, noonce_offset, noonce_size = rp.recv()
+    wid, prefix, nbits, data, noonce_offset, noonce_size = rp.recv()
 
     max_dist = HASH_BITS - nbits
     nbytes = int(nbits / 8)
@@ -80,7 +76,7 @@ def _find_noonce(rp):
     ne = noonce_offset + noonce_size
     noonce_offset = ne - nbytes
 
-    noonce = 0
+    noonce = wid
 
     while True:
         noonce_bytes = noonce.to_bytes(nbytes, "big")
@@ -97,7 +93,8 @@ def _find_noonce(rp):
 
         if match:
             log.info("noonce_bytes=[{}].".format(noonce_bytes))
-            return noonce_bytes
+            rp.send(noonce_bytes)
+            return
 
         noonce += WORKERS
 
