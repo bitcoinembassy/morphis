@@ -329,9 +329,14 @@ class Shell(cmd.Cmd):
 
     @asyncio.coroutine
     def do_getdata(self, arg):
-        "[DATA_KEY] retrieve data for DATA_KEY from the network."
+        "<DATA_KEY> [PATH] retrieve data for DATA_KEY from the network."
 
-        data_key, significant_bits = decode_key(arg)
+        args = arg.split(' ')
+
+        log.info("key=[{}].".format(len(args[0])))
+
+        data_key, significant_bits = decode_key(args[0])
+        path = args[1] if len(args) == 2 else None
 
         if significant_bits:
             self.writeln("Incomplete key, use findkey.")
@@ -339,7 +344,8 @@ class Shell(cmd.Cmd):
 
         start = datetime.today()
         data, version =\
-            yield from multipart.get_data_buffered(self.peer.engine, data_key)
+            yield from multipart.get_data_buffered(\
+                self.peer.engine, data_key, path=path)
         diff = datetime.today() - start
 
         self.writeln("send_get_data(..) took: {}.".format(diff))
@@ -354,7 +360,7 @@ class Shell(cmd.Cmd):
 
     @asyncio.coroutine
     def do_findkey(self, arg):
-        "[DATA_KEY_PREFIX] search the network for the given key."
+        "<DATA_KEY_PREFIX> search the network for the given key."
 
         data_key, significant_bits = decode_key(arg)
 
@@ -366,8 +372,29 @@ class Shell(cmd.Cmd):
         self.writeln("send_find_key(..) took: {}.".format(diff))
 
     @asyncio.coroutine
+    def do_storeblockenc(self, arg):
+        "<data> store base58 encoded block."
+
+        data = base58.decode(arg[0])
+
+        def key_callback(data_key):
+            self.writeln("data_key=[{}].".format(mbase32.encode(data_key)))
+
+        start = datetime.today()
+
+        storing_nodes =\
+            yield from self.peer.engine.tasks.send_store_data(\
+                data, key_callback)
+
+        diff = datetime.today() - start
+        self.writeln("storing_nodes=[{}].".format(storing_nodes))
+        self.writeln("send_store_data(..) took: {}.".format(diff))
+
+    @asyncio.coroutine
     def do_storedataenc(self, arg):
         "<data> store base58 encoded data."
+
+        data = base58.decode(args[0])
 
         def key_callback(data_key):
             self.writeln("data_key=[{}].".format(mbase32.encode(data_key)))
@@ -382,8 +409,8 @@ class Shell(cmd.Cmd):
 
     @asyncio.coroutine
     def do_storeukeyenc(self, arg):
-        "<key> <data> <version> <storekey> [path] store base58 encoded data"
-        " with base58 encoded private key."
+        "<KEY> <DATA> <VERSION> <STOREKEY> [PATH] store base58 encoded DATA"
+        " with base58 encoded private KEY."
 
         args = arg.split(' ')
 
@@ -412,7 +439,7 @@ class Shell(cmd.Cmd):
 
     @asyncio.coroutine
     def do_storedata(self, arg):
-        "[DATA] store DATA into the network."
+        "<DATA> store DATA into the network."
 
         data = bytes(arg, 'UTF8')
 
@@ -424,7 +451,7 @@ class Shell(cmd.Cmd):
             return
 
         def key_callback(data_key):
-            self.writeln("data_key=[{}].".format(hex_string(data_key)))
+            self.writeln("data_key=[{}].".format(mbase32.encode(data_key)))
 
         start = datetime.today()
         storing_nodes =\
@@ -441,7 +468,7 @@ class Shell(cmd.Cmd):
 
     @asyncio.coroutine
     def do_storekey(self, arg):
-        "[DATA] store DATA's key into the network."
+        "<DATA> store DATA's key into the network."
 
         data = bytes(arg, "UTF8")
 
