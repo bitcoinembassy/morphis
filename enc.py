@@ -4,6 +4,9 @@ from Crypto.Cipher import AES
 from Crypto.Hash import SHA512
 from Crypto.PublicKey import RSA
 
+# generate_ID outputs 512 bits.
+ID_BITS = 512
+
 def generate_RSA(bits=4096):
     '''
     Generate an RSA keypair with an exponent of 65537 in PEM format

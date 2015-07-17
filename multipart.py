@@ -10,10 +10,9 @@ import random
 import struct
 from enum import Enum
 
-import chord
+import consts
+import enc
 import mbase32
-from mutil import hex_string
-import node as mnnode
 import peer as mnpeer
 import sshtype
 
@@ -62,6 +61,7 @@ class BlockType(Enum):
 
 class MorphisBlock(object):
     UUID = b'\x86\xa0\x47\x79\xc1\x2e\x4f\x48\x90\xc3\xee\x27\x53\x6d\x26\x96'
+    HEADER_BYTES = 31
 
     @staticmethod
     def parse_block_type(buf):
@@ -93,7 +93,7 @@ class MorphisBlock(object):
         assert self.buf[:16] == MorphisBlock.UUID
         i = 16
 
-        i += 7 # morphis
+        i += 7 # MORPHiS
 
         block_type = struct.unpack_from(">L", self.buf, i)[0]
         if self.block_type:
@@ -123,7 +123,8 @@ class HashTreeBlock(MorphisBlock):
         nbuf += struct.pack(">L", self.depth)
         nbuf += struct.pack(">Q", self.size)
 
-        nbuf += b' ' * (chord.NODE_ID_BYTES - len(nbuf))
+        assert consts.NODE_ID_BYTES == HEADER_BYTES
+        nbuf += b' ' * (consts.NODE_ID_BYTES - len(nbuf))
 
         nbuf += self.data
 
@@ -215,18 +216,18 @@ class HashTreeFetch(object):
     def _fetch_hash_tree_refs(self, hash_tree_data, offset, depth, position):
         data_len = len(hash_tree_data) - offset
 
-        key_cnt = int(data_len / chord.NODE_ID_BYTES)
+        key_cnt = int(data_len / consts.NODE_ID_BYTES)
 
         if depth == 1:
-            pdiff = mnnode.MAX_DATA_BLOCK_SIZE
+            pdiff = consts.MAX_DATA_BLOCK_SIZE
         else:
             pdiff =\
-                pow(mnnode.MAX_DATA_BLOCK_SIZE, depth) / chord.NODE_ID_BYTES
+                pow(consts.MAX_DATA_BLOCK_SIZE, depth) / consts.NODE_ID_BYTES
 
         subdepth = depth - 1
 
         for i in range(key_cnt):
-            end = offset + chord.NODE_ID_BYTES
+            end = offset + consts.NODE_ID_BYTES
             eposition = position + pdiff
 
             if self.positions:
@@ -439,7 +440,7 @@ def store_data(engine, data, privatekey=None, path=None, version=None,\
         key_callback=None, store_key=True, mime_type="", concurrency=64):
     data_len = len(data)
 
-    if mime_type or (privatekey and data_len > mnnode.MAX_DATA_BLOCK_SIZE):
+    if mime_type or (privatekey and data_len > consts.MAX_DATA_BLOCK_SIZE):
         store_link = True
 
         root_block_key = None
@@ -451,7 +452,7 @@ def store_data(engine, data, privatekey=None, path=None, version=None,\
     else:
         store_link = False
 
-    if data_len <= mnnode.MAX_DATA_BLOCK_SIZE:
+    if data_len <= consts.MAX_DATA_BLOCK_SIZE:
         if log.isEnabledFor(logging.INFO):
             log.info("Data fits in one block, performing simple store.")
 
@@ -506,7 +507,7 @@ def store_data(engine, data, privatekey=None, path=None, version=None,\
 
 def __key_callback(keys, idx, key):
     key_len = len(key)
-    assert key_len == chord.NODE_ID_BYTES
+    assert key_len == consts.NODE_ID_BYTES
     idx = key_len * idx
     keys[idx:idx+key_len] = key
 
@@ -516,17 +517,17 @@ def _store_data_multipart(engine, data, key_callback, store_key, concurrency):
     task_semaphore = asyncio.Semaphore(concurrency)
 
     full_data_len = data_len = len(data)
-    assert data_len > mnnode.MAX_DATA_BLOCK_SIZE
+    assert data_len > consts.MAX_DATA_BLOCK_SIZE
 
     while True:
-        nblocks = int(data_len / mnnode.MAX_DATA_BLOCK_SIZE)
-        if data_len % mnnode.MAX_DATA_BLOCK_SIZE:
+        nblocks = int(data_len / consts.MAX_DATA_BLOCK_SIZE)
+        if data_len % consts.MAX_DATA_BLOCK_SIZE:
             nblocks += 1
 
-        keys = bytearray(nblocks * chord.NODE_ID_BYTES)
+        keys = bytearray(nblocks * consts.NODE_ID_BYTES)
 
         start = 0
-        end = mnnode.MAX_DATA_BLOCK_SIZE
+        end = consts.MAX_DATA_BLOCK_SIZE
 
         tasks = []
 
@@ -553,7 +554,7 @@ def _store_data_multipart(engine, data, key_callback, store_key, concurrency):
             yield from task_semaphore.acquire()
 
             start = end
-            end += mnnode.MAX_DATA_BLOCK_SIZE
+            end += consts.MAX_DATA_BLOCK_SIZE
             if end > data_len:
                 assert i >= (nblocks - 2)
                 end = data_len
@@ -567,7 +568,7 @@ def _store_data_multipart(engine, data, key_callback, store_key, concurrency):
         data = keys
         data_len = len(data)
         if data_len\
-                <= (mnnode.MAX_DATA_BLOCK_SIZE - HashTreeBlock.HEADER_BYTES):
+                <= (consts.MAX_DATA_BLOCK_SIZE - HashTreeBlock.HEADER_BYTES):
             break
 
         depth += 1
