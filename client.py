@@ -4,6 +4,8 @@ import asyncio
 import logging
 import os
 
+import chord_tasks
+import mbase32
 import mn1
 import packet as mnp
 import rsakey
@@ -106,6 +108,40 @@ class Client(object):
         log.info("Sent request.")
 
         return (yield from self.queue.get())
+
+    @asyncio.coroutine
+    def send_store_data(self, data, key_callback):
+        data_enc = base58.encode(data)
+
+        r = yield from self.send_command("storeblockenc {}".format(data_enc))
+
+        p1 = r.find(b']')
+        data_key = mbase32.decode(r[10:p1].decode("UTF-8"))
+
+        key_callback(data_key)
+
+    @asyncio.coroutine
+    def send_get_data(self, data_key, path=None):
+        data_key_enc = mbase32.encode(data_key)
+
+        if path:
+            cmd = "getdata {} {}".format(data_key_enc, path)
+        else:
+            cmd = "getdata {}".format(data_key_enc)
+
+        r = yield from self.send_command(cmd)
+
+        data_rw = chord_tasks.DataResponseWrapper(data_key)
+
+        p0 = r.find(b"version=[") + 9
+        p1 = r.find(b']', p0)
+        data_rw.version = r[p0:p1]
+        p0 = p1 + 1
+
+        p0 = r.find(b"data:\r\n", p0) + 7
+        data_rw.data = r[p0:]
+
+        return data_rw
 
 class ConnectionHandler(mn1.ConnectionHandler):
     def __init__(self, client):
