@@ -4,6 +4,7 @@ from Cython.Build import cythonize
 modules = [\
     "asymkey",
     "bittrie",
+    "brute",
     "chord_packet",
     "dhgroup14",
     "enc",
