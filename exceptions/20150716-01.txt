@@ -1,0 +1,40 @@
+dev@dev-py:~/src/l/morphis> py mcc.py --address 127.0.0.1:7000 --create-dmail   
+2015-07-16 15:09:32,566 INFO [mcc:__main__:48] mcc running.                     
+2015-07-16 15:09:32,567 INFO [mcc:__main__:77] mcc private key file found, loading.
+2015-07-16 15:09:32,567 INFO [client:client:32] Connecting to addr=[127.0.0.1:7000].
+2015-07-16 15:09:32,573 INFO [mn1:mn1:382] P: Connection made with [('127.0.0.1', 7000)].
+2015-07-16 15:09:32,573 INFO [mn1:mn1:1124] X: Sending banner.
+2015-07-16 15:09:32,573 INFO [mn1:mn1:802] P: Waiting for packet.
+2015-07-16 15:09:32,573 INFO [client:client:48] Connected!
+2015-07-16 15:09:32,573 INFO [mn1:mn1:812] P: Notified of packet.
+2015-07-16 15:09:32,574 INFO [mn1:mn1:1131] X: Received banner [bytearray(b'SSH-2.0-mNet_0.0.1+cleartext')].
+2015-07-16 15:09:32,574 INFO [mn1:mn1:839] Writing packet_type=[20] (142 bytes) to address=[('127.0.0.1', 7000)].
+2015-07-16 15:09:32,574 INFO [mn1:mn1:882] Writing 142 bytes of data to connection (address=[('127.0.0.1', 7000)]).
+2015-07-16 15:09:32,574 INFO [mn1:mn1:802] P: Waiting for packet.
+2015-07-16 15:09:32,614 INFO [mn1:mn1:812] P: Notified of packet.
+2015-07-16 15:09:32,614 INFO [mn1:mn1:1215] packet_type=[20].
+2015-07-16 15:09:32,614 INFO [mn1:mn1:1228] keyExchangeAlgorithms=[diffie-hellman-group14-sha1].
+2015-07-16 15:09:32,614 INFO [mn1:mn1:1236] Calling kex->run()...
+2015-07-16 15:09:32,664 INFO [mn1:mn1:839] Writing packet_type=[30] (261 bytes) to address=[('127.0.0.1', 7000)].
+2015-07-16 15:09:32,665 INFO [mn1:mn1:882] Writing 261 bytes of data to connection (address=[('127.0.0.1', 7000)]).
+2015-07-16 15:09:32,665 INFO [mn1:mn1:802] P: Waiting for packet.
+2015-07-16 15:09:33,003 INFO [mn1:mn1:812] P: Notified of packet.
+2015-07-16 15:09:33,042 INFO [kexdhgroup14sha1:kexdhgroup14sha1:108] Verifying signature...
+2015-07-16 15:09:33,045 INFO [mn1:mn1:296] Signature validated correctly!
+2015-07-16 15:09:33,045 INFO [mn1:mn1:839] Writing packet_type=[21] (1 bytes) to address=[('127.0.0.1', 7000)].
+2015-07-16 15:09:33,045 INFO [mn1:mn1:882] Writing 1 bytes of data to connection (address=[('127.0.0.1', 7000)]).
+2015-07-16 15:09:33,046 INFO [mn1:mn1:320] Initializing outbound encryption.
+2015-07-16 15:09:33,046 INFO [mn1:mn1:339] Initializing inbound encryption.
+2015-07-16 15:09:33,046 INFO [mn1:mn1:802] P: Waiting for packet.
+2015-07-16 15:09:33,047 WARNING [mn1:mn1:1046] Illegal packet_length [2097037467] received.
+2015-07-16 15:09:33,047 ERROR [mn1:mn1:926] _process_buffer() threw:
+Traceback (most recent call last):
+  File "/home/dev/src/l/morphis/mn1.py", line 924, in process_buffer
+    self._process_buffer()
+  File "/home/dev/src/l/morphis/mn1.py", line 936, in _process_buffer
+    self._process_encrypted_buffer()
+  File "/home/dev/src/l/morphis/mn1.py", line 1047, in _process_encrypted_buffer
+    raise SshException(errmsg)
+sshexception.SshException: Illegal packet_length [2097037467] received.
+2015-07-16 15:09:33,048 INFO [mn1:mn1:700] X: Connection lost to [('127.0.0.1', 7000)].
+
