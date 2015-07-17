@@ -342,20 +342,20 @@ class Downloader(multipart.DataCallback):
 
         self.data_rw = data_rw
 
-    def version(self, version):
+    def notify_version(self, version):
         self.data_rw.version = version
 
-    def size(self, size):
+    def notify_size(self, size):
         if log.isEnabledFor(logging.INFO):
             log.info("Download size=[{}].".format(size))
         self.data_rw.size = size
 
-    def mime_type(self, val):
+    def notify_mime_type(self, val):
         if log.isEnabledFor(logging.INFO):
             log.info("mime_type=[{}].".format(val))
         self.data_rw.mime_type = val
 
-    def data(self, position, data):
+    def notify_data(self, position, data):
         self.data_rw.data_queue.put(data)
 
 @asyncio.coroutine

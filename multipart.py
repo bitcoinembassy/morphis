@@ -19,16 +19,16 @@ import sshtype
 log = logging.getLogger(__name__)
 
 class DataCallback(object):
-    def version(self, version):
+    def notify_version(self, version):
         pass
 
-    def size(self, size):
+    def notify_size(self, size):
         pass
 
-    def mime_type(self, value):
+    def notify_mime_type(self, value):
         pass
 
-    def data(self, position, data):
+    def notify_data(self, position, data):
         pass
 
 class BufferingDataCallback(DataCallback):
@@ -37,10 +37,10 @@ class BufferingDataCallback(DataCallback):
         self.buf = bytearray()
         self.position = 0
 
-    def version(self, version):
+    def notify_version(self, version):
         self.version = version
 
-    def data(self, position, data):
+    def notify_data(self, position, data):
         if position != self.position:
             raise Exception("Incomplete download.")
 
@@ -161,8 +161,16 @@ class TargetedBlock(MorphisBlock):
     NOONCE_OFFSET = MorphisBlock.HEADER_BYTES
     NOONCE_SIZE = 64
 
+    @staticmethod
+    def set_noonce(data, noonce_bytes):
+        assert type(noonce_bytes) in (bytes, bytearray)
+        lenn = len(noonce_bytes)
+        start = TargetedBlock.NOONCE_OFFSET + TargetedBlock.NOONCE_SIZE - lenn
+        end = start + lenn
+        data[start:end] = noonce_bytes
+
     def __init__(self, buf=None):
-        self.noonce = b' ' * NOONCE_SIZE
+        self.noonce = b' ' * TargetedBlock.NOONCE_SIZE
         self.target = None
         self.block = None
 
@@ -171,16 +179,19 @@ class TargetedBlock(MorphisBlock):
     def encode(self):
         nbuf = super().encode()
 
-        assert len(self.noonce) == NOONCE_SIZE
+        assert len(self.noonce) == TargetedBlock.NOONCE_SIZE
         nbuf += self.noonce
         nbuf += sshtype.encodeBinary(self.target)
-        block.encode(nbuf)
+
+        self.block.encode(nbuf)
+
+        return nbuf
 
     def parse(self):
         i = super().parse()
 
-        self.noonce = self.buf[i:i+NOONCE_SIZE]
-        i += NOONCE_SIZE
+        self.noonce = self.buf[i:i+TargetedBlock.NOONCE_SIZE]
+        i += TargetedBlock.NOONCE_SIZE
         i, self.target = sshtype.parse_binary_from(self.buf, i)
         self.block_offset = i
 
@@ -207,7 +218,7 @@ class HashTreeFetch(object):
 
     @asyncio.coroutine
     def fetch(self, root_block):
-        self.data_callback.size(root_block.size)
+        self.data_callback.notify_size(root_block.size)
 
         depth = root_block.depth
         buf = root_block.buf
@@ -342,7 +353,7 @@ class HashTreeFetch(object):
                     yield from self.__wait(position, waiter)
 
             if not depth:
-                self.data_callback.data(position, data_rw.data)
+                self.data_callback.notify_data(position, data_rw.data)
                 self.__notify_position_complete(position + len(data_rw.data))
             else:
                 yield from\
@@ -414,14 +425,14 @@ def get_data(engine, data_key, data_callback, path=None, ordered=False,\
         return None
 
     if data_rw.version:
-        data_callback.version(data_rw.version)
+        data_callback.notify_version(data_rw.version)
 
     link_depth = 0
 
     while True:
         if not data.startswith(MorphisBlock.UUID):
-            data_callback.size(len(data))
-            data_callback.data(0, data)
+            data_callback.notify_size(len(data))
+            data_callback.notify_data(0, data)
             return True
 
         block_type = MorphisBlock.parse_block_type(data)
@@ -439,7 +450,7 @@ def get_data(engine, data_key, data_callback, path=None, ordered=False,\
             block = LinkBlock(data)
 
             if block.mime_type:
-                data_callback.mime_type(block.mime_type)
+                data_callback.notify_mime_type(block.mime_type)
 
             data_rw = yield from engine.tasks.send_get_data(block.destination)
             data = data_rw.data
@@ -450,8 +461,8 @@ def get_data(engine, data_key, data_callback, path=None, ordered=False,\
             continue
 
         if block_type != BlockType.hash_tree.value:
-            data_callback.size(len(data))
-            data_callback.data(0, data)
+            data_callback.notify_size(len(data))
+            data_callback.notify_data(0, data)
             return True
 
         fetch = HashTreeFetch(\
