@@ -17,6 +17,10 @@ HASH_BITS = enc.ID_BITS
 HASH_BYTES = HASH_BITS >> 3
 
 def generate_targeted_block(prefix, nbits, data, noonce_offset, noonce_size):
+    "Brute force finds a noonce for the passed data which allows the data to"
+    " hash to the desired prefix with nbits matching. This is the first hash"
+    " of the block being targetd, thus the key, the id is not what is bruted."
+
     if type(data) is bytes:
         data = bytearray(data)
     else:
@@ -92,7 +96,13 @@ def _find_noonce(rp):
             match = True
 
         if match:
-            log.info("noonce_bytes=[{}].".format(noonce_bytes))
+            if log.isEnabledFor(logging.INFO):
+                log.info("noonce_bytes=[{}]."\
+                    .format(mutil.hex_string(noonce_bytes)))
+            if log.isEnabledFor(logging.DEBUG):
+                log.debug("resulting block=[\n{}]."\
+                    .format(mutil.hex_dump(data)))
+
             rp.send(noonce_bytes)
             return
 

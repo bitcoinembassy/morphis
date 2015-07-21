@@ -25,7 +25,7 @@ def generate_ID(data):
     return SHA512.new(data).digest()
 
 def _setup_data_cipher(data_key):
-    assert len(data_key) == 64
+    assert len(data_key) == 64, len(data_key)
 
     key = data_key[:32]
     iv = data_key[32:48]

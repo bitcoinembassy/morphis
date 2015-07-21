@@ -375,7 +375,10 @@ class Shell(cmd.Cmd):
     def do_storeblockenc(self, arg):
         "<data> store base58 encoded block."
 
-        data = base58.decode(arg[0])
+        args = arg.split(' ')
+
+        data = base58.decode(args[0])
+        store_key = bool(args[1]) if len(args) == 2 else False
 
         def key_callback(data_key):
             self.writeln("data_key=[{}].".format(mbase32.encode(data_key)))
@@ -384,7 +387,7 @@ class Shell(cmd.Cmd):
 
         storing_nodes =\
             yield from self.peer.engine.tasks.send_store_data(\
-                data, key_callback)
+                data, store_key=store_key, key_callback=key_callback)
 
         diff = datetime.today() - start
         self.writeln("storing_nodes=[{}].".format(storing_nodes))
@@ -394,7 +397,7 @@ class Shell(cmd.Cmd):
     def do_storedataenc(self, arg):
         "<data> store base58 encoded data."
 
-        data = base58.decode(args[0])
+        data = base58.decode(args)
 
         def key_callback(data_key):
             self.writeln("data_key=[{}].".format(mbase32.encode(data_key)))
@@ -405,7 +408,7 @@ class Shell(cmd.Cmd):
             self.peer.engine, data, key_callback=key_callback)
 
         diff = datetime.today() - start
-        self.writeln("send_store_data(..) took: {}.".format(diff))
+        self.writeln("multipart.store_data(..) took: {}.".format(diff))
 
     @asyncio.coroutine
     def do_storeukeyenc(self, arg):
@@ -430,7 +433,7 @@ class Shell(cmd.Cmd):
             version=version, key_callback=key_callback)
 
         diff = datetime.today() - start
-        self.writeln("send_store_data(..) took: {}.".format(diff))
+        self.writeln("multipart.store_data(..) took: {}.".format(diff))
 
     @asyncio.coroutine
     def do_sd(self, arg):
@@ -456,7 +459,7 @@ class Shell(cmd.Cmd):
         start = datetime.today()
         storing_nodes =\
             yield from self.peer.engine.tasks.send_store_data(\
-                data, key_callback)
+                data, key_callback=key_callback)
         diff = datetime.today() - start
         self.writeln("storing_nodes=[{}].".format(storing_nodes))
         self.writeln("send_store_data(..) took: {}.".format(diff))
@@ -485,7 +488,7 @@ class Shell(cmd.Cmd):
         start = datetime.today()
         storing_nodes =\
             yield from self.peer.engine.tasks.send_store_key(\
-                data, key_callback)
+                data, key_callback=key_callback)
         diff = datetime.today() - start
         self.writeln("storing_nodes=[{}].".format(storing_nodes))
         self.writeln("send_store_key(..) took: {}.".format(diff))

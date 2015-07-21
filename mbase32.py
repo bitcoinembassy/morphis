@@ -3,7 +3,7 @@
 charset = "ybndrfg8ejkmcpqxot1uwisza345h769"
 
 def encode(val):
-    assert type(val) in (bytes, bytearray)
+    assert type(val) in (bytes, bytearray), type(val)
 
     result = ""
 

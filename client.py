@@ -4,6 +4,7 @@ import asyncio
 import logging
 import os
 
+import base58
 import chord_tasks
 import mbase32
 import mn1
@@ -17,9 +18,6 @@ class Client(object):
     def __init__(self, loop, client_key=None, address="127.0.0.1:4250"):
         self.loop = loop
         self.address = address
-
-        self.cid = None
-        self.queue = None
 
         if client_key is None:
             client_key = rsakey.RsaKey.generate(bits=4096)
@@ -51,15 +49,6 @@ class Client(object):
 
         yield from self._ready.wait()
 
-        cid, queue = yield from\
-            protocol.open_channel("session", True)
-
-        if not queue:
-            return False
-
-        self.cid = cid
-        self.queue = queue
-
         return True
 
     def _create_client_protocol(self):
@@ -77,7 +66,6 @@ class Client(object):
 
     @asyncio.coroutine
     def disconnect(self):
-        yield from self.protocol.close_channel(self.cid)
         self.protocol.close()
 
     @asyncio.coroutine
@@ -86,13 +74,19 @@ class Client(object):
             log.info("Sending command [{}] with args [{}]."\
                 .format(command, args))
 
+        cid, queue = yield from\
+            self.protocol.open_channel("session", True)
+
+        if not queue:
+            return False
+
         msg = BinaryMessage()
         msg.value = command.encode() + b"\r\n"
 
         self.protocol.send_channel_request(\
-            self.cid, "exec", False, msg.encode())
+            cid, "exec", False, msg.encode())
 
-        data = yield from self.queue.get()
+        data = yield from queue.get()
 
         if not data:
             return False
@@ -102,23 +96,23 @@ class Client(object):
         return msg.value
 
     @asyncio.coroutine
-    def _send_request(self, msg):
-        self.protocol.write_channel_data(self.cid, msg.encode())
-
-        log.info("Sent request.")
-
-        return (yield from self.queue.get())
-
-    @asyncio.coroutine
-    def send_store_data(self, data, key_callback):
+    def send_store_data(\
+            self, data, store_key=False, key_callback=None):
         data_enc = base58.encode(data)
 
-        r = yield from self.send_command("storeblockenc {}".format(data_enc))
+        r = yield from\
+            self.send_command(\
+                "storeblockenc {} {}".format(data_enc, store_key))
 
-        p1 = r.find(b']')
-        data_key = mbase32.decode(r[10:p1].decode("UTF-8"))
+        p0 = r.find(b']')
+        data_key = mbase32.decode(r[10:p0].decode("UTF-8"))
 
         key_callback(data_key)
+
+        p0 = r.find(b"storing_nodes=[", p0) + 15
+        p1 = r.find(b']', p0)
+
+        return int(r[p0:p1])
 
     @asyncio.coroutine
     def send_get_data(self, data_key, path=None):

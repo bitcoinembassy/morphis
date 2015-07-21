@@ -410,7 +410,7 @@ def _send_get_data(data_key, significant_bits, path, data_rw):
     except asyncio.TimeoutError:
         data_rw.timed_out = True
     except:
-        log.exception("send_get_data()")
+        log.exception("send_get_data(..)")
         data_rw.exception = True
 
     data_rw.data_queue.put(None)
@@ -428,7 +428,7 @@ def _send_store_data(data, data_rw, privatekey=None, path=None, version=None,\
     except asyncio.TimeoutError:
         data_rw.timed_out = True
     except:
-        log.exception("send_store_data()")
+        log.exception("send_store_data(..)")
         data_rw.exception = True
 
     data_rw.is_done.set()

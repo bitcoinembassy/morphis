@@ -240,8 +240,9 @@ class ChordTasks(object):
         return data_rw
 
     @asyncio.coroutine
-    def send_store_key(self, data, key_callback=None):
-        data_key = enc.generate_ID(data)
+    def send_store_key(self, data, data_key=None, key_callback=None):
+        if not data_key:
+            data_key = enc.generate_ID(data)
         if key_callback:
             key_callback(data_key)
 
@@ -255,12 +256,15 @@ class ChordTasks(object):
         return storing_nodes
 
     @asyncio.coroutine
-    def send_store_updateable_key_key(self, pubkey, key_callback=None):
+    def send_store_updateable_key_key(\
+            self, pubkey, data_key=None, key_callback=None):
         assert type(pubkey) in (bytes, bytearray)
-        yield from self.send_store_key(pubkey, key_callback)
+        yield from\
+            self.send_store_key(\
+                pubkey, data_key=data_key, key_callback=key_callback)
 
     @asyncio.coroutine
-    def send_store_data(self, data, key_callback=None):
+    def send_store_data(self, data, store_key=False, key_callback=None):
         "Sends a StoreData request, returning the count of nodes that claim"\
         " to have stored it."
 

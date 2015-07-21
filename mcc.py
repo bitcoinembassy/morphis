@@ -4,12 +4,14 @@ import argparse
 import asyncio
 import logging
 import os
+from sys import stdin
 import time
 
 import base58
 import client
 import dmail
 import rsakey
+import sshtype
 
 log = logging.getLogger(__name__)
 
@@ -56,6 +58,14 @@ def __main():
         help="Generate and upload a new dmail site.",\
         action="store_true")
     parser.add_argument(\
+        "-i",\
+        help="Read file as stdin.")
+    parser.add_argument(\
+        "--send-dmail",\
+        help="Send stdin as a dmail with the specified subject. The"\
+            " sender and recipients may be specified at the beginning of the"\
+            " data as with email headers: 'from: ' and 'to: '.")
+    parser.add_argument(\
         "--stat",\
         help="Report node status.",\
         action="store_true")
@@ -91,7 +101,8 @@ def __main():
         print(r.decode("UTF-8"), end='')
 
     if args.create_dmail:
-        print("SENDING")
+        log.info("Creating and uploading dmail site.")
+
         key = rsakey.RsaKey.generate(bits=4096)
         ekey = base58.encode(key._encode_key())
 
@@ -107,7 +118,23 @@ def __main():
             print("privkey: {}".format(ekey))
             p1 = r.find(b']')
             r = r[10:p1].decode("UTF-8")
+            print("x: {}".format(base58.encode(sshtype.encodeMpint(dms.dh.x))))
             print("dmail address: {}".format(r))
+
+    if args.send_dmail:
+        log.info("Sending dmail.")
+
+        if args.i:
+            with open(args.i, "rb") as fh:
+                dmail_data = fh.read().decode()
+        else:
+            dmail_data = stdin.read()
+
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("dmail_data=[{}].".format(dmail_data))
+
+        de = dmail.DmailEngine(mc)
+        yield from de.send_dmail_text(args.send_dmail, dmail_data)
 
     log.info("Disconnecting.")
 

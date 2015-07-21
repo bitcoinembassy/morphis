@@ -100,6 +100,7 @@ def page_query(query, page_size=10):
 
 def decode_key(encoded):
     #assert chord.NODE_ID_BITS == 512
+    assert type(encoded) is str, type(encoded)
 
     significant_bits = None
 
@@ -107,7 +108,7 @@ def decode_key(encoded):
 
     if kl == 128:
         data_key = bytes.fromhex(encoded)
-    elif kl in (103, 102):
+    elif kl in (102, 103):
         data_key = bytes(mbase32.decode(encoded))
     else:
         data_key = mbase32.decode(encoded, False)

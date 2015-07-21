@@ -165,8 +165,8 @@ class TargetedBlock(MorphisBlock):
     def set_noonce(data, noonce_bytes):
         assert type(noonce_bytes) in (bytes, bytearray)
         lenn = len(noonce_bytes)
-        start = TargetedBlock.NOONCE_OFFSET + TargetedBlock.NOONCE_SIZE - lenn
-        end = start + lenn
+        end = TargetedBlock.NOONCE_OFFSET + TargetedBlock.NOONCE_SIZE
+        start = end - lenn
         data[start:end] = noonce_bytes
 
     def __init__(self, buf=None):
@@ -502,7 +502,8 @@ def store_data(engine, data, privatekey=None, path=None, version=None,\
                 yield from engine.tasks.send_store_updateable_key_key(\
                     privatekey.asbytes())
         else:
-            yield from engine.tasks.send_store_data(data, key_callback)
+            yield from\
+                engine.tasks.send_store_data(data, key_callback=key_callback)
 
             if store_key:
                 yield from engine.tasks.send_store_key(data)
@@ -536,7 +537,8 @@ def store_data(engine, data, privatekey=None, path=None, version=None,\
                         privatekey.asbytes())
         else:
             yield from\
-                engine.tasks.send_store_data(link_data, orig_key_callback)
+                engine.tasks.send_store_data(\
+                    link_data, key_callback=orig_key_callback)
 
             if store_key:
                 yield from engine.tasks.send_store_key(link_data)
@@ -620,7 +622,7 @@ def _store_data_multipart(engine, data, key_callback, store_key, concurrency):
     block_data = block.encode()
 
     yield from\
-        engine.tasks.send_store_data(block_data, key_callback)
+        engine.tasks.send_store_data(block_data, key_callback=key_callback)
 
     if store_key:
         yield from\
@@ -628,7 +630,8 @@ def _store_data_multipart(engine, data, key_callback, store_key, concurrency):
 
 @asyncio.coroutine
 def _store_block(engine, i, block_data, key_callback, task_semaphore):
-    snodes = yield from engine.tasks.send_store_data(block_data, key_callback)
+    snodes = yield from\
+        engine.tasks.send_store_data(block_data, key_callback=key_callback)
 
     if not snodes:
         if log.isEnabledFor(logging.DEBUG):
