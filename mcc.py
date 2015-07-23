@@ -8,6 +8,7 @@ from sys import stdin
 import time
 
 import base58
+import brute
 import client
 import dmail
 import rsakey
@@ -61,6 +62,10 @@ def __main():
         "-i",\
         help="Read file as stdin.")
     parser.add_argument(\
+        "--prefix",\
+        help="Specify the prefix for various things (currently --create-dmail"\
+            ").")
+    parser.add_argument(\
         "--send-dmail",\
         help="Send stdin as a dmail with the specified subject. The"\
             " sender and recipients may be specified at the beginning of the"\
@@ -103,7 +108,14 @@ def __main():
     if args.create_dmail:
         log.info("Creating and uploading dmail site.")
 
-        key = rsakey.RsaKey.generate(bits=4096)
+        if args.prefix:
+            if log.isEnabledFor(logging.INFO):
+                log.info("Brute force generating key with prefix [{}]."\
+                    .format(args.prefix))
+            key = brute.generate_key(args.prefix)
+        else:
+            key = rsakey.RsaKey.generate(bits=4096)
+
         ekey = base58.encode(key._encode_key())
 
         dms = dmail.DmailSite()

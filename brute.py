@@ -9,6 +9,7 @@ import enc
 import mbase32
 import multipart
 import mutil
+import rsakey
 
 log = logging.getLogger(__name__)
 
@@ -34,24 +35,19 @@ def generate_targeted_block(prefix, nbits, data, noonce_offset, noonce_size):
     refs = []
 
     try:
-        wid = 0
-
         for i in range(WORKERS):
             log.debug("Starting worker.")
 
             lp, rp = mp.Pipe()
 
             pool.apply_async(\
-                find_noonce,\
+                _find_noonce,\
                 args=(rp,))
 
             pipes.append(lp)
-            refs.append(data)
             refs.append(rp)
 
-            lp.send((wid, prefix, nbits, data, noonce_offset, noonce_size))
-
-            wid += 1
+            lp.send((i, prefix, nbits, data, noonce_offset, noonce_size))
 
         ready = mp.connection.wait(pipes)
         block = ready[0].recv()
@@ -62,13 +58,48 @@ def generate_targeted_block(prefix, nbits, data, noonce_offset, noonce_size):
 
     return block
 
-def find_noonce(rp):
+def generate_key(prefix):
+    assert type(prefix) is str
+
+    key = None
+
+    pool = mp.Pool(WORKERS)
+
+    pipes = []
+    refs = []
+
     try:
-        _find_noonce(rp)
+        for i in range(WORKERS):
+            log.debug("Starting worker.")
+
+            lp, rp = mp.Pipe()
+
+            pool.apply_async(\
+                _find_key,\
+                args=(rp,))
+
+            pipes.append(lp)
+            refs.append(rp)
+
+            lp.send((i, prefix))
+
+        ready = mp.connection.wait(pipes)
+        privdata = ready[0].recv()
+        key = rsakey.RsaKey(privdata=privdata)
     except:
-        log.exception("_find_noonce(..)")
+        log.exception("")
+
+    pool.terminate()
+
+    return key
 
 def _find_noonce(rp):
+    try:
+        __find_noonce(rp)
+    except:
+        log.exception("__find_noonce(..)")
+
+def __find_noonce(rp):
     log.debug("Worker running.")
 
     wid, prefix, nbits, data, noonce_offset, noonce_size = rp.recv()
@@ -107,6 +138,32 @@ def _find_noonce(rp):
             return
 
         noonce += WORKERS
+
+def _find_key(rp):
+    try:
+        __find_key(rp)
+    except:
+        log.exception("__find_key(..)")
+
+def __find_key(rp):
+    log.debug("Worker running.")
+
+    wid, prefix = rp.recv()
+
+    while True:
+        key = rsakey.RsaKey.generate(bits=4096)
+        pubkey_bytes = key.asbytes()
+
+        pubkey_hash = enc.generate_ID(pubkey_bytes)
+
+        pubkey_hash_enc = mbase32.encode(pubkey_hash)
+
+        if pubkey_hash_enc.startswith(prefix):
+            if log.isEnabledFor(logging.INFO):
+                log.info("Worker #{} found key.".format(wid))
+
+            rp.send(key._encode_key())
+            return
 
 def main():
     log.info("Testing...")
