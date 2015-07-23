@@ -348,7 +348,14 @@ class ChordTasks(object):
 
         if not self.engine.peers:
             log.info("No connected nodes, unable to send FindNode.")
-            return
+            if data_mode.value:
+                if data_mode is cp.DataMode.store:
+                    return 0
+                else:
+                    assert data_mode is cp.DataMode.get
+                    return DataResponseWrapper(data_key)
+            else:
+                return 0
 
         if not input_trie:
             input_trie = bittrie.BitTrie()
@@ -410,7 +417,14 @@ class ChordTasks(object):
 
         if not tasks:
             log.info("Cannot perform FindNode, as we know no closer nodes.")
-            return
+            if data_mode.value:
+                if data_mode is cp.DataMode.store:
+                    return 0
+                else:
+                    assert data_mode is cp.DataMode.get
+                    return DataResponseWrapper(data_key)
+            else:
+                return 0
 
         if log.isEnabledFor(logging.DEBUG):
             log.debug("Starting {} root level FindNode tasks."\
