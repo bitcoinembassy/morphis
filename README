@@ -8,9 +8,19 @@ I have done this, released the asyncio SSH protocol code as LGPL so that it may 
 
 -------------------------------------------------------------------------------
 
-NOTE: This is a developer preview release. As such, it may not work well in your exact setup. It is fully functional however. Any problems that you have, suggestions, Etc., I am happy hear.
+Maalstroom: morphis://3syweaeb7xwm4q3hxfp9w4nynhcnuob6
+
+Web: http://morph.is
 
 -------------------------------------------------------------------------------
+
+NOTE
+
+This is a developer preview release. As such, it may not work well in your exact setup. It is fully functional however. Any problems that you have, suggestions, Etc., I am happy hear.
+
+-------------------------------------------------------------------------------
+
+INSTRUCTIONS
 
 To run, execute the following:
 
@@ -24,4 +34,6 @@ Then simply point your web browser to localhost:4251, or use the mcc command lin
 
 -------------------------------------------------------------------------------
 
-Contact: sam2015@morph.is
+Contact (d-mail): samq5hzsg9ts58by5543crp3ut7hum5f :)
+
+Contact (e-mail): sam2015@morph.is
