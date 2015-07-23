@@ -1,3 +1,6 @@
+# Copyright (c) 2014-2015  Sam Maloney.
+# License: GPL v2.
+
 import enc
 
 NODE_ID_BITS = enc.ID_BITS

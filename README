@@ -1,0 +1,27 @@
+-=-=   MORPHiS (c) 2014-2015  Sam Maloney (sam2015@morph.is)   =-=-
+
+Version: 0.8.0 - Developer Preview Release
+
+License: GPL v2 for everything except for some files LGPL, and some public domain. See the LICENSE file for complete details.
+
+I have done this, released the asyncio SSH protocol code as LGPL so that it may be used by the broader Python community. I am willing to donate it fully to the Python Software Foundation itself so they may incorporate it into the standard library if wanted. See client.py for a simple example of how dead simple my asyncio SSH library is to use.
+
+-------------------------------------------------------------------------------
+
+NOTE: This is a developer preview release. As such, it may not work well in your exact setup. It is fully functional however. Any problems that you have, suggestions, Etc., I am happy hear.
+
+-------------------------------------------------------------------------------
+
+To run, execute the following:
+
+> python3 node.py
+
+To get some help, try:
+
+> python3 node.py --help
+
+Then simply point your web browser to localhost:4251, or use the mcc command line client, or ssh to localhost:4250. I recommend using the MORPHiS firefox plugin that will be listed on the front page when you hit localhost:4251. (ANY DEVS THAT CAN HELP WITH THIS DEAD SIMPLE PLUGIN WILL BE SUPER APPRECIATED!)
+
+-------------------------------------------------------------------------------
+
+Contact: sam2015@morph.is

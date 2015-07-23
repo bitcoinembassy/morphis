@@ -1,7 +1,8 @@
-# Copyright (C) 2011 Sam Rushing
-# Copyright (C) 2013-2014 The python-bitcoinlib developers
+# Copyright (C) 2011 Sam Rushing.
+# Copyright (C) 2013-2014 The python-bitcoinlib developers.
+# License: LGPL.
 #
-# This file is based upon parts from python-bitcoinlib (e3cdf68eaff2fc7cbcd10a488e0485e0b694f806). LGPL.
+# This file is based upon parts from python-bitcoinlib (e3cdf68eaff2fc7cbcd10a488e0485e0b694f806).
 
 """Base58 encoding and decoding"""
 

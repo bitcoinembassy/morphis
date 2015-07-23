@@ -1,0 +1,1 @@
+GPL v2 for everything except for: asymkey.py, base58.py, dhgroup14.py, dsskey.py, kex.py, kexdhgroup14sha1.py, mn1.py, packet.py, putil.py, rsakey.py, sshtype.py, sshexception.py, which are licensed under the LGPL, and mbase32.py and hashbench.py which are released as public domain.

@@ -1,3 +1,6 @@
+# Copyright (c) 2014-2015  Sam Maloney.
+# License: LGPL
+
 import llog
 
 import asyncio
@@ -17,7 +20,6 @@ import rsakey
 import sshtype
 from sshexception import SshException
 from mutil import hex_dump
-import peer
 
 MAX_PACKET_LENGTH = 35000
 

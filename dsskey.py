@@ -1,5 +1,8 @@
+# Copyright (C) 2003-2007  Robey Pointer <robeypointer@gmail.com>.
+# Copyright (C) 2014-2015  Sam Maloney.
+# License: LGPL.
+#
 # This file is based upon parts from paramiko (r85d5e95f9280aa236602b77e9f5bd0aa4d3c8fcd).
-# LGPL
 
 """
 DSS keys.
