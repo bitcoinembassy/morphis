@@ -72,6 +72,7 @@ def _init_daos(Base, d):
         signature = Column(LargeBinary, nullable=True)
         epubkey = Column(LargeBinary, nullable=True)
         pubkeylen = Column(Integer, nullable=True)
+        target_id = Column(LargeBinary, nullable=True)
 
     Index("data_id", DataBlock.data_id)
     Index("datablock__distance", DataBlock.distance.desc())

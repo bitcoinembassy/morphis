@@ -17,6 +17,7 @@ import chord
 import chord_packet as cp
 from chordexception import ChordException
 from db import Peer, DataBlock, NodeState
+import multipart as mp
 import mutil
 import enc
 import node as mnnode
@@ -279,6 +280,30 @@ class ChordTasks(object):
 
         sdmsg = cp.ChordStoreData()
         sdmsg.data = data
+
+        storing_nodes =\
+            yield from self.send_find_node(\
+                data_id, for_data=True, data_msg=sdmsg)
+
+        return storing_nodes
+
+    @asyncio.coroutine
+    def send_store_targeted_data(\
+            self, data, store_key=False, key_callback=None):
+        "Sends a StoreData request for a TargetedBlock, returning the count"\
+        " of nodes that claim to have stored it."
+
+        tb_header = data[:mp.TargetedBlock.BLOCK_OFFSET]
+
+        # data_id is a double hash due to the anti-entrapment feature.
+        data_key = enc.generate_ID(tb_header)
+        if key_callback:
+            key_callback(data_key)
+        data_id = enc.generate_ID(data_key)
+
+        sdmsg = cp.ChordStoreData()
+        sdmsg.data = data
+        sdmsg.targeted = True
 
         storing_nodes =\
             yield from self.send_find_node(\
@@ -1072,6 +1097,16 @@ class ChordTasks(object):
                                 "[{}].".format(apath))
                         else:
                             rvpeer.will_store = True
+                    else:
+                        if len(pkts) == 1:
+                            # If a node has no closer peers, it may close
+                            # the channel after sending the StorageInterest
+                            # message instead of also sending a PeerList.
+                            tun_meta.jobs -= 1
+                            query_cntr.value -= 1
+                            if not query_cntr.value:
+                                done_all.set()
+                            continue
 
                 pkt = pkts[1]
             else:
@@ -1137,7 +1172,9 @@ class ChordTasks(object):
                             and (packet_type == cp.CHORD_MSG_DATA_RESPONSE\
                                 or packet_type == cp.CHORD_MSG_DATA_PRESENCE))\
                         or (data_mode is cp.DataMode.store\
-                            and packet_type == cp.CHORD_MSG_DATA_STORED):
+                            and (packet_type == cp.CHORD_MSG_DATA_STORED\
+                                or packet_type\
+                                    == cp.CHORD_MSG_STORAGE_INTEREST)):
                     # Break as we reached deepest packet.
                     break
                 else:
@@ -1938,9 +1975,15 @@ class ChordTasks(object):
         peer_dbid = peer.dbid if peer else "<self>"
 
         data = dmsg.data
+        targeted = dmsg.targeted
 
         pubkey = None
         if dmsg.pubkey:
+            if targeted:
+                errmsg = "Targeted updateable key is not implemented."
+                log.warning(errmsg)
+                raise ChordException(errmsg)
+
             pubkey = rsakey.RsaKey(dmsg.pubkey)
 
             data_key = enc.generate_ID(dmsg.pubkey)
@@ -1964,7 +2007,21 @@ class ChordTasks(object):
                 log.warning(errmsg)
                 raise ChordException(errmsg)
         else:
-            data_key = enc.generate_ID(data)
+            if targeted:
+                tb = mp.TargetedBlock(data)
+
+                block_hash = enc.generate_ID(\
+                    data[mp.TargetedBlock.BLOCK_OFFSET:])
+
+                if block_hash != tb.block_hash:
+                    raise ChordException(\
+                        "The block_hash did not match the block.")
+
+                tb_header = data[:mp.TargetedBlock.BLOCK_OFFSET]
+                data_key = enc.generate_ID(tb_header)
+            else:
+                data_key = enc.generate_ID(data)
+
             if data_id != enc.generate_ID(data_key):
                 errmsg = "Peer (dbid=[{}]) sent a data_id that didn't match"\
                     " the data!".format(peer_dbid)
@@ -2042,6 +2099,9 @@ class ChordTasks(object):
                     a, b = enc.encrypt_data_block(dmsg.pubkey, data_key)
                     data_block.epubkey = a + b
                     data_block.pubkeylen = len(dmsg.pubkey)
+
+                if targeted:
+                    data_block.target_id = tb.target_id
 
                 data_block.original_size = original_size
                 data_block.insert_timestamp = datetime.today()

@@ -295,6 +295,7 @@ class ChordDataPresence(ChordMessage):
 class ChordStoreData(ChordMessage):
     def __init__(self, buf = None):
         self.data = None
+        self.targeted = False
 
         self.pubkey = None
         self.path_hash = None
@@ -310,6 +311,7 @@ class ChordStoreData(ChordMessage):
     def encode(self):
         nbuf = super().encode()
         nbuf += sshtype.encodeBinary(self.data)
+        nbuf += struct.pack("?", self.targeted)
 
         if self.pubkey:
             # Updateable keys.
@@ -325,6 +327,8 @@ class ChordStoreData(ChordMessage):
         i = 1
         l, self.data = sshtype.parseBinary(self.buf[i:])
         i += l
+        self.targeted = struct.unpack_from("?", self.buf, i)
+        i += 1
 
         if i == len(self.buf):
             return

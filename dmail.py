@@ -200,11 +200,12 @@ class DmailEngine(object):
         dw.data_enc2 = r
 
         tb = mp.TargetedBlock()
-        tb.target = target_id
+        tb.target_id = target_id
         tb.noonce = int(0).to_bytes(64, "big")
         tb.block = dw
 
-        data = tb.encode()
+        tb_data = tb.encode()
+        tb_header = tb_data[:mp.TargetedBlock.BLOCK_OFFSET]
 
         if log.isEnabledFor(logging.INFO):
             log.info(\
@@ -212,18 +213,19 @@ class DmailEngine(object):
                     .format(target, difficulty))
 
         noonce_bytes = brute.generate_targeted_block(\
-            target_id, difficulty, data,\
+            target_id, difficulty, tb_header,\
             mp.TargetedBlock.NOONCE_OFFSET,\
             mp.TargetedBlock.NOONCE_SIZE)
 
         if log.isEnabledFor(logging.INFO):
             log.info("Work found noonce [{}].".format(noonce_bytes))
 
-        mp.TargetedBlock.set_noonce(data, noonce_bytes)
+        mp.TargetedBlock.set_noonce(tb_data, noonce_bytes)
 
         if log.isEnabledFor(logging.INFO):
-            log.info(\
-                "hash=[{}].".format(mbase32.encode(enc.generate_ID(data))))
+            mp.TargetedBlock.set_noonce(tb_header, noonce_bytes)
+            log.info("hash=[{}]."\
+                .format(mbase32.encode(enc.generate_ID(tb_header))))
 
         key = None
 
@@ -234,11 +236,12 @@ class DmailEngine(object):
         log.info("Sending dmail to the network.")
 
         if log.isEnabledFor(logging.DEBUG):
-            log.debug("dmail block data=[\n{}].".format(mutil.hex_dump(data)))
+            log.debug("dmail block data=[\n{}]."\
+                .format(mutil.hex_dump(tb_data)))
 
         storing_nodes = yield from\
-            self.task_engine.send_store_data(\
-                data, store_key=True, key_callback=key_callback)
+            self.task_engine.send_store_targeted_data(\
+                tb_data, store_key=True, key_callback=key_callback)
 
         key_enc = mbase32.encode(key)
         id_enc = mbase32.encode(enc.generate_ID(key))

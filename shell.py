@@ -397,6 +397,28 @@ class Shell(cmd.Cmd):
         self.writeln("send_store_data(..) took: {}.".format(diff))
 
     @asyncio.coroutine
+    def do_storetargetedblockenc(self, arg):
+        "<data> store base58 encoded targeted block."
+
+        args = arg.split(' ')
+
+        data = base58.decode(args[0])
+        store_key = bool(args[1]) if len(args) == 2 else False
+
+        def key_callback(data_key):
+            self.writeln("data_key=[{}].".format(mbase32.encode(data_key)))
+
+        start = datetime.today()
+
+        storing_nodes =\
+            yield from self.peer.engine.tasks.send_store_targeted_data(\
+                data, store_key=store_key, key_callback=key_callback)
+
+        diff = datetime.today() - start
+        self.writeln("storing_nodes=[{}].".format(storing_nodes))
+        self.writeln("send_store_targeted_data(..) took: {}.".format(diff))
+
+    @asyncio.coroutine
     def do_storedataenc(self, arg):
         "<data> store base58 encoded data."
 

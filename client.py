@@ -118,6 +118,25 @@ class Client(object):
         return int(r[p0:p1])
 
     @asyncio.coroutine
+    def send_store_targeted_data(\
+            self, data, store_key=False, key_callback=None):
+        data_enc = base58.encode(data)
+
+        r = yield from\
+            self.send_command(\
+                "storetargetedblockenc {} {}".format(data_enc, store_key))
+
+        p0 = r.find(b']')
+        data_key = mbase32.decode(r[10:p0].decode("UTF-8"))
+
+        key_callback(data_key)
+
+        p0 = r.find(b"storing_nodes=[", p0) + 15
+        p1 = r.find(b']', p0)
+
+        return int(r[p0:p1])
+
+    @asyncio.coroutine
     def send_get_data(self, data_key, path=None):
         data_key_enc = mbase32.encode(data_key)
 

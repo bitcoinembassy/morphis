@@ -163,6 +163,8 @@ class LinkBlock(MorphisBlock):
 class TargetedBlock(MorphisBlock):
     NOONCE_OFFSET = MorphisBlock.HEADER_BYTES
     NOONCE_SIZE = 64
+    BLOCK_OFFSET = MorphisBlock.HEADER_BYTES + NOONCE_SIZE\
+        + 2 * consts.NODE_ID_BYTES
 
     @staticmethod
     def set_noonce(data, noonce_bytes):
@@ -174,7 +176,8 @@ class TargetedBlock(MorphisBlock):
 
     def __init__(self, buf=None):
         self.noonce = b' ' * TargetedBlock.NOONCE_SIZE
-        self.target = None
+        self.target_id = None
+        self.block_hash = None
         self.block = None
 
         super().__init__(BlockType.targeted.value, buf)
@@ -184,9 +187,19 @@ class TargetedBlock(MorphisBlock):
 
         assert len(self.noonce) == TargetedBlock.NOONCE_SIZE
         nbuf += self.noonce
-        nbuf += sshtype.encodeBinary(self.target)
+        assert self.target_id is not None\
+            and len(self.target_id) == consts.NODE_ID_BYTES
+        nbuf += self.target_id
+#        assert self.block_hash is not None\
+#            and len(self.block_hash) == consts.NODE_ID_BYTES
+#        nbuf += self.block_hash
+        nbuf += b' ' * consts.NODE_ID_BYTES # block_hash.
 
         self.block.encode(nbuf)
+
+        self.block_hash = enc.generate_ID(nbuf[TargetedBlock.BLOCK_OFFSET:])
+        block_hash_offset = TargetedBlock.BLOCK_OFFSET-consts.NODE_ID_BYTES
+        nbuf[block_hash_offset:TargetedBlock.BLOCK_OFFSET] = self.block_hash
 
         return nbuf
 
@@ -195,8 +208,10 @@ class TargetedBlock(MorphisBlock):
 
         self.noonce = self.buf[i:i+TargetedBlock.NOONCE_SIZE]
         i += TargetedBlock.NOONCE_SIZE
-        i, self.target = sshtype.parse_binary_from(self.buf, i)
-        self.block_offset = i
+        self.target_id = self.buf[i:i+consts.NODE_ID_BYTES]
+        i += consts.NODE_ID_BYTES
+        self.block_hash = self.buf[i:i+consts.NODE_ID_BYTES]
+        i += consts.NODE_ID_BYTES
 
 class HashTreeFetch(object):
     def __init__(self, engine, data_callback, ordered=False, positions=None,\
