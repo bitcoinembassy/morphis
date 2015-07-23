@@ -17,6 +17,7 @@ import chord
 import chord_packet as cp
 from chordexception import ChordException
 from db import Peer, DataBlock, NodeState
+import mbase32
 import multipart as mp
 import mutil
 import enc
@@ -404,7 +405,7 @@ class ChordTasks(object):
         if log.isEnabledFor(logging.INFO):
             log.info("Performing FindNode (data_key=[{}], data_mode={}) to a"\
                 " max depth of [{}]."\
-                    .format(mutil.hex_string(data_key), data_mode,\
+                    .format(mbase32.encode(data_key), data_mode,\
                         maximum_depth))
 
         result_trie = bittrie.BitTrie()
@@ -1954,7 +1955,7 @@ class ChordTasks(object):
 
         if log.isEnabledFor(logging.INFO):
             log.info("Stored key=[{}] as id=[{}]."\
-                .format(mutil.hex_string(data_id), data_block_id))
+                .format(mbase32.encode(data_id), data_block_id))
 
         return True
 
@@ -2101,6 +2102,9 @@ class ChordTasks(object):
                     data_block.pubkeylen = len(dmsg.pubkey)
 
                 if targeted:
+                    if log.isEnabledFor(logging.DEBUG):
+                        log.debug("Storing TargetedBlock (target_id=[{}])."\
+                            .format(mbase32.encode(tb.target_id)))
                     data_block.target_id = tb.target_id
 
                 data_block.original_size = original_size
@@ -2141,7 +2145,7 @@ class ChordTasks(object):
                 else:
                     log.info("Not storing data that we already have"\
                         " (data_id=[{}])."\
-                        .format(mutil.hex_string(data_id)))
+                        .format(mbase32.encode(data_id)))
             return False
 
         self.engine.node.datastore_size += size_diff
@@ -2188,7 +2192,7 @@ class ChordTasks(object):
 
             if log.isEnabledFor(logging.INFO):
                 log.info("Stored data for data_id=[{}] as [{}.blk]."\
-                    .format(mutil.hex_string(data_id), data_block_id))
+                    .format(mbase32.encode(data_id), data_block_id))
 
             return True
         except Exception as e:
