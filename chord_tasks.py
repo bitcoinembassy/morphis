@@ -365,6 +365,9 @@ class ChordTasks(object):
 
         assert len(node_id) == chord.NODE_ID_BYTES
         assert data_key is None or type(data_key) is bytes, type(data_key)
+        #TODO: I think we should get rid of data_key parameter. To do so need
+        # to ensure we keep the returned DataResponseWrapper's data_key
+        # attribute to be set or None the same as it is now.
 
         if for_data:
             data_mode = cp.DataMode.get if data_msg is None\
@@ -403,10 +406,9 @@ class ChordTasks(object):
         maximum_depth = int(math.log(known_peer_cnt, 2))
 
         if log.isEnabledFor(logging.INFO):
-            log.info("Performing FindNode (data_key=[{}], data_mode={}) to a"\
+            log.info("Performing FindNode (node_id=[{}], data_mode={}) to a"\
                 " max depth of [{}]."\
-                    .format(mbase32.encode(data_key), data_mode,\
-                        maximum_depth))
+                    .format(mbase32.encode(node_id), data_mode, maximum_depth))
 
         result_trie = bittrie.BitTrie()
 

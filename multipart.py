@@ -126,7 +126,7 @@ class HashTreeBlock(MorphisBlock):
         nbuf += struct.pack(">L", self.depth)
         nbuf += struct.pack(">Q", self.size)
 
-        assert consts.NODE_ID_BYTES == HEADER_BYTES
+        assert consts.NODE_ID_BYTES == HashTreeBlock.HEADER_BYTES
         nbuf += b' ' * (consts.NODE_ID_BYTES - len(nbuf))
 
         nbuf += self.data

@@ -327,7 +327,7 @@ class ChordStoreData(ChordMessage):
         i = 1
         l, self.data = sshtype.parseBinary(self.buf[i:])
         i += l
-        self.targeted = struct.unpack_from("?", self.buf, i)
+        self.targeted = struct.unpack_from("?", self.buf, i)[0]
         i += 1
 
         if i == len(self.buf):
