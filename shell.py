@@ -336,8 +336,6 @@ class Shell(cmd.Cmd):
 
         args = arg.split(' ')
 
-        log.info("key=[{}].".format(len(args[0])))
-
         data_key, significant_bits = decode_key(args[0])
         path = args[1] if len(args) == 2 else None
 
@@ -355,6 +353,29 @@ class Shell(cmd.Cmd):
         self.writeln("version=[{}].".format(version))
         self.writeln("data:")
         self.writeln(data)
+
+    @asyncio.coroutine
+    def do_gettargeteddata(self, arg):
+        "<DATA_KEY> retrieve targeted data for DATA_KEY from the network."
+
+        data_key, significant_bits = decode_key(arg)
+
+        if significant_bits:
+            self.writeln("Incomplete key, use findkey.")
+            return
+
+        start = datetime.today()
+        data_rw =\
+            yield from self.peer.engine.tasks.send_get_targeted_data(data_key)
+        diff = datetime.today() - start
+
+        self.writeln("send_get_targeted_data(..) took: {}.".format(diff))
+
+        if data_rw.data:
+            self.writeln("data:")
+            self.writeln(data_rw.data)
+        else:
+            self.writeln("Not found.")
 
     @asyncio.coroutine
     def do_fk(self, arg):

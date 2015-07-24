@@ -42,6 +42,7 @@ class DataResponseWrapper(object):
         self.pubkey = None
         self.path_hash = b""
         self.version = None
+        self.targeted = False
 
 class TunnelMeta(object):
     def __init__(self, peer=None, jobs=None):
@@ -222,6 +223,21 @@ class ChordTasks(object):
         return data_rw
 
     @asyncio.coroutine
+    def send_get_targeted_data(self, data_key):
+        assert type(data_key) in (bytes, bytearray)\
+            and len(data_key) == chord.NODE_ID_BYTES,\
+            "type(data_key)=[{}], len={}."\
+                .format(type(data_key), len(data_key))
+
+        data_id = enc.generate_ID(data_key)
+
+        data_rw = yield from\
+            self.send_find_node(data_id, for_data=True, data_key=data_key,\
+                for_targeted=True)
+
+        return data_rw
+
+    @asyncio.coroutine
     def send_find_key(self, data_key_prefix, significant_bits=None):
         assert type(data_key_prefix) in (bytes, bytearray),\
             "type(data_key_prefix)=[{}].".format(type(data_key_prefix))
@@ -356,7 +372,8 @@ class ChordTasks(object):
 
     @asyncio.coroutine
     def send_find_node(self, node_id, significant_bits=None, input_trie=None,\
-            for_data=False, data_msg=None, data_key=None, path_hash=None):
+            for_data=False, data_msg=None, data_key=None, path_hash=None,\
+            for_targeted=False):
         "Returns found nodes sorted by closets. If for_data is True then"\
         " this is really {get/store}_data instead of find_node. If data_msg"\
         " is None than it is get_data and the data is returned. Store data"\
@@ -365,9 +382,6 @@ class ChordTasks(object):
 
         assert len(node_id) == chord.NODE_ID_BYTES
         assert data_key is None or type(data_key) is bytes, type(data_key)
-        #TODO: I think we should get rid of data_key parameter. To do so need
-        # to ensure we keep the returned DataResponseWrapper's data_key
-        # attribute to be set or None the same as it is now.
 
         if for_data:
             data_mode = cp.DataMode.get if data_msg is None\
@@ -475,6 +489,8 @@ class ChordTasks(object):
         else:
             if path_hash:
                 data_rw.path_hash = path_hash
+            if for_targeted:
+                data_rw.for_targeted = True
 
         for depth in range(1, maximum_depth):
             direct_peers_lower = 0
@@ -1815,10 +1831,23 @@ class ChordTasks(object):
             # Truncate the data to exclude the cipher padding.
             data = data[:drmsg.original_size]
 
-            data_hash = enc.generate_ID(data)
+            if log.isEnabledFor(logging.INFO):
+                log.info("data_rw.for_targeted=[{}]."\
+                    .format(data_rw.for_targeted))
+
+            if data_rw.for_targeted:
+                data_hash =\
+                    enc.generate_ID(data[:mp.TargetedBlock.BLOCK_OFFSET])
+            else:
+                data_hash = enc.generate_ID(data)
 
             if drmsg.version is not None:
                 # Updateable key mode.
+                if data_rw.targeted:
+                    log.warning("Received versioned DataResponse when we"\
+                        " requested a TargetedBlock, that is invalid.")
+                    return False
+
                 data_rw.version = drmsg.version
 
                 if data_rw.pubkey:
