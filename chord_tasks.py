@@ -233,12 +233,13 @@ class ChordTasks(object):
 
         data_rw = yield from\
             self.send_find_node(data_id, for_data=True, data_key=data_key,\
-                for_targeted=True)
+                targeted=True)
 
         return data_rw
 
     @asyncio.coroutine
-    def send_find_key(self, data_key_prefix, significant_bits=None):
+    def send_find_key(self, data_key_prefix, significant_bits=None,\
+            targeted=False):
         assert type(data_key_prefix) in (bytes, bytearray),\
             "type(data_key_prefix)=[{}].".format(type(data_key_prefix))
 
@@ -256,12 +257,17 @@ class ChordTasks(object):
         data_rw = yield from\
             self.send_find_node(data_key_prefix,\
                 significant_bits=significant_bits, for_data=True,\
-                data_key=None)
+                data_key=None, targeted=targeted)
 
         return data_rw
 
     @asyncio.coroutine
-    def send_store_key(self, data, data_key=None, key_callback=None):
+    def send_store_key(self, data, data_key=None, targeted=False,\
+            key_callback=None):
+        if log.isEnabledFor(logging.INFO):
+            log.info("Sending ChordStoreKey for data_key=[{}], targeted=[{}]."\
+                .format(mbase32.encode(data_key), targeted))
+
         if not data_key:
             data_key = enc.generate_ID(data)
         if key_callback:
@@ -269,6 +275,7 @@ class ChordTasks(object):
 
         skmsg = cp.ChordStoreKey()
         skmsg.data = data
+        skmsg.targeted = targeted
 
         storing_nodes =\
             yield from self.send_find_node(\
@@ -326,6 +333,9 @@ class ChordTasks(object):
             yield from self.send_find_node(\
                 data_id, for_data=True, data_msg=sdmsg)
 
+        if store_key:
+            yield from self.send_store_key(data, data_key, targeted=True)
+
         return storing_nodes
 
     @asyncio.coroutine
@@ -373,7 +383,7 @@ class ChordTasks(object):
     @asyncio.coroutine
     def send_find_node(self, node_id, significant_bits=None, input_trie=None,\
             for_data=False, data_msg=None, data_key=None, path_hash=None,\
-            for_targeted=False):
+            targeted=False):
         "Returns found nodes sorted by closets. If for_data is True then"\
         " this is really {get/store}_data instead of find_node. If data_msg"\
         " is None than it is get_data and the data is returned. Store data"\
@@ -438,6 +448,8 @@ class ChordTasks(object):
         fnmsg.data_mode = data_mode
         if significant_bits:
             fnmsg.significant_bits = significant_bits
+            if targeted:
+                fnmsg.for_targeted_key = True
 
         for peer in input_trie:
             key = bittrie.XorKey(node_id, peer.node_id)
@@ -489,8 +501,8 @@ class ChordTasks(object):
         else:
             if path_hash:
                 data_rw.path_hash = path_hash
-            if for_targeted:
-                data_rw.for_targeted = True
+            if targeted:
+                data_rw.targeted = True
 
         for depth in range(1, maximum_depth):
             direct_peers_lower = 0
@@ -571,7 +583,8 @@ class ChordTasks(object):
                     closest_datas = []
 
                     data_present = yield from\
-                        self._check_has_data(node_id, significant_bits)
+                        self._check_has_data(\
+                            node_id, significant_bits, targeted)
 
                     if data_present:
                         closest_datas.append(data_present)
@@ -635,13 +648,17 @@ class ChordTasks(object):
             # it being closed won't be a case we have to handle. (We don't
             # reopen channels at this point.)
 
+            #NOTE: result_trie is [] when significant_bits.
+
             for row in result_trie:
                 if row is False:
                     # Row is ourself.
                     if data_mode is cp.DataMode.get:
+                        assert significant_bits is None
+
                         data_present =\
                             yield from self._check_has_data(\
-                                node_id, significant_bits)
+                                node_id, significant_bits, False)
 
                         if not data_present:
                             continue
@@ -1342,7 +1359,8 @@ class ChordTasks(object):
             # In for_data mode we respond with two packets.
             if fnmsg.data_mode is cp.DataMode.get:
                 data_present = yield from self._check_has_data(\
-                    fnmsg.node_id, fnmsg.significant_bits)
+                    fnmsg.node_id, fnmsg.significant_bits,\
+                    fnmsg.for_targeted_key)
 
                 pmsg = cp.ChordDataPresence()
                 if fnmsg.significant_bits and data_present:
@@ -1682,10 +1700,12 @@ class ChordTasks(object):
                 tun_meta.peer.protocol.close_channel(tun_meta.local_cid)
 
     @asyncio.coroutine
-    def _check_has_data(self, data_id, significant_bits):
+    def _check_has_data(self, data_id, significant_bits, targeted_key_search):
         distance = mutil.calc_raw_distance(self.engine.node_id, data_id)
 
-        if significant_bits and significant_bits >= 32:
+        min_sig_bits = 32 if targeted_key_search else 20
+
+        if significant_bits and significant_bits >= min_sig_bits:
             mask = ((1 << (chord.NODE_ID_BITS - significant_bits)) - 1)\
                 .to_bytes(chord.NODE_ID_BYTES, "big")
 
@@ -1704,11 +1724,18 @@ class ChordTasks(object):
 
         def dbcall():
             with self.engine.node.db.open_session() as sess:
-                if significant_bits and significant_bits >= 32:
+                if significant_bits and significant_bits >= min_sig_bits:
                     q = sess.query(DataBlock.data_id)
 
                     q = q.filter(DataBlock.data_id > data_id)
                     q = q.filter(DataBlock.data_id <= end_id)
+
+                    if targeted_key_search:
+                        # This is the feature that makes it so spammers are
+                        # forced to target each destination individually with
+                        # while generating a the proof of work.
+                        q = q.filter(DataBlock.target_id == data_id)
+
                     q = q.filter(DataBlock.original_size == 0)
                     q = q.order_by(DataBlock.data_id)
 
@@ -1832,10 +1859,10 @@ class ChordTasks(object):
             data = data[:drmsg.original_size]
 
             if log.isEnabledFor(logging.INFO):
-                log.info("data_rw.for_targeted=[{}]."\
-                    .format(data_rw.for_targeted))
+                log.info("data_rw.targeted=[{}]."\
+                    .format(data_rw.targeted))
 
-            if data_rw.for_targeted:
+            if data_rw.targeted:
                 data_hash =\
                     enc.generate_ID(data[:mp.TargetedBlock.BLOCK_OFFSET])
             else:
@@ -1938,7 +1965,10 @@ class ChordTasks(object):
 
     @asyncio.coroutine
     def _store_key(self, peer, data_id, dmsg):
-        data_key = enc.generate_ID(dmsg.data)
+        if dmsg.targeted:
+            tb, data_key = self._check_store_targeted_block(dmsg.data)
+        else:
+            data_key = enc.generate_ID(dmsg.data)
 
         if data_key != data_id:
             errmsg = "Peer (dbid=[{}]) sent a data that didn't match the"\
@@ -1964,6 +1994,9 @@ class ChordTasks(object):
                 data_block.distance = distance
                 data_block.original_size = 0
                 data_block.insert_timestamp = datetime.today()
+
+                if dmsg.targeted:
+                    data_block.target_id = tb.target_id
 
                 sess.add(data_block)
 
@@ -2040,17 +2073,7 @@ class ChordTasks(object):
                 raise ChordException(errmsg)
         else:
             if targeted:
-                tb = mp.TargetedBlock(data)
-
-                block_hash = enc.generate_ID(\
-                    data[mp.TargetedBlock.BLOCK_OFFSET:])
-
-                if block_hash != tb.block_hash:
-                    raise ChordException(\
-                        "The block_hash did not match the block.")
-
-                tb_header = data[:mp.TargetedBlock.BLOCK_OFFSET]
-                data_key = enc.generate_ID(tb_header)
+                tb, data_key = self._check_store_targeted_block(data)
             else:
                 data_key = enc.generate_ID(data)
 
@@ -2136,6 +2159,10 @@ class ChordTasks(object):
                     if log.isEnabledFor(logging.DEBUG):
                         log.debug("Storing TargetedBlock (target_id=[{}])."\
                             .format(mbase32.encode(tb.target_id)))
+                    # We don't need the following for anything coded yet, but
+                    # doing it for now because then we can tell which are
+                    # targeted blocks as we may want to have code purge them
+                    # with more pressure than normal blocks.
                     data_block.target_id = tb.target_id
 
                 data_block.original_size = original_size
@@ -2266,6 +2293,21 @@ class ChordTasks(object):
                 pass
 
             return False
+
+    def _check_store_targeted_block(self, data):
+        tb = mp.TargetedBlock(data)
+
+        block_hash = enc.generate_ID(\
+            data[mp.TargetedBlock.BLOCK_OFFSET:])
+
+        if block_hash != tb.block_hash:
+            raise ChordException(\
+                "The block_hash did not match the block.")
+
+        tb_header = data[:mp.TargetedBlock.BLOCK_OFFSET]
+        data_key = enc.generate_ID(tb_header)
+
+        return tb, data_key
 
     def _update_nodestate(self, sess, size_diff):
         # Rule: only update this NodeState row when holding a lock on
