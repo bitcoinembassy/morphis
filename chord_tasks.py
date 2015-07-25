@@ -239,7 +239,7 @@ class ChordTasks(object):
 
     @asyncio.coroutine
     def send_find_key(self, data_key_prefix, significant_bits=None,\
-            targeted=False):
+            target_id=None):
         assert type(data_key_prefix) in (bytes, bytearray),\
             "type(data_key_prefix)=[{}].".format(type(data_key_prefix))
 
@@ -247,8 +247,10 @@ class ChordTasks(object):
             significant_bits = len(data_key_prefix) * 8
 
         if log.isEnabledFor(logging.INFO):
-            log.info("Performing wildcard (key) search (significant_bits"\
-                "=[{}], targeted=[{}]).".format(significant_bits, targeted))
+            log.info("Performing wildcard (key) search (prefix=[{}],"\
+                " significant_bits=[{}], target_id=[{}])."\
+                    .format(mbase32.encode(data_key_prefix), significant_bits,\
+                        target_id))
 
         ldiff = chord.NODE_ID_BYTES - len(data_key_prefix)
         if ldiff > 0:
@@ -257,7 +259,7 @@ class ChordTasks(object):
         data_rw = yield from\
             self.send_find_node(data_key_prefix,\
                 significant_bits=significant_bits, for_data=True,\
-                data_key=None, targeted=targeted)
+                data_key=None, target_id=target_id)
 
         return data_rw
 
@@ -383,7 +385,7 @@ class ChordTasks(object):
     @asyncio.coroutine
     def send_find_node(self, node_id, significant_bits=None, input_trie=None,\
             for_data=False, data_msg=None, data_key=None, path_hash=None,\
-            targeted=False):
+            targeted=False, target_id=None):
         "Returns found nodes sorted by closets. If for_data is True then"\
         " this is really {get/store}_data instead of find_node. If data_msg"\
         " is None than it is get_data and the data is returned. Store data"\
@@ -448,8 +450,8 @@ class ChordTasks(object):
         fnmsg.data_mode = data_mode
         if significant_bits:
             fnmsg.significant_bits = significant_bits
-            if targeted:
-                fnmsg.for_targeted_key = True
+            if target_id:
+                fnmsg.target_id = target_id
 
         for peer in input_trie:
             key = bittrie.XorKey(node_id, peer.node_id)
@@ -584,7 +586,7 @@ class ChordTasks(object):
 
                     data_present = yield from\
                         self._check_has_data(\
-                            node_id, significant_bits, targeted)
+                            node_id, significant_bits, target_id)
 
                     if data_present:
                         closest_datas.append(data_present)
@@ -658,7 +660,7 @@ class ChordTasks(object):
 
                         data_present =\
                             yield from self._check_has_data(\
-                                node_id, significant_bits, False)
+                                node_id, significant_bits, None)
 
                         if not data_present:
                             continue
@@ -1360,7 +1362,7 @@ class ChordTasks(object):
             if fnmsg.data_mode is cp.DataMode.get:
                 data_present = yield from self._check_has_data(\
                     fnmsg.node_id, fnmsg.significant_bits,\
-                    fnmsg.for_targeted_key)
+                    fnmsg.target_id)
 
                 pmsg = cp.ChordDataPresence()
                 if fnmsg.significant_bits and data_present:
@@ -1700,16 +1702,18 @@ class ChordTasks(object):
                 tun_meta.peer.protocol.close_channel(tun_meta.local_cid)
 
     @asyncio.coroutine
-    def _check_has_data(self, data_id, significant_bits, targeted_key_search):
+    def _check_has_data(self, data_id, significant_bits, target_id):
         if log.isEnabledFor(logging.DEBUG):
+            target_id_enc =\
+                mbase32.encode(target_id) if target_id is not None else None
             log.debug("Checking for data_id=[{}], significant_bits=[{}],"\
-                " targeted_key_search=[{}]."\
+                " target_id=[{}]."\
                     .format(mbase32.encode(data_id), significant_bits,\
-                        targeted_key_search))
+                        target_id_enc))
 
         distance = mutil.calc_raw_distance(self.engine.node_id, data_id)
 
-        min_sig_bits = 20 if targeted_key_search else 32
+        min_sig_bits = 20 if target_id is not None else 32
 
         if significant_bits and significant_bits >= min_sig_bits:
             mask = ((1 << (chord.NODE_ID_BITS - significant_bits)) - 1)\
@@ -1736,11 +1740,11 @@ class ChordTasks(object):
                     q = q.filter(DataBlock.data_id > data_id)
                     q = q.filter(DataBlock.data_id <= end_id)
 
-                    if targeted_key_search:
+                    if target_id:
                         # This is the feature that makes it so spammers are
                         # forced to target each destination individually with
                         # while generating a the proof of work.
-                        q = q.filter(DataBlock.target_id == data_id)
+                        q = q.filter(DataBlock.target_id == target_id)
 
                     q = q.filter(DataBlock.original_size == 0)
                     q = q.order_by(DataBlock.data_id)

@@ -388,17 +388,18 @@ class Shell(cmd.Cmd):
 
     @asyncio.coroutine
     def do_findkey(self, arg):
-        "<DATA_KEY_PREFIX> [TARGETED] search the network for the given key."
+        "<DATA_KEY_PREFIX> [TARGET] search the network for the given key."
 
         args = arg.split(' ')
 
         data_key, significant_bits = decode_key(args[0])
-        targeted = bool(args[1]) if len(args) == 2 else False
+        target_id = mbase32.decode(args[1]) if len(args) == 2 else None
 
         start = datetime.today()
         data_rw = yield from\
             self.peer.engine.tasks.send_find_key(\
-                data_key, significant_bits=significant_bits, targeted=targeted)
+                data_key, significant_bits=significant_bits,\
+                    target_id=target_id)
         diff = datetime.today() - start
         data_key_enc =\
             mbase32.encode(data_rw.data_key) if data_rw.data_key else None
