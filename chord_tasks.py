@@ -248,7 +248,7 @@ class ChordTasks(object):
 
         if log.isEnabledFor(logging.INFO):
             log.info("Performing wildcard (key) search (significant_bits"\
-                "=[{}]).".format(significant_bits))
+                "=[{}], targeted=[{}]).".format(significant_bits, targeted))
 
         ldiff = chord.NODE_ID_BYTES - len(data_key_prefix)
         if ldiff > 0:
@@ -1701,6 +1701,12 @@ class ChordTasks(object):
 
     @asyncio.coroutine
     def _check_has_data(self, data_id, significant_bits, targeted_key_search):
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("Checking for data_id=[{}], significant_bits=[{}],"\
+                " targeted_key_search=[{}]."\
+                    .format(mbase32.encode(data_id), significant_bits,\
+                        targeted_key_search))
+
         distance = mutil.calc_raw_distance(self.engine.node_id, data_id)
 
         min_sig_bits = 20 if targeted_key_search else 32
