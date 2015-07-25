@@ -309,9 +309,13 @@ class Shell(cmd.Cmd):
 
     @asyncio.coroutine
     def do_findnode(self, arg):
-        "[ID] find the node with hex encoded id."
+        "[ID] find the node with id."
 
-        node_id = int(arg, 16).to_bytes(chord.NODE_ID_BYTES, "big")
+        node_id, significant_bits = decode_key(arg)
+
+        if significant_bits:
+            self.writeln("Won't FindNode for incomplete key.")
+            return
 
         start = datetime.today()
         result = yield from self.peer.engine.tasks.send_find_node(node_id)
@@ -392,7 +396,9 @@ class Shell(cmd.Cmd):
         data_rw = yield from\
             self.peer.engine.tasks.send_find_key(data_key, significant_bits)
         diff = datetime.today() - start
-        self.writeln("data_key=[{}].".format(hex_string(data_rw.data_key)))
+        data_key_enc =\
+            mbase32.encode(data_rw.data_key) if data_rw.data_key else None
+        self.writeln("data_key=[{}].".format(data_key_enc))
         self.writeln("send_find_key(..) took: {}.".format(diff))
 
     @asyncio.coroutine
@@ -529,7 +535,7 @@ class Shell(cmd.Cmd):
             return
 
         def key_callback(data_key):
-            self.writeln("data_key=[{}].".format(hex_string(data_key)))
+            self.writeln("data_key=[{}].".format(mbase32.encode(data_key)))
 
         start = datetime.today()
         storing_nodes =\
@@ -598,7 +604,7 @@ class Shell(cmd.Cmd):
         engine = self.peer.engine
 
         self.writeln("Node:\n\tid=[{}]\n\tbind_port=[{}]\n\tconnections={}"\
-            .format(hex_string(engine.node_id), engine._bind_port,
+            .format(mbase32.encode(engine.node_id), engine._bind_port,
                 len(engine.peers)))
 
     @asyncio.coroutine
