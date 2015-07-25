@@ -1703,7 +1703,7 @@ class ChordTasks(object):
     def _check_has_data(self, data_id, significant_bits, targeted_key_search):
         distance = mutil.calc_raw_distance(self.engine.node_id, data_id)
 
-        min_sig_bits = 32 if targeted_key_search else 20
+        min_sig_bits = 20 if targeted_key_search else 32
 
         if significant_bits and significant_bits >= min_sig_bits:
             mask = ((1 << (chord.NODE_ID_BITS - significant_bits)) - 1)\
