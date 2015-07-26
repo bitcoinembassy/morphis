@@ -137,6 +137,30 @@ class Client(object):
         return int(r[p0:p1])
 
     @asyncio.coroutine
+    def send_find_key(self, prefix, target=None, significant_bits=None):
+        cmd = "findkey " + mbase32.encode(prefix)
+        if target:
+            cmd += " " + mbase32.encode(target)
+            if significant_bits:
+                cmd += " " + str(significant_bits)
+
+        r = yield from self.send_command(cmd)
+
+        p0 = r.find(b"data_key=[") + 10
+        p1 = r.find(b']', p0)
+
+        data_key = r[p0:p1].decode()
+
+        if data_key == "None":
+            data_key = None
+        else:
+            data_key = mbase32.decode(data_key)
+
+        data_rw = chord_tasks.DataResponseWrapper(data_key)
+
+        return data_rw
+
+    @asyncio.coroutine
     def send_get_data(self, data_key, path=None):
         data_key_enc = mbase32.encode(data_key)
 
@@ -151,7 +175,7 @@ class Client(object):
 
         p0 = r.find(b"version=[") + 9
         p1 = r.find(b']', p0)
-        data_rw.version = r[p0:p1]
+        data_rw.version = int(r[p0:p1])
         p0 = p1 + 1
 
         p0 = r.find(b"data:\r\n", p0) + 7

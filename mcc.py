@@ -14,6 +14,7 @@ import base58
 import brute
 import client
 import dmail
+import mbase32
 import rsakey
 import sshtype
 
@@ -68,6 +69,9 @@ def __main():
         "--prefix",\
         help="Specify the prefix for various things (currently --create-dmail"\
             ").")
+    parser.add_argument(\
+        "--scan-dmail",\
+        help="Scan the network for available dmails.")
     parser.add_argument(\
         "--send-dmail",\
         help="Send stdin as a dmail with the specified subject. The"\
@@ -150,6 +154,15 @@ def __main():
 
         de = dmail.DmailEngine(mc)
         yield from de.send_dmail_text(args.send_dmail, dmail_data)
+
+    if args.scan_dmail:
+        addr = mbase32.decode(args.scan_dmail)
+        de = dmail.DmailEngine(mc)
+
+        def key_callback(key):
+            print("dmail key: [{}].".format(mbase32.encode(key)))
+
+        yield from de.scan_dmail_address(addr, key_callback=key_callback)
 
     log.info("Disconnecting.")
 

@@ -160,7 +160,7 @@ class DmailEngine(object):
 
         dmail_bytes = dmail.encode()
 
-        recipients = yield from self._fetch_recipient_dmail_sites(recipients)
+        recipients = yield from self.fetch_recipient_dmail_sites(recipients)
 
         for recipient in recipients:
             if recipient.root["ssm"] != _dh_method_name:
@@ -168,6 +168,42 @@ class DmailEngine(object):
                     .format(recipient.root["ssm"]))
 
             yield from self._send_dmail(dmail, recipient)
+
+    @asyncio.coroutine
+    def scan_dmail_address(self, addr, key_callback=None):
+        addr_enc = mbase32.encode(addr)
+
+        if log.isEnabledFor(logging.INFO):
+            log.info("Scanning dmail [{}].".format(addr_enc))
+
+        dsites = yield from self.fetch_recipient_dmail_sites([addr])
+
+        if not dsites:
+            raise Exception("Dmail site not found.")
+
+        dsite = dsites[0]
+
+        target = dsite.root["target"]
+        significant_bits = dsite.root["difficulty"]
+
+        target = start = mbase32.decode(target)
+
+        while True:
+            data_rw = yield from self.task_engine.send_find_key(\
+                start, target=target, significant_bits=significant_bits)
+
+            key = data_rw.data_key
+
+            if not key:
+                break
+
+            if log.isEnabledFor(logging.INFO):
+                log.info("Found dmail key: [{}].".format(mbase32.encode(key)))
+
+            if key_callback:
+                key_callback(key)
+
+            start = key
 
     @asyncio.coroutine
     def _send_dmail(self, dmail, recipient):
@@ -251,7 +287,7 @@ class DmailEngine(object):
                 .format(key_enc, id_enc, storing_nodes))
 
     @asyncio.coroutine
-    def _fetch_recipient_dmail_sites(self, recipients):
+    def fetch_recipient_dmail_sites(self, recipients):
         robjs = []
 
         for recipient in recipients:

@@ -388,12 +388,15 @@ class Shell(cmd.Cmd):
 
     @asyncio.coroutine
     def do_findkey(self, arg):
-        "<DATA_KEY_PREFIX> [TARGET] search the network for the given key."
+        "<DATA_KEY_PREFIX> [TARGET] [SIGNIFICANT_BITS] search the network for"
+        " the given key."
 
         args = arg.split(' ')
 
         data_key, significant_bits = decode_key(args[0])
-        target_id = mbase32.decode(args[1]) if len(args) == 2 else None
+        target_id = mbase32.decode(args[1]) if len(args) >= 2 else None
+        if len(args) == 3:
+            significant_bits = int(args[2])
 
         start = datetime.today()
         data_rw = yield from\
