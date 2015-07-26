@@ -267,8 +267,9 @@ class ChordTasks(object):
     def send_store_key(self, data, data_key=None, targeted=False,\
             key_callback=None):
         if log.isEnabledFor(logging.INFO):
+            data_key_enc = mbase32.encode(data_key) if data_key else None
             log.info("Sending ChordStoreKey for data_key=[{}], targeted=[{}]."\
-                .format(mbase32.encode(data_key), targeted))
+                .format(data_key_enc, targeted))
 
         if not data_key:
             data_key = enc.generate_ID(data)
