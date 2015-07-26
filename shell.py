@@ -183,14 +183,30 @@ class Shell(cmd.Cmd):
             rmsg.value = msg.value.replace(b'\n', b"\r\n")
             self.peer.protocol.write_channel_data(self.local_cid, rmsg.encode())
 
-            i = buf.find(b'\r')
-            if i == -1:
+            #TODO: Replace this hacky code that handle multibyte characters
+            # with something better. This lets you type one and hit enter
+            # without it breaking, but if you type one and hit backspace then
+            # you are still doomed until you press CTRL-D to quit.
+            i = 0
+            while True:
+                i = buf.find(b'\r', i)
+                if i == -1:
+                    outer_continue = True
+                    break
+
+                try:
+                    line = buf[:i].decode()
+                except:
+                    i += 1
+                    continue
+
+                buf = buf[i+1:]
+
+                return line
+
+            if outer_continue:
+                outer_continue = False
                 continue
-
-            line = buf[:i].decode()
-            buf = buf[i+1:]
-
-            return line
 
     def _replace_line(self, buf, newline):
         lenbuf = len(buf)
