@@ -439,7 +439,7 @@ def get_data(engine, data_key, data_callback, path=None, ordered=False,\
     data_rw = yield from engine.tasks.send_get_data(data_key, path)
     data = data_rw.data
 
-    if not data:
+    if data is None:
         return None
 
     if data_rw.version:

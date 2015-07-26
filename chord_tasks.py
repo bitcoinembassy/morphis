@@ -836,7 +836,7 @@ class ChordTasks(object):
             else:
                 assert data_mode is cp.DataMode.get
 
-                if not data_rw.data\
+                if data_rw.data is None\
                         and (not significant_bits or not data_rw.data_key):
                     log.info("Failed to find the data!")
                 else:
