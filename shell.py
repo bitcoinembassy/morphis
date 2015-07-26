@@ -221,6 +221,14 @@ class Shell(cmd.Cmd):
         except:
             self._write(str(val))
 
+    def write_raw(self, val):
+        assert type(val) in (bytes, bytearray), type(val)
+
+        self.out_buffer += val
+
+        if len(self.out_buffer) > mn1.MAX_PACKET_LENGTH:
+            self.flush()
+
     def _write(self, val):
         if isinstance(val, bytearray) or isinstance(val, bytes):
             val = val.replace(b'\n', b"\r\n")
@@ -356,7 +364,11 @@ class Shell(cmd.Cmd):
         self.writeln("send_get_data(..) took: {}.".format(diff))
         self.writeln("version=[{}].".format(version))
         self.writeln("data:")
-        self.writeln(data)
+        if data is not None:
+            self.write_raw(data)
+            self.writeln("")
+        else:
+            self.writeln("Not found.")
 
     @asyncio.coroutine
     def do_gettargeteddata(self, arg):
@@ -375,9 +387,10 @@ class Shell(cmd.Cmd):
 
         self.writeln("send_get_targeted_data(..) took: {}.".format(diff))
 
-        if data_rw.data:
+        if data_rw.data is not None:
             self.writeln("data:")
-            self.writeln(data_rw.data)
+            self.write_raw(data_rw.data)
+            self.writeln("")
         else:
             self.writeln("Not found.")
 

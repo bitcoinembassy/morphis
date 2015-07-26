@@ -57,7 +57,7 @@ class DmailSite(object):
         return json.dumps(self.root).encode()
 
 class DmailWrapper(object):
-    def __init__(self):
+    def __init__(self, buf=None, offset=0):
         self.version = 1
         self.ssm = None
         self.sse = None
@@ -68,10 +68,12 @@ class DmailWrapper(object):
         self.data_enc = None
         self.data_enc2 = None
 
+        if buf is not None:
+            self.parse_from(buf, offset)
+
     def encode(self, obuf=None):
         buf = obuf if obuf else bytearray()
-
-        buf += struct.pack("B", self.version)
+        buf += struct.pack(">L", self.version)
         buf += sshtype.encodeString(self.ssm)
         buf += sshtype.encodeMpint(self.sse)
         buf += sshtype.encodeMpint(self.ssf)
@@ -80,12 +82,28 @@ class DmailWrapper(object):
         if self.data_enc2:
             buf += self.data_enc2
 
+    def parse_from(self, buf, idx):
+        self.version = struct.unpack_from(">L", buf, idx)[0]
+        idx += 4
+        idx, self.ssm = sshtype.parse_string_from(buf, idx)
+        idx, self.sse = sshtype.parse_mpint_from(buf, idx)
+        idx, self.ssf = sshtype.parse_mpint_from(buf, idx)
+        self.data_len = struct.unpack_from(">L", buf, idx)[0]
+        idx += 4
+
+        self.data_enc = buf[idx:]
+
+        return idx
+
 class Dmail(object):
-    def __init__(self):
+    def __init__(self, buf=None, offset=0, length=None):
         self.version = 1
         self.sender_pubkey = None
         self.subject = None
         self.parts = [] # [DmailPart].
+
+        if buf:
+            self.parse_from(buf, offset, length)
 
     def encode(self, obuf=None):
         buf = obuf if obuf else bytearray()
@@ -94,11 +112,26 @@ class Dmail(object):
         buf += sshtype.encodeBinary(self.sender_pubkey)
         buf += sshtype.encodeString(self.subject)
 
-        buf += struct.pack(">L", len(self.parts))
         for part in self.parts:
             part.encode(buf)
 
         return buf
+
+    def parse_from(self, buf, idx, length=None):
+        if not length:
+            length = len(buf)
+
+        self.version = struct.unpack_from(">L", buf, idx)[0]
+        idx += 4
+        idx, self.sender_pubkey = sshtype.parse_binary_from(buf, idx)
+        idx, self.subject = sshtype.parse_string_from(buf, idx)
+
+        while idx < length:
+            part = DmailPart()
+            idx = part.parse_from(buf, idx)
+            self.parts.append(part)
+
+        return idx
 
 class DmailPart(object):
     def __init__(self):
@@ -112,10 +145,8 @@ class DmailPart(object):
         return buf
 
     def parse_from(self, buf, idx):
-        l, self.mime = sshtype.parse_string_from(buf, idx)
-        idx += l
-        l, self.data = sshtype.parse_binary_from(buf, idx)
-        idx += l
+        idx, self.mime = sshtype.parse_string_from(buf, idx)
+        idx, self.data = sshtype.parse_binary_from(buf, idx)
         return idx
 
 class DmailEngine(object):
@@ -206,6 +237,53 @@ class DmailEngine(object):
             start = key
 
     @asyncio.coroutine
+    def fetch_dmail(self, key, x=None, target_id=None):
+        data_rw = yield from self.task_engine.send_get_targeted_data(key)
+
+        data = data_rw.data
+
+        if not data:
+            return None
+        if not x:
+            return data
+
+        tb = mp.TargetedBlock(data)
+
+        if target_id:
+            if tb.target_id != target_id:
+                raise Exception(\
+                    "TargetedBlock->target_id does not match request.")
+
+        dw = DmailWrapper(tb.buf, mp.TargetedBlock.BLOCK_OFFSET)
+
+        if dw.ssm != "mdh-v1":
+            raise Exception("Unrecognized key exchange method in dmail [{}]."\
+                .format(dw.ssm))
+
+        kex = dhgroup14.DhGroup14()
+        kex.x = x
+        kex.generate_e()
+        kex.f = dw.ssf
+
+        if dw.sse != kex.e:
+            raise Exception("Dmail is encrypted with a different e [{}] than"\
+                " the specified x resulted in [{}].".format(dw.sse, kex.e))
+
+        kex.calculate_k()
+
+        key = self._generate_encryption_key(tb.target_id, kex.k)
+
+        data = enc.decrypt_data_block(dw.data_enc, key)
+
+        dmail = Dmail(data, 0, dw.data_len)
+
+        return dmail
+
+    def _generate_encryption_key(self, target_id, k):
+        return enc.generate_ID(\
+            target_id + sshtype.encodeMpint(k))
+
+    @asyncio.coroutine
     def _send_dmail(self, dmail, recipient):
         root = recipient.root
         sse = root["sse"]
@@ -221,10 +299,9 @@ class DmailEngine(object):
 
         target_id = mbase32.decode(target)
 
-        key = enc.generate_ID(\
-            target_id + sshtype.encodeMpint(k) + dmail.sender_pubkey)
-
+        key = self._generate_encryption_key(target_id, k)
         dmail_bytes = dmail.encode()
+
         m, r = enc.encrypt_data_block(dmail_bytes, key)
 
         dw = DmailWrapper()

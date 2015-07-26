@@ -214,7 +214,7 @@ class ChordFindNode(ChordMessage):
         if i == len(self.buf):
             return
 
-        l, self.target_id = sshtype.parse_binary_from(self.buf, i)
+        i, self.target_id = sshtype.parse_binary_from(self.buf, i)
 
 class ChordGetData(ChordMessage):
     def __init__(self, buf = None):

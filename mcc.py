@@ -14,7 +14,9 @@ import base58
 import brute
 import client
 import dmail
+import enc
 import mbase32
+import mutil
 import rsakey
 import sshtype
 
@@ -63,6 +65,9 @@ def __main():
         help="Generate and upload a new dmail site.",\
         action="store_true")
     parser.add_argument(\
+        "--fetch-dmail",
+        help="Fetch dmail for specified key_id.")
+    parser.add_argument(\
         "-i",\
         help="Read file as stdin.")
     parser.add_argument(\
@@ -84,6 +89,12 @@ def __main():
     parser.add_argument("-l", dest="logconf",\
         help="Specify alternate logging.ini [IF SPECIFIED, THIS MUST BE THE"\
             " FIRST PARAMETER!].")
+    parser.add_argument(\
+        "--dmail-target",\
+        help="Specify the dmail target to validate dmail against.")
+    parser.add_argument(\
+        "-x",\
+        help="Specify the x (Diffie-Hellman private secret) to use.")
 
     args = parser.parse_args()
 
@@ -156,6 +167,8 @@ def __main():
         yield from de.send_dmail_text(args.send_dmail, dmail_data)
 
     if args.scan_dmail:
+        log.info("Scanning dmail address.")
+
         addr = mbase32.decode(args.scan_dmail)
         de = dmail.DmailEngine(mc)
 
@@ -163,6 +176,40 @@ def __main():
             print("dmail key: [{}].".format(mbase32.encode(key)))
 
         yield from de.scan_dmail_address(addr, key_callback=key_callback)
+
+    if args.fetch_dmail:
+        log.info("Fetching dmail for key=[{}].".format(args.fetch_dmail))
+
+        key = mbase32.decode(args.fetch_dmail)
+
+        de = dmail.DmailEngine(mc)
+
+        if args.x:
+            l, x_int = sshtype.parseMpint(base58.decode(args.x))
+        else:
+            x_int = None
+
+        dmail_target = args.dmail_target
+
+        dm = yield from de.fetch_dmail(key, x_int, dmail_target)
+
+        if not dm:
+            raise Exception("No dmail found.")
+
+        if not x_int:
+            print("Encrypted dmail data=[\n{}].".format(mutil.hex_dump(dm)))
+        else:
+            print("Subject: {}\n".format(dm.subject))
+
+            if dm.sender_pubkey:
+                print("From: {}"\
+                    .format(mbase32.encode(enc.generate_ID(dm.sender_pubkey))))
+
+            i = 0
+            for part in dm.parts:
+                print("DmailPart[{}]:\n    mime-type=[{}]\n    data=[{}]\n\n"\
+                    .format(i, part.mime, part.data))
+                i += 1
 
     log.info("Disconnecting.")
 

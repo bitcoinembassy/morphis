@@ -179,7 +179,22 @@ class Client(object):
         p0 = p1 + 1
 
         p0 = r.find(b"data:\r\n", p0) + 7
-        data_rw.data = r[p0:]
+        data_rw.data = r[p0:-2] # -2 for the "\r\n".
+
+        return data_rw
+
+    @asyncio.coroutine
+    def send_get_targeted_data(self, data_key):
+        data_key_enc = mbase32.encode(data_key)
+
+        cmd = "gettargeteddata {}".format(data_key_enc)
+
+        r = yield from self.send_command(cmd)
+
+        data_rw = chord_tasks.DataResponseWrapper(data_key)
+
+        p0 = r.find(b"data:\r\n") + 7
+        data_rw.data = r[p0:-2] # -2 for the "\r\n".
 
         return data_rw
 

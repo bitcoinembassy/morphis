@@ -190,10 +190,10 @@ class TargetedBlock(MorphisBlock):
         assert self.target_id is not None\
             and len(self.target_id) == consts.NODE_ID_BYTES
         nbuf += self.target_id
-#        assert self.block_hash is not None\
-#            and len(self.block_hash) == consts.NODE_ID_BYTES
-#        nbuf += self.block_hash
-        nbuf += b' ' * consts.NODE_ID_BYTES # block_hash.
+
+        nbuf += b' ' * consts.NODE_ID_BYTES # block_hash placeholder.
+
+        assert len(nbuf) == TargetedBlock.BLOCK_OFFSET
 
         self.block.encode(nbuf)
 

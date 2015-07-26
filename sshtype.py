@@ -38,6 +38,19 @@ def parseBinary(buf):
 
     return length + 4, value
 
+def parse_mpint_from(buf, i):
+    length = struct.unpack_from(">L", buf, i)[0]
+
+    if log.isEnabledFor(logging.DEBUG):
+        log.debug("length={}".format(length))
+
+    start = i + 4
+    end = start + length
+
+    value = putil.inflate_long(buf[start:end])
+
+    return end, value
+
 def parseMpint(buf):
     length = struct.unpack(">L", buf[0:4])[0]
     if log.isEnabledFor(logging.DEBUG):
