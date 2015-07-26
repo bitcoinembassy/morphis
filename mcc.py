@@ -207,7 +207,7 @@ def __main():
 
             i = 0
             for part in dm.parts:
-                print("DmailPart[{}]:\n    mime-type=[{}]\n    data=[{}]\n\n"\
+                print("DmailPart[{}]:\n    mime-type=[{}]\n    data=[{}]\n"\
                     .format(i, part.mime, part.data))
                 i += 1
 
