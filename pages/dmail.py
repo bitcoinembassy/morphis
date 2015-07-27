@@ -71,6 +71,13 @@ def _serve(handler, rpath, done_event):
 
             handler._send_partial_content(pages.dmail_inbox_end)
             handler._end_partial_content()
+        elif req.startswith("/view/"):
+            req_data = req[6:]
+
+            content = pages.dmail_address_page_content[0].replace(\
+                b"${IFRAME_SRC}", "/fetch/{}".format(req_data).encode())
+
+            handler._send_content((content, None), False)
         elif req.startswith("/fetch/"):
             keys = req[7:]
             p0 = keys.index('/')
@@ -113,7 +120,7 @@ def _list_dmail_inbox(handler, addr):
         addr_enc = mbase32.encode(addr)
         key_enc = mbase32.encode(key)
         handler._send_partial_content(\
-            """<a href="../fetch/{}/{}">{}</a><br/>"""\
+            """<a href="../view/{}/{}">{}</a><br/>"""\
                 .format(addr_enc, key_enc, key_enc))
 
     try:
@@ -173,4 +180,5 @@ def _fetch_dmail(handler, dmail_addr, dmail_key):
             dmail_text += "----- ^ dmail part #{} ^ -----\n\n".format(i)
             i += 1
 
-    handler._send_content((dmail_text.encode(), None), False)
+    handler._send_content(\
+        (dmail_text.encode(), None), False, content_type="text/plain")

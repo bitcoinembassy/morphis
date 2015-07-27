@@ -299,7 +299,7 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
         else:
             self._handle_error(data_rw)
 
-    def _send_content(self, content_entry, cacheable=True):
+    def _send_content(self, content_entry, cacheable=True, content_type=None):
         content = content_entry[0]
         content_id = content_entry[1]
 
@@ -321,6 +321,8 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
 
         self.send_response(200)
         self.send_header("Content-Length", len(content))
+        self.send_header("Content-Type",\
+            "text/html" if content_type is None else content_type)
         if cacheable:
             self.send_header("Cache-Control", "public")
             self.send_header("ETag", content_id)
