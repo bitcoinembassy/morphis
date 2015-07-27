@@ -16,6 +16,7 @@ import chord
 import enc
 import rsakey
 import mbase32
+import pages
 import multipart
 import mutil
 
@@ -26,8 +27,6 @@ port = 4251
 
 node = None
 server = None
-
-home_page_content = [b'<html><head><title>Morphis</title></head><body><p><a href="morphis://3syweaeb7xwm4q3hxfp9w4nynhcnuob6r1mhj19ntu4gikjr7nhypezti4t1kacp4eyy3hcbxdbm4ria5bayb4rrfsafkscbik7c5ue/">Morphis Homepage</a><br/><a href="morphis://3syweaeb7xwm4q3hxfp9w4nynhcnuob6r1mhj19ntu4gikjr7nhypezti4t1kacp4eyy3hcbxdbm4ria5bayb4rrfsafkscbik7c5ue/firefox_plugin">Morphis Firefox Plugin</a><br/></p><a href="morphis://upload">Upload</a><br/></body></html>', None]
 
 upload_page_content = None
 static_upload_page_content = [None, None]
@@ -65,12 +64,17 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
             rpath = rpath[:-1]
 
         if not rpath:
-            self._send_content(home_page_content)
+            self._send_content(pages.home_page_content)
             return
 
-        s_upload = "upload"
+        s_upload = ".upload"
+        s_dmail = ".dmail"
+
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("rpath=[{}].".format(rpath))
+
         if rpath.startswith(s_upload):
-            if rpath.startswith("upload/generate"):
+            if rpath.startswith(".upload/generate"):
                 priv_key =\
                     base58.encode(\
                         rsakey.RsaKey.generate(bits=4096)._encode_key())
@@ -102,6 +106,12 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
                 self._send_content((content, content_id))
 
             return
+        elif rpath.startswith(s_dmail):
+            if len(rpath) == len(s_dmail):
+                self._send_content(pages.dmail_page_content)
+            else:
+                self._handle_error()
+            return
 
         if self.headers["If-None-Match"] == rpath:
             self.send_response(304)
@@ -109,9 +119,6 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", 0)
             self.end_headers()
             return
-
-        if log.isEnabledFor(logging.INFO):
-            log.info("rpath=[{}].".format(rpath))
 
         error = False
 
@@ -133,11 +140,7 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
             log.exception("decode")
 
         if error:
-            errmsg = b"400 Bad Request."
-            self.send_response(400)
-            self.send_header("Content-Length", len(errmsg))
-            self.end_headers()
-            self.wfile.write(errmsg)
+            self._handle_error()
             return
 
         data_rw = DataResponseWrapper()
@@ -324,8 +327,11 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
         self.wfile.write(content)
         return
 
-    def _handle_error(self, data_rw):
-        if data_rw.exception:
+    def _handle_error(self, data_rw=None):
+        if not data_rw:
+            errmsg = b"400 Bad Request."
+            self.send_response(400)
+        elif data_rw.exception:
             errmsg = b"500 Internal Server Error."
             self.send_response(500)
         elif data_rw.timed_out:
@@ -491,4 +497,4 @@ def _set_upload_page(content):
     static_upload_page_content[1] =\
         mbase32.encode(enc.generate_ID(static_upload_page_content[1]))
 
-_set_upload_page(b'<html><head><title>Morphis Maalstroom Upload</title></head><body><p>Select the file to upload below:</p><form action="upload" method="post" enctype="multipart/form-data"><input type="file" name="fileToUpload" id="fileToUpload"/><div style="${UPDATEABLE_KEY_MODE_DISPLAY}"><br/><br/><label for="privateKey">Private Key</label><textarea name="privateKey" id="privateKey" rows="5" cols="80">${PRIVATE_KEY}</textarea><br/><label for="path">Path</label><input type="textfield" name="path" id="path"/><br/><label for="version">Version</label><input type="textfield" name="version" id="version"/><br/><label for="mime_type">Mime Type</label><input type="textfield" name="mime_type" id="mime_type"/><br/></div><input type="submit" value="Upload File" name="submit"/></form><p style="${STATIC_MODE_DISPLAY}"><a href="morphis://upload/generate">switch to updateable key mode</a></p><p style="${UPDATEABLE_KEY_MODE_DISPLAY}"><a href="morphis://upload">switch to static key mode</a></p></body></html>')
+_set_upload_page(b'<html><head><title>MORPHiS Maalstroom Upload</title></head><body><h4 style="${UPDATEABLE_KEY_MODE_DISPLAY}">NOTE: Bookmark this page to save your private key in the bookmark!</h4>Select the file to upload below:</p><form action="upload" method="post" enctype="multipart/form-data"><input type="file" name="fileToUpload" id="fileToUpload"/><div style="${UPDATEABLE_KEY_MODE_DISPLAY}"><br/><br/><label for="privateKey">Private Key</label><textarea name="privateKey" id="privateKey" rows="5" cols="80">${PRIVATE_KEY}</textarea><br/><label for="path">Path</label><input type="textfield" name="path" id="path"/><br/><label for="version">Version</label><input type="textfield" name="version" id="version"/><br/><label for="mime_type">Mime Type</label><input type="textfield" name="mime_type" id="mime_type"/><br/></div><input type="submit" value="Upload File" name="submit"/></form><p style="${STATIC_MODE_DISPLAY}"><a href="morphis://.upload/generate">switch to updateable key mode</a></p><p style="${UPDATEABLE_KEY_MODE_DISPLAY}"><a href="morphis://.upload">switch to static key mode</a></p><h5><- <a href="morphis://">MORPHiS UI</a></h5></body></html>')
