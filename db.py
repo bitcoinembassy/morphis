@@ -13,7 +13,7 @@ from sqlalchemy.schema import Index
 from sqlalchemy import create_engine, text, event, MetaData
 from sqlalchemy import Column, ForeignKey, Integer, String
 from sqlalchemy.exc import ProgrammingError
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.pool import Pool
 from sqlalchemy.types import LargeBinary, Boolean, DateTime
 
@@ -24,6 +24,8 @@ Base = declarative_base()
 Peer = None
 DataBlock = None
 NodeState = None
+DmailAddress = None
+DmailKey = None
 
 def _init_daos(Base, d):
     # If I recall correctly, this abomination is purely for PostgreSQL mode,
@@ -86,6 +88,27 @@ def _init_daos(Base, d):
         value = Column(String(128), nullable=True)
 
     d.NodeState = NodeState
+
+    class DmailAddress(Base):
+        __tablename__ = "dmailaddress"
+
+        id = Column(Integer, primary_key=True)
+        site_key = Column(LargeBinary, nullable=False)
+        site_privatekey = Column(LargeBinary, nullable=True)
+        dmail_keys = relationship("DmailKey")
+
+    Index("dmailaddress__site_key", DmailAddress.site_key)
+
+    d.DmailAddress = DmailAddress
+
+    class DmailKey(Base):
+        __tablename__ = "dmailkey"
+
+        id = Column(Integer, primary_key=True)
+        parent_id = Column(Integer, ForeignKey("dmailaddress.id"))
+        x = Column(LargeBinary, nullable=False)
+
+    d.DmailKey = DmailKey
 
     return d
 
@@ -203,3 +226,5 @@ if Peer is None:
     Peer = d.Peer
     DataBlock = d.DataBlock
     NodeState = d.NodeState
+    DmailAddress = d.DmailAddress
+    DmailKey = d.DmailKey

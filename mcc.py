@@ -13,6 +13,7 @@ import time
 import base58
 import brute
 import client
+import db
 import dmail
 import enc
 import mbase32
@@ -65,11 +66,16 @@ def __main():
         help="Generate and upload a new dmail site.",\
         action="store_true")
     parser.add_argument(\
+        "--dburl",\
+        help="Specify the database url to use.")
+    parser.add_argument(\
         "--fetch-dmail",
         help="Fetch dmail for specified key_id.")
     parser.add_argument(\
         "-i",\
         help="Read file as stdin.")
+    parser.add_argument("--nn", type=int,\
+        help="Node instance number.")
     parser.add_argument(\
         "--prefix",\
         help="Specify the prefix for various things (currently --create-dmail"\
@@ -134,7 +140,8 @@ def __main():
         else:
             key = rsakey.RsaKey.generate(bits=4096)
 
-        ekey = base58.encode(key._encode_key())
+        ekey = key._encode_key()
+        ekey_enc = base58.encode(ekey)
 
         dms = dmail.DmailSite()
         dms.generate()
@@ -142,13 +149,46 @@ def __main():
 
         r = yield from mc.send_command(\
             "storeukeyenc {} {} {} True"\
-                .format(ekey, edms, int(time.time()*1000)))
+                .format(ekey_enc, edms, int(time.time()*1000)))
 
         if r:
-            print("privkey: {}".format(ekey))
             p1 = r.find(b']')
             r = r[10:p1].decode("UTF-8")
-            print("x: {}".format(base58.encode(sshtype.encodeMpint(dms.dh.x))))
+            dmail_site_key = r
+            dmail_x = sshtype.encodeMpint(dms.dh.x)
+
+            if args.dburl:
+                if args.nn:
+                    dbase = db.Db(loop, args.dburl, 'n' + str(args.nn))
+                else:
+                    dbase = db.Db(loop, args.dburl)
+            else:
+                if args.nn:
+                    dbase = db.Db(loop, "sqlite:///data/morphis-{}.sqlite"\
+                        .format(args.nn))
+                else:
+                    dbase = db.Db(loop, "sqlite:///data/morphis.sqlite")
+
+            dbase.init_engine()
+
+            def dbcall():
+                with dbase.open_session() as sess:
+                    dmailaddress = db.DmailAddress()
+                    dmailaddress.site_key = mbase32.decode(dmail_site_key)
+                    dmailaddress.site_privatekey = ekey
+
+                    dmailkey = db.DmailKey()
+                    dmailkey.x = dmail_x
+
+                    dmailaddress.dmail_keys.append(dmailkey)
+
+                    sess.add(dmailaddress)
+                    sess.commit()
+
+            yield from loop.run_in_executor(None, dbcall)
+
+            print("privkey: {}".format(ekey_enc))
+            print("x: {}".format(base58.encode(dmail_x)))
             print("dmail address: {}".format(r))
 
     if args.send_dmail:
