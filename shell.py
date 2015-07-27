@@ -417,8 +417,8 @@ class Shell(cmd.Cmd):
 
     @asyncio.coroutine
     def do_findkey(self, arg):
-        "<DATA_KEY_PREFIX> [TARGET] [SIGNIFICANT_BITS] search the network for"
-        " the given key."
+        "<DATA_KEY_PREFIX> [TARGET_ID] [SIGNIFICANT_BITS] search the network"
+        " for the given key."
 
         args = arg.split(' ')
 

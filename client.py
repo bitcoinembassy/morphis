@@ -137,10 +137,10 @@ class Client(object):
         return int(r[p0:p1])
 
     @asyncio.coroutine
-    def send_find_key(self, prefix, target=None, significant_bits=None):
+    def send_find_key(self, prefix, target_id=None, significant_bits=None):
         cmd = "findkey " + mbase32.encode(prefix)
-        if target:
-            cmd += " " + mbase32.encode(target)
+        if target_id:
+            cmd += " " + mbase32.encode(target_id)
             if significant_bits:
                 cmd += " " + str(significant_bits)
 
@@ -175,11 +175,15 @@ class Client(object):
 
         p0 = r.find(b"version=[") + 9
         p1 = r.find(b']', p0)
-        data_rw.version = int(r[p0:p1])
+        ver_str = r[p0:p1]
+        data_rw.version = int(ver_str) if ver_str != b"None" else None
         p0 = p1 + 1
 
         p0 = r.find(b"data:\r\n", p0) + 7
-        data_rw.data = r[p0:-2] # -2 for the "\r\n".
+        data = r[p0:-2] # -2 for the "\r\n".
+
+        #FIXME: This is ambiguous with data that == "Not found." :)
+        data_rw.data = data if data != b"Not found." else None
 
         return data_rw
 

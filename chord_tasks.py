@@ -394,6 +394,7 @@ class ChordTasks(object):
         " data."
 
         assert len(node_id) == chord.NODE_ID_BYTES
+        # data_key needs to be bytes for PyCrypto usage later on.
         assert data_key is None or type(data_key) is bytes, type(data_key)
 
         if for_data:

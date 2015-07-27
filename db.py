@@ -89,6 +89,16 @@ def _init_daos(Base, d):
 
     d.NodeState = NodeState
 
+    class DmailKey(Base):
+        __tablename__ = "dmailkey"
+
+        id = Column(Integer, primary_key=True)
+        parent_id = Column(Integer, ForeignKey("dmailaddress.id"))
+        x = Column(LargeBinary, nullable=False)
+        target_id = Column(LargeBinary, nullable=False)
+
+    d.DmailKey = DmailKey
+
     class DmailAddress(Base):
         __tablename__ = "dmailaddress"
 
@@ -100,15 +110,6 @@ def _init_daos(Base, d):
     Index("dmailaddress__site_key", DmailAddress.site_key)
 
     d.DmailAddress = DmailAddress
-
-    class DmailKey(Base):
-        __tablename__ = "dmailkey"
-
-        id = Column(Integer, primary_key=True)
-        parent_id = Column(Integer, ForeignKey("dmailaddress.id"))
-        x = Column(LargeBinary, nullable=False)
-
-    d.DmailKey = DmailKey
 
     return d
 

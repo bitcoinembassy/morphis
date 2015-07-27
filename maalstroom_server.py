@@ -10,6 +10,7 @@ import logging
 import queue
 from socketserver import ThreadingMixIn
 from threading import Event
+import time
 
 import base58
 import chord
@@ -17,6 +18,7 @@ import enc
 import rsakey
 import mbase32
 import pages
+import pages.dmail
 import multipart
 import mutil
 
@@ -53,7 +55,9 @@ class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
 
 class MaalstroomHandler(BaseHTTPRequestHandler):
     def __init__(self, a, b, c):
+        global node
         self.protocol_version = "HTTP/1.1"
+        self.node = node
 
         super().__init__(a, b, c)
 
@@ -107,10 +111,7 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
 
             return
         elif rpath.startswith(s_dmail):
-            if len(rpath) == len(s_dmail):
-                self._send_content(pages.dmail_page_content)
-            else:
-                self._handle_error()
+            pages.dmail.serve(self, rpath)
             return
 
         if self.headers["If-None-Match"] == rpath:
@@ -298,18 +299,17 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
         else:
             self._handle_error(data_rw)
 
-    def _send_content(self, content_entry):
+    def _send_content(self, content_entry, cacheable=True):
         content = content_entry[0]
         content_id = content_entry[1]
 
-        if not content_id:
+        if cacheable and not content_id:
             if callable(content):
                 content = content()
-
             content_id = mbase32.encode(enc.generate_ID(content))
             content_entry[1] = content_id
 
-        if self.headers["If-None-Match"] == content_id:
+        if cacheable and self.headers["If-None-Match"] == content_id:
             self.send_response(304)
             self.send_header("ETag", content_id)
             self.send_header("Content-Length", 0)
@@ -321,11 +321,40 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
 
         self.send_response(200)
         self.send_header("Content-Length", len(content))
-        self.send_header("Cache-Control", "public")
-        self.send_header("ETag", content_id)
+        if cacheable:
+            self.send_header("Cache-Control", "public")
+            self.send_header("ETag", content_id)
         self.end_headers()
         self.wfile.write(content)
         return
+
+    def _send_partial_content(self, content, start=False):
+        if type(content) is str:
+            content = content.encode()
+
+        if start:
+            self.send_response(200)
+            self.send_header("Transfer-Encoding", "chunked")
+            self.end_headers()
+
+        chunklen = len(content)
+
+#        if not content.endswith(b"\r\n"):
+#            add_line = True
+#            chunklen += 2
+#        else:
+#            add_line = False
+
+        self.wfile.write("{:x}\r\n".format(chunklen).encode())
+        self.wfile.write(content)
+#        if add_line:
+#            self.wfile.write(b"\r\n")
+        self.wfile.write(b"\r\n")
+
+        self.wfile.flush()
+
+    def _end_partial_content(self):
+        self.wfile.write(b"0\r\n\r\n")
 
     def _handle_error(self, data_rw=None):
         if not data_rw:

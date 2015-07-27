@@ -179,6 +179,7 @@ def __main():
 
                     dmailkey = db.DmailKey()
                     dmailkey.x = dmail_x
+                    dmailkey.target_id = mbase32.decode(dms.root["target"])
 
                     dmailaddress.dmail_keys.append(dmailkey)
 

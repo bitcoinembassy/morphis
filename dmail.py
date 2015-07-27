@@ -23,6 +23,9 @@ log = logging.getLogger(__name__)
 
 _dh_method_name = "mdh-v1"
 
+class DmailException(Exception):
+    pass
+
 class DmailSite(object):
     def __init__(self, prev=None):
         self.root = json.loads(prev) if prev else {}
@@ -195,7 +198,7 @@ class DmailEngine(object):
 
         for recipient in recipients:
             if recipient.root["ssm"] != _dh_method_name:
-                raise Exception("Unsupported ss method [{}]."\
+                raise DmailException("Unsupported ss method [{}]."\
                     .format(recipient.root["ssm"]))
 
             yield from self._send_dmail(dmail, recipient)
@@ -210,7 +213,7 @@ class DmailEngine(object):
         dsites = yield from self.fetch_recipient_dmail_sites([addr])
 
         if not dsites:
-            raise Exception("Dmail site not found.")
+            raise DmailException("Dmail site not found.")
 
         dsite = dsites[0]
 
@@ -221,7 +224,7 @@ class DmailEngine(object):
 
         while True:
             data_rw = yield from self.task_engine.send_find_key(\
-                start, target=target, significant_bits=significant_bits)
+                start, target_id=target, significant_bits=significant_bits)
 
             key = data_rw.data_key
 
@@ -251,14 +254,19 @@ class DmailEngine(object):
 
         if target_id:
             if tb.target_id != target_id:
-                raise Exception(\
-                    "TargetedBlock->target_id does not match request.")
+                tb_tid_enc = mbase32.encode(tb.target_id)
+                tid_enc = mbase32.encode(target_id)
+                raise DmailException(\
+                    "TargetedBlock->target_id [{}] does not match request"\
+                    " [{}]."\
+                        .format(tb_tid_enc, tid_enc))
 
         dw = DmailWrapper(tb.buf, mp.TargetedBlock.BLOCK_OFFSET)
 
         if dw.ssm != "mdh-v1":
-            raise Exception("Unrecognized key exchange method in dmail [{}]."\
-                .format(dw.ssm))
+            raise DmailException(\
+                "Unrecognized key exchange method in dmail [{}]."\
+                    .format(dw.ssm))
 
         kex = dhgroup14.DhGroup14()
         kex.x = x
@@ -266,8 +274,10 @@ class DmailEngine(object):
         kex.f = dw.ssf
 
         if dw.sse != kex.e:
-            raise Exception("Dmail is encrypted with a different e [{}] than"\
-                " the specified x resulted in [{}].".format(dw.sse, kex.e))
+            raise DmailException(\
+                "Dmail is encrypted with a different e [{}] than"\
+                " the specified x resulted in [{}]."\
+                    .format(dw.sse, kex.e))
 
         kex.calculate_k()
 
