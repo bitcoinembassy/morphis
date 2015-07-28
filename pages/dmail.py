@@ -36,7 +36,10 @@ def _serve(handler, rpath, done_event):
     else:
         req = rpath[len(s_dmail):]
         log.info("req=[{}].".format(req))
-        if req == "/address_list":
+        if req == "/css":
+            handler._send_content(\
+                pages.dmail_css_content, content_type="text/css")
+        elif req == "/address_list":
             handler._send_partial_content(
                 pages.dmail_page_content__f1_start, True)
 
@@ -88,6 +91,26 @@ def _serve(handler, rpath, done_event):
             dmail_key = mbase32.decode(dmail_key_enc)
 
             yield from _fetch_dmail(handler, dmail_addr, dmail_key)
+        elif req == "/create_address":
+            handler._send_content(pages.dmail_create_address_content, False)
+        elif req == "/create_address/form":
+            handler._send_content(\
+                pages.dmail_create_address_form_content)
+        elif req.startswith("/create_address/make_it_so"):
+            prefix = req[26 + 1 + 7:] # + ?prefix=
+            log.info("prefix=[{}].".format(prefix))
+            privkey, dmail_key, dms =\
+                yield from _create_dmail_address(handler, prefix)
+
+            dmail_key_enc = mbase32.encode(dmail_key)
+
+            handler._send_partial_content(pages.dmail_frame_start, True)
+            handler._send_partial_content(b"SUCCESS<br/>")
+            handler._send_partial_content(\
+                """<p>New dmail address: <a href="../addr/{}">{}</a></p>"""\
+                    .format(dmail_key_enc, dmail_key_enc).encode())
+            handler._send_partial_content(pages.dmail_frame_end)
+            handler._end_partial_content()
         else:
             handler._handle_error()
 
@@ -182,3 +205,9 @@ def _fetch_dmail(handler, dmail_addr, dmail_key):
 
     handler._send_content(\
         (dmail_text.encode(), None), False, content_type="text/plain")
+
+@asyncio.coroutine
+def _create_dmail_address(handler, prefix):
+    de = dmail.DmailEngine(handler.node.chord_engine.tasks, handler.node.db)
+    privkey, data_key, dms = yield from de.generate_dmail_address(prefix)
+    return privkey, data_key, dms

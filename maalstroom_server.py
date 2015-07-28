@@ -330,13 +330,15 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
         self.wfile.write(content)
         return
 
-    def _send_partial_content(self, content, start=False):
+    def _send_partial_content(self, content, start=False, content_type=None):
         if type(content) is str:
             content = content.encode()
 
         if start:
             self.send_response(200)
             self.send_header("Transfer-Encoding", "chunked")
+            self.send_header("Content-Type",\
+                "text/html" if content_type is None else content_type)
             self.end_headers()
 
         chunklen = len(content)

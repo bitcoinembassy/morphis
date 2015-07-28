@@ -8,9 +8,11 @@ import json
 import logging
 import os
 import struct
+import time
 
 import brute
 import chord
+import db
 import mbase32
 import multipart as mp
 import mutil
@@ -153,8 +155,58 @@ class DmailPart(object):
         return idx
 
 class DmailEngine(object):
-    def __init__(self, task_engine):
+    def __init__(self, task_engine, db=None):
         self.task_engine = task_engine
+        self.db = db
+        self.loop = task_engine.loop
+
+    @asyncio.coroutine
+    def generate_dmail_address(self, prefix=None):
+        if log.isEnabledFor(logging.INFO):
+            log.info("Generating dmail address (prefix=[{}].".format(prefix))
+
+        if prefix:
+            if log.isEnabledFor(logging.INFO):
+                log.info("Brute force generating key with prefix [{}]."\
+                    .format(prefix))
+            privkey = brute.generate_key(prefix)
+        else:
+            privkey = rsakey.RsaKey.generate(bits=4096)
+
+        dms = DmailSite()
+        dms.generate()
+
+        data_key = None
+        def key_callback(value):
+            nonlocal data_key
+            data_key = value
+
+        log.info("Uploading dmail site.")
+
+        r = yield from self.task_engine.send_store_updateable_key(\
+            dms.export(), privkey, version=int(time.time()*1000),\
+            key_callback=key_callback)
+
+        def dbcall():
+            with self.db.open_session() as sess:
+                dmailaddress = db.DmailAddress()
+                dmailaddress.site_key = data_key
+                dmailaddress.site_privatekey = privkey._encode_key()
+
+                dmailkey = db.DmailKey()
+                dmailkey.x = sshtype.encodeMpint(dms.dh.x)
+                dmailkey.target_id = mbase32.decode(dms.root["target"])
+
+                dmailaddress.dmail_keys.append(dmailkey)
+
+                sess.add(dmailaddress)
+                sess.commit()
+
+        log.info("Saving dmail site to the database.")
+
+        yield from self.loop.run_in_executor(None, dbcall)
+
+        return privkey, data_key, dms
 
     @asyncio.coroutine
     def send_dmail_text(self, subject, message_text):

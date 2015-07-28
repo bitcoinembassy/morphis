@@ -26,54 +26,73 @@ home_page_content = [\
 </div>
 </body></html>""", None]
 
+dmail_css_content = [\
+    b"""* {
+    box-sizing: border-box;
+}
+html, body {
+    height: 100%;
+    padding: 0;
+    margin: 0;
+}
+div.header {
+    height: 3em;
+    padding: 0;
+    margin: 0;
+    /* Disgustingly enough (CSS is so), having the border fixes everything.
+       We don't actually want a border, so we make it invisible with the
+       color. Let this be proof that MORPHiS must deprecate CSS at
+       somepoint as well! :) */
+    border: solid 1px; /* Doesn't mater as long as not 0 or hidden. */
+    border-color: #ffffff #ffffff; /* Invisible without browser knowing. */
+}
+div.footer {
+    height: 3em;
+    width: 100%;
+    padding: 1em;
+    margin: 0;
+    bottom: 0px;
+    position: absolute;
+}
+div.section {
+    height: calc(100% - 7em);
+    border: dashed 0.2em;
+    margin-top: 1em;
+    padding: 1em;
+}
+h5 {
+    margin: 0;
+    padding: 0;
+}
+div * * span {
+    margin-left: 0.5em;
+    margin-right: 0.5em;
+}
+#footer_right {
+    right: 0px;
+    position: absolute;
+}
+label:after {
+    content: ": ";
+}""", None]
+
 dmail_page_wrapper =\
     b"""<!DOCTYPE html>
 <html><head><title>MORPHiS Maalstroom Dmail Client</title>
-<style type="text/css">
-    * {
-        box-sizing: border-box;
-    }
-    html, body { 
-        height: 100%;
-        padding: 0;
-        margin: 0;
-    }
-    div.header {
-        height: 3em;
-        padding: 0;
-        margin: 0;
-        /* Disgustingly enough (CSS is so), having the border fixes everything.
-           We don't actually want a border, so we make it invisible with the
-           color. Let this be proof that MORPHiS must deprecate CSS at
-           somepoint as well! :) */
-        border: solid 1px; /* Doesn't mater as long as not 0 or hidden. */
-        border-color: #ffffff #ffffff; /* Invisible without browser knowing. */
-    }
-    div.footer {
-        height: 3em;
-        width: 100%;
-        padding: 1em;
-        margin: 0;
-        bottom: 0px;
-        position: absolute;
-    }
-    div.section {
-        height: calc(100% - 7em);
-        border: dashed 0.2em;
-        margin-top: 1em;
-        padding: 1em;
-    }
-    h5 {
-        margin: 0;
-        padding: 0;
-    }
-</style>
+<link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/>
 </head><body>
 <div class="header">
     <h2>MORPHiS Maalstroom Dmail Client</h2>
 </div>
 <div class="footer">
-    <h5><- <a href="morphis://">MORPHiS UI</a></h5>
+    <h5>
+        <span><- <a href="morphis://">MORPHiS UI</a></span>
+        <span id="footer_right">
+            <span>[<a href="morphis://.dmail">List Dmail Addresses</a>]</span>
+            <span>[<a href="morphis://.dmail/create_address">Create New Dmail Address</a>]</span>
+            <span>[<a href="morphis://.dmail/compose">Send a Dmail</a>]</span>
+        </span>
+    </h5>
 </div>
 <div class="section">
     <iframe src="${IFRAME_SRC}" frameborder="0" height="100%" width="100%"/>
@@ -81,6 +100,14 @@ dmail_page_wrapper =\
 </body></html>"""
 
 dmail_page_content = [None, None]
+
+dmail_frame_start =\
+    b"""<!DOCTYPE html>
+<html><head><base target="_parent" /></head><body>
+"""
+
+dmail_frame_end =\
+    b"""</body></html>"""
 
 dmail_page_content__f1_start =\
     b"""<!DOCTYPE html>
@@ -102,6 +129,20 @@ dmail_inbox_start =\
 dmail_inbox_end =\
     b"""</body></html>"""
 
+dmail_create_address_content = [None, None]
+
+dmail_create_address_form_content = [\
+    b"""<!DOCTYPE html>
+<html><head><base target="_parent" /><link rel="stylesheet" type="text/css" href="../css"/></head><body>
+<form action="make_it_so" method="get">
+    <label for="prefix">Dmail Prefix</label>
+    <input type="textfield" name="prefix" id="prefix"/>
+    <p style="font-style: italic;">(Optional: Each letter in the prefix will make the address take 32x longer to generate.)</p>
+    <p style="font-style: italic;">(Three letters takes almost an hour on my test machine.)</p>
+    <input type="submit" formtarget="_self" id="create" value="Create"/>
+</form>
+</body></html>""", None]
+
 ##.
 
 initialized_template = False
@@ -110,5 +151,8 @@ if not initialized_template:
         dmail_page_wrapper.replace(b"${IFRAME_SRC}", b"address_list")
 
     dmail_address_page_content[0] = dmail_page_wrapper
+
+    dmail_create_address_content[0] =\
+        dmail_page_wrapper.replace(b"${IFRAME_SRC}", b"create_address/form")
 
     initialized_template = True

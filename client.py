@@ -118,6 +118,29 @@ class Client(object):
         return int(r[p0:p1])
 
     @asyncio.coroutine
+    def send_store_updateable_key(\
+            self, data, privkey, path=None, version=None, store_key=True,\
+            key_callback=None):
+        privkey_enc = base58.encode(privkey._encode_key())
+        data_enc = base58.encode(data)
+
+        cmd = "storeukeyenc {} {} {} {}"\
+            .format(privkey_enc, data_enc, version, store_key)
+
+        r = yield from self.send_command(cmd)
+
+        if not r:
+            return 0
+
+        if key_callback:
+            p1 = r.find(b']', 10)
+            r = r[10:p1].decode()
+            key_enc = r
+            key_callback(mbase32.decode(key_enc))
+
+        return 1 #FIXME: The shell API doesn't return this value as of yet.
+
+    @asyncio.coroutine
     def send_store_targeted_data(\
             self, data, store_key=False, key_callback=None):
         data_enc = base58.encode(data)

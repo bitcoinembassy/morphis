@@ -290,9 +290,12 @@ class ChordTasks(object):
     def send_store_updateable_key_key(\
             self, pubkey, data_key=None, key_callback=None):
         assert type(pubkey) in (bytes, bytearray)
-        yield from\
+
+        r = yield from\
             self.send_store_key(\
                 pubkey, data_key=data_key, key_callback=key_callback)
+
+        return r
 
     @asyncio.coroutine
     def send_store_data(self, data, store_key=False, key_callback=None):
@@ -343,9 +346,8 @@ class ChordTasks(object):
 
     @asyncio.coroutine
     def send_store_updateable_key(\
-            self, data, privatekey, path=None, version=None,\
+            self, data, privatekey, path=None, version=None, store_key=None,\
             key_callback=None):
-
         assert not path or type(path) is bytes, type(path)
         assert not version or type(version) is int, type(version)
 
@@ -353,7 +355,8 @@ class ChordTasks(object):
 
         data_key = enc.generate_ID(public_key_bytes)
 
-        key_callback(data_key)
+        if key_callback:
+            key_callback(data_key)
 
         if path:
             path_hash = enc.generate_ID(path)
@@ -380,6 +383,10 @@ class ChordTasks(object):
         storing_nodes =\
             yield from self.send_find_node(\
                 data_id, for_data=True, data_msg=sdmsg)
+
+        if store_key:
+            yield from self.send_store_updateable_key_key(\
+                public_key_bytes, data_key)
 
         return storing_nodes
 
@@ -1077,9 +1084,11 @@ class ChordTasks(object):
                             continue
                         else:
                             if log.isEnabledFor(logging.DEBUG):
+                                store_msg = cp.ChordDataStored(pkts[0])
                                 log.debug("Received DataStored (stored=[{}])"\
                                     " message from Peer (dbid={})."\
-                                        .format(tun_meta.peer.dbid, path))
+                                        .format(store_msg.stored,\
+                                            tun_meta.peer.dbid, path))
 
                     query_cntr.value -= 1
                     if not query_cntr.value:

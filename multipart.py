@@ -514,11 +514,7 @@ def store_data(engine, data, privatekey=None, path=None, version=None,\
 
         if privatekey and not store_link:
             yield from engine.tasks.send_store_updateable_key(\
-                data, privatekey, path, version, key_callback)
-
-            if store_key:
-                yield from engine.tasks.send_store_updateable_key_key(\
-                    privatekey.asbytes())
+                data, privatekey, path, version, store_key, key_callback)
         else:
             yield from\
                 engine.tasks.send_store_data(data, key_callback=key_callback)
@@ -547,12 +543,8 @@ def store_data(engine, data, privatekey=None, path=None, version=None,\
 
         if privatekey:
             yield from engine.tasks.send_store_updateable_key(\
-                link_data, privatekey, path, version, orig_key_callback)
-
-            if store_key:
-                yield from\
-                    engine.tasks.send_store_updateable_key_key(\
-                        privatekey.asbytes())
+                link_data, privatekey, path, version, store_key,\
+                orig_key_callback)
         else:
             yield from\
                 engine.tasks.send_store_data(\

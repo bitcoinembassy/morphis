@@ -8,7 +8,6 @@ import asyncio
 import logging
 import os
 from sys import stdin
-import time
 
 import base58
 import brute
@@ -132,65 +131,15 @@ def __main():
     if args.create_dmail:
         log.info("Creating and uploading dmail site.")
 
-        if args.prefix:
-            if log.isEnabledFor(logging.INFO):
-                log.info("Brute force generating key with prefix [{}]."\
-                    .format(args.prefix))
-            key = brute.generate_key(args.prefix)
-        else:
-            key = rsakey.RsaKey.generate(bits=4096)
+        db = init_db(args)
+        de = dmail.DmailEngine(mc, db)
 
-        ekey = key._encode_key()
-        ekey_enc = base58.encode(ekey)
+        privkey, data_key, dms =\
+            yield from de.generate_dmail_address(args.prefix)
 
-        dms = dmail.DmailSite()
-        dms.generate()
-        edms = base58.encode(dms.export())
-
-        r = yield from mc.send_command(\
-            "storeukeyenc {} {} {} True"\
-                .format(ekey_enc, edms, int(time.time()*1000)))
-
-        if r:
-            p1 = r.find(b']')
-            r = r[10:p1].decode("UTF-8")
-            dmail_site_key = r
-            dmail_x = sshtype.encodeMpint(dms.dh.x)
-
-            if args.dburl:
-                if args.nn:
-                    dbase = db.Db(loop, args.dburl, 'n' + str(args.nn))
-                else:
-                    dbase = db.Db(loop, args.dburl)
-            else:
-                if args.nn:
-                    dbase = db.Db(loop, "sqlite:///data/morphis-{}.sqlite"\
-                        .format(args.nn))
-                else:
-                    dbase = db.Db(loop, "sqlite:///data/morphis.sqlite")
-
-            dbase.init_engine()
-
-            def dbcall():
-                with dbase.open_session() as sess:
-                    dmailaddress = db.DmailAddress()
-                    dmailaddress.site_key = mbase32.decode(dmail_site_key)
-                    dmailaddress.site_privatekey = ekey
-
-                    dmailkey = db.DmailKey()
-                    dmailkey.x = dmail_x
-                    dmailkey.target_id = mbase32.decode(dms.root["target"])
-
-                    dmailaddress.dmail_keys.append(dmailkey)
-
-                    sess.add(dmailaddress)
-                    sess.commit()
-
-            yield from loop.run_in_executor(None, dbcall)
-
-            print("privkey: {}".format(ekey_enc))
-            print("x: {}".format(base58.encode(dmail_x)))
-            print("dmail address: {}".format(r))
+        print("privkey: {}".format(base58.encode(privkey._encode_key())))
+        print("x: {}".format(base58.encode(sshtype.encodeMpint(dms.dh.x))))
+        print("dmail address: {}".format(mbase32.encode(data_key)))
 
     if args.send_dmail:
         log.info("Sending dmail.")
@@ -257,6 +206,23 @@ def __main():
     yield from mc.disconnect()
 
     loop.stop()
+
+def init_db(args):
+    if args.dburl:
+        if args.nn:
+            dbase = db.Db(loop, args.dburl, 'n' + str(args.nn))
+        else:
+            dbase = db.Db(loop, args.dburl)
+    else:
+        if args.nn:
+            dbase = db.Db(loop, "sqlite:///data/morphis-{}.sqlite"\
+                .format(args.nn))
+        else:
+            dbase = db.Db(loop, "sqlite:///data/morphis.sqlite")
+
+    dbase.init_engine()
+
+    return dbase
 
 if __name__ == "__main__":
     main()
