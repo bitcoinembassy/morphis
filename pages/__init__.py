@@ -60,6 +60,10 @@ div.section {
     margin-top: 1em;
     padding: 1em;
 }
+h4 {
+    margin: 0 0 1em 0;
+    padding: 0;
+}
 h5 {
     margin: 0;
     padding: 0;
@@ -103,7 +107,7 @@ dmail_page_content = [None, None]
 
 dmail_frame_start =\
     b"""<!DOCTYPE html>
-<html><head><base target="_parent" /></head><body>
+<html><head><base target="_parent" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/></head><body>
 """
 
 dmail_frame_end =\
@@ -111,7 +115,7 @@ dmail_frame_end =\
 
 dmail_page_content__f1_start =\
     b"""<!DOCTYPE html>
-<html><head><base target="_parent" /></head><body>
+<html><head><base target="_parent" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/></head><body>
 <h4>Your dmail addresses:</h4>
 """
 
@@ -122,7 +126,7 @@ dmail_address_page_content = [None, None]
 
 dmail_inbox_start =\
     b"""<!DOCTYPE html>
-<html><head><base target="_parent" /></head><body>
+<html><head><base target="_parent" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/></head><body>
 <h4>Dmails for address [${DMAIL_ADDRESS}]:</h4>
 """
 
@@ -133,7 +137,7 @@ dmail_create_address_content = [None, None]
 
 dmail_create_address_form_content = [\
     b"""<!DOCTYPE html>
-<html><head><base target="_parent" /><link rel="stylesheet" type="text/css" href="../css"/></head><body>
+<html><head><base target="_parent" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/></head><body>
 <form action="make_it_so" method="get">
     <label for="prefix">Dmail Prefix</label>
     <input type="textfield" name="prefix" id="prefix"/>
