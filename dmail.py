@@ -343,7 +343,10 @@ class DmailEngine(object):
 
     def _generate_encryption_key(self, target_id, k):
         return enc.generate_ID(\
-            target_id + sshtype.encodeMpint(k))
+            b"The life forms running github are more retarded than any retard!"\
+            + target_id + sshtype.encodeMpint(k)\
+            + b"https://github.com/nixxquality/WebMConverter/commit/"\
+            + b"c1ac0baac06fa7175677a4a1bf65860a84708d67")
 
     @asyncio.coroutine
     def _send_dmail(self, dmail, recipient):
