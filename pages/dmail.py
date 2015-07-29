@@ -193,7 +193,9 @@ def __serve_post(handler, rpath, done_event):
             recipients,\
             content)
 
-        handler._send_content(b"SUCCESS.")
+        handler._send_content(\
+            "SUCCESS.<br/><p>Dmail successfully sent to: {}</p>"\
+                .format(dest_addr_enc[0].decode()).encode())
     else:
         handler._handle_error()
 
