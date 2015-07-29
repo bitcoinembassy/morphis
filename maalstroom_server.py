@@ -111,7 +111,7 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
 
             return
         elif rpath.startswith(s_dmail):
-            pages.dmail.serve(self, rpath)
+            pages.dmail.serve_get(self, rpath)
             return
 
         if self.headers["If-None-Match"] == rpath:
@@ -220,12 +220,26 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
             self._handle_error(data_rw)
 
     def do_POST(self):
-        log.info(self.headers)
+        rpath = self.path[1:]
+
+        log.info("POST; rpath=[{}].".format(rpath))
+
+        if rpath != ".upload/upload":
+            pages.dmail.serve_post(self, rpath)
+            return
+
+        if log.isEnabledFor(logging.DEBUG):
+            log.info(self.headers)
 
         if self.headers["Content-Type"] == "application/x-www-form-urlencoded":
+            log.debug("Content-Type=[application/x-www-form-urlencoded].")
             data = self.rfile.read(int(self.headers["Content-Length"]))
             privatekey = None
         else:
+            if log.isEnabledFor(logging.DEBUG):
+                log.debug("Content-Type=[{}]."\
+                    .format(self.headers["Content-Type"]))
+
             form = cgi.FieldStorage(\
                 fp=self.rfile,\
                 headers=self.headers,\
@@ -300,8 +314,12 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
             self._handle_error(data_rw)
 
     def _send_content(self, content_entry, cacheable=True, content_type=None):
-        content = content_entry[0]
-        content_id = content_entry[1]
+        if type(content_entry) is list:
+            content = content_entry[0]
+            content_id = content_entry[1]
+        else:
+            content = content_entry
+            cacheable = False
 
         if cacheable and not content_id:
             if callable(content):
@@ -360,7 +378,26 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
     def _end_partial_content(self):
         self.wfile.write(b"0\r\n\r\n")
 
-    def _handle_error(self, data_rw=None):
+    def send_exception(self, exception, errcode=500):
+        self._send_error(\
+            errmsg=str("{}: {}".format(type(exception).__name__, exception)),\
+            errcode=errcode)
+
+    def _send_error(self, errmsg, errcode=500):
+        if errcode == 400:
+            errmsg = "400 Bad Request.\n\n{}"\
+                .format(errmsg).encode()
+            self.send_response(400)
+        else:
+            errmsg = "500 Internal Server Error.\n\n{}"\
+                .format(errmsg).encode()
+            self.send_response(500)
+
+        self.send_header("Content-Length", len(errmsg))
+        self.end_headers()
+        self.wfile.write(errmsg)
+
+    def _handle_error(self, data_rw=None, errmsg=None, errcode=None):
         if not data_rw:
             errmsg = b"400 Bad Request."
             self.send_response(400)

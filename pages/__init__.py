@@ -147,6 +147,42 @@ dmail_create_address_form_content = [\
 </form>
 </body></html>""", None]
 
+dmail_compose_dmail_content = [None, None]
+
+dmail_compose_dmail_form_content = [\
+    b"""<!DOCTYPE html>
+<html><head><base target="_parent" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/>
+<style type="text/css">
+body {
+    height: 0%;
+}
+label {
+    width: 10em;
+    display: inline-block;
+    text-align: right;
+}
+.formfield * {
+    vertical-align: top;
+}
+</style></head><body style="height: 0%">
+<form action="make_it_so" method="post">
+    <p class="formfield">
+        <label for="subject">Subject</label>
+        <input type="textfield" name="subject" id="subject" size="70"/>
+    </p><p class="formfield">
+        <label for="sender">From</label>
+        <input type="textfield" name="sender" id="sender" size="70"/>
+    </p><p class="formfield">
+        <label for="destination">To</label>
+        <input type="textfield" name="destination" id="destination" size="70"/>
+    </p><p class="formfield">
+        <label for="content">Message Content</label>
+        <textarea name="content" id="content" cols="80" rows="24"></textarea>
+    </p>
+    <input type="submit" formtarget="_self" id="send" value="Send"/> (This will take at least a few second, if not much longer, depending on the difficulty (anti-spam setting) set by the owner of the destination address.)
+</form>
+</body></html>""", None]
+
 ##.
 
 initialized_template = False
@@ -158,5 +194,8 @@ if not initialized_template:
 
     dmail_create_address_content[0] =\
         dmail_page_wrapper.replace(b"${IFRAME_SRC}", b"create_address/form")
+
+    dmail_compose_dmail_content[0] =\
+        dmail_page_wrapper.replace(b"${IFRAME_SRC}", b"compose/form")
 
     initialized_template = True

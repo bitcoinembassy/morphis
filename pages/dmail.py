@@ -4,8 +4,10 @@
 import llog
 
 import asyncio
+import importlib
 import logging
 import threading
+import urllib
 
 from db import DmailAddress, DmailKey
 import dmail
@@ -18,19 +20,50 @@ log = logging.getLogger(__name__)
 
 s_dmail = ".dmail"
 
-def serve(handler, rpath):
+def serve_get(handler, rpath):
     done_event = threading.Event()
 
     #FIXME: Is it safe to call the handler's out stream from the loop thread?
     # Because that is what I'm doing here.
     handler.node.loop.call_soon_threadsafe(\
         asyncio.async,\
-        _serve(handler, rpath, done_event))
+        _serve_get(handler, rpath, done_event))
+
+    done_event.wait()
+
+def serve_post(handler, rpath):
+    done_event = threading.Event()
+
+    #FIXME: Is it safe to call the handler's out stream from the loop thread?
+    # Because that is what I'm doing here.
+    handler.node.loop.call_soon_threadsafe(\
+        asyncio.async,\
+        _serve_post(handler, rpath, done_event))
 
     done_event.wait()
 
 @asyncio.coroutine
-def _serve(handler, rpath, done_event):
+def _serve_get(handler, rpath, done_event):
+    try:
+        yield from __serve_get(handler, rpath, done_event)
+    except Exception as e:
+        log.exception("__serve_get(..)")
+        handler.send_exception(e)
+
+    done_event.set()
+
+@asyncio.coroutine
+def _serve_post(handler, rpath, done_event):
+    try:
+        yield from __serve_post(handler, rpath, done_event)
+    except Exception as e:
+        log.exception("__serve_post(..)")
+        handler.send_exception(e)
+
+    done_event.set()
+
+@asyncio.coroutine
+def __serve_get(handler, rpath, done_event):
     if len(rpath) == len(s_dmail):
         handler._send_content(pages.dmail_page_content)
     else:
@@ -47,6 +80,12 @@ def _serve(handler, rpath, done_event):
 
             handler._send_partial_content(pages.dmail_page_content__f1_end)
             handler._end_partial_content()
+        elif req == "/compose":
+            from_addr = req[9:]
+
+            handler._send_content(pages.dmail_compose_dmail_content)
+        elif req == "/compose/form":
+            handler._send_content(pages.dmail_compose_dmail_form_content)
         elif req.startswith("/addr/"):
             addr_enc = req[6:]
 
@@ -56,7 +95,7 @@ def _serve(handler, rpath, done_event):
             content = pages.dmail_address_page_content[0].replace(\
                 b"${IFRAME_SRC}", "/inbox/{}".format(addr_enc).encode())
 
-            handler._send_content((content, None), False)
+            handler._send_content(content)
         elif req.startswith("/inbox/"):
             addr_enc = req[7:]
 
@@ -80,7 +119,7 @@ def _serve(handler, rpath, done_event):
             content = pages.dmail_address_page_content[0].replace(\
                 b"${IFRAME_SRC}", "/fetch/{}".format(req_data).encode())
 
-            handler._send_content((content, None), False)
+            handler._send_content(content)
         elif req.startswith("/fetch/"):
             keys = req[7:]
             p0 = keys.index('/')
@@ -92,10 +131,9 @@ def _serve(handler, rpath, done_event):
 
             yield from _fetch_dmail(handler, dmail_addr, dmail_key)
         elif req == "/create_address":
-            handler._send_content(pages.dmail_create_address_content, False)
+            handler._send_content(pages.dmail_create_address_content)
         elif req == "/create_address/form":
-            handler._send_content(\
-                pages.dmail_create_address_form_content)
+            handler._send_content(pages.dmail_create_address_form_content)
         elif req.startswith("/create_address/make_it_so"):
             prefix = req[26 + 1 + 7:] # + ?prefix=
             log.info("prefix=[{}].".format(prefix))
@@ -114,7 +152,50 @@ def _serve(handler, rpath, done_event):
         else:
             handler._handle_error()
 
-    done_event.set()
+@asyncio.coroutine
+def __serve_post(handler, rpath, done_event):
+    assert rpath.startswith(s_dmail)
+
+    rpath = rpath[len(s_dmail):]
+
+    if rpath == "/compose/make_it_so":
+        data = handler.rfile.read(int(handler.headers["Content-Length"]))
+        log.debug("data=[{}].".format(data))
+        dd = urllib.parse.parse_qs(data)
+        log.debug("dd=[{}].".format(dd))
+
+        subject = dd.get(b"subject")
+        if subject:
+            subject = subject[0].decode()
+        else:
+            subject = ""
+
+#        sender_asymkey = rsakey.RsaKey(privdata=base58.decode(dd[b"sender"])
+        sender_asymkey = None
+
+        dest_addr_enc = dd.get(b"destination")
+        if not dest_addr_enc:
+            handler._send_error("You must specify a destination.", 400)
+            return
+
+        recipient, significant_bits =\
+            mutil.decode_key(dest_addr_enc[0].decode())
+        recipients = [(dest_addr_enc, recipient, significant_bits)]
+
+        content = dd.get(b"content")
+        if content:
+            content = content[0]
+
+        de = dmail.DmailEngine(handler.node.chord_engine.tasks)
+        yield from de.send_dmail(\
+            subject,\
+            sender_asymkey,\
+            recipients,\
+            content)
+
+        handler._send_content(b"SUCCESS.")
+    else:
+        handler._handle_error()
 
 def _list_dmail_addresses(handler):
     def dbcall():
@@ -203,8 +284,7 @@ def _fetch_dmail(handler, dmail_addr, dmail_key):
             dmail_text += "----- ^ dmail part #{} ^ -----\n\n".format(i)
             i += 1
 
-    handler._send_content(\
-        (dmail_text.encode(), None), False, content_type="text/plain")
+    handler._send_content(dmail_text.encode(), content_type="text/plain")
 
 @asyncio.coroutine
 def _create_dmail_address(handler, prefix):
