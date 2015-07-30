@@ -423,7 +423,7 @@ class Shell(cmd.Cmd):
         args = arg.split(' ')
 
         data_key, significant_bits = decode_key(args[0])
-        target_id = mbase32.decode(args[1]) if len(args) >= 2 else None
+        target_key = mbase32.decode(args[1]) if len(args) >= 2 else None
         if len(args) == 3:
             significant_bits = int(args[2])
 
@@ -431,7 +431,7 @@ class Shell(cmd.Cmd):
         data_rw = yield from\
             self.peer.engine.tasks.send_find_key(\
                 data_key, significant_bits=significant_bits,\
-                    target_id=target_id)
+                    target_key=target_key)
         diff = datetime.today() - start
         data_key_enc =\
             mbase32.encode(data_rw.data_key) if data_rw.data_key else None

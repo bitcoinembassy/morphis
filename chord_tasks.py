@@ -239,7 +239,7 @@ class ChordTasks(object):
 
     @asyncio.coroutine
     def send_find_key(self, data_key_prefix, significant_bits=None,\
-            target_id=None):
+            target_key=None):
         assert type(data_key_prefix) in (bytes, bytearray),\
             "type(data_key_prefix)=[{}].".format(type(data_key_prefix))
 
@@ -248,9 +248,9 @@ class ChordTasks(object):
 
         if log.isEnabledFor(logging.INFO):
             log.info("Performing wildcard (key) search (prefix=[{}],"\
-                " significant_bits=[{}], target_id=[{}])."\
+                " significant_bits=[{}], target_key=[{}])."\
                     .format(mbase32.encode(data_key_prefix), significant_bits,\
-                        target_id))
+                        target_key))
 
         ldiff = chord.NODE_ID_BYTES - len(data_key_prefix)
         if ldiff > 0:
@@ -259,7 +259,7 @@ class ChordTasks(object):
         data_rw = yield from\
             self.send_find_node(data_key_prefix,\
                 significant_bits=significant_bits, for_data=True,\
-                data_key=None, target_id=target_id)
+                data_key=None, target_key=target_key)
 
         return data_rw
 
@@ -393,7 +393,7 @@ class ChordTasks(object):
     @asyncio.coroutine
     def send_find_node(self, node_id, significant_bits=None, input_trie=None,\
             for_data=False, data_msg=None, data_key=None, path_hash=None,\
-            targeted=False, target_id=None):
+            targeted=False, target_key=None):
         "Returns found nodes sorted by closets. If for_data is True then"\
         " this is really {get/store}_data instead of find_node. If data_msg"\
         " is None than it is get_data and the data is returned. Store data"\
@@ -459,8 +459,8 @@ class ChordTasks(object):
         fnmsg.data_mode = data_mode
         if significant_bits:
             fnmsg.significant_bits = significant_bits
-            if target_id:
-                fnmsg.target_id = target_id
+            if target_key:
+                fnmsg.target_key = target_key
 
         for peer in input_trie:
             key = bittrie.XorKey(node_id, peer.node_id)
@@ -595,7 +595,7 @@ class ChordTasks(object):
 
                     data_present = yield from\
                         self._check_has_data(\
-                            node_id, significant_bits, target_id)
+                            node_id, significant_bits, target_key)
 
                     if data_present:
                         closest_datas.append(data_present)
@@ -1373,7 +1373,7 @@ class ChordTasks(object):
             if fnmsg.data_mode is cp.DataMode.get:
                 data_present = yield from self._check_has_data(\
                     fnmsg.node_id, fnmsg.significant_bits,\
-                    fnmsg.target_id)
+                    fnmsg.target_key)
 
                 pmsg = cp.ChordDataPresence()
                 if fnmsg.significant_bits and data_present:
@@ -1713,18 +1713,18 @@ class ChordTasks(object):
                 tun_meta.peer.protocol.close_channel(tun_meta.local_cid)
 
     @asyncio.coroutine
-    def _check_has_data(self, data_id, significant_bits, target_id):
+    def _check_has_data(self, data_id, significant_bits, target_key):
         if log.isEnabledFor(logging.DEBUG):
-            target_id_enc =\
-                mbase32.encode(target_id) if target_id is not None else None
+            target_key_enc =\
+                mbase32.encode(target_key) if target_key is not None else None
             log.debug("Checking for data_id=[{}], significant_bits=[{}],"\
-                " target_id=[{}]."\
+                " target_key=[{}]."\
                     .format(mbase32.encode(data_id), significant_bits,\
-                        target_id_enc))
+                        target_key_enc))
 
         distance = mutil.calc_raw_distance(self.engine.node_id, data_id)
 
-        min_sig_bits = 20 if target_id is not None else 32
+        min_sig_bits = 20 if target_key is not None else 32
 
         if significant_bits and significant_bits >= min_sig_bits:
             mask = ((1 << (chord.NODE_ID_BITS - significant_bits)) - 1)\
@@ -1751,11 +1751,11 @@ class ChordTasks(object):
                     q = q.filter(DataBlock.data_id > data_id)
                     q = q.filter(DataBlock.data_id <= end_id)
 
-                    if target_id:
+                    if target_key:
                         # This is the feature that makes it so spammers are
                         # forced to target each destination individually with
                         # while generating a the proof of work.
-                        q = q.filter(DataBlock.target_id == target_id)
+                        q = q.filter(DataBlock.target_key == target_key)
 
                     q = q.filter(DataBlock.original_size == 0)
                     q = q.order_by(DataBlock.data_id)
@@ -2017,7 +2017,7 @@ class ChordTasks(object):
                 data_block.insert_timestamp = datetime.today()
 
                 if dmsg.targeted:
-                    data_block.target_id = tb.target_id
+                    data_block.target_key = tb.target_key
 
                 sess.add(data_block)
 
@@ -2178,13 +2178,13 @@ class ChordTasks(object):
 
                 if targeted:
                     if log.isEnabledFor(logging.DEBUG):
-                        log.debug("Storing TargetedBlock (target_id=[{}])."\
-                            .format(mbase32.encode(tb.target_id)))
+                        log.debug("Storing TargetedBlock (target_key=[{}])."\
+                            .format(mbase32.encode(tb.target_key)))
                     # We don't need the following for anything coded yet, but
                     # doing it for now because then we can tell which are
                     # targeted blocks as we may want to have code purge them
                     # with more pressure than normal blocks.
-                    data_block.target_id = tb.target_id
+                    data_block.target_key = tb.target_key
 
                 data_block.original_size = original_size
                 data_block.insert_timestamp = datetime.today()

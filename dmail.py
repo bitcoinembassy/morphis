@@ -196,7 +196,7 @@ class DmailEngine(object):
 
                 dmailkey = db.DmailKey()
                 dmailkey.x = sshtype.encodeMpint(dms.dh.x)
-                dmailkey.target_id = mbase32.decode(dms.root["target"])
+                dmailkey.target_key = mbase32.decode(dms.root["target"])
 
                 dmailaddress.dmail_keys.append(dmailkey)
 
@@ -306,7 +306,7 @@ class DmailEngine(object):
 
         while True:
             data_rw = yield from self.task_engine.send_find_key(\
-                start, target_id=target, significant_bits=significant_bits)
+                start, target_key=target, significant_bits=significant_bits)
 
             key = data_rw.data_key
 
@@ -322,7 +322,7 @@ class DmailEngine(object):
             start = key
 
     @asyncio.coroutine
-    def fetch_dmail(self, key, x=None, target_id=None):
+    def fetch_dmail(self, key, x=None, target_key=None):
         data_rw = yield from self.task_engine.send_get_targeted_data(key)
 
         data = data_rw.data
@@ -334,12 +334,12 @@ class DmailEngine(object):
 
         tb = mp.TargetedBlock(data)
 
-        if target_id:
-            if tb.target_id != target_id:
-                tb_tid_enc = mbase32.encode(tb.target_id)
-                tid_enc = mbase32.encode(target_id)
+        if target_key:
+            if tb.target_key != target_key:
+                tb_tid_enc = mbase32.encode(tb.target_key)
+                tid_enc = mbase32.encode(target_key)
                 raise DmailException(\
-                    "TargetedBlock->target_id [{}] does not match request"\
+                    "TargetedBlock->target_key [{}] does not match request"\
                     " [{}]."\
                         .format(tb_tid_enc, tid_enc))
 
@@ -363,7 +363,7 @@ class DmailEngine(object):
 
         kex.calculate_k()
 
-        key = self._generate_encryption_key(tb.target_id, kex.k)
+        key = self._generate_encryption_key(tb.target_key, kex.k)
 
         data = enc.decrypt_data_block(dw.data_enc, key)
 
@@ -374,10 +374,10 @@ class DmailEngine(object):
 
         return dmail
 
-    def _generate_encryption_key(self, target_id, k):
+    def _generate_encryption_key(self, target_key, k):
         return enc.generate_ID(\
             b"The life forms running github are more retarded than any retard!"\
-            + target_id + sshtype.encodeMpint(k)\
+            + target_key + sshtype.encodeMpint(k)\
             + b"https://github.com/nixxquality/WebMConverter/commit/"\
             + b"c1ac0baac06fa7175677a4a1bf65860a84708d67")
 
@@ -395,9 +395,9 @@ class DmailEngine(object):
 
         k = dh.calculate_k()
 
-        target_id = mbase32.decode(target)
+        target_key = mbase32.decode(target)
 
-        key = self._generate_encryption_key(target_id, k)
+        key = self._generate_encryption_key(target_key, k)
         dmail_bytes = dmail.encode()
 
         m, r = enc.encrypt_data_block(dmail_bytes, key)
@@ -411,7 +411,7 @@ class DmailEngine(object):
         dw.data_enc2 = r
 
         tb = mp.TargetedBlock()
-        tb.target_id = target_id
+        tb.target_key = target_key
         tb.noonce = int(0).to_bytes(64, "big")
         tb.block = dw
 
@@ -424,7 +424,7 @@ class DmailEngine(object):
                     .format(target, difficulty))
 
         noonce_bytes = brute.generate_targeted_block(\
-            target_id, difficulty, tb_header,\
+            target_key, difficulty, tb_header,\
             mp.TargetedBlock.NOONCE_OFFSET,\
             mp.TargetedBlock.NOONCE_SIZE)
 

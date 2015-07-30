@@ -176,7 +176,7 @@ class TargetedBlock(MorphisBlock):
 
     def __init__(self, buf=None):
         self.noonce = b' ' * TargetedBlock.NOONCE_SIZE
-        self.target_id = None
+        self.target_key = None
         self.block_hash = None
         self.block = None
 
@@ -187,9 +187,9 @@ class TargetedBlock(MorphisBlock):
 
         assert len(self.noonce) == TargetedBlock.NOONCE_SIZE
         nbuf += self.noonce
-        assert self.target_id is not None\
-            and len(self.target_id) == consts.NODE_ID_BYTES
-        nbuf += self.target_id
+        assert self.target_key is not None\
+            and len(self.target_key) == consts.NODE_ID_BYTES
+        nbuf += self.target_key
 
         nbuf += b' ' * consts.NODE_ID_BYTES # block_hash placeholder.
 
@@ -208,7 +208,7 @@ class TargetedBlock(MorphisBlock):
 
         self.noonce = self.buf[i:i+TargetedBlock.NOONCE_SIZE]
         i += TargetedBlock.NOONCE_SIZE
-        self.target_id = self.buf[i:i+consts.NODE_ID_BYTES]
+        self.target_key = self.buf[i:i+consts.NODE_ID_BYTES]
         i += consts.NODE_ID_BYTES
         self.block_hash = self.buf[i:i+consts.NODE_ID_BYTES]
         i += consts.NODE_ID_BYTES

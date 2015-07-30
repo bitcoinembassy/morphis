@@ -74,7 +74,7 @@ def _init_daos(Base, d):
         signature = Column(LargeBinary, nullable=True)
         epubkey = Column(LargeBinary, nullable=True)
         pubkeylen = Column(Integer, nullable=True)
-        target_id = Column(LargeBinary, nullable=True)
+        target_key = Column(LargeBinary, nullable=True)
 
     Index("data_id", DataBlock.data_id)
     Index("datablock__distance", DataBlock.distance.desc())
@@ -95,7 +95,7 @@ def _init_daos(Base, d):
         id = Column(Integer, primary_key=True)
         parent_id = Column(Integer, ForeignKey("dmailaddress.id"))
         x = Column(LargeBinary, nullable=False)
-        target_id = Column(LargeBinary, nullable=False)
+        target_key = Column(LargeBinary, nullable=False)
 
     d.DmailKey = DmailKey
 
