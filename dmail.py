@@ -166,13 +166,16 @@ class DmailEngine(object):
         if log.isEnabledFor(logging.INFO):
             log.info("Generating dmail address (prefix=[{}].".format(prefix))
 
-        if prefix:
-            if log.isEnabledFor(logging.INFO):
-                log.info("Brute force generating key with prefix [{}]."\
-                    .format(prefix))
-            privkey = brute.generate_key(prefix)
-        else:
-            privkey = rsakey.RsaKey.generate(bits=4096)
+        def threadcall():
+            if prefix:
+                if log.isEnabledFor(logging.INFO):
+                    log.info("Brute force generating key with prefix [{}]."\
+                        .format(prefix))
+                return brute.generate_key(prefix)
+            else:
+                return rsakey.RsaKey.generate(bits=4096)
+
+        privkey = yield from self.loop.run_in_executor(None, threadcall)
 
         dms = DmailSite()
         dms.generate()
@@ -423,10 +426,13 @@ class DmailEngine(object):
                 "Attempting work on dmail (target=[{}], difficulty=[{}])."\
                     .format(target, difficulty))
 
-        noonce_bytes = brute.generate_targeted_block(\
-            target_key, difficulty, tb_header,\
-            mp.TargetedBlock.NOONCE_OFFSET,\
-            mp.TargetedBlock.NOONCE_SIZE)
+        def threadcall():
+            return brute.generate_targeted_block(\
+                target_key, difficulty, tb_header,\
+                mp.TargetedBlock.NOONCE_OFFSET,\
+                mp.TargetedBlock.NOONCE_SIZE)
+
+        noonce_bytes = yield from self.loop.run_in_executor(None, threadcall)
 
         if log.isEnabledFor(logging.INFO):
             log.info("Work found noonce [{}].".format(noonce_bytes))
