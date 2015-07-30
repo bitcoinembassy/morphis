@@ -77,6 +77,10 @@ class Node():
             log.debug("The database is already initialized.")
             return
 
+        if not os.path.exists("data"):
+            log.info("The 'data' directory was missing; creating.")
+            os.makedirs("data")
+
         self.db.init_engine()
         self._db_initialized = True
 
