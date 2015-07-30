@@ -256,12 +256,12 @@ def _fetch_dmail(handler, dmail_addr, dmail_key):
 
             sess.rollback()
 
-            return dmail_key_obj.target_id, dmail_key_obj.x
+            return dmail_key_obj.target_key, dmail_key_obj.x
 
-    target_id, x_bin = dbcall()
+    target_key, x_bin = dbcall()
     l, x = sshtype.parseMpint(x_bin)
 
-    dm = yield from de.fetch_dmail(bytes(dmail_key), x, target_id)
+    dm = yield from de.fetch_dmail(bytes(dmail_key), x, target_key)
 
     if not dm:
         handler._send_partial_content(\
