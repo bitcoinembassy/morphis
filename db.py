@@ -105,7 +105,7 @@ def _init_daos(Base, d):
         id = Column(Integer, primary_key=True)
         site_key = Column(LargeBinary, nullable=False)
         site_privatekey = Column(LargeBinary, nullable=True)
-        dmail_keys = relationship("DmailKey")
+        dmail_keys = relationship(DmailKey)
 
     Index("dmailaddress__site_key", DmailAddress.site_key)
 
