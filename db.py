@@ -36,7 +36,7 @@ def _init_daos(Base, d):
     # as desired. Hopefully we can get SQLAlchemy fixed and then this
     # complication removed.
     class Peer(Base):
-        __tablename__ = "Peer"
+        __tablename__ = "peer"
 
         id = Column(Integer, primary_key=True)
         name = Column(String(48), nullable=True)
@@ -62,7 +62,7 @@ def _init_daos(Base, d):
     d.Peer = Peer
 
     class DataBlock(Base):
-        __tablename__ = "DataBlock"
+        __tablename__ = "datablock"
 
         id = Column(Integer, primary_key=True)
         data_id = Column(LargeBinary, nullable=False)
@@ -82,7 +82,7 @@ def _init_daos(Base, d):
     d.DataBlock = DataBlock
 
     class NodeState(Base):
-        __tablename__ = "NodeState"
+        __tablename__ = "nodestate"
 
         key = Column(String(64), primary_key=True)
         value = Column(String(128), nullable=True)
