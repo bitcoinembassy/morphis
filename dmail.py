@@ -189,7 +189,7 @@ class DmailEngine(object):
 
         r = yield from self.task_engine.send_store_updateable_key(\
             dms.export(), privkey, version=int(time.time()*1000),\
-            key_callback=key_callback)
+            store_key=True, key_callback=key_callback)
 
         def dbcall():
             with self.db.open_session() as sess:
