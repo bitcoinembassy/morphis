@@ -179,7 +179,7 @@ label {
         <label for="content">Message Content</label>
         <textarea name="content" id="content" cols="80" rows="24"></textarea>
     </p>
-    <input type="submit" formtarget="_self" id="send" value="Send"/> (This will take at least a few second, if not much longer, depending on the difficulty (anti-spam setting) set by the owner of the destination address.)
+    <input type="submit" formtarget="_self" id="send" value="Send"/> (This will take at least a few seconds, if not much longer, depending on the difficulty (anti-spam setting) set by the owner of the destination address.)
 </form>
 </body></html>""", None]
 
