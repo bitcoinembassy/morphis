@@ -315,6 +315,9 @@ class ChordTasks(object):
             yield from self.send_find_node(\
                 data_id, for_data=True, data_msg=sdmsg)
 
+        if store_key:
+            yield from self.send_store_key(data, data_key)
+
         return storing_nodes
 
     @asyncio.coroutine
