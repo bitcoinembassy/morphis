@@ -460,9 +460,13 @@ class ChordTasks(object):
         used_tunnels = {}
         far_peers_by_path = {}
 
+        data_msg_type = type(data_msg)
+
         fnmsg = cp.ChordFindNode()
         fnmsg.node_id = node_id
         fnmsg.data_mode = data_mode
+        if data_msg_type is cp.ChordStoreData:
+            fnmsg.version = data_msg.version
         if significant_bits:
             fnmsg.significant_bits = significant_bits
             if target_key:
@@ -509,7 +513,6 @@ class ChordTasks(object):
 
         sent_data_request = Counter(0)
         data_rw = DataResponseWrapper(data_key)
-        data_msg_type = type(data_msg)
         if data_msg_type is cp.ChordStoreData:
             if data_msg.pubkey:
                 data_rw.pubkey = data_msg.pubkey
@@ -714,7 +717,8 @@ class ChordTasks(object):
                         assert data_mode is cp.DataMode.store
 
                         will_store, need_pruning =\
-                            yield from self._check_do_want_data(node_id)
+                            yield from self._check_do_want_data(\
+                                node_id, fnmsg.version)
 
                         if not will_store:
                             continue
@@ -1393,7 +1397,8 @@ class ChordTasks(object):
                 peer.protocol.write_channel_data(local_cid, pmsg.encode())
             elif fnmsg.data_mode is cp.DataMode.store:
                 will_store, need_pruning =\
-                    yield from self._check_do_want_data(fnmsg.node_id)
+                    yield from self._check_do_want_data(\
+                        fnmsg.node_id, fnmsg.version)
 
                 imsg = cp.ChordStorageInterest()
                 imsg.will_store = will_store
@@ -1785,7 +1790,7 @@ class ChordTasks(object):
         return (yield from self.loop.run_in_executor(None, dbcall))
 
     @asyncio.coroutine
-    def _check_do_want_data(self, data_id):
+    def _check_do_want_data(self, data_id, version):
         "Checks if we have space to store, and if not if we have enough data"\
         " that is further in distance thus having enough space to free."\
         "returns: will_store, need_pruning"
@@ -1805,12 +1810,23 @@ class ChordTasks(object):
             # Check if we have this block.
             def dbcall():
                 with self.engine.node.db.open_session() as sess:
-                    q = sess.query(func.count("*"))
-                    q = q.filter(DataBlock.data_id == data_id)
+                    if version:
+                        old_entry = sess.query(DataBlock)\
+                            .filter(DataBlock.data_id == data_id)\
+                            .first()
 
-                    if q.scalar() > 0:
-                        # We already have this block.
-                        return False
+                        if old_entry:
+                            vint = int(old_entry.version)
+                            if vint >= version:
+                                # We only want to store newer versions.
+                                return False
+                    else:
+                        q = sess.query(func.count("*"))
+                        q = q.filter(DataBlock.data_id == data_id)
+
+                        if q.scalar() > 0:
+                            # We already have this block.
+                            return False
 
                     return True
 
