@@ -365,7 +365,7 @@ class Shell(cmd.Cmd):
         args = arg.split(' ')
 
         data_key, significant_bits = decode_key(args[0])
-        path = args[1] if len(args) == 2 else None
+        path = args[1].encode() if len(args) == 2 else None
 
         if significant_bits:
             self.writeln("Incomplete key, use findkey.")
