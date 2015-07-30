@@ -314,7 +314,7 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
             self._handle_error(data_rw)
 
     def _send_content(self, content_entry, cacheable=True, content_type=None):
-        if type(content_entry) is list:
+        if type(content_entry) in (list, tuple):
             content = content_entry[0]
             content_id = content_entry[1]
         else:
