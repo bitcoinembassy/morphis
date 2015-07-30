@@ -1792,6 +1792,8 @@ class ChordTasks(object):
                 mutil.calc_log_distance(self.engine.node_id, data_id)
             if log_dist > chord.NODE_ID_BITS - 2:
                 # Too far.
+                if log.isEnabledFor(logging.DEBUG):
+                    log.debug("Don't want data; too far.")
                 return False, False
 
             # Check if we have this block.
@@ -1807,6 +1809,10 @@ class ChordTasks(object):
                     return True
 
             r = yield from self.loop.run_in_executor(None, dbcall)
+
+            if not r:
+                if log.isEnabledFor(logging.DEBUG):
+                    log.debug("Don't want data; already have it.")
 
             return r, False
 
