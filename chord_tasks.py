@@ -360,11 +360,14 @@ class ChordTasks(object):
 
         if path:
             path_hash = enc.generate_ID(path)
-            data_key = enc.generate_ID(data_key + path_hash)
+            data_id = enc.generate_ID(enc.generate_ID(data_key + path_hash))
         else:
             path_hash = b""
+            data_id = enc.generate_ID(data_key)
 
-        data_id = enc.generate_ID(data_key)
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("data_key=[{}], data_id=[{}]."\
+                .format(mbase32.encode(data_key), mbase32.encode(data_id)))
 
         hm = bytearray()
         hm += sshtype.encodeBinary(path_hash)
@@ -2080,10 +2083,18 @@ class ChordTasks(object):
 
             data_key = enc.generate_ID(dmsg.pubkey)
             if dmsg.path_hash:
+                if log.isEnabledFor(logging.DEBUG):
+                    log.debug("path_hash=[{}]."\
+                        .format(mbase32.encode(dmsg.path_hash)))
                 data_key = enc.generate_ID(data_key + dmsg.path_hash)
-            if data_id != enc.generate_ID(data_key):
-                errmsg = "Peer (dbid=[{}]) sent a data_id that didn't match"\
-                    " the updateable key id!".format(peer_dbid)
+
+            calc_data_id = enc.generate_ID(data_key)
+
+            if data_id != calc_data_id:
+                errmsg = "Peer (dbid=[{}]) sent a data_id [{}] that didn't"\
+                    " match the updateable key id [{}]!"\
+                        .format(peer_dbid, mbase32.encode(data_id),\
+                            mbase32.encode(calc_data_id))
                 log.warning(errmsg)
                 raise ChordException(errmsg)
 
