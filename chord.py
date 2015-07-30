@@ -386,7 +386,10 @@ class ChordEngine():
             log.info("Connecting to peer (id={}, addr=[{}])."\
                 .format(dbpeer.id, dbpeer.address))
 
-        host, port = dbpeer.address.split(':')
+        address = dbpeer.address
+        p0 = address.rindex(':')
+        host = address[:p0]
+        port = address[p0+1:]
 
         peer = mnpeer.Peer(self, dbpeer)
 
