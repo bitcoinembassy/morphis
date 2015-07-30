@@ -517,10 +517,8 @@ def store_data(engine, data, privatekey=None, path=None, version=None,\
                 data, privatekey, path, version, store_key, key_callback)
         else:
             yield from\
-                engine.tasks.send_store_data(data, key_callback=key_callback)
-
-            if store_key:
-                yield from engine.tasks.send_store_key(data)
+                engine.tasks.send_store_data(data, store_key=store_key,\
+                    key_callback=key_callback)
 
         if log.isEnabledFor(logging.INFO):
             log.info("Simple store complete.")
@@ -548,10 +546,8 @@ def store_data(engine, data, privatekey=None, path=None, version=None,\
         else:
             yield from\
                 engine.tasks.send_store_data(\
-                    link_data, key_callback=orig_key_callback)
-
-            if store_key:
-                yield from engine.tasks.send_store_key(link_data)
+                    link_data, store_key=store_key,\
+                    key_callback=orig_key_callback)
 
         log.info("Link stored.")
 
@@ -632,11 +628,8 @@ def _store_data_multipart(engine, data, key_callback, store_key, concurrency):
     block_data = block.encode()
 
     yield from\
-        engine.tasks.send_store_data(block_data, key_callback=key_callback)
-
-    if store_key:
-        yield from\
-            engine.tasks.send_store_key(block_data)
+        engine.tasks.send_store_data(block_data, store_key=store_key,\
+            key_callback=key_callback)
 
 @asyncio.coroutine
 def _store_block(engine, i, block_data, key_callback, task_semaphore):
