@@ -6,6 +6,7 @@ import llog
 from bisect import bisect_left
 import logging
 
+import consts
 import mbase32
 
 log = logging.getLogger(__name__)
@@ -102,7 +103,7 @@ def page_query(query, page_size=10):
         offset += page_size
 
 def decode_key(encoded):
-    #assert chord.NODE_ID_BITS == 512
+    assert consts.NODE_ID_BITS == 512
     assert type(encoded) is str, type(encoded)
 
     significant_bits = None
@@ -113,6 +114,8 @@ def decode_key(encoded):
         data_key = bytes.fromhex(encoded)
     elif kl in (102, 103):
         data_key = bytes(mbase32.decode(encoded))
+        if len(data_key) < consts.NODE_ID_BYTES:
+            significant_bits = 5 * kl
     else:
         data_key = mbase32.decode(encoded, False)
         significant_bits = 5 * kl
