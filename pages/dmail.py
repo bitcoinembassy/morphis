@@ -7,7 +7,7 @@ import asyncio
 import importlib
 import logging
 import threading
-import urllib
+import urllib.parse
 
 from db import DmailAddress, DmailKey
 import enc
@@ -334,7 +334,8 @@ def _fetch_dmail(handler, dmail_addr, dmail_key):
 
     l, x = sshtype.parseMpint(x_bin)
 
-    dm = yield from de.fetch_dmail(bytes(dmail_key), x, target_key)
+    dm, valid_sig =\
+        yield from de.fetch_dmail(bytes(dmail_key), x, target_key)
 
     if not dm:
         handler._send_partial_content(\
@@ -345,6 +346,11 @@ def _fetch_dmail(handler, dmail_addr, dmail_key):
     dmail_text = []
 
     if dm.sender_pubkey:
+        if valid_sig:
+            dmail_text += "Sender Address Verified.\n\n"
+        else:
+            dmail_text += "WARNING: Sender Address Forged!\n\n"
+
         dmail_text += "From: {}\n"\
             .format(mbase32.encode(enc.generate_ID(dm.sender_pubkey)))
 

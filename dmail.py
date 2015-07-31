@@ -70,10 +70,11 @@ class DmailWrapper(object):
         self.sse = None
         self.ssf = None
 
+        self.signature = None
+
         self.data = None
         self.data_len = None
         self.data_enc = None
-        self.data_enc2 = None
 
         if buf is not None:
             self.parse_from(buf, offset)
@@ -84,10 +85,11 @@ class DmailWrapper(object):
         buf += sshtype.encodeString(self.ssm)
         buf += sshtype.encodeMpint(self.sse)
         buf += sshtype.encodeMpint(self.ssf)
+
+        buf += sshtype.encodeBinary(self.signature)
+
         buf += struct.pack(">L", self.data_len)
         buf += self.data_enc
-        if self.data_enc2:
-            buf += self.data_enc2
 
     def parse_from(self, buf, idx):
         self.version = struct.unpack_from(">L", buf, idx)[0]
@@ -95,6 +97,9 @@ class DmailWrapper(object):
         idx, self.ssm = sshtype.parse_string_from(buf, idx)
         idx, self.sse = sshtype.parse_mpint_from(buf, idx)
         idx, self.ssf = sshtype.parse_mpint_from(buf, idx)
+
+        idx, self.signature = sshtype.parse_binary_from(buf, idx)
+
         self.data_len = struct.unpack_from(">L", buf, idx)[0]
         idx += 4
 
@@ -295,7 +300,8 @@ class DmailEngine(object):
                 raise DmailException("Unsupported ss method [{}]."\
                     .format(recipient.root["ssm"]))
 
-            storing_nodes = yield from self.__send_dmail(dmail, recipient)
+            storing_nodes =\
+                yield from self.__send_dmail(from_asymkey, recipient, dmail)
 
         return storing_nodes
 
@@ -387,7 +393,13 @@ class DmailEngine(object):
 
         dmail = Dmail(data, 0, dw.data_len)
 
-        return dmail
+        if dw.signature:
+            pubkey = rsakey.RsaKey(dmail.sender_pubkey)
+            valid_sig = pubkey.verify_rsassa_pss_sig(dw.data_enc, dw.signature)
+
+            return dmail, valid_sig
+        else:
+            return dmail, False
 
     def _generate_encryption_key(self, target_key, k):
         return enc.generate_ID(\
@@ -397,7 +409,7 @@ class DmailEngine(object):
             + b"c1ac0baac06fa7175677a4a1bf65860a84708d67")
 
     @asyncio.coroutine
-    def __send_dmail(self, dmail, recipient):
+    def __send_dmail(self, from_asymkey, recipient, dmail):
         root = recipient.root
         sse = root["sse"]
         target = root["target"]
@@ -416,14 +428,17 @@ class DmailEngine(object):
         dmail_bytes = dmail.encode()
 
         m, r = enc.encrypt_data_block(dmail_bytes, key)
+        m = m + r
 
         dw = DmailWrapper()
         dw.ssm = _dh_method_name
         dw.sse = sse
         dw.ssf = dh.e
+
+        dw.signature = from_asymkey.calc_rsassa_pss_sig(m)
+
         dw.data_len = len(dmail_bytes)
         dw.data_enc = m
-        dw.data_enc2 = r
 
         tb = mp.TargetedBlock()
         tb.target_key = target_key

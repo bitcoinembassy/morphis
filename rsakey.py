@@ -14,17 +14,20 @@ from hashlib import sha1
 import logging
 
 from Crypto.PublicKey import RSA
+from Crypto.Signature import PKCS1_PSS
 
 import putil as util
 from putil import *
 
 import sshtype
 import asymkey
+import enc
 from sshexception import *
 
 log = logging.getLogger(__name__)
 
-SHA1_DIGESTINFO = b'\x30\x21\x30\x09\x06\x05\x2b\x0e\x03\x02\x1a\x05\x00\x04\x14'
+SHA1_DIGESTINFO =\
+    b'\x30\x21\x30\x09\x06\x05\x2b\x0e\x03\x02\x1a\x05\x00\x04\x14'
 
 #class RsaKey (PKey):
 class RsaKey(asymkey.AsymKey):
@@ -39,6 +42,12 @@ class RsaKey(asymkey.AsymKey):
         self.d = None
         self.p = None
         self.q = None
+
+        self.__public_key = None
+        self.__private_key = None
+        self.__rsassa_pss_signer = None
+        self.__rsassa_pss_verifier = None
+
         if file_obj is not None:
             self._from_private_key(file_obj, password)
             return
@@ -87,14 +96,32 @@ class RsaKey(asymkey.AsymKey):
     def can_sign(self):
         return self.d is not None
 
+    def calc_rsassa_pss_sig(self, data):
+        h = enc._generate_ID(data)
+
+        privkey = self._private_key()
+
+        signer = self._rsassa_pss_signer()
+
+        return signer.sign(h)
+
     def sign_ssh_data(self, data):
         digest = sha1(data).digest()
-        rsa = RSA.construct((int(self.n), int(self.e), int(self.d)))
-        sig = util.deflate_long(rsa.sign(self._pkcs1imify(digest), bytes())[0], 0)
+        rsa = self._private_key()
+        sig = util.deflate_long(\
+            rsa.sign(self._pkcs1imify(digest), bytes())[0], 0)
+
         m = bytearray()
         m += sshtype.encodeString('ssh-rsa')
         m += sshtype.encodeBinary(sig)
         return m
+
+    def verify_rsassa_pss_sig(self, data, signature):
+        h = enc._generate_ID(data)
+
+        signer = self._rsassa_pss_verifier()
+
+        return signer.verify(h, signature)
 
     def verify_ssh_sig(self, key_data, sig_msg):
         i, v = sshtype.parseString(sig_msg)
@@ -110,8 +137,43 @@ class RsaKey(asymkey.AsymKey):
         if log.isEnabledFor(logging.DEBUG):
             log.debug("sig=[{}].".format(sig))
         hash_obj = util.inflate_long(self._pkcs1imify(sha1(key_data).digest()), True)
-        rsa = RSA.construct((int(self.n), int(self.e)))
+        rsa = self._public_key()
         return rsa.verify(hash_obj, (sig, ))
+
+    def _public_key(self):
+        key = self.__public_key
+
+        if not key:
+            self.__public_key = key = RSA.construct((int(self.n), int(self.e)))
+
+        return key
+
+    def _private_key(self):
+        key = self.__private_key
+
+        if not key:
+            self.__private_key = key =\
+                RSA.construct((int(self.n), int(self.e), int(self.d)))
+
+        return key
+
+    def _rsassa_pss_signer(self):
+        signer = self.__rsassa_pss_signer
+
+        if not signer:
+            signer = self.__rsassa_pss_signer =\
+                PKCS1_PSS.new(self._private_key())
+
+        return signer
+
+    def _rsassa_pss_verifier(self):
+        verifier = self.__rsassa_pss_verifier
+
+        if not verifier:
+            verifier = self.__rsassa_pss_verifier =\
+                PKCS1_PSS.new(self._public_key())
+
+        return verifier
 
     def _encode_key(self):
         if (self.p is None) or (self.q is None):
