@@ -103,7 +103,7 @@ def _find_noonce(rp):
         log.exception("__find_noonce(..)")
 
 def __find_noonce(rp):
-    log.debug("Worker running.")
+#    log.debug("Worker running.")
 
     wid, prefix, nbits, data, noonce_offset, noonce_size = rp.recv()
 
@@ -126,16 +126,16 @@ def __find_noonce(rp):
             dist, direction = mutil.calc_log_distance(h, prefix)
             match = dist <= max_dist and direction == -1
         except IndexError:
-            log.debug("Exactly matched prefix.")
+#            log.debug("Exactly matched prefix.")
             match = True
 
         if match:
-            if log.isEnabledFor(logging.INFO):
-                log.info("noonce_bytes=[{}]."\
-                    .format(mutil.hex_string(noonce_bytes)))
-            if log.isEnabledFor(logging.DEBUG):
-                log.debug("resulting block=[\n{}]."\
-                    .format(mutil.hex_dump(data)))
+#            if log.isEnabledFor(logging.INFO):
+#                log.info("noonce_bytes=[{}]."\
+#                    .format(mutil.hex_string(noonce_bytes)))
+#            if log.isEnabledFor(logging.DEBUG):
+#                log.debug("resulting block=[\n{}]."\
+#                    .format(mutil.hex_dump(data)))
 
             rp.send(noonce_bytes)
             return
@@ -149,7 +149,7 @@ def _find_key(rp):
         log.exception("__find_key(..)")
 
 def __find_key(rp):
-    log.debug("Worker running.")
+#    log.debug("Worker running.")
 
     wid, prefix = rp.recv()
 
@@ -162,8 +162,8 @@ def __find_key(rp):
         pubkey_hash_enc = mbase32.encode(pubkey_hash)
 
         if pubkey_hash_enc.startswith(prefix):
-            if log.isEnabledFor(logging.INFO):
-                log.info("Worker #{} found key.".format(wid))
+#            if log.isEnabledFor(logging.INFO):
+#                log.info("Worker #{} found key.".format(wid))
 
             rp.send(key._encode_key())
             return
