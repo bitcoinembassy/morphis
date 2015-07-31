@@ -4,6 +4,7 @@
 import llog
 
 import asyncio
+from datetime import datetime
 import json
 import logging
 import os
@@ -106,6 +107,7 @@ class Dmail(object):
         self.version = 1
         self.sender_pubkey = None
         self.subject = None
+        self.date = None
         self.parts = [] # [DmailPart].
 
         if buf:
@@ -117,6 +119,7 @@ class Dmail(object):
         buf += struct.pack(">L", self.version)
         buf += sshtype.encodeBinary(self.sender_pubkey)
         buf += sshtype.encodeString(self.subject)
+        buf += sshtype.encodeString(self.date)
 
         for part in self.parts:
             part.encode(buf)
@@ -131,6 +134,7 @@ class Dmail(object):
         idx += 4
         idx, self.sender_pubkey = sshtype.parse_binary_from(buf, idx)
         idx, self.subject = sshtype.parse_string_from(buf, idx)
+        idx, self.date = sshtype.parse_string_from(buf, idx)
 
         while idx < length:
             part = DmailPart()
@@ -231,27 +235,35 @@ class DmailEngine(object):
             m_dest_ids.append((m_dest_enc, m_dest_id, sig_bits))
             p0 = p1 + 1
 
+        date = datetime.today()
+
         if message_text[p0] == '\n':
             p0 += 1
 
         message_text = message_text[p0:]
 
         storing_nodes = yield from self.send_dmail(\
-            subject, m_from_asymkey, m_dest_ids, message_text)
+            m_from_asymkey, m_dest_ids, subject, date, message_text)
 
         return storing_nodes
 
     @asyncio.coroutine
-    def send_dmail(self, subject, from_asymkey, recipients, message_text):
+    def send_dmail(self, from_asymkey, recipients, subject, date,\
+            message_text):
         assert from_asymkey is None or type(from_asymkey) is rsakey.RsaKey
         assert type(recipients) is list, type(recipients)
+        assert not date or type(date) is datetime
 
         if type(message_text) is str:
             message_text = message_text.encode()
 
+        if not date:
+            date = datetime.today()
+
         dmail = Dmail()
         dmail.sender_pubkey = from_asymkey.asbytes() if from_asymkey else b""
         dmail.subject = subject
+        dmail.date = date.isoformat()
 
         if message_text:
             part = DmailPart()

@@ -188,9 +188,10 @@ def __serve_post(handler, rpath, done_event):
 
         de = dmail.DmailEngine(handler.node.chord_engine.tasks)
         yield from de.send_dmail(\
-            subject,\
             sender_asymkey,\
             recipients,\
+            subject,\
+            None,\
             content)
 
         handler._send_content(\
@@ -269,11 +270,16 @@ def _fetch_dmail(handler, dmail_addr, dmail_key):
                 .format(dmail_key_enc))
         return
 
-    dmail_text = "Subject: {}\n".format(dm.subject)
+    dmail_text = []
 
     if dm.sender_pubkey:
         dmail_text += "From: {}\n"\
             .format(mbase32.encode(enc.generate_ID(dm.sender_pubkey)))
+
+    dmail_text += "Subject: {}\n".format(dm.subject)
+
+    date_fmtted = mutil.parse_iso_datetime(dm.date)
+    dmail_text += "Date: {}\n".format(date_fmtted)
 
     dmail_text += '\n'
 
@@ -285,6 +291,8 @@ def _fetch_dmail(handler, dmail_addr, dmail_key):
         if len(dm.parts) > 1:
             dmail_text += "----- ^ dmail part #{} ^ -----\n\n".format(i)
             i += 1
+
+    dmail_text = ''.join(dmail_text)
 
     handler._send_content(dmail_text.encode(), content_type="text/plain")
 

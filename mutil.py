@@ -4,6 +4,7 @@
 import llog
 
 from bisect import bisect_left
+from datetime import datetime
 import logging
 
 import consts
@@ -162,3 +163,8 @@ def calc_log_distance(nid, pid):
             break
 
     return dist, direction
+
+iso_fmt = "%Y-%m-%dT%H:%M:%S.%f"
+
+def parse_iso_datetime(date_str):
+    return datetime.strptime(datetime.today().isoformat(), iso_fmt)

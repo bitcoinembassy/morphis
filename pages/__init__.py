@@ -167,14 +167,14 @@ label {
 </style></head><body style="height: 0%">
 <form action="make_it_so" method="post">
     <p class="formfield">
-        <label for="subject">Subject</label>
-        <input type="textfield" name="subject" id="subject" size="70"/>
-    </p><p class="formfield">
         <label for="sender">From</label>
         <input type="textfield" name="sender" id="sender" size="70"/>
     </p><p class="formfield">
         <label for="destination">To</label>
         <input type="textfield" name="destination" id="destination" size="70"/>
+    </p><p class="formfield">
+        <label for="subject">Subject</label>
+        <input type="textfield" name="subject" id="subject" size="70"/>
     </p><p class="formfield">
         <label for="content">Message Content</label>
         <textarea name="content" id="content" cols="80" rows="24"></textarea>
