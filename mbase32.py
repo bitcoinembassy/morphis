@@ -1,7 +1,7 @@
 # Copyright (c) 2014-2015  Sam Maloney.
 # License: Public Domain.
 
-charset = "ybndrfg8ejkmcpqxot1uwisza345h769"
+charset = "13456789abcdefghijkmnopqrstuwxyz"
 
 def encode(val):
     assert type(val) in (bytes, bytearray), type(val)
