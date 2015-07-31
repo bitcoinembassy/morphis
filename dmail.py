@@ -435,7 +435,10 @@ class DmailEngine(object):
         dw.sse = sse
         dw.ssf = dh.e
 
-        dw.signature = from_asymkey.calc_rsassa_pss_sig(m)
+        if from_asymkey:
+            dw.signature = from_asymkey.calc_rsassa_pss_sig(m)
+        else:
+            dw.signature = b''
 
         dw.data_len = len(dmail_bytes)
         dw.data_enc = m
