@@ -10,10 +10,12 @@ import threading
 import urllib
 
 from db import DmailAddress, DmailKey
+import enc
 import dmail
 import mbase32
 import mutil
 import pages
+import rsakey
 import sshtype
 
 log = logging.getLogger(__name__)
@@ -76,7 +78,15 @@ def __serve_get(handler, rpath, done_event):
             handler._send_partial_content(
                 pages.dmail_page_content__f1_start, True)
 
-            _list_dmail_addresses(handler)
+            site_keys = yield from _list_dmail_addresses(handler)
+
+            for dbid, site_key in site_keys:
+                site_key_enc = mbase32.encode(site_key)
+
+                resp = """<a href="addr/{}">{}</a><br/>"""\
+                    .format(site_key_enc, site_key_enc)
+
+                handler._send_partial_content(resp)
 
             handler._send_partial_content(pages.dmail_page_content__f1_end)
             handler._end_partial_content()
@@ -85,7 +95,26 @@ def __serve_get(handler, rpath, done_event):
 
             handler._send_content(pages.dmail_compose_dmail_content)
         elif req == "/compose/form":
-            handler._send_content(pages.dmail_compose_dmail_form_content)
+            handler._send_partial_content(\
+                pages.dmail_compose_dmail_form_start, True)
+
+            site_keys = yield from _list_dmail_addresses(handler)
+
+            for dbid, site_key in site_keys:
+                site_key_enc = mbase32.encode(site_key)
+
+                sender_element = """<option value="{}">{}</option>"""\
+                    .format(dbid, site_key_enc)
+
+                handler._send_partial_content(sender_element)
+
+            handler._send_partial_content(\
+                "<option value="">&lt;Anonymous&gt;</option>")
+
+            handler._send_partial_content(\
+                pages.dmail_compose_dmail_form_end)
+
+            handler._end_partial_content()
         elif req.startswith("/addr/"):
             addr_enc = req[6:]
 
@@ -160,9 +189,14 @@ def __serve_post(handler, rpath, done_event):
 
     if rpath == "/compose/make_it_so":
         data = handler.rfile.read(int(handler.headers["Content-Length"]))
-        log.debug("data=[{}].".format(data))
+
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("data=[{}].".format(data))
+
         dd = urllib.parse.parse_qs(data)
-        log.debug("dd=[{}].".format(dd))
+
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("dd=[{}].".format(dd))
 
         subject = dd.get(b"subject")
         if subject:
@@ -170,8 +204,22 @@ def __serve_post(handler, rpath, done_event):
         else:
             subject = ""
 
-#        sender_asymkey = rsakey.RsaKey(privdata=base58.decode(dd[b"sender"])
-        sender_asymkey = None
+        sender_dmail_id = dd.get(b"sender")
+
+        if sender_dmail_id:
+            sender_dmail_id = int(sender_dmail_id[0])
+
+            if log.isEnabledFor(logging.DEBUG):
+                log.debug("sender_dmail_id=[{}].".format(sender_dmail_id))
+
+            dmail_address =\
+                yield from _fetch_dmail_address(handler, sender_dmail_id)
+
+            sender_asymkey = rsakey.RsaKey(\
+                privdata=dmail_address.site_privatekey)\
+                    if dmail_address else None
+        else:
+            sender_asymkey = None
 
         dest_addr_enc = dd.get(b"destination")
         if not dest_addr_enc:
@@ -200,6 +248,27 @@ def __serve_post(handler, rpath, done_event):
     else:
         handler._handle_error()
 
+@asyncio.coroutine
+def _fetch_dmail_address(handler, dmail_address_id):
+    def dbcall():
+        with handler.node.db.open_session() as sess:
+            q = sess.query(DmailAddress)\
+                .filter(DmailAddress.id == dmail_address_id)
+
+            dmailaddr = q.first()
+
+            if not dmailaddr:
+                return None
+
+            sess.expunge(dmailaddr)
+
+            return dmailaddr
+
+    dmailaddr = yield from handler.node.loop.run_in_executor(None, dbcall)
+
+    return dmailaddr
+
+@asyncio.coroutine
 def _list_dmail_addresses(handler):
     def dbcall():
         with handler.node.db.open_session() as sess:
@@ -207,17 +276,18 @@ def _list_dmail_addresses(handler):
 
             log.info("Fetching addresses...")
 
+            site_keys = []
+
             for addr in mutil.page_query(q):
-                site_key_enc = mbase32.encode(addr.site_key)
-
-                resp = """<a href="addr/{}">{}</a><br/>"""\
-                    .format(site_key_enc, site_key_enc)
-
-                handler._send_partial_content(resp)
+                site_keys.append((addr.id, addr.site_key))
 
             sess.rollback()
 
-    dbcall()
+            return site_keys
+
+    site_keys = yield from handler.node.loop.run_in_executor(None, dbcall)
+
+    return site_keys
 
 @asyncio.coroutine
 def _list_dmail_inbox(handler, addr):
@@ -259,7 +329,9 @@ def _fetch_dmail(handler, dmail_addr, dmail_key):
 
             return dmail_key_obj.target_key, dmail_key_obj.x
 
-    target_key, x_bin = dbcall()
+    target_key, x_bin =\
+        yield from handler.node.loop.run_in_executor(None, dbcall)
+
     l, x = sshtype.parseMpint(x_bin)
 
     dm = yield from de.fetch_dmail(bytes(dmail_key), x, target_key)

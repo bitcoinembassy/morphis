@@ -149,7 +149,7 @@ dmail_create_address_form_content = [\
 
 dmail_compose_dmail_content = [None, None]
 
-dmail_compose_dmail_form_content = [\
+dmail_compose_dmail_form_start =\
     b"""<!DOCTYPE html>
 <html><head><base target="_parent" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/>
 <style type="text/css">
@@ -168,7 +168,10 @@ label {
 <form action="make_it_so" method="post">
     <p class="formfield">
         <label for="sender">From</label>
-        <input type="textfield" name="sender" id="sender" size="70"/>
+        <select name="sender">"""
+
+dmail_compose_dmail_form_end =\
+    b"""</select>
     </p><p class="formfield">
         <label for="destination">To</label>
         <input type="textfield" name="destination" id="destination" size="70"/>
@@ -181,7 +184,7 @@ label {
     </p>
     <input type="submit" formtarget="_self" id="send" value="Send"/> (This will take at least a few seconds, if not much longer, depending on the difficulty (anti-spam setting) set by the owner of the destination address.)
 </form>
-</body></html>""", None]
+</body></html>"""
 
 ##.
 
