@@ -22,6 +22,9 @@ This is a developer preview release. As such, it may not work well in your exact
 
 INSTRUCTIONS
 
+Dependencies:
+    Python >= 2.4.1, PyCrypto (2.6 tested), sqlalchemy (0.9.8 tested).
+
 To run, execute the following:
 
 > python3 node.py
