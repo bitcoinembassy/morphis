@@ -331,6 +331,11 @@ def __main():
             if db_pool_size:
                 node.db.pool_size = db_pool_size
 
+            if maalstroom_enabled:
+                if maaluppage:
+                    maalstroom.set_upload_page(maaluppage)
+                yield from maalstroom.start_maalstroom_server(node)
+
             node.init_db()
             yield from node.create_schema()
 
@@ -350,11 +355,6 @@ def __main():
             if args.maxconn:
                 node.chord_engine.maximum_connections = args.maxconn
                 node.chord_engine.hard_maximum_connections = args.maxconn * 2
-
-            if maalstroom_enabled:
-                if maaluppage:
-                    maalstroom.set_upload_page(maaluppage)
-                yield from maalstroom.start_maalstroom_server(node)
 
             if addpeer != None:
                 node.chord_engine.connect_peers = addpeer
