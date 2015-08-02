@@ -236,7 +236,7 @@ dmail_fetch_panel_content = [\
     <span>
         [<a target="_self" href="../mark_as_read/${DMAIL_IDS}">Toggle Read</a>]
     </span><span>
-        [<a target="_self" href="../delete/${DMAIL_IDS}">Delete Dmail</a>]
+        [<a target="_self" href="../trash/${DMAIL_IDS}">Trash Dmail</a>]
     </span>
 </div>
 </body></html>""", None]

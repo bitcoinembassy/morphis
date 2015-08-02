@@ -151,7 +151,7 @@ def _init_daos(Base, d):
         subject = Column(String, nullable=False)
         date = Column(DateTime, nullable=False)
         read = Column(Boolean, nullable=True)
-        hidden = Column(Boolean, nullable=True)
+        hidden = Column(Boolean, nullable=False)
         tags = relationship(DmailTag, secondary=dmail_message__dmail_tag)
         parts = relationship(DmailPart)
 

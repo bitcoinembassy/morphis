@@ -8,7 +8,7 @@ import logging
 import threading
 import urllib.parse
 
-from sqlalchemy import func
+from sqlalchemy import func, not_
 from sqlalchemy.orm import joinedload
 
 from db import DmailAddress, DmailKey, DmailMessage, DmailTag, DmailPart
@@ -240,6 +240,20 @@ def __serve_get(handler, rpath, done_event):
             yield from _process_dmail_message(handler, dmail_key, processor)
 
             handler._send_204()
+        elif req.startswith("/fetch/panel/trash/"):
+            req_data = req[20:]
+
+            p0 = req_data.index('/')
+            dmail_key_enc = req_data[p0+1:]
+            dmail_key = mbase32.decode(dmail_key_enc)
+
+            def processor(dmail):
+                dmail.hidden = not dmail.hidden
+                return True
+
+            yield from _process_dmail_message(handler, dmail_key, processor)
+
+            handler._send_204()
         elif req.startswith("/fetch/panel/"):
             req_data = req[13:]
 
@@ -407,6 +421,7 @@ def _list_dmails_for_tag(handler, addr, tag):
         with handler.node.db.open_session() as sess:
             q = sess.query(DmailMessage)\
                 .filter(DmailMessage.tags.any(DmailTag.name == tag))\
+                .filter(DmailMessage.hidden == False)\
                 .order_by(DmailMessage.read, DmailMessage.date.desc())
 
             msgs = q.all()
@@ -548,6 +563,8 @@ def _fetch_and_save_dmail(handler, dmail_addr, dmail_key):
             msg.sender_valid = valid_sig
             msg.subject = dmailobj.subject
             msg.date = mutil.parse_iso_datetime(dmailobj.date)
+
+            msg.hidden = False
 
             tag = DmailTag()
             tag.name = "Inbox"
