@@ -85,8 +85,9 @@ def __serve_get(handler, rpath, done_event):
             for dbid, site_key in site_keys:
                 site_key_enc = mbase32.encode(site_key)
 
-                resp = """<a href="addr/{}">{}</a><br/>"""\
-                    .format(site_key_enc, site_key_enc)
+                resp = """<span class="nowrap">[<a href="addr/{}">view</a>]"""\
+                    """ {}</span><br/>"""\
+                        .format(site_key_enc, site_key_enc)
 
                 handler._send_partial_content(resp)
 
@@ -352,7 +353,7 @@ def __serve_post(handler, rpath, done_event):
 
         recipient, significant_bits =\
             mutil.decode_key(dest_addr_enc[0].decode())
-        recipients = [(dest_addr_enc, recipient, significant_bits)]
+        recipients = [(dest_addr_enc, bytes(recipient), significant_bits)]
 
         content = dd.get(b"content")
         if content:

@@ -512,7 +512,7 @@ class DmailEngine(object):
                     data_rw = yield from self.task_engine.send_find_key(\
                         recipient, significant_bits=significant_bits)
 
-                    recipient = data_rw.data_key
+                    recipient = bytes(data_rw.data_key)
 
                     if not recipient:
                         log.info("Failed to find key for prefix [{}]."\
