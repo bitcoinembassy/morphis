@@ -191,7 +191,7 @@ dmail_address_page_content = [None, None]
 dmail_inbox_start =\
     b"""<!DOCTYPE html>
 <html><head><base target="_root" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/></head><body class="iframe">
-<h4>Dmails for address [${DMAIL_ADDRESS}]:</h4>
+<h4>Dmails for address [<a href="../../addr/${DMAIL_ADDRESS}">${DMAIL_ADDRESS2}</a>]:</h4>
 """
 
 dmail_inbox_end =\
@@ -216,7 +216,7 @@ dmail_tag_view_content = [None, None]
 dmail_tag_view_list_start =\
     b"""<!DOCTYPE html>
 <html><head><base target="_root" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/></head><body class="iframe">
-<h4>Dmails for tag [${TAG_NAME}] of address [${DMAIL_ADDRESS}]:</h4>
+<h4>Dmails for tag [${TAG_NAME}] of address [<a href="../../../../addr/${DMAIL_ADDRESS}">${DMAIL_ADDRESS2}</a>]:</h4>
 """
 
 dmail_tag_view_list_end =\

@@ -163,8 +163,9 @@ def __serve_get(handler, rpath, done_event):
                 b"${TAG_NAME}", tag.encode())
             #FIXME: This is getting inefficient now, maybe time for Flask or
             # something like it. Maybe we can use just it's template renderer.
+            start = start.replace(b"${DMAIL_ADDRESS}", addr_enc.encode())
             start = start.replace(\
-                b"${DMAIL_ADDRESS}",\
+                b"${DMAIL_ADDRESS2}",\
                 "{}...".format(addr_enc[:32]).encode())
 
             handler._send_partial_content(start, True)
@@ -190,7 +191,10 @@ def __serve_get(handler, rpath, done_event):
                     .format(addr_enc))
 
             start = pages.dmail_inbox_start.replace(\
-                b"${DMAIL_ADDRESS}", "{}...".format(addr_enc[:32]).encode())
+                b"${DMAIL_ADDRESS}", addr_enc.encode())
+            start = start.replace(\
+                b"${DMAIL_ADDRESS2}", "{}...".format(addr_enc[:32]).encode())
+
             handler._send_partial_content(start, True)
 
             addr, significant_bits = mutil.decode_key(addr_enc)
