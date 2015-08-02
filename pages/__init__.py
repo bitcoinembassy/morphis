@@ -125,6 +125,9 @@ body.panel div.panel {
     padding-right: 0.75em;
     padding-left: 0.75em;
 }
+.strikethrough {
+    text-decoration: line-through;
+}
 div.panel span {
     padding-right: 0.25em;
     padding-left: 0.25em;

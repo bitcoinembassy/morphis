@@ -429,7 +429,10 @@ def _list_dmails_for_tag(handler, addr, tag):
 
         sender_key = msg.sender_dmail_key
         if sender_key:
-            sender_key = mbase32.encode(sender_key[:32]) + "..."
+            if msg.sender_valid:
+                sender_key = mbase32.encode(sender_key[:32]) + "..."
+            else:
+                sender_key = """<span class="strikethrough">""" + mbase32.encode(sender_key[:32]) + "</span>..."
         else:
             sender_key = "Anonymous"
 
@@ -651,15 +654,15 @@ def _format_dmail(dm, valid_sig):
     dmail_text = []
 
     if (from_db and dm.sender_dmail_key) or (not from_db and dm.sender_pubkey):
-        if valid_sig:
-            dmail_text += "Sender Address Verified.\n\n"
-        else:
-            dmail_text += "WARNING: Sender Address Forged!\n\n"
-
         if from_db:
             sender_dmail_key = dm.sender_dmail_key
         else:
             sender_dmail_key = enc.generate_ID(dm.sender_pubkey)
+
+        if valid_sig:
+            dmail_text += "Sender Address Verified.\n\n"
+        else:
+            dmail_text += "WARNING: Sender Address Forged!\n\n"
 
         dmail_text += "From: {}\n".format(mbase32.encode(sender_dmail_key))
 
