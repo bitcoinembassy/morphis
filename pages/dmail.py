@@ -421,15 +421,27 @@ def _list_dmails_for_tag(handler, addr, tag):
         addr_enc = mbase32.encode(addr)
         key_enc = mbase32.encode(msg.data_key)
 
-        is_read = "" if msg.read else " (unread)"
+        is_read = "" if msg.read else "(unread)"
+
+        subject = msg.subject
+        if len(subject) > 80:
+            subject = subject[:80] + "..."
+
+        sender_key = msg.sender_dmail_key
+        if sender_key:
+            sender_key = mbase32.encode(sender_key[:32]) + "..."
+        else:
+            sender_key = "Anonymous"
 
         handler._send_partial_content(\
-            """{}: <a href="../../../../fetch/{}/{}">{}...</a>{}<br/>"""\
+            """<span class="nowrap">{}: <a href="../../../../fetch/{}/{}">{}</a>&nbsp;-&nbsp;{}</span><span class="right_text tag">{}</span><br/>"""\
                 .format(\
-                    msg.date,\
+                    mutil.format_human_no_ms_datetime(msg.date),\
                     addr_enc,\
                     key_enc,\
-                    key_enc[:32],\
+#                    key_enc[:32],\
+                    subject,\
+                    sender_key,\
                     is_read))
 
     if not msgs:

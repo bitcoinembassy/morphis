@@ -5,19 +5,29 @@
 home_page_content = [\
     b"""<!DOCTYPE html>
 <html><head><title>MORPHiS Maalstroom UI</title>
+<link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/>
 <style type="text/css">
-    div.section { border-width 2px; border: dashed; padding: 1em; margin-top: 1em; }
+    div.msection {
+        border-width 2px;
+        border: dashed;
+        padding: 1em; margin-top: 1em;
+    }
+    body {
+        position: absolute;
+        top: 0;
+        width: 100%;
+    }
 </style>
 </head><body>
-<p><h2 style="display: inline;">MORPHiS Maalstroom UI</h2><span style="position: absolute; right: 1em;">(<a href="morphis://.aiwj/explanation">AIWJ</a> - JAVASCRIPT FREE!)</span></p>
-<div class="section">
+<p><h2 style="display: inline;">MORPHiS Maalstroom UI</h2><span style="position: absolute; right: 0em;">(<a href="morphis://.aiwj/explanation">AIWJ</a> - JAVASCRIPT FREE!)</span></p>
+<div class="msection">
     <h3>MORPHiS Web</h3>
     <p>
         <a href="morphis://3syweaeb7xwm4q3hxfp9w4nynhcnuob6r1mhj19ntu4gikjr7nhypezti4t1kacp4eyy3hcbxdbm4ria5bayb4rrfsafkscbik7c5ue/">MORPHiS Homepage</a><br/>
         <a href="morphis://3syweaeb7xwm4q3hxfp9w4nynhcnuob6r1mhj19ntu4gikjr7nhypezti4t1kacp4eyy3hcbxdbm4ria5bayb4rrfsafkscbik7c5ue/firefox_plugin">MORPHiS Firefox Plugin</a><br/>
     </p>
 </div>
-<div class="section">
+<div class="msection">
     <h3>MORPHiS Interface</h3>
     <p>
         <a href="morphis://.upload">Upload</a> (Upload data to the network.)<br/>
@@ -101,8 +111,33 @@ label {
 label:after {
     content: ": ";
 }
-.panel {
+iframe.panel {
     background-color: #86CBD2;
+}
+body.panel {
+    display: table;
+    height: 100%;
+}
+body.panel div.panel {
+    display: table-cell;
+    vertical-align: middle;
+    height: 100%;
+    padding-right: 0.75em;
+    padding-left: 0.75em;
+}
+div.panel span {
+    padding-right: 0.25em;
+    padding-left: 0.25em;
+}
+.right_text {
+    position: absolute;
+    right: 0;
+}
+.nowrap {
+    white-space: nowrap;
+}
+.tag {
+    background-color: #EEEEFF;
 }
 """, None]
 
@@ -193,9 +228,14 @@ dmail_fetch_wrapper = [\
 
 dmail_fetch_panel_content = [\
     b"""<!DOCTYPE html>
-<html><head><base target="_root" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/></head><body class="iframe">
-[<a target="_self" href="../mark_as_read/${DMAIL_IDS}">Mark as Read</a>]
-[<a target="_self" href="../delete/${DMAIL_IDS}">Delete Dmail</a>]
+<html><head><base target="_root" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/></head><body class="iframe panel">
+<div class="panel">
+    <span>
+        [<a target="_self" href="../mark_as_read/${DMAIL_IDS}">Toggle Read</a>]
+    </span><span>
+        [<a target="_self" href="../delete/${DMAIL_IDS}">Delete Dmail</a>]
+    </span>
+</div>
 </body></html>""", None]
 
 dmail_create_address_content = [None, None]
