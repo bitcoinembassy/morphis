@@ -473,6 +473,8 @@ def _list_dmail_inbox(handler, addr, significant_bits):
 
     @asyncio.coroutine
     def process_key(key):
+        nonlocal new_dmail_cnt
+
         exists = yield from _check_have_dmail(handler, key)
 
         key_enc = mbase32.encode(key)
