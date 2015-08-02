@@ -67,6 +67,9 @@ class Node():
         self.bind_address = None
         self.unsecured_transport = None
 
+        self.shell_enabled = True
+        self.eval_enabled = False
+
     @property
     def all_nodes(self):
         global nodes
@@ -265,6 +268,9 @@ def __main():
         help="Specify the database url to use.")
     parser.add_argument("--dm", action="store_true",\
         help="Disable Maalstroom server.")
+    parser.add_argument("--disableshell", action="store_true",
+        help="Disable MORPHiS from allowing ssh shell connections from"\
+            " localhost.")
     parser.add_argument("--dssize", type=int,\
         help="Specify the datastore size in standard non-IEC-redefined JEDEC"\
             " MBs (default is one gigabyte, as in 1024^3 bytes). Morphis does"\
@@ -273,6 +279,8 @@ def __main():
             " attempted redefinition of an existing unit by the IEC.")
     parser.add_argument("--dumptasksonexit", action="store_true",\
         help="Dump async task list on exit.")
+    parser.add_argument("--enableeval", action="store_true",\
+        help="Enable eval and ! commands in the shell (BAD ON SHARED HOST).")
     parser.add_argument("--instanceoffset", type=int,\
         help="Debug option to increment node instance and bind port.")
     parser.add_argument("-l", dest="logconf",\
@@ -326,6 +334,12 @@ def __main():
         @asyncio.coroutine
         def _start_node(instance, bindaddr):
             node = Node(loop, instance, dburl)
+
+            if args.enableeval:
+                node.eval_enabled = True
+            if args.disableshell:
+                node.shell_enabled = False
+
             nodes.append(node)
 
             if db_pool_size:

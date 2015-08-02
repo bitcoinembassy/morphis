@@ -775,7 +775,8 @@ class ChordEngine():
         if req.channel_type == "mpeer":
             return True
         elif req.channel_type == "session":
-            return peer.protocol.address[0] == "127.0.0.1"
+            return self.node.shell_enabled\
+                and peer.protocol.address[0] == "127.0.0.1"
         return False
 
     @asyncio.coroutine

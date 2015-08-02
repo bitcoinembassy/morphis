@@ -286,6 +286,11 @@ class Shell(cmd.Cmd):
 
     def do_eval(self, arg):
         "Execute python code."
+
+        if not self.peer.engine.node.eval_enabled:
+            self.writeln("Eval is disabled.")
+            return
+
         try:
             r = eval(arg, globals(), self.shell_locals)
             self.writeln(r)
@@ -295,6 +300,11 @@ class Shell(cmd.Cmd):
 
     def do_shell(self, arg):
         "Execute python code."
+
+        if not self.peer.engine.node.eval_enabled:
+            self.writeln("Eval is disabled.")
+            return
+
         try:
             exec(arg, globals(), self.shell_locals)
         except Exception as e:
