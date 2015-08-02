@@ -150,17 +150,17 @@ class Dmail(object):
 
 class DmailPart(object):
     def __init__(self):
-        self.mime = None
+        self.mime_type = None
         self.data = None
 
     def encode(self, obuf=None):
         buf = obuf if obuf else bytearray()
-        buf += sshtype.encodeString(self.mime)
+        buf += sshtype.encodeString(self.mime_type)
         buf += sshtype.encodeBinary(self.data)
         return buf
 
     def parse_from(self, buf, idx):
-        idx, self.mime = sshtype.parse_string_from(buf, idx)
+        idx, self.mime_type = sshtype.parse_string_from(buf, idx)
         idx, self.data = sshtype.parse_binary_from(buf, idx)
         return idx
 
@@ -272,7 +272,7 @@ class DmailEngine(object):
 
         if message_text:
             part = DmailPart()
-            part.mime = "text/plain"
+            part.mime_type = "text/plain"
             part.data = message_text
             dmail.parts.append(part)
 
@@ -306,14 +306,15 @@ class DmailEngine(object):
         return storing_nodes
 
     @asyncio.coroutine
-    def scan_dmail_address(self, addr, key_callback=None):
+    def scan_dmail_address(self, addr, significant_bits, key_callback=None):
         addr_enc = mbase32.encode(addr)
 
         if log.isEnabledFor(logging.INFO):
             log.info("Scanning dmail [{}].".format(addr_enc))
 
         dsites = yield from\
-            self.fetch_recipient_dmail_sites([(addr_enc, addr, None)])
+            self.fetch_recipient_dmail_sites(\
+                [(addr_enc, addr, significant_bits)])
 
         if not dsites:
             raise DmailException("Dmail site not found.")
@@ -349,9 +350,9 @@ class DmailEngine(object):
         data = data_rw.data
 
         if not data:
-            return None
+            return None, None
         if not x:
-            return data
+            return data, None
 
         tb = mp.TargetedBlock(data)
 

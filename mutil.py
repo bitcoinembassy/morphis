@@ -167,4 +167,9 @@ def calc_log_distance(nid, pid):
 iso_fmt = "%Y-%m-%dT%H:%M:%S.%f"
 
 def parse_iso_datetime(date_str):
-    return datetime.strptime(datetime.today().isoformat(), iso_fmt)
+    return datetime.strptime(date_str, iso_fmt)
+
+iso_fmt_human_no_ms = "%Y-%m-%d %H:%M:%S"
+
+def format_human_no_ms_datetime(datetime):
+    return datetime.strftime(iso_fmt_human_no_ms)

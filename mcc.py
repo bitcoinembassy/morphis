@@ -159,13 +159,15 @@ def __main():
     if args.scan_dmail:
         log.info("Scanning dmail address.")
 
-        addr = mbase32.decode(args.scan_dmail)
+        addr, sig_bits = mutil.decode_key(args.scan_dmail)
+
         de = dmail.DmailEngine(mc)
 
         def key_callback(key):
             print("dmail key: [{}].".format(mbase32.encode(key)))
 
-        yield from de.scan_dmail_address(addr, key_callback=key_callback)
+        yield from de.scan_dmail_address(\
+            addr, sig_bits, key_callback=key_callback)
 
     if args.fetch_dmail:
         log.info("Fetching dmail for key=[{}].".format(args.fetch_dmail))
@@ -198,7 +200,7 @@ def __main():
             i = 0
             for part in dm.parts:
                 print("DmailPart[{}]:\n    mime-type=[{}]\n    data=[{}]\n"\
-                    .format(i, part.mime, part.data))
+                    .format(i, part.mime_type, part.data))
                 i += 1
 
     log.info("Disconnecting.")

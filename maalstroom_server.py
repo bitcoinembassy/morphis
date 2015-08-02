@@ -6,6 +6,7 @@ import llog
 import asyncio
 import cgi
 from http.server import BaseHTTPRequestHandler, HTTPServer
+import importlib
 import logging
 import queue
 from socketserver import ThreadingMixIn
@@ -73,11 +74,16 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
 
         s_upload = ".upload"
         s_dmail = ".dmail"
+        s_aiwj = ".aiwj"
 
         if log.isEnabledFor(logging.DEBUG):
             log.debug("rpath=[{}].".format(rpath))
 
-        if rpath.startswith(s_upload):
+        if rpath.startswith(s_aiwj):
+            self._send_content(\
+                b"AIWJ - Asynchronous IFrames Without Javascript!")
+            return
+        elif rpath.startswith(s_upload):
             if rpath.startswith(".upload/generate"):
                 priv_key =\
                     base58.encode(\
@@ -111,6 +117,8 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
 
             return
         elif rpath.startswith(s_dmail):
+            importlib.reload(pages)
+            importlib.reload(pages.dmail)
             pages.dmail.serve_get(self, rpath)
             return
 
@@ -313,6 +321,12 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
         else:
             self._handle_error(data_rw)
 
+    def _send_204(self):
+        self.send_response(204)
+        self.send_header("Content-Length", 0)
+        self.end_headers()
+        return
+
     def _send_content(self, content_entry, cacheable=True, content_type=None):
         if type(content_entry) in (list, tuple):
             content = content_entry[0]
@@ -344,16 +358,22 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
         if cacheable:
             self.send_header("Cache-Control", "public")
             self.send_header("ETag", content_id)
+        else:
+            self._send_no_cache()
+
         self.end_headers()
         self.wfile.write(content)
         return
 
-    def _send_partial_content(self, content, start=False, content_type=None):
+    def _send_partial_content(self, content, start=False, content_type=None,\
+            cacheable=False):
         if type(content) is str:
             content = content.encode()
 
         if start:
             self.send_response(200)
+            if not cacheable:
+                self._send_no_cache()
             self.send_header("Transfer-Encoding", "chunked")
             self.send_header("Content-Type",\
                 "text/html" if content_type is None else content_type)
@@ -377,6 +397,15 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
 
     def _end_partial_content(self):
         self.wfile.write(b"0\r\n\r\n")
+
+    def _send_no_cache(self):
+        self.send_header("Cache-Control",\
+            "no-cache, no-store, must-revalidate")
+#            "private, no-store, max-age=0, no-cache, must-revalidate, post-check=0, pre-check=0")
+        self.send_header("Pragma", "no-cache")
+        self.send_header("Expires", "0")
+#        self.send_header("Expires", "Mon, 26 Jul 1997 00:00:00 GMT")
+#        self.send_header("Last-Modified", "Sun, 2 Aug 2015 00:00:00 GMT")
 
     def send_exception(self, exception, errcode=500):
         self._send_error(\

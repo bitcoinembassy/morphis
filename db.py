@@ -11,7 +11,7 @@ from contextlib import contextmanager
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.schema import Index
 from sqlalchemy import create_engine, text, event, MetaData
-from sqlalchemy import Column, ForeignKey, Integer, String
+from sqlalchemy import Table, Column, ForeignKey, Integer, String, DateTime
 from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.pool import Pool
@@ -26,6 +26,9 @@ DataBlock = None
 NodeState = None
 DmailAddress = None
 DmailKey = None
+DmailMessage = None
+DmailPart = None
+DmailTag = None
 
 def _init_daos(Base, d):
     # If I recall correctly, this abomination is purely for PostgreSQL mode,
@@ -110,6 +113,51 @@ def _init_daos(Base, d):
     Index("dmailaddress__site_key", DmailAddress.site_key)
 
     d.DmailAddress = DmailAddress
+
+    dmail_message__dmail_tag = Table(\
+        "dmail_message__dmail_tag",\
+        Base.metadata,\
+        Column("dmail_message_id", Integer, ForeignKey("dmailmessage.id")),\
+        Column("tag_id", Integer, ForeignKey("dmailtag.id")))
+
+    class DmailTag(Base):
+        __tablename__ = "dmailtag"
+
+        id = Column(Integer, primary_key=True)
+        name = Column(String, nullable=False)
+
+    Index("dmailtag__name", DmailTag.name)
+
+    d.DmailTag = DmailTag
+
+    class DmailPart(Base):
+        __tablename__ = "dmailpart"
+
+        id = Column(Integer, primary_key=True)
+        dmail_message_id = Column(Integer, ForeignKey("dmailmessage.id"))
+        mime_type = Column(String, nullable=True)
+        data = Column(LargeBinary, nullable=False)
+
+    d.DmailPart = DmailPart
+
+    class DmailMessage(Base):
+        __tablename__ = "dmailmessage"
+
+        id = Column(Integer, primary_key=True)
+        dmail_address_id = Column(Integer, ForeignKey("dmailaddress.id"))
+        data_key = Column(LargeBinary, nullable=False)
+        sender_dmail_key = Column(LargeBinary, nullable=True)
+        sender_valid = Column(Boolean, nullable=True)
+        subject = Column(String, nullable=False)
+        date = Column(DateTime, nullable=False)
+        read = Column(Boolean, nullable=True)
+        hidden = Column(Boolean, nullable=True)
+        tags = relationship(DmailTag, secondary=dmail_message__dmail_tag)
+        parts = relationship(DmailPart)
+
+    Index("dmailmessage__data_key", DmailMessage.data_key)
+
+    d.DmailMessage = DmailMessage
 
     return d
 
@@ -227,5 +275,10 @@ if Peer is None:
     Peer = d.Peer
     DataBlock = d.DataBlock
     NodeState = d.NodeState
+
+    # Maalstroom Dmail Client.
     DmailAddress = d.DmailAddress
     DmailKey = d.DmailKey
+    DmailMessage = d.DmailMessage
+    DmailPart = d.DmailPart
+    DmailTag = d.DmailTag

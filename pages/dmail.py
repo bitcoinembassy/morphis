@@ -4,12 +4,14 @@
 import llog
 
 import asyncio
-import importlib
 import logging
 import threading
 import urllib.parse
 
-from db import DmailAddress, DmailKey
+from sqlalchemy import func
+from sqlalchemy.orm import joinedload
+
+from db import DmailAddress, DmailKey, DmailMessage, DmailTag, DmailPart
 import enc
 import dmail
 import mbase32
@@ -90,11 +92,9 @@ def __serve_get(handler, rpath, done_event):
 
             handler._send_partial_content(pages.dmail_page_content__f1_end)
             handler._end_partial_content()
-        elif req == "/compose":
-            from_addr = req[9:]
+        elif req.startswith("/compose/form"):
+            dest_addr_enc = req[14:] if len(req) > 14 else ""
 
-            handler._send_content(pages.dmail_compose_dmail_content)
-        elif req == "/compose/form":
             handler._send_partial_content(\
                 pages.dmail_compose_dmail_form_start, True)
 
@@ -112,9 +112,31 @@ def __serve_get(handler, rpath, done_event):
                 "<option value="">&lt;Anonymous&gt;</option>")
 
             handler._send_partial_content(\
-                pages.dmail_compose_dmail_form_end)
+                pages.dmail_compose_dmail_form_end.replace(\
+                    b"${DEST_ADDR}", dest_addr_enc.encode()))
 
             handler._end_partial_content()
+        elif req.startswith("/compose"):
+            from_addr = req[9:]
+
+            if from_addr:
+                iframe_src = "../compose/form/{}".format(from_addr).encode()
+            else:
+                iframe_src = "../compose/form"
+
+            content = [\
+                pages.dmail_compose_dmail_content[0].replace(\
+                    b"${IFRAME_SRC}", iframe_src),
+                None]
+
+            handler._send_content(content)
+        elif req.startswith("/addr/view/"):
+            addr_enc = req[11:]
+
+            start = pages.dmail_addr_view_start.replace(\
+                b"${DMAIL_ADDRESS}", addr_enc.encode())
+
+            handler._send_content(start)
         elif req.startswith("/addr/"):
             addr_enc = req[6:]
 
@@ -122,11 +144,45 @@ def __serve_get(handler, rpath, done_event):
                 log.info("Viewing dmail address [{}].".format(addr_enc))
 
             content = pages.dmail_address_page_content[0].replace(\
-                b"${IFRAME_SRC}", "/inbox/{}".format(addr_enc).encode())
+                b"${IFRAME_SRC}", "/addr/view/{}".format(addr_enc).encode())
 
             handler._send_content(content)
-        elif req.startswith("/inbox/"):
-            addr_enc = req[7:]
+        elif req.startswith("/tag/view/list/"):
+            params = req[15:]
+
+            p0 = params.index('/')
+            tag = params[:p0]
+            addr_enc = params[p0+1:]
+
+            if log.isEnabledFor(logging.INFO):
+                log.info("Viewing dmails with tag [{}] for address [{}]."\
+                    .format(tag, addr_enc))
+
+            start = pages.dmail_tag_view_list_start.replace(\
+                b"${TAG_NAME}", tag.encode())
+            #FIXME: This is getting inefficient now, maybe time for Flask or
+            # something like it. Maybe we can use just it's template renderer.
+            start = start.replace(\
+                b"${DMAIL_ADDRESS}",\
+                "{}...".format(addr_enc[:32]).encode())
+
+            handler._send_partial_content(start, True)
+
+            yield from\
+                _list_dmails_for_tag(handler, mbase32.decode(addr_enc), tag)
+
+            handler._send_partial_content(pages.dmail_tag_view_list_end)
+            handler._end_partial_content()
+
+        elif req.startswith("/tag/view/"):
+            params = req[10:]
+
+            content = pages.dmail_tag_view_content[0].replace(\
+                b"${IFRAME_SRC}", "/tag/view/list/{}".format(params).encode())
+
+            handler._send_content(content)
+        elif req.startswith("/scan/list/"):
+            addr_enc = req[11:]
 
             if log.isEnabledFor(logging.INFO):
                 log.info("Viewing inbox for dmail address [{}]."\
@@ -136,21 +192,21 @@ def __serve_get(handler, rpath, done_event):
                 b"${DMAIL_ADDRESS}", "{}...".format(addr_enc[:32]).encode())
             handler._send_partial_content(start, True)
 
-            addr = bytes(mbase32.decode(addr_enc))
+            addr, significant_bits = mutil.decode_key(addr_enc)
 
-            yield from _list_dmail_inbox(handler, addr)
+            yield from _list_dmail_inbox(handler, addr, significant_bits)
 
             handler._send_partial_content(pages.dmail_inbox_end)
             handler._end_partial_content()
-        elif req.startswith("/view/"):
-            req_data = req[6:]
+        elif req.startswith("/scan/"):
+            addr_enc = req[6:]
 
             content = pages.dmail_address_page_content[0].replace(\
-                b"${IFRAME_SRC}", "/fetch/{}".format(req_data).encode())
+                b"${IFRAME_SRC}", "/scan/list/{}".format(addr_enc).encode())
 
             handler._send_content(content)
-        elif req.startswith("/fetch/"):
-            keys = req[7:]
+        elif req.startswith("/fetch/view/"):
+            keys = req[12:]
             p0 = keys.index('/')
             dmail_addr_enc = keys[:p0]
             dmail_key_enc = keys[p0+1:]
@@ -158,7 +214,61 @@ def __serve_get(handler, rpath, done_event):
             dmail_addr = mbase32.decode(dmail_addr_enc)
             dmail_key = mbase32.decode(dmail_key_enc)
 
-            yield from _fetch_dmail(handler, dmail_addr, dmail_key)
+            dm = yield from _load_dmail(handler, dmail_key)
+
+            if dm:
+                valid_sig = dm.sender_valid
+            else:
+                dm, valid_sig =\
+                    yield from _fetch_dmail(handler, dmail_addr, dmail_key)
+
+            dmail_text = _format_dmail(dm, valid_sig)
+
+            handler._send_content(\
+                dmail_text.encode(), content_type="text/plain")
+        elif req.startswith("/fetch/panel/mark_as_read/"):
+            req_data = req[26:]
+
+            p0 = req_data.index('/')
+            dmail_key_enc = req_data[p0+1:]
+            dmail_key = mbase32.decode(dmail_key_enc)
+
+            def processor(dmail):
+                dmail.read = not dmail.read
+                return True
+
+            yield from _process_dmail_message(handler, dmail_key, processor)
+
+            handler._send_204()
+        elif req.startswith("/fetch/panel/"):
+            req_data = req[13:]
+
+            content = pages.dmail_fetch_panel_content[0].replace(\
+                b"${DMAIL_IDS}", req_data.encode())
+
+            handler._send_content([content, None])
+        elif req.startswith("/fetch/wrapper/"):
+            req_data = req[15:]
+
+            content = pages.dmail_fetch_wrapper[0].replace(\
+                b"${IFRAME_SRC}",\
+                "/fetch/view/{}"\
+                    .format(req_data).encode())
+            #FIXME: This is getting inefficient now, maybe time for Flask or
+            # something like it. Maybe we can use just it's template renderer.
+            content = content.replace(\
+                b"${IFRAME2_SRC}",\
+                "/fetch/panel/{}"\
+                    .format(req_data).encode())
+
+            handler._send_content([content, None])
+        elif req.startswith("/fetch/"):
+            req_data = req[7:]
+
+            content = pages.dmail_address_page_content[0].replace(\
+                b"${IFRAME_SRC}", "/fetch/wrapper/{}".format(req_data).encode())
+
+            handler._send_content([content, None])
         elif req == "/create_address":
             handler._send_content(pages.dmail_create_address_content)
         elif req == "/create_address/form":
@@ -250,6 +360,8 @@ def __serve_post(handler, rpath, done_event):
 
 @asyncio.coroutine
 def _fetch_dmail_address(handler, dmail_address_id):
+    "Fetch from our database the parameters that are stored in a DMail site."
+
     def dbcall():
         with handler.node.db.open_session() as sess:
             q = sess.query(DmailAddress)\
@@ -290,20 +402,196 @@ def _list_dmail_addresses(handler):
     return site_keys
 
 @asyncio.coroutine
-def _list_dmail_inbox(handler, addr):
+def _list_dmails_for_tag(handler, addr, tag):
+    def dbcall():
+        with handler.node.db.open_session() as sess:
+            q = sess.query(DmailMessage)\
+                .filter(DmailMessage.tags.any(DmailTag.name == tag))\
+                .order_by(DmailMessage.read, DmailMessage.date.desc())
+
+            msgs = q.all()
+
+            sess.expunge_all()
+
+            return msgs
+
+    msgs = yield from handler.node.loop.run_in_executor(None, dbcall)
+
+    for msg in msgs:
+        addr_enc = mbase32.encode(addr)
+        key_enc = mbase32.encode(msg.data_key)
+
+        is_read = "" if msg.read else " (unread)"
+
+        handler._send_partial_content(\
+            """{}: <a href="../../../../fetch/{}/{}">{}...</a>{}<br/>"""\
+                .format(\
+                    msg.date,\
+                    addr_enc,\
+                    key_enc,\
+                    key_enc[:32],\
+                    is_read))
+
+    if not msgs:
+        handler._send_partial_content("Mailbox is empty.")
+
+@asyncio.coroutine
+def _list_dmail_inbox(handler, addr, significant_bits):
     de = dmail.DmailEngine(handler.node.chord_engine.tasks)
 
-    def key_callback(key):
-        addr_enc = mbase32.encode(addr)
+    new_dmail_cnt = 0
+
+    @asyncio.coroutine
+    def process_key(key):
+        exists = yield from _check_have_dmail(handler, key)
+
         key_enc = mbase32.encode(key)
+
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("Processing Dmail (key=[{}]).".format(key_enc))
+
+        if exists:
+            if log.isEnabledFor(logging.DEBUG):
+                log.debug("Ignoring dmail (key=[{}]) we already have."\
+                    .format(key_enc))
+            return
+
+        yield from _fetch_and_save_dmail(handler, addr, key)
+
+        addr_enc = mbase32.encode(addr)
         handler._send_partial_content(\
-            """<a href="../view/{}/{}">{}</a><br/>"""\
+            """<a href="../../fetch/{}/{}">{}</a><br/>"""\
                 .format(addr_enc, key_enc, key_enc))
 
+        new_dmail_cnt += 1
+
+    tasks = []
+
+    def key_callback(key):
+        tasks.append(asyncio.async(process_key(key), loop=handler.node.loop))
+
     try:
-        yield from de.scan_dmail_address(addr, key_callback=key_callback)
+        yield from de.scan_dmail_address(\
+            addr, significant_bits, key_callback=key_callback)
     except dmail.DmailException as e:
         handler._send_partial_content("DmailException: {}".format(e))
+
+    if tasks:
+        yield from asyncio.wait(tasks, loop=handler.node.loop)
+
+    if new_dmail_cnt:
+        handler._send_partial_content("Moved {} Dmails to Inbox."\
+            .format(new_dmail_cnt))
+    else:
+        handler._send_partial_content("No new Dmails.")
+
+@asyncio.coroutine
+def _check_have_dmail(handler, dmail_key):
+    def dbcall():
+        with handler.node.db.open_session() as sess:
+            q = sess.query(func.count("*"))\
+                .filter(DmailMessage.data_key == dmail_key)
+
+            if q.scalar():
+                return True
+            return False
+
+    exists = yield from handler.node.loop.run_in_executor(None, dbcall)
+    return exists
+
+@asyncio.coroutine
+def _fetch_and_save_dmail(handler, dmail_addr, dmail_key):
+    dmailobj, valid_sig =\
+        yield from _fetch_dmail(handler, dmail_addr, dmail_key)
+
+    if not dmailobj:
+        if log.isEnabledFor(logging.INFO):
+            log.info("Dmail was not found on the network.")
+        return
+
+    def dbcall():
+        with handler.node.db.open_session() as sess:
+            handler.node.db.lock_table(sess, DmailMessage)
+
+            q = sess.query(func.count("*"))\
+                .filter(DmailMessage.data_key == dmail_key)
+
+            if q.scalar():
+                return False
+
+            q = sess.query(DmailAddress.id)\
+                .filter(DmailAddress.site_key == dmail_addr)
+
+            dmail_address = q.first()
+
+            msg = DmailMessage()
+            msg.dmail_address_id = dmail_address.id
+            msg.data_key = dmail_key
+            msg.sender_dmail_key =\
+                enc.generate_ID(dmailobj.sender_pubkey)\
+                    if dmailobj.sender_pubkey else None
+            msg.sender_valid = valid_sig
+            msg.subject = dmailobj.subject
+            msg.date = mutil.parse_iso_datetime(dmailobj.date)
+
+            tag = DmailTag()
+            tag.name = "Inbox"
+            msg.tags = [tag]
+
+            msg.parts = []
+
+            for part in dmailobj.parts:
+                dbpart = DmailPart()
+                dbpart.mime_type = part.mime_type
+                dbpart.data = part.data
+                msg.parts.append(dbpart)
+
+            sess.add(msg)
+
+            sess.commit()
+
+    yield from handler.node.loop.run_in_executor(None, dbcall)
+
+    if log.isEnabledFor(logging.INFO):
+        log.info("Dmail saved!")
+
+    return
+
+@asyncio.coroutine
+def _process_dmail_message(handler, dmail_key, process_call):
+    def dbcall():
+        with handler.node.db.open_session() as sess:
+            q = sess.query(DmailMessage)\
+                .filter(DmailMessage.data_key == dmail_key)
+
+            dmail = q.first()
+
+            if process_call(dmail):
+                sess.commit()
+
+            return dmail
+
+    dmail = yield from handler.node.loop.run_in_executor(None, dbcall)
+
+    return dmail
+
+@asyncio.coroutine
+def _load_dmail(handler, dmail_key):
+    def dbcall():
+        with handler.node.db.open_session() as sess:
+            q = sess.query(DmailMessage)\
+                .options(joinedload("parts"))\
+                .filter(DmailMessage.data_key == dmail_key)
+
+            dmail = q.first()
+
+            sess.expunge_all()
+
+            return dmail
+
+    dmail = yield from handler.node.loop.run_in_executor(None, dbcall)
+
+    return dmail
 
 @asyncio.coroutine
 def _fetch_dmail(handler, dmail_addr, dmail_key):
@@ -341,22 +629,35 @@ def _fetch_dmail(handler, dmail_addr, dmail_key):
         handler._send_partial_content(\
             "Dmail for key [{}] was not found."\
                 .format(dmail_key_enc))
-        return
+        return None, None
+
+    return dm, valid_sig
+
+def _format_dmail(dm, valid_sig):
+    from_db = type(dm) is DmailMessage
 
     dmail_text = []
 
-    if dm.sender_pubkey:
+    if (from_db and dm.sender_dmail_key) or (not from_db and dm.sender_pubkey):
         if valid_sig:
             dmail_text += "Sender Address Verified.\n\n"
         else:
             dmail_text += "WARNING: Sender Address Forged!\n\n"
 
-        dmail_text += "From: {}\n"\
-            .format(mbase32.encode(enc.generate_ID(dm.sender_pubkey)))
+        if from_db:
+            sender_dmail_key = dm.sender_dmail_key
+        else:
+            sender_dmail_key = enc.generate_ID(dm.sender_pubkey)
+
+        dmail_text += "From: {}\n".format(mbase32.encode(sender_dmail_key))
 
     dmail_text += "Subject: {}\n".format(dm.subject)
 
-    date_fmtted = mutil.parse_iso_datetime(dm.date)
+    if from_db:
+        date_fmtted = dm.date
+    else:
+        date_fmtted = mutil.parse_iso_datetime(dm.date)
+
     dmail_text += "Date: {}\n".format(date_fmtted)
 
     dmail_text += '\n'
@@ -372,7 +673,7 @@ def _fetch_dmail(handler, dmail_addr, dmail_key):
 
     dmail_text = ''.join(dmail_text)
 
-    handler._send_content(dmail_text.encode(), content_type="text/plain")
+    return dmail_text
 
 @asyncio.coroutine
 def _create_dmail_address(handler, prefix):

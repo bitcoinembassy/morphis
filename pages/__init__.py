@@ -9,7 +9,7 @@ home_page_content = [\
     div.section { border-width 2px; border: dashed; padding: 1em; margin-top: 1em; }
 </style>
 </head><body>
-<p><h2>MORPHiS Maalstroom UI</h2></p>
+<p><h2 style="display: inline;">MORPHiS Maalstroom UI</h2><span style="position: absolute; right: 1em;">(<a href="morphis://.aiwj/explanation">AIWJ</a> - JAVASCRIPT FREE!)</span></p>
 <div class="section">
     <h3>MORPHiS Web</h3>
     <p>
@@ -35,11 +35,15 @@ html, body {
     padding: 0;
     margin: 0;
 }
+body.iframe {
+    height: 0%;
+}
 div.header {
     height: 3em;
     padding: 0;
     margin: 0;
-    /* Disgustingly enough (CSS is so), having the border fixes everything.
+    /* FIXME:
+       Disgustingly enough (CSS is so), having the border fixes everything.
        We don't actually want a border, so we make it invisible with the
        color. Let this be proof that MORPHiS must deprecate CSS at
        somepoint as well! :) */
@@ -76,9 +80,31 @@ div * * span {
     right: 0px;
     position: absolute;
 }
+.nomargin {
+    margin: 0;
+}
+iframe {
+    margin: 0;
+    margin-bottom: -4px; //FIXME: SOMEONE DEPRECATE HTML/CSS FOR ME PLEASE!
+    // Without the above hack there is extra padding after an iframe, breaking
+    // calcs and making scrollbars where there shouldn't be.
+    padding: 0;
+}
+label {
+    width: 10em;
+    display: inline-block;
+    text-align: right;
+}
+.formfield * {
+    vertical-align: top;
+}
 label:after {
     content: ": ";
-}""", None]
+}
+.panel {
+    background-color: #86CBD2;
+}
+""", None]
 
 dmail_page_wrapper =\
     b"""<!DOCTYPE html>
@@ -99,7 +125,7 @@ dmail_page_wrapper =\
     </h5>
 </div>
 <div class="section">
-    <iframe src="${IFRAME_SRC}" frameborder="0" height="100%" width="100%"/>
+    <iframe src="${IFRAME_SRC}" frameborder="0" height="100%" width="100%"></iframe>
 </div>
 </body></html>"""
 
@@ -107,7 +133,7 @@ dmail_page_content = [None, None]
 
 dmail_frame_start =\
     b"""<!DOCTYPE html>
-<html><head><base target="_parent" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/></head><body>
+<html><head><base target="_root" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/></head><body class="iframe">
 """
 
 dmail_frame_end =\
@@ -115,7 +141,7 @@ dmail_frame_end =\
 
 dmail_page_content__f1_start =\
     b"""<!DOCTYPE html>
-<html><head><base target="_parent" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/></head><body>
+<html><head><base target="_root" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/></head><body class="iframe">
 <h4>Your dmail addresses:</h4>
 """
 
@@ -126,18 +152,57 @@ dmail_address_page_content = [None, None]
 
 dmail_inbox_start =\
     b"""<!DOCTYPE html>
-<html><head><base target="_parent" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/></head><body>
+<html><head><base target="_root" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/></head><body class="iframe">
 <h4>Dmails for address [${DMAIL_ADDRESS}]:</h4>
 """
 
 dmail_inbox_end =\
     b"""</body></html>"""
 
+dmail_addr_view_start =\
+    b"""<!DOCTYPE html>
+<html><head><base target="_root" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/>
+<style type="text/css">
+</style></head><body class="iframe">
+<p class="nomargin">
+    <a href="/tag/view/Inbox/${DMAIL_ADDRESS}">View Inbox</a>
+    [<a href="/scan/${DMAIL_ADDRESS}">Scan Network for New Messages</a>]
+</p>
+"""
+
+dmail_addr_view_end =\
+    b"""</body></html>"""
+
+dmail_tag_view_content = [None, None]
+
+dmail_tag_view_list_start =\
+    b"""<!DOCTYPE html>
+<html><head><base target="_root" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/></head><body class="iframe">
+<h4>Dmails for tag [${TAG_NAME}] of address [${DMAIL_ADDRESS}]:</h4>
+"""
+
+dmail_tag_view_list_end =\
+    b"""</body></html>"""
+
+dmail_fetch_wrapper = [\
+    b"""<!DOCTYPE html>
+<html><head><base target="_root" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/></head><body>
+<iframe src="${IFRAME_SRC}" frameborder="0" style="height: calc(100% - 2em);" width="100%"></iframe>
+<iframe src="${IFRAME2_SRC}" class="panel" frameborder="0" style="height: 2em;" width="100%"></iframe>
+</body></html>""", None]
+
+dmail_fetch_panel_content = [\
+    b"""<!DOCTYPE html>
+<html><head><base target="_root" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/></head><body class="iframe">
+[<a target="_self" href="../mark_as_read/${DMAIL_IDS}">Mark as Read</a>]
+[<a target="_self" href="../delete/${DMAIL_IDS}">Delete Dmail</a>]
+</body></html>""", None]
+
 dmail_create_address_content = [None, None]
 
 dmail_create_address_form_content = [\
     b"""<!DOCTYPE html>
-<html><head><base target="_parent" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/></head><body>
+<html><head><base target="_root" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/></head><body class="iframe">
 <form action="make_it_so" method="get">
     <label for="prefix">Dmail Prefix</label>
     <input type="textfield" name="prefix" id="prefix"/>
@@ -151,20 +216,9 @@ dmail_compose_dmail_content = [None, None]
 
 dmail_compose_dmail_form_start =\
     b"""<!DOCTYPE html>
-<html><head><base target="_parent" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/>
+<html><head><base target="_root" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/>
 <style type="text/css">
-body {
-    height: 0%;
-}
-label {
-    width: 10em;
-    display: inline-block;
-    text-align: right;
-}
-.formfield * {
-    vertical-align: top;
-}
-</style></head><body style="height: 0%">
+</style></head><body class="iframe">
 <form action="make_it_so" method="post">
     <p class="formfield">
         <label for="sender">From</label>
@@ -174,7 +228,7 @@ dmail_compose_dmail_form_end =\
     b"""</select>
     </p><p class="formfield">
         <label for="destination">To</label>
-        <input type="textfield" name="destination" id="destination" size="70"/>
+        <input type="textfield" name="destination" id="destination" size="70" value="${DEST_ADDR}"/>
     </p><p class="formfield">
         <label for="subject">Subject</label>
         <input type="textfield" name="subject" id="subject" size="70"/>
@@ -198,7 +252,8 @@ if not initialized_template:
     dmail_create_address_content[0] =\
         dmail_page_wrapper.replace(b"${IFRAME_SRC}", b"create_address/form")
 
-    dmail_compose_dmail_content[0] =\
-        dmail_page_wrapper.replace(b"${IFRAME_SRC}", b"compose/form")
+    dmail_compose_dmail_content[0] = dmail_page_wrapper
+
+    dmail_tag_view_content[0] = dmail_page_wrapper
 
     initialized_template = True
