@@ -43,7 +43,6 @@ class DmailSite(object):
             log.info("dmail target=[{}].".format(mbase32.encode(target)))
 
         self.root["target"] = mbase32.encode(target)
-        self.root["difficulty"] = 20 # 1048576 hashes on average.
 
     def generate_ss(self):
         self.dh = dh = dhgroup14.DhGroup14()
@@ -165,13 +164,13 @@ class DmailPart(object):
         return idx
 
 class DmailEngine(object):
-    def __init__(self, task_engine, db=None):
+    def __init__(self, task_engine, db):
         self.task_engine = task_engine
         self.db = db
         self.loop = task_engine.loop
 
     @asyncio.coroutine
-    def generate_dmail_address(self, prefix=None):
+    def generate_dmail_address(self, prefix=None, difficulty=20):
         if log.isEnabledFor(logging.INFO):
             log.info("Generating dmail address (prefix=[{}].".format(prefix))
 
@@ -188,6 +187,7 @@ class DmailEngine(object):
 
         dms = DmailSite()
         dms.generate()
+        dms.root["difficulty"] = difficulty
 
         data_key = None
         def key_callback(value):
@@ -209,8 +209,9 @@ class DmailEngine(object):
                 dmailkey = db.DmailKey()
                 dmailkey.x = sshtype.encodeMpint(dms.dh.x)
                 dmailkey.target_key = mbase32.decode(dms.root["target"])
+                dmailkey.difficulty = difficulty
 
-                dmailaddress.dmail_keys.append(dmailkey)
+                dmailaddress.keys.append(dmailkey)
 
                 sess.add(dmailaddress)
                 sess.commit()
@@ -312,19 +313,44 @@ class DmailEngine(object):
         if log.isEnabledFor(logging.INFO):
             log.info("Scanning dmail [{}].".format(addr_enc))
 
-        dsites = yield from\
-            self.fetch_recipient_dmail_sites(\
-                [(addr_enc, addr, significant_bits)])
+        def dbcall():
+            with self.db.open_session() as sess:
+                q = sess.query(db.DmailAddress)\
+                    .filter(db.DmailAddress.site_key == addr)
 
-        if not dsites:
-            raise DmailException("Dmail site not found.")
+                dmail_address = q.first()
+                dmail_address.keys
 
-        dsite = dsites[0]
+                sess.expunge_all()
 
-        target = dsite.root["target"]
-        significant_bits = dsite.root["difficulty"]
+                return dmail_address
 
-        target = start = mbase32.decode(target)
+        dmail_address = yield from self.loop.run_in_executor(None, dbcall)
+
+        if dmail_address:
+            log.info("Found DmailAddress locally, using local settings.")
+
+            target = dmail_address.keys[0].target_key
+            significant_bits = dmail_address.keys[0].difficulty
+        else:
+            log.info("DmailAddress not found locally, fetching settings from"\
+                " the network.")
+
+            dsites = yield from\
+                self.fetch_recipient_dmail_sites(\
+                    [(addr_enc, addr, significant_bits)])
+
+            if not dsites:
+                raise DmailException("Dmail site not found.")
+
+            dsite = dsites[0]
+
+            target = dsite.root["target"]
+            significant_bits = dsite.root["difficulty"]
+
+            target = mbase32.decode(target)
+
+        start = target
 
         while True:
             data_rw = yield from self.task_engine.send_find_key(\

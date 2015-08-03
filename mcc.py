@@ -122,6 +122,9 @@ def __main():
         loop.stop()
         return
 
+    dbase = init_db(args)
+    de = dmail.DmailEngine(mc, dbase)
+
     log.info("Processing command requests...")
 
     if args.stat:
@@ -130,9 +133,6 @@ def __main():
 
     if args.create_dmail:
         log.info("Creating and uploading dmail site.")
-
-        db = init_db(args)
-        de = dmail.DmailEngine(mc, db)
 
         privkey, data_key, dms =\
             yield from de.generate_dmail_address(args.prefix)
@@ -153,15 +153,12 @@ def __main():
         if log.isEnabledFor(logging.DEBUG):
             log.debug("dmail_data=[{}].".format(dmail_data))
 
-        de = dmail.DmailEngine(mc)
         yield from de.send_dmail_text(args.send_dmail, dmail_data)
 
     if args.scan_dmail:
         log.info("Scanning dmail address.")
 
         addr, sig_bits = mutil.decode_key(args.scan_dmail)
-
-        de = dmail.DmailEngine(mc)
 
         def key_callback(key):
             print("dmail key: [{}].".format(mbase32.encode(key)))
@@ -173,8 +170,6 @@ def __main():
         log.info("Fetching dmail for key=[{}].".format(args.fetch_dmail))
 
         key = mbase32.decode(args.fetch_dmail)
-
-        de = dmail.DmailEngine(mc)
 
         if args.x:
             l, x_int = sshtype.parseMpint(base58.decode(args.x))

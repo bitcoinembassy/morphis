@@ -4,7 +4,7 @@
 ## Templates:
 home_page_content = [\
     b"""<!DOCTYPE html>
-<html><head><title>MORPHiS Maalstroom UI</title>
+<html><head><title>ALL TOGETHER NOW WE SING IN UNISON - MORPHiS Maalstroom UI</title>
 <link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/>
 <style type="text/css">
     div.msection {
@@ -105,7 +105,7 @@ label {
     display: inline-block;
     text-align: right;
 }
-.formfield * {
+form p * {
     vertical-align: top;
 }
 label:after {
@@ -124,6 +124,9 @@ body.panel div.panel {
     height: 100%;
     padding-right: 0.75em;
     padding-left: 0.75em;
+}
+.italic {
+    font-style: italic;
 }
 .strikethrough {
     text-decoration: line-through;
@@ -202,14 +205,56 @@ dmail_addr_view_start =\
 <html><head><base target="_root" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/>
 <style type="text/css">
 </style></head><body class="iframe">
+<h4>Dmail Address [${DMAIL_ADDRESS_SHORT}...].</h4>
 <p class="nomargin">
     <a href="/tag/view/Inbox/${DMAIL_ADDRESS}">View Inbox</a>
     [<a href="/scan/${DMAIL_ADDRESS}">Scan Network for New Messages</a>]
+</p>
+<p>
+    [<a href="../settings/${DMAIL_ADDRESS}">Address Settings</a>]
 </p>
 """
 
 dmail_addr_view_end =\
     b"""</body></html>"""
+
+dmail_addr_settings_content = [None, None]
+
+dmail_iframe_body_start =\
+    b"""<!DOCTYPE html>
+<html><head><base target="_root" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/></head><body class="iframe">"""
+
+dmail_addr_settings_edit_content = [dmail_iframe_body_start\
+    + b"""<h4>Dmail Address [<a href="../../${DMAIL_ADDRESS}">${DMAIL_ADDRESS_SHORT}...</a>].</h4>
+<p>NOTE: Difficulty is the anti-spam setting that determines how much work it is to send you a Dmail. Its effect is exponential (work=2^difficulty). Do not set it too low -- I would recommend no lower than 20. If 2^difficulty is lower than the amount of nodes in the network, then the network will likely have trouble finding your Dmails.</p>
+<p><b>NOTE</b>: If you turn this up, you will no longer see any new Dmails that were sent to you while you had the lower setting. This is because they won't include enough work to be found. Dmails stored locally already (Inbox) won't be affected. In a future version of Maalstroom this will be solved. For now it is not because it will take a bunch more UI to allow you to manage properly, and I want to release ASAP :).</p>
+<form action="publish" method="get">
+    <input type="hidden" name="dmail_address" id="dmail_address" value="${DMAIL_ADDRESS}"/>
+    <p>
+        <label for="difficulty">Difficulty</label>
+        <input type="textfield" name="difficulty" id="difficulty" value="${DIFFICULTY}"/>
+    </p>
+    <input type="submit" formtarget="_self" id="publish" value="Republish Dmail Site"/>
+</form>
+<p>NOTE: Do not give out these values! The site private key controls your Dmail address. The DH secret is the key to decrypting your Dmail.</p>
+<form action="save" method="post">
+    <p>
+        <label for="privatekey">Dmail Site Private Key</label>
+        <textarea name="privatekey" id="privatekey" rows="26" cols="80" readonly>${PRIVATE_KEY}</textarea>
+    </p>
+    <p>
+        <label for="x">Private Encryption DH Secret</label>
+        <textarea name="x" id="x" rows="4" cols="80" readonly>${X}</textarea>
+    </p>
+    <p>
+        <label for="target_key">Dmail Target Key</label>
+        <input type="textfield" name="target_key" id="target_key" size="80" readonly value="${TARGET_KEY}"/>
+    </p>
+</form>
+</body></html>""", None]
+
+dmail_addr_settings_edit_success_content = [dmail_iframe_body_start.decode()\
+    + """<h4>Dmail Address [<a target="_root" href="../../{}">{}</a>].</h4><p>SUCCESS.</p></body></html>""", None]
 
 dmail_tag_view_content = [None, None]
 
@@ -247,10 +292,18 @@ dmail_create_address_form_content = [\
     b"""<!DOCTYPE html>
 <html><head><base target="_root" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/></head><body class="iframe">
 <form action="make_it_so" method="get">
-    <label for="prefix">Dmail Prefix</label>
-    <input type="textfield" name="prefix" id="prefix"/>
-    <p style="font-style: italic;">(Optional: Each letter in the prefix will make the address take 32x longer to generate.)</p>
-    <p style="font-style: italic;">(Three letters takes almost an hour on my test machine.)</p>
+    <h4>Dmail Address Generation</h4>
+    <p>To create yourself a new Dmail Address, simply click the Create button below. Changing these values from their defaults is not needed at all.</p>
+    <p>
+        <label for="difficulty">Difficulty</label>
+        <input type="textfield" name="difficulty" id="difficulty" value="20"/>
+    </p>
+    <p>NOTE: Difficulty is the anti-spam setting that determines how much work it is to send you a Dmail. Its effect is exponential (work=2^difficulty). Do not set it too low -- I would recommend no lower than 20. If 2^difficulty is lower than the amount of nodes in the network, then the network will likely have trouble finding your Dmails.</p>
+    <p>
+        <label for="prefix">Dmail Prefix</label>
+        <input type="textfield" name="prefix" id="prefix"/>&nbsp;<span class="italic">(Optional)</span>
+    </p>
+    <p>NOTE: Each letter in the prefix will make the address take 32x longer to generate. Three letters takes almost an hour on my test machine.</p>
     <input type="submit" formtarget="_self" id="create" value="Create"/>
 </form>
 </body></html>""", None]
@@ -263,23 +316,23 @@ dmail_compose_dmail_form_start =\
 <style type="text/css">
 </style></head><body class="iframe">
 <form action="make_it_so" method="post">
-    <p class="formfield">
+    <p>
         <label for="sender">From</label>
         <select name="sender">"""
 
 dmail_compose_dmail_form_end =\
     b"""</select>
-    </p><p class="formfield">
+    </p><p>
         <label for="destination">To</label>
         <input type="textfield" name="destination" id="destination" size="70" value="${DEST_ADDR}"/>
-    </p><p class="formfield">
+    </p><p>
         <label for="subject">Subject</label>
         <input type="textfield" name="subject" id="subject" size="70"/>
-    </p><p class="formfield">
+    </p><p>
         <label for="content">Message Content</label>
         <textarea name="content" id="content" cols="80" rows="24"></textarea>
     </p>
-    <input type="submit" formtarget="_self" id="send" value="Send"/> (This will take at least a few seconds, if not much longer, depending on the difficulty (anti-spam setting) set by the owner of the destination address.)
+    <input type="submit" formtarget="_self" id="send" value="Send"/> (This will take at least a few seconds, if not much longer, depending on the difficulty (anti-spam setting) set by the owner of the destination address. Also, there is randomness involved.)
 </form>
 </body></html>"""
 
@@ -291,6 +344,8 @@ if not initialized_template:
         dmail_page_wrapper.replace(b"${IFRAME_SRC}", b"address_list")
 
     dmail_address_page_content[0] = dmail_page_wrapper
+
+    dmail_addr_settings_content[0] = dmail_page_wrapper
 
     dmail_create_address_content[0] =\
         dmail_page_wrapper.replace(b"${IFRAME_SRC}", b"create_address/form")

@@ -6,11 +6,13 @@ import llog
 import asyncio
 import logging
 import threading
+import time
 import urllib.parse
 
 from sqlalchemy import func, not_
 from sqlalchemy.orm import joinedload
 
+import base58
 from db import DmailAddress, DmailKey, DmailMessage, DmailTag, DmailPart
 import enc
 import dmail
@@ -125,19 +127,90 @@ def __serve_get(handler, rpath, done_event):
             else:
                 iframe_src = "../compose/form".encode()
 
-            content = [\
-                pages.dmail_compose_dmail_content[0].replace(\
-                    b"${IFRAME_SRC}", iframe_src),
-                None]
+            content = pages.dmail_compose_dmail_content[0].replace(\
+                    b"${IFRAME_SRC}", iframe_src)
 
-            handler._send_content(content)
+            handler._send_content([content, None])
         elif req.startswith("/addr/view/"):
             addr_enc = req[11:]
 
             start = pages.dmail_addr_view_start.replace(\
                 b"${DMAIL_ADDRESS}", addr_enc.encode())
+            start = start.replace(\
+                b"${DMAIL_ADDRESS_SHORT}", addr_enc[:32].encode())
 
-            handler._send_content(start)
+            handler._send_partial_content(start, True)
+
+            handler._send_partial_content(pages.dmail_addr_view_end)
+            handler._end_partial_content()
+        elif req.startswith("/addr/settings/edit/publish?"):
+            query = req[28:]
+
+            qdict = urllib.parse.parse_qs(query)
+
+            addr_enc = qdict["dmail_address"][0]
+            difficulty = qdict["difficulty"][0]
+
+            def processor(dmail_address):
+                if difficulty != dmail_address.keys[0].difficulty:
+                    dmail_address.keys[0].difficulty = difficulty
+                    return True
+                else:
+                    return False
+
+            dmail_address = yield from\
+                _process_dmail_address(\
+                    handler, mbase32.decode(addr_enc), processor)
+
+            dms = dmail.DmailSite()
+            root = dms.root
+            root["target"] =\
+                mbase32.encode(dmail_address.keys[0].target_key)
+            root["difficulty"] = difficulty
+            root["ssm"] = "mdh-v1"
+            root["sse"] = sshtype.parseMpint(dmail_address.keys[0].x)
+
+            private_key = rsakey.RsaKey(privdata=dmail_address.site_privatekey)
+
+            r = yield from\
+                handler.node.chord_engine.tasks.send_store_updateable_key(\
+                    dms.export(), private_key,\
+                    version=int(time.time()*1000), store_key=True)
+
+            handler._send_content(\
+                pages.dmail_addr_settings_edit_success_content[0]\
+                    .format(addr_enc, addr_enc[:32]).encode())
+        elif req.startswith("/addr/settings/edit/"):
+            addr_enc = req[20:]
+
+            dmail_address = yield from\
+                _load_dmail_address(handler, mbase32.decode(addr_enc))
+
+            content = pages.dmail_addr_settings_edit_content[0].replace(\
+                b"${DIFFICULTY}",\
+                str(dmail_address.keys[0].difficulty).encode())
+            content = content.replace(\
+                b"${DMAIL_ADDRESS_SHORT}", addr_enc[:32].encode())
+            content = content.replace(\
+                b"${DMAIL_ADDRESS}", addr_enc.encode())
+            content = content.replace(\
+                b"${PRIVATE_KEY}",\
+                base58.encode(dmail_address.site_privatekey).encode())
+            content = content.replace(\
+                b"${X}", base58.encode(dmail_address.keys[0].x).encode())
+            content = content.replace(\
+                b"${TARGET_KEY}",\
+                base58.encode(dmail_address.keys[0].target_key).encode())
+
+            handler._send_content([content, None])
+        elif req.startswith("/addr/settings/"):
+            addr_enc = req[15:]
+
+            content = pages.dmail_addr_settings_content[0].replace(\
+                b"${IFRAME_SRC}",\
+                "/addr/settings/edit/{}".format(addr_enc).encode())
+
+            handler._send_content([content, None])
         elif req.startswith("/addr/"):
             addr_enc = req[6:]
 
@@ -147,7 +220,7 @@ def __serve_get(handler, rpath, done_event):
             content = pages.dmail_address_page_content[0].replace(\
                 b"${IFRAME_SRC}", "/addr/view/{}".format(addr_enc).encode())
 
-            handler._send_content(content)
+            handler._send_content([content, None])
         elif req.startswith("/tag/view/list/"):
             params = req[15:]
 
@@ -182,7 +255,7 @@ def __serve_get(handler, rpath, done_event):
             content = pages.dmail_tag_view_content[0].replace(\
                 b"${IFRAME_SRC}", "/tag/view/list/{}".format(params).encode())
 
-            handler._send_content(content)
+            handler._send_content([content, None])
         elif req.startswith("/scan/list/"):
             addr_enc = req[11:]
 
@@ -209,7 +282,7 @@ def __serve_get(handler, rpath, done_event):
             content = pages.dmail_address_page_content[0].replace(\
                 b"${IFRAME_SRC}", "/scan/list/{}".format(addr_enc).encode())
 
-            handler._send_content(content)
+            handler._send_content([content, None])
         elif req.startswith("/fetch/view/"):
             keys = req[12:]
             p0 = keys.index('/')
@@ -292,11 +365,17 @@ def __serve_get(handler, rpath, done_event):
             handler._send_content(pages.dmail_create_address_content)
         elif req == "/create_address/form":
             handler._send_content(pages.dmail_create_address_form_content)
-        elif req.startswith("/create_address/make_it_so"):
-            prefix = req[26 + 1 + 7:] # + ?prefix=
+        elif req.startswith("/create_address/make_it_so?"):
+            query = req[27:]
+
+            qdict = urllib.parse.parse_qs(query)
+
+            prefix = qdict["prefix"][0]
+            difficulty = qdict["difficulty"][0]
+
             log.info("prefix=[{}].".format(prefix))
             privkey, dmail_key, dms =\
-                yield from _create_dmail_address(handler, prefix)
+                yield from _create_dmail_address(handler, prefix, difficulty)
 
             dmail_key_enc = mbase32.encode(dmail_key)
 
@@ -314,9 +393,9 @@ def __serve_get(handler, rpath, done_event):
 def __serve_post(handler, rpath, done_event):
     assert rpath.startswith(s_dmail)
 
-    rpath = rpath[len(s_dmail):]
+    req = rpath[len(s_dmail):]
 
-    if rpath == "/compose/make_it_so":
+    if req == "/compose/make_it_so":
         data = handler.rfile.read(int(handler.headers["Content-Length"]))
 
         if log.isEnabledFor(logging.DEBUG):
@@ -363,7 +442,9 @@ def __serve_post(handler, rpath, done_event):
         if content:
             content = content[0]
 
-        de = dmail.DmailEngine(handler.node.chord_engine.tasks)
+        de =\
+            dmail.DmailEngine(handler.node.chord_engine.tasks, handler.node.db)
+
         yield from de.send_dmail(\
             sender_asymkey,\
             recipients,\
@@ -457,12 +538,13 @@ def _list_dmails_for_tag(handler, addr, tag):
             sender_key = "Anonymous"
 
         handler._send_partial_content(\
-            """<span class="nowrap">{}: <a href="../../../../fetch/{}/{}">{}</a>&nbsp;-&nbsp;{}</span><span class="right_text tag">{}</span><br/>"""\
+            """<span class="nowrap">{}: <a href="../../../../fetch/{}/{}" title="{}">{}</a>&nbsp;-&nbsp;{}</span><span class="right_text tag">{}</span><br/>"""\
                 .format(\
                     mutil.format_human_no_ms_datetime(msg.date),\
                     addr_enc,\
                     key_enc,\
 #                    key_enc[:32],\
+                    key_enc,
                     subject,\
                     sender_key,\
                     is_read))
@@ -472,7 +554,8 @@ def _list_dmails_for_tag(handler, addr, tag):
 
 @asyncio.coroutine
 def _list_dmail_inbox(handler, addr, significant_bits):
-    de = dmail.DmailEngine(handler.node.chord_engine.tasks)
+    de =\
+        dmail.DmailEngine(handler.node.chord_engine.tasks, handler.node.db)
 
     new_dmail_cnt = 0
 
@@ -597,24 +680,6 @@ def _fetch_and_save_dmail(handler, dmail_addr, dmail_key):
     return
 
 @asyncio.coroutine
-def _process_dmail_message(handler, dmail_key, process_call):
-    def dbcall():
-        with handler.node.db.open_session() as sess:
-            q = sess.query(DmailMessage)\
-                .filter(DmailMessage.data_key == dmail_key)
-
-            dmail = q.first()
-
-            if process_call(dmail):
-                sess.commit()
-
-            return dmail
-
-    dmail = yield from handler.node.loop.run_in_executor(None, dbcall)
-
-    return dmail
-
-@asyncio.coroutine
 def _load_dmail(handler, dmail_key):
     def dbcall():
         with handler.node.db.open_session() as sess:
@@ -633,8 +698,72 @@ def _load_dmail(handler, dmail_key):
     return dmail
 
 @asyncio.coroutine
+def _process_dmail_message(handler, dmail_key, process_call):
+    def dbcall():
+        with handler.node.db.open_session() as sess:
+            q = sess.query(DmailMessage)\
+                .filter(DmailMessage.data_key == dmail_key)
+
+            dmail = q.first()
+
+            if process_call(dmail):
+                sess.commit()
+
+            sess.expunge_all()
+
+            return dmail
+
+    dmail = yield from handler.node.loop.run_in_executor(None, dbcall)
+
+    return dmail
+
+@asyncio.coroutine
+def _load_dmail_address(handler, dmail_addr):
+    def dbcall():
+        with handler.node.db.open_session() as sess:
+            q = sess.query(DmailAddress)\
+                .filter(DmailAddress.site_key == dmail_addr)
+
+            dmail_address = q.first()
+
+            keys = dmail_address.keys
+
+            sess.expunge_all()
+
+            return dmail_address
+
+    dmail_address =\
+        yield from handler.node.loop.run_in_executor(None, dbcall)
+
+    return dmail_address
+
+@asyncio.coroutine
+def _process_dmail_address(handler, dmail_addr, process_call):
+    def dbcall():
+        with handler.node.db.open_session() as sess:
+            q = sess.query(DmailAddress)\
+                .filter(DmailAddress.site_key == dmail_addr)
+
+            dmail_address = q.first()
+
+            if process_call(dmail_address):
+                sess.commit()
+
+            keys = dmail_address.keys
+
+            sess.expunge_all()
+
+            return dmail_address
+
+    dmail_address =\
+        yield from handler.node.loop.run_in_executor(None, dbcall)
+
+    return dmail_address
+
+@asyncio.coroutine
 def _fetch_dmail(handler, dmail_addr, dmail_key):
-    de = dmail.DmailEngine(handler.node.chord_engine.tasks)
+    de =\
+        dmail.DmailEngine(handler.node.chord_engine.tasks, handler.node.db)
 
     if log.isEnabledFor(logging.INFO):
         dmail_key_enc = mbase32.encode(dmail_key)
@@ -642,22 +771,12 @@ def _fetch_dmail(handler, dmail_addr, dmail_key):
         log.info("Fetching dmail (key=[{}]) for address=[{}]."\
             .format(dmail_key_enc, dmail_addr_enc))
 
-    def dbcall():
-        nonlocal dmail_addr
+    dmail_address = yield from _load_dmail_address(handler, dmail_addr)
 
-        with handler.node.db.open_session() as sess:
-            q = sess.query(DmailAddress)\
-                .filter(DmailAddress.site_key == dmail_addr)
+    dmail_key_obj = dmail_address.keys[0]
 
-            dmail_addr_obj = q.first()
-            dmail_key_obj = dmail_addr_obj.dmail_keys[0]
-
-            sess.rollback()
-
-            return dmail_key_obj.target_key, dmail_key_obj.x
-
-    target_key, x_bin =\
-        yield from handler.node.loop.run_in_executor(None, dbcall)
+    target_key = dmail_key_obj.target_key
+    x_bin = dmail_key_obj.x
 
     l, x = sshtype.parseMpint(x_bin)
 
@@ -715,7 +834,8 @@ def _format_dmail(dm, valid_sig):
     return dmail_text
 
 @asyncio.coroutine
-def _create_dmail_address(handler, prefix):
+def _create_dmail_address(handler, prefix, difficulty):
     de = dmail.DmailEngine(handler.node.chord_engine.tasks, handler.node.db)
-    privkey, data_key, dms = yield from de.generate_dmail_address(prefix)
+    privkey, data_key, dms =\
+        yield from de.generate_dmail_address(prefix, difficulty)
     return privkey, data_key, dms
