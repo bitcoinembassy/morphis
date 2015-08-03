@@ -117,8 +117,10 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
 
             return
         elif rpath.startswith(s_dmail):
-            importlib.reload(pages)
-            importlib.reload(pages.dmail)
+            if self.node.web_devel:
+                importlib.reload(pages)
+                importlib.reload(pages.dmail)
+
             pages.dmail.serve_get(self, rpath)
             return
 

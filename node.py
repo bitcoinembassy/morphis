@@ -70,6 +70,8 @@ class Node():
         self.shell_enabled = True
         self.eval_enabled = False
 
+        self.web_devel = False
+
     @property
     def all_nodes(self):
         global nodes
@@ -297,6 +299,9 @@ def __main():
     parser.add_argument("--reinitds", action="store_true",\
         help="Allow reinitialization of the Datastore. This will only happen"\
             " if the Datastore directory has already been manually deleted.")
+    parser.add_argument("--webdevel", action="store_true",\
+        help="Enable web development mode. This causes Maalstroom to reload"\
+            " the web UI modules every request.")
 
     args = parser.parse_args()
 
@@ -339,6 +344,8 @@ def __main():
                 node.eval_enabled = True
             if args.disableshell:
                 node.shell_enabled = False
+            if args.webdevel:
+                node.web_devel = True
 
             nodes.append(node)
 
