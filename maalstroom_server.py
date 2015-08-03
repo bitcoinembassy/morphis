@@ -1,20 +1,27 @@
+# Copyright (c) 2014-2015  Sam Maloney.
+# License: GPL v2.
+
 import llog
 
 import asyncio
 import cgi
 from http.server import BaseHTTPRequestHandler, HTTPServer
+import importlib
 import logging
 import queue
 from socketserver import ThreadingMixIn
 from threading import Event
+import time
 
 import base58
 import chord
 import enc
-from mutil import decode_key
 import rsakey
 import mbase32
+import pages
+import pages.dmail
 import multipart
+import mutil
 
 log = logging.getLogger(__name__)
 
@@ -23,8 +30,6 @@ port = 4251
 
 node = None
 server = None
-
-home_page_content = [b'<html><head><title>Morphis</title></head><body><p><a href="morphis://3syweaeb7xwm4q3hxfp9w4nynhcnuob6r1mhj19ntu4gikjr7nhypezti4t1kacp4eyy3hcbxdbm4ria5bayb4rrfsafkscbik7c5ue/">Morphis Homepage</a><br/><a href="morphis://3syweaeb7xwm4q3hxfp9w4nynhcnuob6r1mhj19ntu4gikjr7nhypezti4t1kacp4eyy3hcbxdbm4ria5bayb4rrfsafkscbik7c5ue/firefox_plugin">Morphis Firefox Plugin</a><br/></p><a href="morphis://upload">Upload</a><br/></body></html>', None]
 
 upload_page_content = None
 static_upload_page_content = [None, None]
@@ -51,7 +56,9 @@ class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
 
 class MaalstroomHandler(BaseHTTPRequestHandler):
     def __init__(self, a, b, c):
+        global node
         self.protocol_version = "HTTP/1.1"
+        self.node = node
 
         super().__init__(a, b, c)
 
@@ -62,12 +69,22 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
             rpath = rpath[:-1]
 
         if not rpath:
-            self._send_content(home_page_content)
+            self._send_content(pages.home_page_content)
             return
 
-        s_upload = "upload"
-        if rpath.startswith(s_upload):
-            if rpath.startswith("upload/generate"):
+        s_upload = ".upload"
+        s_dmail = ".dmail"
+        s_aiwj = ".aiwj"
+
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("rpath=[{}].".format(rpath))
+
+        if rpath.startswith(s_aiwj):
+            self._send_content(\
+                b"AIWJ - Asynchronous IFrames Without Javascript!")
+            return
+        elif rpath.startswith(s_upload):
+            if rpath.startswith(".upload/generate"):
                 priv_key =\
                     base58.encode(\
                         rsakey.RsaKey.generate(bits=4096)._encode_key())
@@ -99,6 +116,13 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
                 self._send_content((content, content_id))
 
             return
+        elif rpath.startswith(s_dmail):
+            if self.node.web_devel:
+                importlib.reload(pages)
+                importlib.reload(pages.dmail)
+
+            pages.dmail.serve_get(self, rpath)
+            return
 
         if self.headers["If-None-Match"] == rpath:
             self.send_response(304)
@@ -106,9 +130,6 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", 0)
             self.end_headers()
             return
-
-        if log.isEnabledFor(logging.INFO):
-            log.info("rpath=[{}].".format(rpath))
 
         error = False
 
@@ -124,17 +145,13 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
             path = None
 
         try:
-            data_key, significant_bits = decode_key(rpath)
+            data_key, significant_bits = mutil.decode_key(rpath)
         except:
             error = True
             log.exception("decode")
 
         if error:
-            errmsg = b"400 Bad Request."
-            self.send_response(400)
-            self.send_header("Content-Length", len(errmsg))
-            self.end_headers()
-            self.wfile.write(errmsg)
+            self._handle_error()
             return
 
         data_rw = DataResponseWrapper()
@@ -213,12 +230,26 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
             self._handle_error(data_rw)
 
     def do_POST(self):
-        log.info(self.headers)
+        rpath = self.path[1:]
+
+        log.info("POST; rpath=[{}].".format(rpath))
+
+        if rpath != ".upload/upload":
+            pages.dmail.serve_post(self, rpath)
+            return
+
+        if log.isEnabledFor(logging.DEBUG):
+            log.info(self.headers)
 
         if self.headers["Content-Type"] == "application/x-www-form-urlencoded":
+            log.debug("Content-Type=[application/x-www-form-urlencoded].")
             data = self.rfile.read(int(self.headers["Content-Length"]))
             privatekey = None
         else:
+            if log.isEnabledFor(logging.DEBUG):
+                log.debug("Content-Type=[{}]."\
+                    .format(self.headers["Content-Type"]))
+
             form = cgi.FieldStorage(\
                 fp=self.rfile,\
                 headers=self.headers,\
@@ -292,18 +323,27 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
         else:
             self._handle_error(data_rw)
 
-    def _send_content(self, content_entry):
-        content = content_entry[0]
-        content_id = content_entry[1]
+    def _send_204(self):
+        self.send_response(204)
+        self.send_header("Content-Length", 0)
+        self.end_headers()
+        return
 
-        if not content_id:
+    def _send_content(self, content_entry, cacheable=True, content_type=None):
+        if type(content_entry) in (list, tuple):
+            content = content_entry[0]
+            content_id = content_entry[1]
+        else:
+            content = content_entry
+            cacheable = False
+
+        if cacheable and not content_id:
             if callable(content):
                 content = content()
-
             content_id = mbase32.encode(enc.generate_ID(content))
             content_entry[1] = content_id
 
-        if self.headers["If-None-Match"] == content_id:
+        if cacheable and self.headers["If-None-Match"] == content_id:
             self.send_response(304)
             self.send_header("ETag", content_id)
             self.send_header("Content-Length", 0)
@@ -315,14 +355,84 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
 
         self.send_response(200)
         self.send_header("Content-Length", len(content))
-        self.send_header("Cache-Control", "public")
-        self.send_header("ETag", content_id)
+        self.send_header("Content-Type",\
+            "text/html" if content_type is None else content_type)
+        if cacheable:
+            self.send_header("Cache-Control", "public")
+            self.send_header("ETag", content_id)
+        else:
+            self._send_no_cache()
+
         self.end_headers()
         self.wfile.write(content)
         return
 
-    def _handle_error(self, data_rw):
-        if data_rw.exception:
+    def _send_partial_content(self, content, start=False, content_type=None,\
+            cacheable=False):
+        if type(content) is str:
+            content = content.encode()
+
+        if start:
+            self.send_response(200)
+            if not cacheable:
+                self._send_no_cache()
+            self.send_header("Transfer-Encoding", "chunked")
+            self.send_header("Content-Type",\
+                "text/html" if content_type is None else content_type)
+            self.end_headers()
+
+        chunklen = len(content)
+
+#        if not content.endswith(b"\r\n"):
+#            add_line = True
+#            chunklen += 2
+#        else:
+#            add_line = False
+
+        self.wfile.write("{:x}\r\n".format(chunklen).encode())
+        self.wfile.write(content)
+#        if add_line:
+#            self.wfile.write(b"\r\n")
+        self.wfile.write(b"\r\n")
+
+        self.wfile.flush()
+
+    def _end_partial_content(self):
+        self.wfile.write(b"0\r\n\r\n")
+
+    def _send_no_cache(self):
+        self.send_header("Cache-Control",\
+            "no-cache, no-store, must-revalidate")
+#            "private, no-store, max-age=0, no-cache, must-revalidate, post-check=0, pre-check=0")
+        self.send_header("Pragma", "no-cache")
+        self.send_header("Expires", "0")
+#        self.send_header("Expires", "Mon, 26 Jul 1997 00:00:00 GMT")
+#        self.send_header("Last-Modified", "Sun, 2 Aug 2015 00:00:00 GMT")
+
+    def send_exception(self, exception, errcode=500):
+        self._send_error(\
+            errmsg=str("{}: {}".format(type(exception).__name__, exception)),\
+            errcode=errcode)
+
+    def _send_error(self, errmsg, errcode=500):
+        if errcode == 400:
+            errmsg = "400 Bad Request.\n\n{}"\
+                .format(errmsg).encode()
+            self.send_response(400)
+        else:
+            errmsg = "500 Internal Server Error.\n\n{}"\
+                .format(errmsg).encode()
+            self.send_response(500)
+
+        self.send_header("Content-Length", len(errmsg))
+        self.end_headers()
+        self.wfile.write(errmsg)
+
+    def _handle_error(self, data_rw=None, errmsg=None, errcode=None):
+        if not data_rw:
+            errmsg = b"400 Bad Request."
+            self.send_response(400)
+        elif data_rw.exception:
             errmsg = b"500 Internal Server Error."
             self.send_response(500)
         elif data_rw.timed_out:
@@ -342,20 +452,20 @@ class Downloader(multipart.DataCallback):
 
         self.data_rw = data_rw
 
-    def version(self, version):
+    def notify_version(self, version):
         self.data_rw.version = version
 
-    def size(self, size):
+    def notify_size(self, size):
         if log.isEnabledFor(logging.INFO):
             log.info("Download size=[{}].".format(size))
         self.data_rw.size = size
 
-    def mime_type(self, val):
+    def notify_mime_type(self, val):
         if log.isEnabledFor(logging.INFO):
             log.info("mime_type=[{}].".format(val))
         self.data_rw.mime_type = val
 
-    def data(self, position, data):
+    def notify_data(self, position, data):
         self.data_rw.data_queue.put(data)
 
 @asyncio.coroutine
@@ -410,7 +520,7 @@ def _send_get_data(data_key, significant_bits, path, data_rw):
     except asyncio.TimeoutError:
         data_rw.timed_out = True
     except:
-        log.exception("send_get_data()")
+        log.exception("send_get_data(..)")
         data_rw.exception = True
 
     data_rw.data_queue.put(None)
@@ -428,7 +538,7 @@ def _send_store_data(data, data_rw, privatekey=None, path=None, version=None,\
     except asyncio.TimeoutError:
         data_rw.timed_out = True
     except:
-        log.exception("send_store_data()")
+        log.exception("send_store_data(..)")
         data_rw.exception = True
 
     data_rw.is_done.set()
@@ -488,4 +598,4 @@ def _set_upload_page(content):
     static_upload_page_content[1] =\
         mbase32.encode(enc.generate_ID(static_upload_page_content[1]))
 
-_set_upload_page(b'<html><head><title>Morphis Maalstroom Upload</title></head><body><p>Select the file to upload below:</p><form action="upload" method="post" enctype="multipart/form-data"><input type="file" name="fileToUpload" id="fileToUpload"/><div style="${UPDATEABLE_KEY_MODE_DISPLAY}"><br/><br/><label for="privateKey">Private Key</label><textarea name="privateKey" id="privateKey" rows="5" cols="80">${PRIVATE_KEY}</textarea><br/><label for="path">Path</label><input type="textfield" name="path" id="path"/><br/><label for="version">Version</label><input type="textfield" name="version" id="version"/><br/><label for="mime_type">Mime Type</label><input type="textfield" name="mime_type" id="mime_type"/><br/></div><input type="submit" value="Upload File" name="submit"/></form><p style="${STATIC_MODE_DISPLAY}"><a href="morphis://upload/generate">switch to updateable key mode</a></p><p style="${UPDATEABLE_KEY_MODE_DISPLAY}"><a href="morphis://upload">switch to static key mode</a></p></body></html>')
+_set_upload_page(b'<html><head><title>MORPHiS Maalstroom Upload</title></head><body><h4 style="${UPDATEABLE_KEY_MODE_DISPLAY}">NOTE: Bookmark this page to save your private key in the bookmark!</h4>Select the file to upload below:</p><form action="upload" method="post" enctype="multipart/form-data"><input type="file" name="fileToUpload" id="fileToUpload"/><div style="${UPDATEABLE_KEY_MODE_DISPLAY}"><br/><br/><label for="privateKey">Private Key</label><textarea name="privateKey" id="privateKey" rows="5" cols="80">${PRIVATE_KEY}</textarea><br/><label for="path">Path</label><input type="textfield" name="path" id="path"/><br/><label for="version">Version</label><input type="textfield" name="version" id="version"/><br/><label for="mime_type">Mime Type</label><input type="textfield" name="mime_type" id="mime_type"/><br/></div><input type="submit" value="Upload File" name="submit"/></form><p style="${STATIC_MODE_DISPLAY}"><a href="morphis://.upload/generate">switch to updateable key mode</a></p><p style="${UPDATEABLE_KEY_MODE_DISPLAY}"><a href="morphis://.upload">switch to static key mode</a></p><h5><- <a href="morphis://">MORPHiS UI</a></h5></body></html>')

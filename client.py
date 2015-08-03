@@ -1,9 +1,15 @@
+# Copyright (c) 2014-2015  Sam Maloney.
+# License: GPL v2.
+
 import llog
 
 import asyncio
 import logging
 import os
 
+import base58
+import chord_tasks
+import mbase32
 import mn1
 import packet as mnp
 import rsakey
@@ -15,9 +21,6 @@ class Client(object):
     def __init__(self, loop, client_key=None, address="127.0.0.1:4250"):
         self.loop = loop
         self.address = address
-
-        self.cid = None
-        self.queue = None
 
         if client_key is None:
             client_key = rsakey.RsaKey.generate(bits=4096)
@@ -49,15 +52,6 @@ class Client(object):
 
         yield from self._ready.wait()
 
-        cid, queue = yield from\
-            protocol.open_channel("session", True)
-
-        if not queue:
-            return False
-
-        self.cid = cid
-        self.queue = queue
-
         return True
 
     def _create_client_protocol(self):
@@ -75,7 +69,6 @@ class Client(object):
 
     @asyncio.coroutine
     def disconnect(self):
-        yield from self.protocol.close_channel(self.cid)
         self.protocol.close()
 
     @asyncio.coroutine
@@ -84,13 +77,19 @@ class Client(object):
             log.info("Sending command [{}] with args [{}]."\
                 .format(command, args))
 
+        cid, queue = yield from\
+            self.protocol.open_channel("session", True)
+
+        if not queue:
+            return False
+
         msg = BinaryMessage()
         msg.value = command.encode() + b"\r\n"
 
         self.protocol.send_channel_request(\
-            self.cid, "exec", False, msg.encode())
+            cid, "exec", False, msg.encode())
 
-        data = yield from self.queue.get()
+        data = yield from queue.get()
 
         if not data:
             return False
@@ -100,12 +99,131 @@ class Client(object):
         return msg.value
 
     @asyncio.coroutine
-    def _send_request(self, msg):
-        self.protocol.write_channel_data(self.cid, msg.encode())
+    def send_store_data(\
+            self, data, store_key=False, key_callback=None):
+        data_enc = base58.encode(data)
 
-        log.info("Sent request.")
+        r = yield from\
+            self.send_command(\
+                "storeblockenc {} {}".format(data_enc, store_key))
 
-        return (yield from self.queue.get())
+        p0 = r.find(b']')
+        data_key = mbase32.decode(r[10:p0].decode("UTF-8"))
+
+        key_callback(data_key)
+
+        p0 = r.find(b"storing_nodes=[", p0) + 15
+        p1 = r.find(b']', p0)
+
+        return int(r[p0:p1])
+
+    @asyncio.coroutine
+    def send_store_updateable_key(\
+            self, data, privkey, path=None, version=None, store_key=True,\
+            key_callback=None):
+        privkey_enc = base58.encode(privkey._encode_key())
+        data_enc = base58.encode(data)
+
+        cmd = "storeukeyenc {} {} {} {}"\
+            .format(privkey_enc, data_enc, version, store_key)
+
+        r = yield from self.send_command(cmd)
+
+        if not r:
+            return 0
+
+        if key_callback:
+            p1 = r.find(b']', 10)
+            r = r[10:p1].decode()
+            key_enc = r
+            key_callback(mbase32.decode(key_enc))
+
+        return 1 #FIXME: The shell API doesn't return this value as of yet.
+
+    @asyncio.coroutine
+    def send_store_targeted_data(\
+            self, data, store_key=False, key_callback=None):
+        data_enc = base58.encode(data)
+
+        r = yield from\
+            self.send_command(\
+                "storetargetedblockenc {} {}".format(data_enc, store_key))
+
+        p0 = r.find(b']')
+        data_key = mbase32.decode(r[10:p0].decode("UTF-8"))
+
+        key_callback(data_key)
+
+        p0 = r.find(b"storing_nodes=[", p0) + 15
+        p1 = r.find(b']', p0)
+
+        return int(r[p0:p1])
+
+    @asyncio.coroutine
+    def send_find_key(self, prefix, target_key=None, significant_bits=None):
+        cmd = "findkey " + mbase32.encode(prefix)
+        if target_key:
+            cmd += " " + mbase32.encode(target_key)
+            if significant_bits:
+                cmd += " " + str(significant_bits)
+
+        r = yield from self.send_command(cmd)
+
+        p0 = r.find(b"data_key=[") + 10
+        p1 = r.find(b']', p0)
+
+        data_key = r[p0:p1].decode()
+
+        if data_key == "None":
+            data_key = None
+        else:
+            data_key = mbase32.decode(data_key)
+
+        data_rw = chord_tasks.DataResponseWrapper(data_key)
+
+        return data_rw
+
+    @asyncio.coroutine
+    def send_get_data(self, data_key, path=None):
+        data_key_enc = mbase32.encode(data_key)
+
+        if path:
+            cmd = "getdata {} {}".format(data_key_enc, path)
+        else:
+            cmd = "getdata {}".format(data_key_enc)
+
+        r = yield from self.send_command(cmd)
+
+        data_rw = chord_tasks.DataResponseWrapper(data_key)
+
+        p0 = r.find(b"version=[") + 9
+        p1 = r.find(b']', p0)
+        ver_str = r[p0:p1]
+        data_rw.version = int(ver_str) if ver_str != b"None" else None
+        p0 = p1 + 1
+
+        p0 = r.find(b"data:\r\n", p0) + 7
+        data = r[p0:-2] # -2 for the "\r\n".
+
+        #FIXME: This is ambiguous with data that == "Not found." :)
+        data_rw.data = data if data != b"Not found." else None
+
+        return data_rw
+
+    @asyncio.coroutine
+    def send_get_targeted_data(self, data_key):
+        data_key_enc = mbase32.encode(data_key)
+
+        cmd = "gettargeteddata {}".format(data_key_enc)
+
+        r = yield from self.send_command(cmd)
+
+        data_rw = chord_tasks.DataResponseWrapper(data_key)
+
+        p0 = r.find(b"data:\r\n") + 7
+        data_rw.data = r[p0:-2] # -2 for the "\r\n".
+
+        return data_rw
 
 class ConnectionHandler(mn1.ConnectionHandler):
     def __init__(self, client):

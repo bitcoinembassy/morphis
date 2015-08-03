@@ -1,3 +1,6 @@
+# Copyright (c) 2014-2015  Sam Maloney.
+# License: GPL v2.
+
 import llog
 
 import asyncio
@@ -8,9 +11,9 @@ from contextlib import contextmanager
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.schema import Index
 from sqlalchemy import create_engine, text, event, MetaData
-from sqlalchemy import Column, ForeignKey, Integer, String
+from sqlalchemy import Table, Column, ForeignKey, Integer, String, DateTime
 from sqlalchemy.exc import ProgrammingError
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.pool import Pool
 from sqlalchemy.types import LargeBinary, Boolean, DateTime
 
@@ -21,6 +24,11 @@ Base = declarative_base()
 Peer = None
 DataBlock = None
 NodeState = None
+DmailAddress = None
+DmailKey = None
+DmailMessage = None
+DmailPart = None
+DmailTag = None
 
 def _init_daos(Base, d):
     # If I recall correctly, this abomination is purely for PostgreSQL mode,
@@ -31,7 +39,7 @@ def _init_daos(Base, d):
     # as desired. Hopefully we can get SQLAlchemy fixed and then this
     # complication removed.
     class Peer(Base):
-        __tablename__ = "Peer"
+        __tablename__ = "peer"
 
         id = Column(Integer, primary_key=True)
         name = Column(String(48), nullable=True)
@@ -57,7 +65,7 @@ def _init_daos(Base, d):
     d.Peer = Peer
 
     class DataBlock(Base):
-        __tablename__ = "DataBlock"
+        __tablename__ = "datablock"
 
         id = Column(Integer, primary_key=True)
         data_id = Column(LargeBinary, nullable=False)
@@ -65,10 +73,11 @@ def _init_daos(Base, d):
         original_size = Column(Integer, nullable=False)
         insert_timestamp = Column(DateTime, nullable=False)
         last_access = Column(DateTime, nullable=True)
-        version = Column(Integer, nullable=True)
+        version = Column(String, nullable=True) # str for sqlite bigint :(.
         signature = Column(LargeBinary, nullable=True)
         epubkey = Column(LargeBinary, nullable=True)
         pubkeylen = Column(Integer, nullable=True)
+        target_key = Column(LargeBinary, nullable=True)
 
     Index("data_id", DataBlock.data_id)
     Index("datablock__distance", DataBlock.distance.desc())
@@ -76,12 +85,80 @@ def _init_daos(Base, d):
     d.DataBlock = DataBlock
 
     class NodeState(Base):
-        __tablename__ = "NodeState"
+        __tablename__ = "nodestate"
 
         key = Column(String(64), primary_key=True)
         value = Column(String(128), nullable=True)
 
     d.NodeState = NodeState
+
+    class DmailKey(Base):
+        __tablename__ = "dmailkey"
+
+        id = Column(Integer, primary_key=True)
+        parent_id = Column(Integer, ForeignKey("dmailaddress.id"))
+        x = Column(LargeBinary, nullable=False)
+        target_key = Column(LargeBinary, nullable=False)
+        difficulty = Column(Integer, nullable=False)
+
+    d.DmailKey = DmailKey
+
+    class DmailAddress(Base):
+        __tablename__ = "dmailaddress"
+
+        id = Column(Integer, primary_key=True)
+        site_key = Column(LargeBinary, nullable=False)
+        site_privatekey = Column(LargeBinary, nullable=True)
+        keys = relationship(DmailKey)
+
+    Index("dmailaddress__site_key", DmailAddress.site_key)
+
+    d.DmailAddress = DmailAddress
+
+    dmail_message__dmail_tag = Table(\
+        "dmail_message__dmail_tag",\
+        Base.metadata,\
+        Column("dmail_message_id", Integer, ForeignKey("dmailmessage.id")),\
+        Column("tag_id", Integer, ForeignKey("dmailtag.id")))
+
+    class DmailTag(Base):
+        __tablename__ = "dmailtag"
+
+        id = Column(Integer, primary_key=True)
+        name = Column(String, nullable=False)
+
+    Index("dmailtag__name", DmailTag.name)
+
+    d.DmailTag = DmailTag
+
+    class DmailPart(Base):
+        __tablename__ = "dmailpart"
+
+        id = Column(Integer, primary_key=True)
+        dmail_message_id = Column(Integer, ForeignKey("dmailmessage.id"))
+        mime_type = Column(String, nullable=True)
+        data = Column(LargeBinary, nullable=False)
+
+    d.DmailPart = DmailPart
+
+    class DmailMessage(Base):
+        __tablename__ = "dmailmessage"
+
+        id = Column(Integer, primary_key=True)
+        dmail_address_id = Column(Integer, ForeignKey("dmailaddress.id"))
+        data_key = Column(LargeBinary, nullable=False)
+        sender_dmail_key = Column(LargeBinary, nullable=True)
+        sender_valid = Column(Boolean, nullable=True)
+        subject = Column(String, nullable=False)
+        date = Column(DateTime, nullable=False)
+        read = Column(Boolean, nullable=True)
+        hidden = Column(Boolean, nullable=False)
+        tags = relationship(DmailTag, secondary=dmail_message__dmail_tag)
+        parts = relationship(DmailPart)
+
+    Index("dmailmessage__data_key", DmailMessage.data_key)
+
+    d.DmailMessage = DmailMessage
 
     return d
 
@@ -199,3 +276,10 @@ if Peer is None:
     Peer = d.Peer
     DataBlock = d.DataBlock
     NodeState = d.NodeState
+
+    # Maalstroom Dmail Client.
+    DmailAddress = d.DmailAddress
+    DmailKey = d.DmailKey
+    DmailMessage = d.DmailMessage
+    DmailPart = d.DmailPart
+    DmailTag = d.DmailTag

@@ -1,16 +1,22 @@
+# Copyright (c) 2014-2015  Sam Maloney.
+# License: GPL v2.
+
 from distutils.core import setup
 from Cython.Build import cythonize
 
 modules = [\
     "asymkey",
     "bittrie",
+    "brute",
     "chord_packet",
+    "dhgroup14",
     "enc",
     "llog",
     "mbase32",
     "mutil",
     "putil",
     "packet",
+    "pages",
     "rsakey",
     "sshtype"\
 ]

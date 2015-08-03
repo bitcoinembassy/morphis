@@ -9,3 +9,5 @@
 - have the shell channel open code mark this dbpeer as a shell client and from then on only let the peer with that id (client pubkey authenticated with) open a session channel.
 
 - consider morphis/ssh protocol disconnect message as authentic. consider tcp disconnect as ddos and simply reconnect. (issue with one host firewalled, thus only connecting host can reconnect). have some sanity to prevent loop.
+
+- have tunnels relay data if they've already seen it so that we don't have to send it the whole way from us for each destination.

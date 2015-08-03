@@ -1,9 +1,18 @@
-from bisect import bisect_left
+# Copyright (c) 2014-2015  Sam Maloney.
+# License: GPL v2.
 
+import llog
+
+from bisect import bisect_left
+from datetime import datetime
+import logging
+
+import consts
 import mbase32
 
-accept_chars = b" !\"#$%&`()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_'abcdefghijklmnopqrstuvwxyz{|}~"
+log = logging.getLogger(__name__)
 
+accept_chars = b" !\"#$%&`()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_'abcdefghijklmnopqrstuvwxyz{|}~"
 accept_chars = sorted(accept_chars)
 
 width = 16
@@ -95,7 +104,8 @@ def page_query(query, page_size=10):
         offset += page_size
 
 def decode_key(encoded):
-    #assert chord.NODE_ID_BITS == 512
+    assert consts.NODE_ID_BITS == 512
+    assert type(encoded) is str, type(encoded)
 
     significant_bits = None
 
@@ -103,10 +113,63 @@ def decode_key(encoded):
 
     if kl == 128:
         data_key = bytes.fromhex(encoded)
-    elif kl in (103, 102):
+    elif kl in (102, 103):
         data_key = bytes(mbase32.decode(encoded))
+        if len(data_key) < consts.NODE_ID_BYTES:
+            significant_bits = 5 * kl
     else:
         data_key = mbase32.decode(encoded, False)
         significant_bits = 5 * kl
 
     return data_key, significant_bits
+
+def calc_raw_distance(data1, data2):
+    "Calculates the XOR distance, return is absolute value."
+
+    assert type(data1) in (bytes, bytearray)\
+        and type(data2) in (bytes, bytearray)
+
+    buf = bytearray()
+
+    for i in range(len(data1)):
+        buf.append(data1[i] ^ data2[i])
+
+    return buf
+
+def calc_log_distance(nid, pid):
+    "Returns: distance, direction."
+    " distance is in log base2."
+
+    id_size = len(nid)
+    assert id_size >= len(pid)
+
+    if log.isEnabledFor(logging.DEBUG):
+        log.debug("pid=\n[{}], nid=\n[{}].".format(hex_dump(pid),\
+            hex_dump(nid)))
+
+    dist = 0
+    direction = 0
+
+    for i in range(id_size):
+        if pid[i] != nid[i]:
+            direction = 1 if pid[i] > nid[i] else -1
+
+            xv = pid[i] ^ nid[i]
+            xv = log_base2_8bit(xv) + 1
+
+            # (byte * 8) + bit.
+            dist = ((id_size - 1 - i) << 3) + xv
+
+            break
+
+    return dist, direction
+
+iso_fmt = "%Y-%m-%dT%H:%M:%S.%f"
+
+def parse_iso_datetime(date_str):
+    return datetime.strptime(date_str, iso_fmt)
+
+iso_fmt_human_no_ms = "%Y-%m-%d %H:%M:%S"
+
+def format_human_no_ms_datetime(datetime):
+    return datetime.strftime(iso_fmt_human_no_ms)

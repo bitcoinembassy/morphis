@@ -1,3 +1,6 @@
+# Copyright (c) 2014-2015  Sam Maloney.
+# License: LGPL.
+
 class AsymKey():
     def _write_private_key_file(self, tag, filename, data, password):
         with open(filename, 'wb') as f:

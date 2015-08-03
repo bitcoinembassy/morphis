@@ -1,3 +1,6 @@
+# Copyright (c) 2014-2015  Sam Maloney.
+# License: GPL v2.
+
 import llog
 
 import asyncio
@@ -6,7 +9,7 @@ import logging
 import packet as mnpacket
 import rsakey
 import mn1
-from mutil import hex_dump, log_base2_8bit
+import mutil
 import enc
 
 log = logging.getLogger(__name__)
@@ -14,6 +17,8 @@ log = logging.getLogger(__name__)
 class Peer():
     def __init__(self, engine, dbpeer=None):
         self.engine = engine
+
+        self.full_node = False
 
         self.dbid = None
         self.distance = None
@@ -54,7 +59,7 @@ class Peer():
 
     def update_distance(self):
         self.distance, self.direction =\
-            self.engine.calc_log_distance(self.engine.node_id, self.node_id)
+            mutil.calc_log_distance(self.engine.node_id, self.node_id)
 
     def _peer_authenticated(self, key):
         self.node_key = key
@@ -148,7 +153,7 @@ class ChannelHandler():
     def channel_data(self, protocol, local_cid, data):
         if log.isEnabledFor(logging.DEBUG):
             log.debug("Received data: local_cid=[{}], value=[\n{}]."\
-                .format(local_cid, hex_dump(data)))
+                .format(local_cid, mutil.hex_dump(data)))
 
         # Return value controls if the data gets added to the channel queue.
         r = yield from self.peer.engine.channel_data(\

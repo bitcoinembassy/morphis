@@ -1,3 +1,5 @@
+Note, these only ever occurred when running a massive amount of multiple nodes in the same process. They have not happened since in testing I now start only 10 nodes in a single process and start many processes instead. Still, the bug may exist even without multiple nodes in one process, so this should be investigated.
+
 [COMMIT:0e042bb6b3d3be2ecde619d6ed42f8b794eda864]
 future: Task(<process_connection_count>)<exception=AttributeError("'Future' object has no attribute 'clauses'",)>
 Traceback (most recent call last):

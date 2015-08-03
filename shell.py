@@ -1,3 +1,6 @@
+# Copyright (c) 2014-2015  Sam Maloney.
+# License: GPL v2.
+
 import llog
 
 import asyncio
@@ -6,13 +9,16 @@ from datetime import datetime
 import logging
 import queue as tqueue
 
+import base58
 import chord
 import db
 import enc
+import mbase32
 import mn1
 import multipart
 from mutil import hex_dump, hex_string, decode_key
 import node
+import rsakey
 import sshtype
 
 log = logging.getLogger(__name__)
@@ -177,14 +183,30 @@ class Shell(cmd.Cmd):
             rmsg.value = msg.value.replace(b'\n', b"\r\n")
             self.peer.protocol.write_channel_data(self.local_cid, rmsg.encode())
 
-            i = buf.find(b'\r')
-            if i == -1:
+            #TODO: Replace this hacky code that handle multibyte characters
+            # with something better. This lets you type one and hit enter
+            # without it breaking, but if you type one and hit backspace then
+            # you are still doomed until you press CTRL-D to quit.
+            i = 0
+            while True:
+                i = buf.find(b'\r', i)
+                if i == -1:
+                    outer_continue = True
+                    break
+
+                try:
+                    line = buf[:i].decode()
+                except:
+                    i += 1
+                    continue
+
+                buf = buf[i+1:]
+
+                return line
+
+            if outer_continue:
+                outer_continue = False
                 continue
-
-            line = buf[:i].decode()
-            buf = buf[i+1:]
-
-            return line
 
     def _replace_line(self, buf, newline):
         lenbuf = len(buf)
@@ -214,6 +236,14 @@ class Shell(cmd.Cmd):
             self._write(val)
         except:
             self._write(str(val))
+
+    def write_raw(self, val):
+        assert type(val) in (bytes, bytearray), type(val)
+
+        self.out_buffer += val
+
+        if len(self.out_buffer) > mn1.MAX_PACKET_LENGTH:
+            self.flush()
 
     def _write(self, val):
         if isinstance(val, bytearray) or isinstance(val, bytes):
@@ -256,6 +286,11 @@ class Shell(cmd.Cmd):
 
     def do_eval(self, arg):
         "Execute python code."
+
+        if not self.peer.engine.node.eval_enabled:
+            self.writeln("Eval is disabled.")
+            return
+
         try:
             r = eval(arg, globals(), self.shell_locals)
             self.writeln(r)
@@ -265,6 +300,11 @@ class Shell(cmd.Cmd):
 
     def do_shell(self, arg):
         "Execute python code."
+
+        if not self.peer.engine.node.eval_enabled:
+            self.writeln("Eval is disabled.")
+            return
+
         try:
             exec(arg, globals(), self.shell_locals)
         except Exception as e:
@@ -303,9 +343,13 @@ class Shell(cmd.Cmd):
 
     @asyncio.coroutine
     def do_findnode(self, arg):
-        "[ID] find the node with hex encoded id."
+        "[ID] find the node with id."
 
-        node_id = int(arg, 16).to_bytes(chord.NODE_ID_BYTES, "big")
+        node_id, significant_bits = decode_key(arg)
+
+        if significant_bits:
+            self.writeln("Won't FindNode for incomplete key.")
+            return
 
         start = datetime.today()
         result = yield from self.peer.engine.tasks.send_find_node(node_id)
@@ -316,7 +360,7 @@ class Shell(cmd.Cmd):
             self.writeln("nid[{}] FOUND: {:22} id=[{}] diff=[{}]"\
                 .format(r.id, r.address, hex_string(r.node_id),\
                     hex_string(\
-                        self.peer.engine.calc_raw_distance(\
+                        calc_raw_distance(\
                             r.node_id, node_id))))
 
     @asyncio.coroutine
@@ -326,7 +370,35 @@ class Shell(cmd.Cmd):
 
     @asyncio.coroutine
     def do_getdata(self, arg):
-        "[DATA_KEY] retrieve data for DATA_KEY from the network."
+        "<DATA_KEY> [PATH] retrieve data for DATA_KEY from the network."
+
+        args = arg.split(' ')
+
+        data_key, significant_bits = decode_key(args[0])
+        path = args[1].encode() if len(args) == 2 else None
+
+        if significant_bits:
+            self.writeln("Incomplete key, use findkey.")
+            return
+
+        start = datetime.today()
+        data, version =\
+            yield from multipart.get_data_buffered(\
+                self.peer.engine, data_key, path=path)
+        diff = datetime.today() - start
+
+        self.writeln("send_get_data(..) took: {}.".format(diff))
+        self.writeln("version=[{}].".format(version))
+        self.writeln("data:")
+        if data is not None:
+            self.write_raw(data)
+            self.writeln("")
+        else:
+            self.writeln("Not found.")
+
+    @asyncio.coroutine
+    def do_gettargeteddata(self, arg):
+        "<DATA_KEY> retrieve targeted data for DATA_KEY from the network."
 
         data_key, significant_bits = decode_key(arg)
 
@@ -335,13 +407,18 @@ class Shell(cmd.Cmd):
             return
 
         start = datetime.today()
-        data, version =\
-            yield from multipart.get_data_buffered(self.peer.engine, data_key)
+        data_rw =\
+            yield from self.peer.engine.tasks.send_get_targeted_data(data_key)
         diff = datetime.today() - start
 
-        self.writeln("data=[{}].".format(data))
-        self.writeln("version=[{}].".format(version))
-        self.writeln("send_get_data(..) took: {}.".format(diff))
+        self.writeln("send_get_targeted_data(..) took: {}.".format(diff))
+
+        if data_rw.data is not None:
+            self.writeln("data:")
+            self.write_raw(data_rw.data)
+            self.writeln("")
+        else:
+            self.writeln("Not found.")
 
     @asyncio.coroutine
     def do_fk(self, arg):
@@ -350,16 +427,112 @@ class Shell(cmd.Cmd):
 
     @asyncio.coroutine
     def do_findkey(self, arg):
-        "[DATA_KEY_PREFIX] search the network for the given key."
+        "<DATA_KEY_PREFIX> [TARGET_ID] [SIGNIFICANT_BITS] search the network"
+        " for the given key."
 
-        data_key, significant_bits = decode_key(arg)
+        args = arg.split(' ')
+
+        data_key, significant_bits = decode_key(args[0])
+        target_key = mbase32.decode(args[1]) if len(args) >= 2 else None
+        if len(args) == 3:
+            significant_bits = int(args[2])
 
         start = datetime.today()
         data_rw = yield from\
-            self.peer.engine.tasks.send_find_key(data_key, significant_bits)
+            self.peer.engine.tasks.send_find_key(\
+                data_key, significant_bits=significant_bits,\
+                    target_key=target_key)
         diff = datetime.today() - start
-        self.writeln("data_key=[{}].".format(hex_string(data_rw.data_key)))
+        data_key_enc =\
+            mbase32.encode(data_rw.data_key) if data_rw.data_key else None
+        self.writeln("data_key=[{}].".format(data_key_enc))
         self.writeln("send_find_key(..) took: {}.".format(diff))
+
+    @asyncio.coroutine
+    def do_storeblockenc(self, arg):
+        "<data> store base58 encoded block."
+
+        args = arg.split(' ')
+
+        data = base58.decode(args[0])
+        store_key = bool(args[1]) if len(args) == 2 else False
+
+        def key_callback(data_key):
+            self.writeln("data_key=[{}].".format(mbase32.encode(data_key)))
+
+        start = datetime.today()
+
+        storing_nodes =\
+            yield from self.peer.engine.tasks.send_store_data(\
+                data, store_key=store_key, key_callback=key_callback)
+
+        diff = datetime.today() - start
+        self.writeln("storing_nodes=[{}].".format(storing_nodes))
+        self.writeln("send_store_data(..) took: {}.".format(diff))
+
+    @asyncio.coroutine
+    def do_storetargetedblockenc(self, arg):
+        "<data> store base58 encoded targeted block."
+
+        args = arg.split(' ')
+
+        data = base58.decode(args[0])
+        store_key = bool(args[1]) if len(args) == 2 else False
+
+        def key_callback(data_key):
+            self.writeln("data_key=[{}].".format(mbase32.encode(data_key)))
+
+        start = datetime.today()
+
+        storing_nodes =\
+            yield from self.peer.engine.tasks.send_store_targeted_data(\
+                data, store_key=store_key, key_callback=key_callback)
+
+        diff = datetime.today() - start
+        self.writeln("storing_nodes=[{}].".format(storing_nodes))
+        self.writeln("send_store_targeted_data(..) took: {}.".format(diff))
+
+    @asyncio.coroutine
+    def do_storedataenc(self, arg):
+        "<data> store base58 encoded data."
+
+        data = base58.decode(args)
+
+        def key_callback(data_key):
+            self.writeln("data_key=[{}].".format(mbase32.encode(data_key)))
+
+        start = datetime.today()
+
+        yield from multipart.store_data(\
+            self.peer.engine, data, key_callback=key_callback)
+
+        diff = datetime.today() - start
+        self.writeln("multipart.store_data(..) took: {}.".format(diff))
+
+    @asyncio.coroutine
+    def do_storeukeyenc(self, arg):
+        "<KEY> <DATA> <VERSION> <STOREKEY> [PATH] store base58 encoded DATA"
+        " with base58 encoded private KEY."
+
+        args = arg.split(' ')
+
+        key = rsakey.RsaKey(privdata=base58.decode(args[0]))
+        data = base58.decode(args[1])
+        version = int(args[2])
+        storekey = bool(args[3])
+        path = args[4] if len(args) > 4 else None
+
+        def key_callback(data_key):
+            self.writeln("data_key=[{}].".format(mbase32.encode(data_key)))
+
+        start = datetime.today()
+
+        yield from multipart.store_data(\
+            self.peer.engine, data, privatekey=key, path=path,\
+            version=version, key_callback=key_callback)
+
+        diff = datetime.today() - start
+        self.writeln("multipart.store_data(..) took: {}.".format(diff))
 
     @asyncio.coroutine
     def do_sd(self, arg):
@@ -368,7 +541,7 @@ class Shell(cmd.Cmd):
 
     @asyncio.coroutine
     def do_storedata(self, arg):
-        "[DATA] store DATA into the network."
+        "<DATA> store DATA into the network."
 
         data = bytes(arg, 'UTF8')
 
@@ -380,12 +553,12 @@ class Shell(cmd.Cmd):
             return
 
         def key_callback(data_key):
-            self.writeln("data_key=[{}].".format(hex_string(data_key)))
+            self.writeln("data_key=[{}].".format(mbase32.encode(data_key)))
 
         start = datetime.today()
         storing_nodes =\
             yield from self.peer.engine.tasks.send_store_data(\
-                data, key_callback)
+                data, key_callback=key_callback)
         diff = datetime.today() - start
         self.writeln("storing_nodes=[{}].".format(storing_nodes))
         self.writeln("send_store_data(..) took: {}.".format(diff))
@@ -397,7 +570,7 @@ class Shell(cmd.Cmd):
 
     @asyncio.coroutine
     def do_storekey(self, arg):
-        "[DATA] store DATA's key into the network."
+        "<DATA> store DATA's key into the network."
 
         data = bytes(arg, "UTF8")
 
@@ -409,12 +582,12 @@ class Shell(cmd.Cmd):
             return
 
         def key_callback(data_key):
-            self.writeln("data_key=[{}].".format(hex_string(data_key)))
+            self.writeln("data_key=[{}].".format(mbase32.encode(data_key)))
 
         start = datetime.today()
         storing_nodes =\
             yield from self.peer.engine.tasks.send_store_key(\
-                data, key_callback)
+                data, key_callback=key_callback)
         diff = datetime.today() - start
         self.writeln("storing_nodes=[{}].".format(storing_nodes))
         self.writeln("send_store_key(..) took: {}.".format(diff))
@@ -478,7 +651,7 @@ class Shell(cmd.Cmd):
         engine = self.peer.engine
 
         self.writeln("Node:\n\tid=[{}]\n\tbind_port=[{}]\n\tconnections={}"\
-            .format(hex_string(engine.node_id), engine._bind_port,
+            .format(mbase32.encode(engine.node_id), engine._bind_port,
                 len(engine.peers)))
 
     @asyncio.coroutine

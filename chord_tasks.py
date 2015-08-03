@@ -1,3 +1,6 @@
+# Copyright (c) 2014-2015  Sam Maloney.
+# License: GPL v2.
+
 import llog
 
 import asyncio
@@ -14,7 +17,9 @@ import chord
 import chord_packet as cp
 from chordexception import ChordException
 from db import Peer, DataBlock, NodeState
-from mutil import hex_string, page_query
+import mbase32
+import multipart as mp
+import mutil
 import enc
 import node as mnnode
 import peer as mnpeer
@@ -37,6 +42,7 @@ class DataResponseWrapper(object):
         self.pubkey = None
         self.path_hash = b""
         self.version = None
+        self.targeted = False
 
 class TunnelMeta(object):
     def __init__(self, peer=None, jobs=None):
@@ -91,6 +97,8 @@ class ChordTasks(object):
 
         msg = cp.ChordNodeInfo(data)
         log.info("Received ChordNodeInfo message.")
+
+        peer.full_node = True
 
         yield from peer.protocol.close_channel(local_cid)
 
@@ -148,15 +156,15 @@ class ChordTasks(object):
             byte_ = chord.NODE_ID_BYTES - 1 - (bit >> 3)
             node_id[byte_] ^= 1 << (bit % 8)
 
-            assert self.engine.calc_log_distance(\
+            assert mutil.calc_log_distance(\
                 node_id, self.engine.node_id)[0] == (bit + 1),\
                 "calc={}, bit={}, diff={}."\
                     .format(\
-                        self.engine.calc_log_distance(\
+                        mutil.calc_log_distance(\
                             node_id, self.engine.node_id)[0],\
                         bit + 1,
-                        hex_string(\
-                            self.engine.calc_raw_distance(\
+                        mutil.hex_string(\
+                            mutil.calc_raw_distance(\
                                 self.engine.node_id, node_id)))
 
             nodes, new_nodes = yield from self._perform_stabilize(node_id)
@@ -215,7 +223,23 @@ class ChordTasks(object):
         return data_rw
 
     @asyncio.coroutine
-    def send_find_key(self, data_key_prefix, significant_bits=None):
+    def send_get_targeted_data(self, data_key):
+        assert type(data_key) in (bytes, bytearray)\
+            and len(data_key) == chord.NODE_ID_BYTES,\
+            "type(data_key)=[{}], len={}."\
+                .format(type(data_key), len(data_key))
+
+        data_id = enc.generate_ID(data_key)
+
+        data_rw = yield from\
+            self.send_find_node(data_id, for_data=True, data_key=data_key,\
+                targeted=True)
+
+        return data_rw
+
+    @asyncio.coroutine
+    def send_find_key(self, data_key_prefix, significant_bits=None,\
+            target_key=None):
         assert type(data_key_prefix) in (bytes, bytearray),\
             "type(data_key_prefix)=[{}].".format(type(data_key_prefix))
 
@@ -223,8 +247,10 @@ class ChordTasks(object):
             significant_bits = len(data_key_prefix) * 8
 
         if log.isEnabledFor(logging.INFO):
-            log.info("Performing wildcard (key) search (significant_bits"\
-                "=[{}]).".format(significant_bits))
+            log.info("Performing wildcard (key) search (prefix=[{}],"\
+                " significant_bits=[{}], target_key=[{}])."\
+                    .format(mbase32.encode(data_key_prefix), significant_bits,\
+                        target_key))
 
         ldiff = chord.NODE_ID_BYTES - len(data_key_prefix)
         if ldiff > 0:
@@ -233,18 +259,26 @@ class ChordTasks(object):
         data_rw = yield from\
             self.send_find_node(data_key_prefix,\
                 significant_bits=significant_bits, for_data=True,\
-                data_key=None)
+                data_key=None, target_key=target_key)
 
         return data_rw
 
     @asyncio.coroutine
-    def send_store_key(self, data, key_callback=None):
-        data_key = enc.generate_ID(data)
+    def send_store_key(self, data, data_key=None, targeted=False,\
+            key_callback=None):
+        if log.isEnabledFor(logging.INFO):
+            data_key_enc = mbase32.encode(data_key) if data_key else None
+            log.info("Sending ChordStoreKey for data_key=[{}], targeted=[{}]."\
+                .format(data_key_enc, targeted))
+
+        if not data_key:
+            data_key = enc.generate_ID(data)
         if key_callback:
             key_callback(data_key)
 
         skmsg = cp.ChordStoreKey()
         skmsg.data = data
+        skmsg.targeted = targeted
 
         storing_nodes =\
             yield from self.send_find_node(\
@@ -253,13 +287,18 @@ class ChordTasks(object):
         return storing_nodes
 
     @asyncio.coroutine
-    def send_store_updateable_key_key(self, privatekey, key_callback=None):
-        public_key_bytes = privatekey.asbytes() # asbytes=public key.
+    def send_store_updateable_key_key(\
+            self, pubkey, data_key=None, key_callback=None):
+        assert type(pubkey) in (bytes, bytearray)
 
-        yield from self.send_store_key(public_key_bytes, key_callback)
+        r = yield from\
+            self.send_store_key(\
+                pubkey, data_key=data_key, key_callback=key_callback)
+
+        return r
 
     @asyncio.coroutine
-    def send_store_data(self, data, key_callback=None):
+    def send_store_data(self, data, store_key=False, key_callback=None):
         "Sends a StoreData request, returning the count of nodes that claim"\
         " to have stored it."
 
@@ -276,13 +315,42 @@ class ChordTasks(object):
             yield from self.send_find_node(\
                 data_id, for_data=True, data_msg=sdmsg)
 
+        if store_key:
+            yield from self.send_store_key(data, data_key)
+
+        return storing_nodes
+
+    @asyncio.coroutine
+    def send_store_targeted_data(\
+            self, data, store_key=False, key_callback=None):
+        "Sends a StoreData request for a TargetedBlock, returning the count"\
+        " of nodes that claim to have stored it."
+
+        tb_header = data[:mp.TargetedBlock.BLOCK_OFFSET]
+
+        # data_id is a double hash due to the anti-entrapment feature.
+        data_key = enc.generate_ID(tb_header)
+        if key_callback:
+            key_callback(data_key)
+        data_id = enc.generate_ID(data_key)
+
+        sdmsg = cp.ChordStoreData()
+        sdmsg.data = data
+        sdmsg.targeted = True
+
+        storing_nodes =\
+            yield from self.send_find_node(\
+                data_id, for_data=True, data_msg=sdmsg)
+
+        if store_key:
+            yield from self.send_store_key(data, data_key, targeted=True)
+
         return storing_nodes
 
     @asyncio.coroutine
     def send_store_updateable_key(\
-            self, data, privatekey, path=None, version=None,\
+            self, data, privatekey, path=None, version=None, store_key=None,\
             key_callback=None):
-
         assert not path or type(path) is bytes, type(path)
         assert not version or type(version) is int, type(version)
 
@@ -290,15 +358,19 @@ class ChordTasks(object):
 
         data_key = enc.generate_ID(public_key_bytes)
 
-        key_callback(data_key)
+        if key_callback:
+            key_callback(data_key)
 
         if path:
             path_hash = enc.generate_ID(path)
-            data_key = enc.generate_ID(data_key + path_hash)
+            data_id = enc.generate_ID(enc.generate_ID(data_key + path_hash))
         else:
             path_hash = b""
+            data_id = enc.generate_ID(data_key)
 
-        data_id = enc.generate_ID(data_key)
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("data_key=[{}], data_id=[{}]."\
+                .format(mbase32.encode(data_key), mbase32.encode(data_id)))
 
         hm = bytearray()
         hm += sshtype.encodeBinary(path_hash)
@@ -318,11 +390,16 @@ class ChordTasks(object):
             yield from self.send_find_node(\
                 data_id, for_data=True, data_msg=sdmsg)
 
+        if store_key:
+            yield from self.send_store_updateable_key_key(\
+                public_key_bytes, data_key)
+
         return storing_nodes
 
     @asyncio.coroutine
     def send_find_node(self, node_id, significant_bits=None, input_trie=None,\
-            for_data=False, data_msg=None, data_key=None, path_hash=None):
+            for_data=False, data_msg=None, data_key=None, path_hash=None,\
+            targeted=False, target_key=None):
         "Returns found nodes sorted by closets. If for_data is True then"\
         " this is really {get/store}_data instead of find_node. If data_msg"\
         " is None than it is get_data and the data is returned. Store data"\
@@ -330,6 +407,7 @@ class ChordTasks(object):
         " data."
 
         assert len(node_id) == chord.NODE_ID_BYTES
+        # data_key needs to be bytes for PyCrypto usage later on.
         assert data_key is None or type(data_key) is bytes, type(data_key)
 
         if for_data:
@@ -340,11 +418,20 @@ class ChordTasks(object):
 
         if not self.engine.peers:
             log.info("No connected nodes, unable to send FindNode.")
-            return
+            if data_mode.value:
+                if data_mode is cp.DataMode.store:
+                    return 0
+                else:
+                    assert data_mode is cp.DataMode.get
+                    return DataResponseWrapper(data_key)
+            else:
+                return 0
 
         if not input_trie:
             input_trie = bittrie.BitTrie()
             for peer in self.engine.peer_trie:
+                if not peer.full_node:
+                    continue
                 key = bittrie.XorKey(node_id, peer.node_id)
                 input_trie[key] = peer
 
@@ -360,9 +447,9 @@ class ChordTasks(object):
         maximum_depth = int(math.log(known_peer_cnt, 2))
 
         if log.isEnabledFor(logging.INFO):
-            log.info("Performing FindNode (data_key=[{}], data_mode={}) to a"\
+            log.info("Performing FindNode (node_id=[{}], data_mode={}) to a"\
                 " max depth of [{}]."\
-                    .format(hex_string(data_key), data_mode, maximum_depth))
+                    .format(mbase32.encode(node_id), data_mode, maximum_depth))
 
         result_trie = bittrie.BitTrie()
 
@@ -373,11 +460,17 @@ class ChordTasks(object):
         used_tunnels = {}
         far_peers_by_path = {}
 
+        data_msg_type = type(data_msg)
+
         fnmsg = cp.ChordFindNode()
         fnmsg.node_id = node_id
         fnmsg.data_mode = data_mode
+        if data_msg_type is cp.ChordStoreData:
+            fnmsg.version = data_msg.version
         if significant_bits:
             fnmsg.significant_bits = significant_bits
+            if target_key:
+                fnmsg.target_key = target_key
 
         for peer in input_trie:
             key = bittrie.XorKey(node_id, peer.node_id)
@@ -399,7 +492,14 @@ class ChordTasks(object):
 
         if not tasks:
             log.info("Cannot perform FindNode, as we know no closer nodes.")
-            return
+            if data_mode.value:
+                if data_mode is cp.DataMode.store:
+                    return 0
+                else:
+                    assert data_mode is cp.DataMode.get
+                    return DataResponseWrapper(data_key)
+            else:
+                return 0
 
         if log.isEnabledFor(logging.DEBUG):
             log.debug("Starting {} root level FindNode tasks."\
@@ -413,7 +513,6 @@ class ChordTasks(object):
 
         sent_data_request = Counter(0)
         data_rw = DataResponseWrapper(data_key)
-        data_msg_type = type(data_msg)
         if data_msg_type is cp.ChordStoreData:
             if data_msg.pubkey:
                 data_rw.pubkey = data_msg.pubkey
@@ -422,6 +521,8 @@ class ChordTasks(object):
         else:
             if path_hash:
                 data_rw.path_hash = path_hash
+            if targeted:
+                data_rw.targeted = True
 
         for depth in range(1, maximum_depth):
             direct_peers_lower = 0
@@ -502,7 +603,8 @@ class ChordTasks(object):
                     closest_datas = []
 
                     data_present = yield from\
-                        self._check_has_data(node_id, significant_bits)
+                        self._check_has_data(\
+                            node_id, significant_bits, target_key)
 
                     if data_present:
                         closest_datas.append(data_present)
@@ -566,13 +668,17 @@ class ChordTasks(object):
             # it being closed won't be a case we have to handle. (We don't
             # reopen channels at this point.)
 
+            #NOTE: result_trie is [] when significant_bits.
+
             for row in result_trie:
                 if row is False:
                     # Row is ourself.
                     if data_mode is cp.DataMode.get:
+                        assert significant_bits is None
+
                         data_present =\
                             yield from self._check_has_data(\
-                                node_id, significant_bits)
+                                node_id, significant_bits, None)
 
                         if not data_present:
                             continue
@@ -611,7 +717,8 @@ class ChordTasks(object):
                         assert data_mode is cp.DataMode.store
 
                         will_store, need_pruning =\
-                            yield from self._check_do_want_data(node_id)
+                            yield from self._check_do_want_data(\
+                                node_id, fnmsg.version)
 
                         if not will_store:
                             continue
@@ -748,7 +855,7 @@ class ChordTasks(object):
             else:
                 assert data_mode is cp.DataMode.get
 
-                if not data_rw.data\
+                if data_rw.data is None\
                         and (not significant_bits or not data_rw.data_key):
                     log.info("Failed to find the data!")
                 else:
@@ -987,9 +1094,11 @@ class ChordTasks(object):
                             continue
                         else:
                             if log.isEnabledFor(logging.DEBUG):
+                                store_msg = cp.ChordDataStored(pkts[0])
                                 log.debug("Received DataStored (stored=[{}])"\
                                     " message from Peer (dbid={})."\
-                                        .format(tun_meta.peer.dbid, path))
+                                        .format(store_msg.stored,\
+                                            tun_meta.peer.dbid, path))
 
                     query_cntr.value -= 1
                     if not query_cntr.value:
@@ -1047,6 +1156,16 @@ class ChordTasks(object):
                                 "[{}].".format(apath))
                         else:
                             rvpeer.will_store = True
+                    else:
+                        if len(pkts) == 1:
+                            # If a node has no closer peers, it may close
+                            # the channel after sending the StorageInterest
+                            # message instead of also sending a PeerList.
+                            tun_meta.jobs -= 1
+                            query_cntr.value -= 1
+                            if not query_cntr.value:
+                                done_all.set()
+                            continue
 
                 pkt = pkts[1]
             else:
@@ -1112,7 +1231,9 @@ class ChordTasks(object):
                             and (packet_type == cp.CHORD_MSG_DATA_RESPONSE\
                                 or packet_type == cp.CHORD_MSG_DATA_PRESENCE))\
                         or (data_mode is cp.DataMode.store\
-                            and packet_type == cp.CHORD_MSG_DATA_STORED):
+                            and (packet_type == cp.CHORD_MSG_DATA_STORED\
+                                or packet_type\
+                                    == cp.CHORD_MSG_STORAGE_INTEREST)):
                     # Break as we reached deepest packet.
                     break
                 else:
@@ -1239,9 +1360,9 @@ class ChordTasks(object):
             if log.isEnabledFor(logging.DEBUG):
                 log.debug("nn: {} FOUND: {:7} {:22} node_id=[{}] diff=[{}]"\
                     .format(self.engine.node.instance, r.dbid, r.address,\
-                        hex_string(r.node_id),\
-                        hex_string(\
-                            self.engine.calc_raw_distance(\
+                        mutil.hex_string(r.node_id),\
+                        mutil.hex_string(\
+                            mutil.calc_raw_distance(\
                                 r.node_id, fnmsg.node_id))))
 
             rlist.append(r)
@@ -1261,7 +1382,8 @@ class ChordTasks(object):
             # In for_data mode we respond with two packets.
             if fnmsg.data_mode is cp.DataMode.get:
                 data_present = yield from self._check_has_data(\
-                    fnmsg.node_id, fnmsg.significant_bits)
+                    fnmsg.node_id, fnmsg.significant_bits,\
+                    fnmsg.target_key)
 
                 pmsg = cp.ChordDataPresence()
                 if fnmsg.significant_bits and data_present:
@@ -1275,7 +1397,8 @@ class ChordTasks(object):
                 peer.protocol.write_channel_data(local_cid, pmsg.encode())
             elif fnmsg.data_mode is cp.DataMode.store:
                 will_store, need_pruning =\
-                    yield from self._check_do_want_data(fnmsg.node_id)
+                    yield from self._check_do_want_data(\
+                        fnmsg.node_id, fnmsg.version)
 
                 imsg = cp.ChordStorageInterest()
                 imsg.will_store = will_store
@@ -1540,7 +1663,8 @@ class ChordTasks(object):
                     if not pkt2:
                         # FindNode for key can send just one packet and then
                         # close the tunnel if it had no closer nodes.
-                        if pkt_type != cp.CHORD_MSG_DATA_PRESENCE:
+                        if pkt_type != cp.CHORD_MSG_DATA_PRESENCE\
+                                and pkt_type != cp.CHORD_MSG_STORAGE_INTEREST:
                             log.warning("Tunnel closed before expected second"\
                                 " packet; first pkt_type=[{}]."\
                                     .format(pkt_type))
@@ -1600,10 +1724,20 @@ class ChordTasks(object):
                 tun_meta.peer.protocol.close_channel(tun_meta.local_cid)
 
     @asyncio.coroutine
-    def _check_has_data(self, data_id, significant_bits):
-        distance = self.engine.calc_raw_distance(self.engine.node_id, data_id)
+    def _check_has_data(self, data_id, significant_bits, target_key):
+        if log.isEnabledFor(logging.DEBUG):
+            target_key_enc =\
+                mbase32.encode(target_key) if target_key is not None else None
+            log.debug("Checking for data_id=[{}], significant_bits=[{}],"\
+                " target_key=[{}]."\
+                    .format(mbase32.encode(data_id), significant_bits,\
+                        target_key_enc))
 
-        if significant_bits and significant_bits >= 32:
+        distance = mutil.calc_raw_distance(self.engine.node_id, data_id)
+
+        min_sig_bits = 20 if target_key is not None else 32
+
+        if significant_bits and significant_bits >= min_sig_bits:
             mask = ((1 << (chord.NODE_ID_BITS - significant_bits)) - 1)\
                 .to_bytes(chord.NODE_ID_BYTES, "big")
 
@@ -1613,7 +1747,7 @@ class ChordTasks(object):
                 end_id.append(c1 | c2)
 
             if distance > self.engine.furthest_data_block:
-                d2 = self.engine.calc_raw_distance(self.engine.node_id, end_id)
+                d2 = mutil.calc_raw_distance(self.engine.node_id, end_id)
                 if d2 > self.engine.furthest_data_block:
                     return False
         else:
@@ -1622,11 +1756,18 @@ class ChordTasks(object):
 
         def dbcall():
             with self.engine.node.db.open_session() as sess:
-                if significant_bits and significant_bits >= 32:
+                if significant_bits and significant_bits >= min_sig_bits:
                     q = sess.query(DataBlock.data_id)
 
                     q = q.filter(DataBlock.data_id > data_id)
                     q = q.filter(DataBlock.data_id <= end_id)
+
+                    if target_key:
+                        # This is the feature that makes it so spammers are
+                        # forced to target each destination individually with
+                        # while generating a the proof of work.
+                        q = q.filter(DataBlock.target_key == target_key)
+
                     q = q.filter(DataBlock.original_size == 0)
                     q = q.order_by(DataBlock.data_id)
 
@@ -1649,7 +1790,7 @@ class ChordTasks(object):
         return (yield from self.loop.run_in_executor(None, dbcall))
 
     @asyncio.coroutine
-    def _check_do_want_data(self, data_id):
+    def _check_do_want_data(self, data_id, version):
         "Checks if we have space to store, and if not if we have enough data"\
         " that is further in distance thus having enough space to free."\
         "returns: will_store, need_pruning"
@@ -1659,16 +1800,49 @@ class ChordTasks(object):
             # We only store stuff closer than 2^2 less then the maximum
             # distance.
             log_dist, direction =\
-                self.engine.calc_log_distance(self.engine.node_id, data_id)
+                mutil.calc_log_distance(self.engine.node_id, data_id)
             if log_dist > chord.NODE_ID_BITS - 2:
+                # Too far.
+                if log.isEnabledFor(logging.DEBUG):
+                    log.debug("Don't want data; too far.")
                 return False, False
-            return True, False
+
+            # Check if we have this block.
+            def dbcall():
+                with self.engine.node.db.open_session() as sess:
+                    if version:
+                        old_entry = sess.query(DataBlock)\
+                            .filter(DataBlock.data_id == data_id)\
+                            .first()
+
+                        if old_entry:
+                            vint = int(old_entry.version)
+                            if vint >= version:
+                                # We only want to store newer versions.
+                                return False
+                    else:
+                        q = sess.query(func.count("*"))
+                        q = q.filter(DataBlock.data_id == data_id)
+
+                        if q.scalar() > 0:
+                            # We already have this block.
+                            return False
+
+                    return True
+
+            r = yield from self.loop.run_in_executor(None, dbcall)
+
+            if not r:
+                if log.isEnabledFor(logging.DEBUG):
+                    log.debug("Don't want data; already have it.")
+
+            return r, False
 
         if log.isEnabledFor(logging.DEBUG):
             log.debug("Datastore is full, checking if proposed block is"\
                 " closer than enough stored blocks to fit with a purge.")
 
-        distance = self.engine.calc_raw_distance(self.engine.node_id, data_id)
+        distance = mutil.calc_raw_distance(self.engine.node_id, data_id)
 
         if distance > self.engine.furthest_data_block:
             return False, False
@@ -1680,15 +1854,22 @@ class ChordTasks(object):
         # in order to see if we want to store it.
         def dbcall():
             with self.engine.node.db.open_session() as sess:
-                # We don't worry about inaccuracy caused by padding for now.
+                # First check if we have this block already.
+                q = sess.query(func.count("*"))
+                q = q.filter(DataBlock.data_id == data_id)
 
+                if q.scalar() > 0:
+                    # We already have this block.
+                    return False
+
+                # We don't worry about inaccuracy caused by padding for now.
                 q = sess.query(DataBlock.original_size)\
                     .filter(DataBlock.distance > distance)\
                     .filter(DataBlock.original_size != 0)\
                     .order_by(DataBlock.distance.desc())
 
                 freeable_space = 0
-                for block in page_query(q):
+                for block in mutil.page_query(q):
                     freeable_space += block.original_size
 
                     if current_datastore_size - freeable_space\
@@ -1726,10 +1907,23 @@ class ChordTasks(object):
             # Truncate the data to exclude the cipher padding.
             data = data[:drmsg.original_size]
 
-            data_hash = enc.generate_ID(data)
+            if log.isEnabledFor(logging.INFO):
+                log.info("data_rw.targeted=[{}]."\
+                    .format(data_rw.targeted))
+
+            if data_rw.targeted:
+                data_hash =\
+                    enc.generate_ID(data[:mp.TargetedBlock.BLOCK_OFFSET])
+            else:
+                data_hash = enc.generate_ID(data)
 
             if drmsg.version is not None:
                 # Updateable key mode.
+                if data_rw.targeted:
+                    log.warning("Received versioned DataResponse when we"\
+                        " requested a TargetedBlock, that is invalid.")
+                    return False
+
                 data_rw.version = drmsg.version
 
                 if data_rw.pubkey:
@@ -1739,6 +1933,9 @@ class ChordTasks(object):
                         drmsg.epubkey, data_rw.data_key)
                     # Truncate the key data to exclude the cipher padding.
                     pubkey = pubkey[:drmsg.pubkeylen]
+
+                    # Return the pubkey to the original caller.
+                    data_rw.pubkey = pubkey
 
                     data_key = enc.generate_ID(pubkey)
                     if data_rw.path_hash:
@@ -1809,12 +2006,18 @@ class ChordTasks(object):
 
         enc_data = yield from self.loop.run_in_executor(None, iocall)
 
-        return enc_data, data_block.original_size, data_block.version,\
+        version =\
+            int(data_block.version) if data_block.version is not None else None
+
+        return enc_data, data_block.original_size, version,\
             data_block.signature, data_block.epubkey, data_block.pubkeylen
 
     @asyncio.coroutine
     def _store_key(self, peer, data_id, dmsg):
-        data_key = enc.generate_ID(dmsg.data)
+        if dmsg.targeted:
+            tb, data_key = self._check_store_targeted_block(dmsg.data)
+        else:
+            data_key = enc.generate_ID(dmsg.data)
 
         if data_key != data_id:
             errmsg = "Peer (dbid=[{}]) sent a data that didn't match the"\
@@ -1822,7 +2025,7 @@ class ChordTasks(object):
             log.warning(errmsg)
             raise ChordException(errmsg)
 
-        distance = self.engine.calc_raw_distance(self.engine.node_id, data_id)
+        distance = mutil.calc_raw_distance(self.engine.node_id, data_id)
 
         def dbcall():
             with self.engine.node.db.open_session() as sess:
@@ -1840,6 +2043,9 @@ class ChordTasks(object):
                 data_block.distance = distance
                 data_block.original_size = 0
                 data_block.insert_timestamp = datetime.today()
+
+                if dmsg.targeted:
+                    data_block.target_key = tb.target_key
 
                 sess.add(data_block)
 
@@ -1862,7 +2068,7 @@ class ChordTasks(object):
 
         if log.isEnabledFor(logging.INFO):
             log.info("Stored key=[{}] as id=[{}]."\
-                .format(hex_string(data_id), data_block_id))
+                .format(mbase32.encode(data_id), data_block_id))
 
         return True
 
@@ -1883,17 +2089,31 @@ class ChordTasks(object):
         peer_dbid = peer.dbid if peer else "<self>"
 
         data = dmsg.data
+        targeted = dmsg.targeted
 
         pubkey = None
         if dmsg.pubkey:
+            if targeted:
+                errmsg = "Targeted updateable key is not implemented."
+                log.warning(errmsg)
+                raise ChordException(errmsg)
+
             pubkey = rsakey.RsaKey(dmsg.pubkey)
 
             data_key = enc.generate_ID(dmsg.pubkey)
             if dmsg.path_hash:
+                if log.isEnabledFor(logging.DEBUG):
+                    log.debug("path_hash=[{}]."\
+                        .format(mbase32.encode(dmsg.path_hash)))
                 data_key = enc.generate_ID(data_key + dmsg.path_hash)
-            if data_id != enc.generate_ID(data_key):
-                errmsg = "Peer (dbid=[{}]) sent a data_id that didn't match"\
-                    " the updateable key id!".format(peer_dbid)
+
+            calc_data_id = enc.generate_ID(data_key)
+
+            if data_id != calc_data_id:
+                errmsg = "Peer (dbid=[{}]) sent a data_id [{}] that didn't"\
+                    " match the updateable key id [{}]!"\
+                        .format(peer_dbid, mbase32.encode(data_id),\
+                            mbase32.encode(calc_data_id))
                 log.warning(errmsg)
                 raise ChordException(errmsg)
 
@@ -1909,14 +2129,18 @@ class ChordTasks(object):
                 log.warning(errmsg)
                 raise ChordException(errmsg)
         else:
-            data_key = enc.generate_ID(data)
+            if targeted:
+                tb, data_key = self._check_store_targeted_block(data)
+            else:
+                data_key = enc.generate_ID(data)
+
             if data_id != enc.generate_ID(data_key):
                 errmsg = "Peer (dbid=[{}]) sent a data_id that didn't match"\
                     " the data!".format(peer_dbid)
                 log.warning(errmsg)
                 raise ChordException(errmsg)
 
-        distance = self.engine.calc_raw_distance(self.engine.node_id, data_id)
+        distance = mutil.calc_raw_distance(self.engine.node_id, data_id)
         original_size = len(data)
 
         def dbcall():
@@ -1928,9 +2152,11 @@ class ChordTasks(object):
                     old_entry = sess.query(DataBlock)\
                         .filter(DataBlock.data_id == data_id)\
                         .first()
-                    if old_entry and old_entry.version >= dmsg.version:
-                        # We only want to store newer versions.
-                        return None, None
+                    if old_entry:
+                        vint = int(old_entry.version)
+                        if vint >= dmsg.version:
+                            # We only want to store newer versions.
+                            return None, None
                 else:
                     q = sess.query(func.count("*"))
                     q = q.filter(DataBlock.data_id == data_id)
@@ -1948,7 +2174,7 @@ class ChordTasks(object):
                         .filter(DataBlock.original_size != 0)\
                         .order_by(DataBlock.distance.desc())
 
-                    for block in page_query(q):
+                    for block in mutil.page_query(q):
                         freeable_space += block.original_size
                         blocks_to_prune.append(block.id)
 
@@ -1979,12 +2205,22 @@ class ChordTasks(object):
                     data_block.distance = distance
 
                 if pubkey:
-                    data_block.version = dmsg.version
+                    data_block.version = str(dmsg.version)
                     data_block.signature = dmsg.signature
 
                     a, b = enc.encrypt_data_block(dmsg.pubkey, data_key)
                     data_block.epubkey = a + b
                     data_block.pubkeylen = len(dmsg.pubkey)
+
+                if targeted:
+                    if log.isEnabledFor(logging.DEBUG):
+                        log.debug("Storing TargetedBlock (target_key=[{}])."\
+                            .format(mbase32.encode(tb.target_key)))
+                    # We don't need the following for anything coded yet, but
+                    # doing it for now because then we can tell which are
+                    # targeted blocks as we may want to have code purge them
+                    # with more pressure than normal blocks.
+                    data_block.target_key = tb.target_key
 
                 data_block.original_size = original_size
                 data_block.insert_timestamp = datetime.today()
@@ -2024,7 +2260,7 @@ class ChordTasks(object):
                 else:
                     log.info("Not storing data that we already have"\
                         " (data_id=[{}])."\
-                        .format(hex_string(data_id)))
+                        .format(mbase32.encode(data_id)))
             return False
 
         self.engine.node.datastore_size += size_diff
@@ -2071,7 +2307,7 @@ class ChordTasks(object):
 
             if log.isEnabledFor(logging.INFO):
                 log.info("Stored data for data_id=[{}] as [{}.blk]."\
-                    .format(hex_string(data_id), data_block_id))
+                    .format(mbase32.encode(data_id), data_block_id))
 
             return True
         except Exception as e:
@@ -2114,6 +2350,21 @@ class ChordTasks(object):
                 pass
 
             return False
+
+    def _check_store_targeted_block(self, data):
+        tb = mp.TargetedBlock(data)
+
+        block_hash = enc.generate_ID(\
+            data[mp.TargetedBlock.BLOCK_OFFSET:])
+
+        if block_hash != tb.block_hash:
+            raise ChordException(\
+                "The block_hash did not match the block.")
+
+        tb_header = data[:mp.TargetedBlock.BLOCK_OFFSET]
+        data_key = enc.generate_ID(tb_header)
+
+        return tb, data_key
 
     def _update_nodestate(self, sess, size_diff):
         # Rule: only update this NodeState row when holding a lock on

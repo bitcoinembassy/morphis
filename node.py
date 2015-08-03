@@ -1,3 +1,6 @@
+# Copyright (c) 2014-2015  Sam Maloney.
+# License: GPL v2.
+
 import llog
 
 import asyncio
@@ -64,6 +67,11 @@ class Node():
         self.bind_address = None
         self.unsecured_transport = None
 
+        self.shell_enabled = True
+        self.eval_enabled = False
+
+        self.web_devel = False
+
     @property
     def all_nodes(self):
         global nodes
@@ -73,6 +81,10 @@ class Node():
         if self._db_initialized:
             log.debug("The database is already initialized.")
             return
+
+        if not os.path.exists("data"):
+            log.info("The 'data' directory was missing; creating.")
+            os.makedirs("data")
 
         self.db.init_engine()
         self._db_initialized = True
@@ -258,6 +270,9 @@ def __main():
         help="Specify the database url to use.")
     parser.add_argument("--dm", action="store_true",\
         help="Disable Maalstroom server.")
+    parser.add_argument("--disableshell", action="store_true",
+        help="Disable MORPHiS from allowing ssh shell connections from"\
+            " localhost.")
     parser.add_argument("--dssize", type=int,\
         help="Specify the datastore size in standard non-IEC-redefined JEDEC"\
             " MBs (default is one gigabyte, as in 1024^3 bytes). Morphis does"\
@@ -266,6 +281,8 @@ def __main():
             " attempted redefinition of an existing unit by the IEC.")
     parser.add_argument("--dumptasksonexit", action="store_true",\
         help="Dump async task list on exit.")
+    parser.add_argument("--enableeval", action="store_true",\
+        help="Enable eval and ! commands in the shell (BAD ON SHARED HOST).")
     parser.add_argument("--instanceoffset", type=int,\
         help="Debug option to increment node instance and bind port.")
     parser.add_argument("-l", dest="logconf",\
@@ -282,6 +299,9 @@ def __main():
     parser.add_argument("--reinitds", action="store_true",\
         help="Allow reinitialization of the Datastore. This will only happen"\
             " if the Datastore directory has already been manually deleted.")
+    parser.add_argument("--webdevel", action="store_true",\
+        help="Enable web development mode. This causes Maalstroom to reload"\
+            " the web UI modules every request.")
 
     args = parser.parse_args()
 
@@ -319,10 +339,23 @@ def __main():
         @asyncio.coroutine
         def _start_node(instance, bindaddr):
             node = Node(loop, instance, dburl)
+
+            if args.enableeval:
+                node.eval_enabled = True
+            if args.disableshell:
+                node.shell_enabled = False
+            if args.webdevel:
+                node.web_devel = True
+
             nodes.append(node)
 
             if db_pool_size:
                 node.db.pool_size = db_pool_size
+
+            if maalstroom_enabled:
+                if maaluppage:
+                    maalstroom.set_upload_page(maaluppage)
+                yield from maalstroom.start_maalstroom_server(node)
 
             node.init_db()
             yield from node.create_schema()
@@ -343,11 +376,6 @@ def __main():
             if args.maxconn:
                 node.chord_engine.maximum_connections = args.maxconn
                 node.chord_engine.hard_maximum_connections = args.maxconn * 2
-
-            if maalstroom_enabled:
-                if maaluppage:
-                    maalstroom.set_upload_page(maaluppage)
-                yield from maalstroom.start_maalstroom_server(node)
 
             if addpeer != None:
                 node.chord_engine.connect_peers = addpeer

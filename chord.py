@@ -1,3 +1,6 @@
+# Copyright (c) 2014-2015  Sam Maloney.
+# License: GPL v2.
+
 import llog
 
 import asyncio
@@ -24,11 +27,11 @@ import peer as mnpeer
 import shell
 import enc
 from db import Peer
-from mutil import hex_dump, log_base2_8bit, hex_string
+from mutil import hex_dump, log_base2_8bit, hex_string, calc_log_distance
 
 BUCKET_SIZE = 8
 
-NODE_ID_BITS = 512
+NODE_ID_BITS = enc.ID_BITS
 NODE_ID_BYTES = NODE_ID_BITS >> 3
 
 log = logging.getLogger(__name__)
@@ -165,7 +168,7 @@ class ChordEngine():
                         assert peer.node_id is None
                         peer.node_id = enc.generate_ID(peer.pubkey)
                         peer.distance, peer.direction =\
-                            self.calc_log_distance(\
+                            calc_log_distance(\
                                 self.node_id,\
                                 peer.node_id)
                         q = q.filter(Peer.node_id == peer.node_id)
@@ -232,44 +235,6 @@ class ChordEngine():
         self._async_process_connection_count()
 
         self._async_do_stabilize()
-
-    def calc_raw_distance(self, data1, data2):
-        "Calculates the XOR distance, return is absolute value."
-
-        assert type(data1) in (bytes, bytearray)\
-            and type(data2) in (bytes, bytearray)
-
-        buf = bytearray()
-
-        for i in range(len(data1)):
-            buf.append(data1[i] ^ data2[i])
-
-        return buf
-
-    def calc_log_distance(self, nid, pid):
-        "Returns: distance, direction."
-        " distance is in log base2."
-
-        if log.isEnabledFor(logging.DEBUG):
-            log.debug("pid=\n[{}], nid=\n[{}].".format(hex_dump(pid),\
-                hex_dump(nid)))
-
-        dist = 0
-        direction = 0
-
-        for i in range(NODE_ID_BYTES):
-            if pid[i] != nid[i]:
-                direction = 1 if pid[i] > nid[i] else -1
-
-                xv = pid[i] ^ nid[i]
-                xv = log_base2_8bit(xv) + 1
-
-                # (byte * 8) + bit.
-                dist = ((NODE_ID_BYTES - 1 - i) << 3) + xv
-
-                break
-
-        return dist, direction
 
     def _async_do_stabilize(self):
         self._do_stabilize_handle =\
@@ -421,7 +386,10 @@ class ChordEngine():
             log.info("Connecting to peer (id={}, addr=[{}])."\
                 .format(dbpeer.id, dbpeer.address))
 
-        host, port = dbpeer.address.split(':')
+        address = dbpeer.address
+        p0 = address.rindex(':')
+        host = address[:p0]
+        port = address[p0+1:]
 
         peer = mnpeer.Peer(self, dbpeer)
 
@@ -807,7 +775,8 @@ class ChordEngine():
         if req.channel_type == "mpeer":
             return True
         elif req.channel_type == "session":
-            return peer.protocol.address[0] == "127.0.0.1"
+            return self.node.shell_enabled\
+                and peer.protocol.address[0] == "127.0.0.1"
         return False
 
     @asyncio.coroutine
@@ -920,6 +889,8 @@ class ChordEngine():
         elif packet_type == cp.CHORD_MSG_NODE_INFO:
             log.info("Received CHORD_MSG_NODE_INFO message.")
             msg = cp.ChordNodeInfo(data)
+
+            peer.full_node = True
 
             # Respond to them. Even though it doesn't make sense for now as
             # they (a client) knows our bind port obviously, but in the future

@@ -1,3 +1,6 @@
+# Copyright (c) 2014-2015  Sam Maloney.
+# License: GPL v2.
+
 import llog
 
 import asyncio
@@ -10,26 +13,25 @@ import random
 import struct
 from enum import Enum
 
-import chord
+import consts
+import enc
 import mbase32
-from mutil import hex_string
-import node as mnnode
 import peer as mnpeer
 import sshtype
 
 log = logging.getLogger(__name__)
 
 class DataCallback(object):
-    def version(self, version):
+    def notify_version(self, version):
         pass
 
-    def size(self, size):
+    def notify_size(self, size):
         pass
 
-    def mime_type(self, value):
+    def notify_mime_type(self, value):
         pass
 
-    def data(self, position, data):
+    def notify_data(self, position, data):
         pass
 
 class BufferingDataCallback(DataCallback):
@@ -38,10 +40,10 @@ class BufferingDataCallback(DataCallback):
         self.buf = bytearray()
         self.position = 0
 
-    def version(self, version):
+    def notify_version(self, version):
         self.version = version
 
-    def data(self, position, data):
+    def notify_data(self, position, data):
         if position != self.position:
             raise Exception("Incomplete download.")
 
@@ -62,6 +64,7 @@ class BlockType(Enum):
 
 class MorphisBlock(object):
     UUID = b'\x86\xa0\x47\x79\xc1\x2e\x4f\x48\x90\xc3\xee\x27\x53\x6d\x26\x96'
+    HEADER_BYTES = 31
 
     @staticmethod
     def parse_block_type(buf):
@@ -93,7 +96,7 @@ class MorphisBlock(object):
         assert self.buf[:16] == MorphisBlock.UUID
         i = 16
 
-        i += 7 # morphis
+        i += 7 # MORPHiS
 
         block_type = struct.unpack_from(">L", self.buf, i)[0]
         if self.block_type:
@@ -123,7 +126,8 @@ class HashTreeBlock(MorphisBlock):
         nbuf += struct.pack(">L", self.depth)
         nbuf += struct.pack(">Q", self.size)
 
-        nbuf += b' ' * (chord.NODE_ID_BYTES - len(nbuf))
+        assert consts.NODE_ID_BYTES == HashTreeBlock.HEADER_BYTES
+        nbuf += b' ' * (consts.NODE_ID_BYTES - len(nbuf))
 
         nbuf += self.data
 
@@ -153,9 +157,61 @@ class LinkBlock(MorphisBlock):
     def parse(self):
         i = super().parse()
 
-        l, self.mime_type = sshtype.parse_string_from(self.buf, i)
-        i += l
+        i, self.mime_type = sshtype.parse_string_from(self.buf, i)
         self.destination = self.buf[i:]
+
+class TargetedBlock(MorphisBlock):
+    NOONCE_OFFSET = MorphisBlock.HEADER_BYTES
+    NOONCE_SIZE = 64
+    BLOCK_OFFSET = MorphisBlock.HEADER_BYTES + NOONCE_SIZE\
+        + 2 * consts.NODE_ID_BYTES
+
+    @staticmethod
+    def set_noonce(data, noonce_bytes):
+        assert type(noonce_bytes) in (bytes, bytearray)
+        lenn = len(noonce_bytes)
+        end = TargetedBlock.NOONCE_OFFSET + TargetedBlock.NOONCE_SIZE
+        start = end - lenn
+        data[start:end] = noonce_bytes
+
+    def __init__(self, buf=None):
+        self.noonce = b' ' * TargetedBlock.NOONCE_SIZE
+        self.target_key = None
+        self.block_hash = None
+        self.block = None
+
+        super().__init__(BlockType.targeted.value, buf)
+
+    def encode(self):
+        nbuf = super().encode()
+
+        assert len(self.noonce) == TargetedBlock.NOONCE_SIZE
+        nbuf += self.noonce
+        assert self.target_key is not None\
+            and len(self.target_key) == consts.NODE_ID_BYTES
+        nbuf += self.target_key
+
+        nbuf += b' ' * consts.NODE_ID_BYTES # block_hash placeholder.
+
+        assert len(nbuf) == TargetedBlock.BLOCK_OFFSET
+
+        self.block.encode(nbuf)
+
+        self.block_hash = enc.generate_ID(nbuf[TargetedBlock.BLOCK_OFFSET:])
+        block_hash_offset = TargetedBlock.BLOCK_OFFSET-consts.NODE_ID_BYTES
+        nbuf[block_hash_offset:TargetedBlock.BLOCK_OFFSET] = self.block_hash
+
+        return nbuf
+
+    def parse(self):
+        i = super().parse()
+
+        self.noonce = self.buf[i:i+TargetedBlock.NOONCE_SIZE]
+        i += TargetedBlock.NOONCE_SIZE
+        self.target_key = self.buf[i:i+consts.NODE_ID_BYTES]
+        i += consts.NODE_ID_BYTES
+        self.block_hash = self.buf[i:i+consts.NODE_ID_BYTES]
+        i += consts.NODE_ID_BYTES
 
 class HashTreeFetch(object):
     def __init__(self, engine, data_callback, ordered=False, positions=None,\
@@ -176,9 +232,11 @@ class HashTreeFetch(object):
         self._task_cnt = 0
         self._tasks_done = asyncio.Event()
 
+        self._abort = False
+
     @asyncio.coroutine
     def fetch(self, root_block):
-        self.data_callback.size(root_block.size)
+        self.data_callback.notify_size(root_block.size)
 
         depth = root_block.depth
         buf = root_block.buf
@@ -186,6 +244,9 @@ class HashTreeFetch(object):
         i = HashTreeBlock.HEADER_BYTES
 
         yield from self._fetch_hash_tree_refs(buf, i, depth, 0)
+
+        if self._abort:
+            return False
 
         yield from self._tasks_done.wait()
 
@@ -196,6 +257,8 @@ class HashTreeFetch(object):
             while self._failed\
                     and ((datetime.today() - start) < delta):
                 yield from self._task_semaphore.acquire()
+                if self._abort:
+                    return False
                 self._schedule_retry()
 
             yield from self._tasks_done.wait()
@@ -209,18 +272,18 @@ class HashTreeFetch(object):
     def _fetch_hash_tree_refs(self, hash_tree_data, offset, depth, position):
         data_len = len(hash_tree_data) - offset
 
-        key_cnt = int(data_len / chord.NODE_ID_BYTES)
+        key_cnt = int(data_len / consts.NODE_ID_BYTES)
 
         if depth == 1:
-            pdiff = mnnode.MAX_DATA_BLOCK_SIZE
+            pdiff = consts.MAX_DATA_BLOCK_SIZE
         else:
             pdiff =\
-                pow(mnnode.MAX_DATA_BLOCK_SIZE, depth) / chord.NODE_ID_BYTES
+                pow(consts.MAX_DATA_BLOCK_SIZE, depth) / consts.NODE_ID_BYTES
 
         subdepth = depth - 1
 
         for i in range(key_cnt):
-            end = offset + chord.NODE_ID_BYTES
+            end = offset + consts.NODE_ID_BYTES
             eposition = position + pdiff
 
             if self.positions:
@@ -231,9 +294,16 @@ class HashTreeFetch(object):
 
             if self._failed:
                 yield from self._task_semaphore.acquire()
+                if self._abort:
+                    #FIXME: Cancel all async started tasks.
+                    return
                 self._schedule_retry()
 
             yield from self._task_semaphore.acquire()
+            if self._abort:
+                #FIXME: Cancel all async started tasks.
+                return
+
             data_key = hash_tree_data[offset:end]
             asyncio.async(\
                 self.__fetch_hash_tree_ref(data_key, subdepth, position),\
@@ -247,7 +317,7 @@ class HashTreeFetch(object):
 
     def _schedule_retry(self):
         retry = random.choice(self._failed)
-        retry_depth, retry_position, data_key = retry
+        retry_depth, retry_position, data_key, tries = retry
 
         asyncio.async(\
             self.__fetch_hash_tree_ref(\
@@ -268,8 +338,29 @@ class HashTreeFetch(object):
         self._task_semaphore.release()
 
         if not data_rw.data:
-            if not retry:
-                self._failed.append((depth, position, data_key))
+            if retry:
+                retry[3] += 1 # Tries.
+
+                if retry[3] >= 5:
+                    if log.isEnabledFor(logging.INFO):
+                        log.info("Block id [{}] failed too much; aborting."\
+                            .format(mbase32.encode(data_key)))
+                    self._abort = True
+                    self._task_semaphore.release()
+                    self._tasks_done.set()
+                    return
+            else:
+                retry = [depth, position, data_key, 1]
+                self._failed.append(retry)
+
+            if log.isEnabledFor(logging.INFO):
+                log.info("Block id [{}] failed, retrying (tries=[{}])."\
+                    .format(mbase32.encode(data_key), retry[3]))
+
+            if self.ordered:
+                # This very fetch is probably blocking future ones so retry
+                # immediately!
+                self._schedule_retry()
         else:
             if retry:
                 del self._failed[retry]
@@ -280,7 +371,7 @@ class HashTreeFetch(object):
                     yield from self.__wait(position, waiter)
 
             if not depth:
-                self.data_callback.data(position, data_rw.data)
+                self.data_callback.notify_data(position, data_rw.data)
                 self.__notify_position_complete(position + len(data_rw.data))
             else:
                 yield from\
@@ -292,6 +383,7 @@ class HashTreeFetch(object):
             assert self._task_cnt == 0
             self._tasks_done.set()
 
+    @asyncio.coroutine
     def __wait(self, position, waiter):
         entry = [position, waiter]
 
@@ -319,8 +411,9 @@ def get_data_buffered(engine, data_key, path=None, retry_seconds=30,\
         concurrency=64, max_link_depth=1):
     cb = BufferingDataCallback()
 
-    r = yield from get_data(engine, data_key, path, cb, ordered=True,\
-            retry_seconds=retry_seconds, concurrency=concurrency)
+    r = yield from get_data(engine, data_key, cb, path=path, ordered=True,\
+            retry_seconds=retry_seconds, concurrency=concurrency,\
+            max_link_depth=max_link_depth)
 
     if not r:
         if r is None:
@@ -346,18 +439,18 @@ def get_data(engine, data_key, data_callback, path=None, ordered=False,\
     data_rw = yield from engine.tasks.send_get_data(data_key, path)
     data = data_rw.data
 
-    if not data:
+    if data is None:
         return None
 
     if data_rw.version:
-        data_callback.version(data_rw.version)
+        data_callback.notify_version(data_rw.version)
 
     link_depth = 0
 
     while True:
         if not data.startswith(MorphisBlock.UUID):
-            data_callback.size(len(data))
-            data_callback.data(0, data)
+            data_callback.notify_size(len(data))
+            data_callback.notify_data(0, data)
             return True
 
         block_type = MorphisBlock.parse_block_type(data)
@@ -375,7 +468,7 @@ def get_data(engine, data_key, data_callback, path=None, ordered=False,\
             block = LinkBlock(data)
 
             if block.mime_type:
-                data_callback.mime_type(block.mime_type)
+                data_callback.notify_mime_type(block.mime_type)
 
             data_rw = yield from engine.tasks.send_get_data(block.destination)
             data = data_rw.data
@@ -386,8 +479,8 @@ def get_data(engine, data_key, data_callback, path=None, ordered=False,\
             continue
 
         if block_type != BlockType.hash_tree.value:
-            data_callback.size(len(data))
-            data_callback.data(0, data)
+            data_callback.notify_size(len(data))
+            data_callback.notify_data(0, data)
             return True
 
         fetch = HashTreeFetch(\
@@ -403,7 +496,7 @@ def store_data(engine, data, privatekey=None, path=None, version=None,\
         key_callback=None, store_key=True, mime_type="", concurrency=64):
     data_len = len(data)
 
-    if mime_type or (privatekey and data_len > mnnode.MAX_DATA_BLOCK_SIZE):
+    if mime_type or (privatekey and data_len > consts.MAX_DATA_BLOCK_SIZE):
         store_link = True
 
         root_block_key = None
@@ -415,22 +508,17 @@ def store_data(engine, data, privatekey=None, path=None, version=None,\
     else:
         store_link = False
 
-    if data_len <= mnnode.MAX_DATA_BLOCK_SIZE:
+    if data_len <= consts.MAX_DATA_BLOCK_SIZE:
         if log.isEnabledFor(logging.INFO):
             log.info("Data fits in one block, performing simple store.")
 
         if privatekey and not store_link:
             yield from engine.tasks.send_store_updateable_key(\
-                data, privatekey, path, version, key_callback)
-
-            if store_key:
-                yield from engine.tasks.send_store_updateable_key_key(\
-                    data, privatekey, path)
+                data, privatekey, path, version, store_key, key_callback)
         else:
-            yield from engine.tasks.send_store_data(data, key_callback)
-
-            if store_key:
-                yield from engine.tasks.send_store_key(data)
+            yield from\
+                engine.tasks.send_store_data(data, store_key=store_key,\
+                    key_callback=key_callback)
 
         if log.isEnabledFor(logging.INFO):
             log.info("Simple store complete.")
@@ -453,23 +541,19 @@ def store_data(engine, data, privatekey=None, path=None, version=None,\
 
         if privatekey:
             yield from engine.tasks.send_store_updateable_key(\
-                link_data, privatekey, path, version, orig_key_callback)
-
-            if store_key:
-                yield from\
-                    engine.tasks.send_store_updateable_key_key(privatekey)
+                link_data, privatekey, path, version, store_key,\
+                orig_key_callback)
         else:
             yield from\
-                engine.tasks.send_store_data(link_data, orig_key_callback)
-
-            if store_key:
-                yield from engine.tasks.send_store_key(link_data)
+                engine.tasks.send_store_data(\
+                    link_data, store_key=store_key,\
+                    key_callback=orig_key_callback)
 
         log.info("Link stored.")
 
 def __key_callback(keys, idx, key):
     key_len = len(key)
-    assert key_len == chord.NODE_ID_BYTES
+    assert key_len == consts.NODE_ID_BYTES
     idx = key_len * idx
     keys[idx:idx+key_len] = key
 
@@ -479,17 +563,17 @@ def _store_data_multipart(engine, data, key_callback, store_key, concurrency):
     task_semaphore = asyncio.Semaphore(concurrency)
 
     full_data_len = data_len = len(data)
-    assert data_len > mnnode.MAX_DATA_BLOCK_SIZE
+    assert data_len > consts.MAX_DATA_BLOCK_SIZE
 
     while True:
-        nblocks = int(data_len / mnnode.MAX_DATA_BLOCK_SIZE)
-        if data_len % mnnode.MAX_DATA_BLOCK_SIZE:
+        nblocks = int(data_len / consts.MAX_DATA_BLOCK_SIZE)
+        if data_len % consts.MAX_DATA_BLOCK_SIZE:
             nblocks += 1
 
-        keys = bytearray(nblocks * chord.NODE_ID_BYTES)
+        keys = bytearray(nblocks * consts.NODE_ID_BYTES)
 
         start = 0
-        end = mnnode.MAX_DATA_BLOCK_SIZE
+        end = consts.MAX_DATA_BLOCK_SIZE
 
         tasks = []
 
@@ -516,7 +600,7 @@ def _store_data_multipart(engine, data, key_callback, store_key, concurrency):
             yield from task_semaphore.acquire()
 
             start = end
-            end += mnnode.MAX_DATA_BLOCK_SIZE
+            end += consts.MAX_DATA_BLOCK_SIZE
             if end > data_len:
                 assert i >= (nblocks - 2)
                 end = data_len
@@ -530,7 +614,7 @@ def _store_data_multipart(engine, data, key_callback, store_key, concurrency):
         data = keys
         data_len = len(data)
         if data_len\
-                <= (mnnode.MAX_DATA_BLOCK_SIZE - HashTreeBlock.HEADER_BYTES):
+                <= (consts.MAX_DATA_BLOCK_SIZE - HashTreeBlock.HEADER_BYTES):
             break
 
         depth += 1
@@ -544,15 +628,13 @@ def _store_data_multipart(engine, data, key_callback, store_key, concurrency):
     block_data = block.encode()
 
     yield from\
-        engine.tasks.send_store_data(block_data, key_callback)
-
-    if store_key:
-        yield from\
-            engine.tasks.send_store_key(block_data)
+        engine.tasks.send_store_data(block_data, store_key=store_key,\
+            key_callback=key_callback)
 
 @asyncio.coroutine
 def _store_block(engine, i, block_data, key_callback, task_semaphore):
-    snodes = yield from engine.tasks.send_store_data(block_data, key_callback)
+    snodes = yield from\
+        engine.tasks.send_store_data(block_data, key_callback=key_callback)
 
     if not snodes:
         if log.isEnabledFor(logging.DEBUG):

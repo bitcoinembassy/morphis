@@ -1,3 +1,6 @@
+# Copyright (c) 2014-2015  Sam Maloney.
+# License: GPL v2.
+
 import llog
 
 from enum import Enum
@@ -177,7 +180,9 @@ class ChordFindNode(ChordMessage):
     def __init__(self, buf = None):
         self.node_id = None
         self.data_mode = DataMode.none
+        self.version = None
         self.significant_bits = None
+        self.target_key = None
 
         super().__init__(CHORD_MSG_FIND_NODE, buf)
 
@@ -186,8 +191,14 @@ class ChordFindNode(ChordMessage):
         nbuf += sshtype.encodeBinary(self.node_id)
         nbuf += struct.pack("B", self.data_mode.value)
 
+        nbuf += struct.pack("?", self.version is not None)
+        if self.version is not None:
+            nbuf += sshtype.encodeMpint(self.version)
+
         if self.significant_bits:
             nbuf += struct.pack(">H", self.significant_bits)
+            if self.target_key:
+                nbuf += sshtype.encodeBinary(self.target_key)
 
         return nbuf
 
@@ -199,10 +210,21 @@ class ChordFindNode(ChordMessage):
         self.data_mode = DataMode(struct.unpack("B", self.buf[i:i+1])[0])
         i += 1
 
+        has_version = struct.unpack_from("?", self.buf, i)[0]
+        i += 1
+        if has_version:
+            i, self.version = sshtype.parse_mpint_from(self.buf, i)
+
         if i == len(self.buf):
             return
 
         self.significant_bits = struct.unpack(">H", self.buf[i:i+2])[0]
+        i += 2
+
+        if i == len(self.buf):
+            return
+
+        i, self.target_key = sshtype.parse_binary_from(self.buf, i)
 
 class ChordGetData(ChordMessage):
     def __init__(self, buf = None):
@@ -292,6 +314,7 @@ class ChordDataPresence(ChordMessage):
 class ChordStoreData(ChordMessage):
     def __init__(self, buf = None):
         self.data = None
+        self.targeted = False
 
         self.pubkey = None
         self.path_hash = None
@@ -307,6 +330,7 @@ class ChordStoreData(ChordMessage):
     def encode(self):
         nbuf = super().encode()
         nbuf += sshtype.encodeBinary(self.data)
+        nbuf += struct.pack("?", self.targeted)
 
         if self.pubkey:
             # Updateable keys.
@@ -322,6 +346,8 @@ class ChordStoreData(ChordMessage):
         i = 1
         l, self.data = sshtype.parseBinary(self.buf[i:])
         i += l
+        self.targeted = struct.unpack_from("?", self.buf, i)[0]
+        i += 1
 
         if i == len(self.buf):
             return
@@ -337,12 +363,14 @@ class ChordStoreData(ChordMessage):
 class ChordStoreKey(ChordMessage):
     def __init__(self, buf = None):
         self.data = None
+        self.targeted = False
 
         super().__init__(CHORD_MSG_STORE_KEY, buf)
 
     def encode(self):
         nbuf = super().encode()
         nbuf += sshtype.encodeBinary(self.data)
+        nbuf += struct.pack("?", self.targeted)
 
         return nbuf
 
@@ -350,6 +378,8 @@ class ChordStoreKey(ChordMessage):
         super().parse()
         i = 1
         l, self.data = sshtype.parseBinary(self.buf[i:])
+        i += l
+        self.targeted = struct.unpack_from("?", self.buf, i)[0]
 
 class ChordDataStored(ChordMessage):
     def __init__(self, buf = None):

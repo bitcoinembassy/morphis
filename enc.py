@@ -1,8 +1,14 @@
+# Copyright (c) 2014-2015  Sam Maloney.
+# License: GPL v2.
+
 import os
 
 from Crypto.Cipher import AES
 from Crypto.Hash import SHA512
 from Crypto.PublicKey import RSA
+
+# generate_ID outputs 512 bits.
+ID_BITS = 512
 
 def generate_RSA(bits=4096):
     '''
@@ -21,8 +27,11 @@ def generate_RSA(bits=4096):
 def generate_ID(data):
     return SHA512.new(data).digest()
 
+def _generate_ID(data):
+    return SHA512.new(data)
+
 def _setup_data_cipher(data_key):
-    assert len(data_key) == 64
+    assert len(data_key) == 64, len(data_key)
 
     key = data_key[:32]
     iv = data_key[32:48]
