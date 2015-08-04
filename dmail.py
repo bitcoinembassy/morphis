@@ -53,7 +53,7 @@ class DmailSite(object):
             log.info("dmail e=[{}].".format(dh.e))
 
         self.root["ssm"] = _dh_method_name
-        self.root["sse"] = dh.e
+        self.root["sse"] = base58.encode(sshtype.encodeMpint(dh.e))
 
     def generate(self):
         self.generate_target()
@@ -171,6 +171,8 @@ class DmailEngine(object):
 
     @asyncio.coroutine
     def generate_dmail_address(self, prefix=None, difficulty=20):
+        assert type(difficulty) is int
+
         if log.isEnabledFor(logging.INFO):
             log.info("Generating dmail address (prefix=[{}].".format(prefix))
 
@@ -296,6 +298,8 @@ class DmailEngine(object):
 
         recipients = yield from self.fetch_recipient_dmail_sites(recipients)
 
+        storing_nodes = 0
+
         for recipient in recipients:
             if recipient.root["ssm"] != _dh_method_name:
                 raise DmailException("Unsupported ss method [{}]."\
@@ -319,9 +323,9 @@ class DmailEngine(object):
                     .filter(db.DmailAddress.site_key == addr)
 
                 dmail_address = q.first()
-                dmail_address.keys
-
-                sess.expunge_all()
+                if dmail_address:
+                    dmail_address.keys
+                    sess.expunge_all()
 
                 return dmail_address
 
@@ -405,9 +409,9 @@ class DmailEngine(object):
 
         if dw.sse != kex.e:
             raise DmailException(\
-                "Dmail is encrypted with a different e [{}] than"\
+                "Dmail [{}] is encrypted with a different e [{}] than"\
                 " the specified x resulted in [{}]."\
-                    .format(dw.sse, kex.e))
+                    .format(mbase32.encode(data_rw.data_key), dw.sse, kex.e))
 
         kex.calculate_k()
 
@@ -421,8 +425,9 @@ class DmailEngine(object):
         dmail = Dmail(data, 0, dw.data_len)
 
         if dw.signature:
+            signature = dw.signature
             pubkey = rsakey.RsaKey(dmail.sender_pubkey)
-            valid_sig = pubkey.verify_rsassa_pss_sig(dw.data_enc, dw.signature)
+            valid_sig = pubkey.verify_rsassa_pss_sig(dw.data_enc, signature)
 
             return dmail, valid_sig
         else:
@@ -437,8 +442,10 @@ class DmailEngine(object):
 
     @asyncio.coroutine
     def __send_dmail(self, from_asymkey, recipient, dmail):
+        assert type(recipient) is DmailSite
+
         root = recipient.root
-        sse = root["sse"]
+        sse = sshtype.parseMpint(base58.decode(root["sse"]))[1]
         target = root["target"]
         difficulty = root["difficulty"]
 
@@ -455,7 +462,11 @@ class DmailEngine(object):
         dmail_bytes = dmail.encode()
 
         m, r = enc.encrypt_data_block(dmail_bytes, key)
-        m = m + r
+        if m:
+            if r:
+                m = m + r
+        else:
+            m = r
 
         dw = DmailWrapper()
         dw.ssm = _dh_method_name

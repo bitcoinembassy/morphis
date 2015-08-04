@@ -151,9 +151,10 @@ def _init_daos(Base, d):
         sender_valid = Column(Boolean, nullable=True)
         subject = Column(String, nullable=False)
         date = Column(DateTime, nullable=False)
-        read = Column(Boolean, nullable=True)
+        read = Column(Boolean, nullable=False)
         hidden = Column(Boolean, nullable=False)
         tags = relationship(DmailTag, secondary=dmail_message__dmail_tag)
+        address = relationship(DmailAddress)
         parts = relationship(DmailPart)
 
     Index("dmailmessage__data_key", DmailMessage.data_key)

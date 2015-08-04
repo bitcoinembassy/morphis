@@ -18,6 +18,8 @@ accept_chars = sorted(accept_chars)
 width = 16
 
 def hex_dump(data, offset = 0, length = None):
+    assert type(data) in (bytes, bytearray), type(data)
+
     output = bytearray()
     col1 = bytearray()
     col2 = bytearray()

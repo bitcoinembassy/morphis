@@ -14,6 +14,7 @@ from sqlalchemy.orm import joinedload
 
 import base58
 from db import DmailAddress, DmailKey, DmailMessage, DmailTag, DmailPart
+import dhgroup14
 import enc
 import dmail
 import mbase32
@@ -162,13 +163,17 @@ def __serve_get(handler, rpath, done_event):
                 _process_dmail_address(\
                     handler, mbase32.decode(addr_enc), processor)
 
+            dh = dhgroup14.DhGroup14()
+            dh.x = sshtype.parseMpint(dmail_address.keys[0].x)[1]
+            dh.generate_e()
+
             dms = dmail.DmailSite()
             root = dms.root
             root["target"] =\
                 mbase32.encode(dmail_address.keys[0].target_key)
-            root["difficulty"] = difficulty
+            root["difficulty"] = int(difficulty)
             root["ssm"] = "mdh-v1"
-            root["sse"] = sshtype.parseMpint(dmail_address.keys[0].x)
+            root["sse"] = base58.encode(sshtype.encodeMpint(dh.e))
 
             private_key = rsakey.RsaKey(privdata=dmail_address.site_privatekey)
 
@@ -255,7 +260,7 @@ def __serve_get(handler, rpath, done_event):
             content = pages.dmail_tag_view_content[0].replace(\
                 b"${IFRAME_SRC}", "../list/{}".format(params).encode())
 
-            handler._send_content([content, None])
+            handler._send_content(content)
         elif req.startswith("/scan/list/"):
             addr_enc = req[11:]
 
@@ -371,7 +376,7 @@ def __serve_get(handler, rpath, done_event):
             qdict = urllib.parse.parse_qs(query)
 
             prefix = qdict["prefix"][0]
-            difficulty = qdict["difficulty"][0]
+            difficulty = int(qdict["difficulty"][0])
 
             log.info("prefix=[{}].".format(prefix))
             privkey, dmail_key, dms =\
@@ -506,6 +511,8 @@ def _list_dmails_for_tag(handler, addr, tag):
     def dbcall():
         with handler.node.db.open_session() as sess:
             q = sess.query(DmailMessage)\
+                .filter(\
+                    DmailMessage.address.has(DmailAddress.site_key == addr))\
                 .filter(DmailMessage.tags.any(DmailTag.name == tag))\
                 .filter(DmailMessage.hidden == False)\
                 .order_by(DmailMessage.read, DmailMessage.date.desc())
@@ -518,8 +525,9 @@ def _list_dmails_for_tag(handler, addr, tag):
 
     msgs = yield from handler.node.loop.run_in_executor(None, dbcall)
 
+    addr_enc = mbase32.encode(addr)
+
     for msg in msgs:
-        addr_enc = mbase32.encode(addr)
         key_enc = mbase32.encode(msg.data_key)
 
         is_read = "" if msg.read else "(unread)"
