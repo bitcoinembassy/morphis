@@ -23,8 +23,8 @@ home_page_content = [\
 <div class="msection">
     <h3>MORPHiS Web</h3>
     <p>
-        <a href="morphis://3syweaeb7xwm4q3hxfp9w4nynhcnuob6r1mhj19ntu4gikjr7nhypezti4t1kacp4eyy3hcbxdbm4ria5bayb4rrfsafkscbik7c5ue/">MORPHiS Homepage</a><br/>
-        <a href="morphis://3syweaeb7xwm4q3hxfp9w4nynhcnuob6r1mhj19ntu4gikjr7nhypezti4t1kacp4eyy3hcbxdbm4ria5bayb4rrfsafkscbik7c5ue/firefox_plugin">MORPHiS Firefox Plugin</a><br/>
+        <a href="morphis://sp1nara3xhndtgswh7fznt414we4mi3y6kdwbkz4jmt8ocb6x4w1faqjotjkcrefta11swe3h53dt6oru3r13t667pr7cpe3ocxeuma">MORPHiS Homepage</a><br/>
+        <a href="morphis://sp1nara3xhndtgswh7fznt414we4mi3y6kdwbkz4jmt8ocb6x4w1faqjotjkcrefta11swe3h53dt6oru3r13t667pr7cpe3ocxeuma/firefox_plugin">MORPHiS Firefox Plugin</a><br/>
     </p>
 </div>
 <div class="msection">
