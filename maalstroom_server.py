@@ -60,9 +60,31 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
         self.protocol_version = "HTTP/1.1"
         self.node = node
 
+        self.maalstroom_plugin_used = False
+        self.maalstroom_url_prefix = None
+        self._maalstroom_http_url_prefix = "http://{}/"
+        self._maalstroom_morphis_url_prefix = "morphis://"
+
         super().__init__(a, b, c)
 
+    def __prepare_for_request(self):
+        if self.headers["X-Maalstroom-Plugin"]:
+            self.maalstroom_plugin_used = True
+            self.maalstroom_url_prefix = self._maalstroom_morphis_url_prefix
+        else:
+            global port
+            host = self.headers["Host"]
+            if log.isEnabledFor(logging.DEBUG):
+                log.debug("No plugin used for request, rewriting URLs using"\
+                    " host=[{}]."\
+                        .format(host))
+            # Host header includes port.
+            self.maalstroom_url_prefix =\
+                self._maalstroom_http_url_prefix.format(host).encode()
+
     def do_GET(self):
+        self.__prepare_for_request()
+
         rpath = self.path[1:]
 
         if rpath and rpath[-1] == '/':
@@ -167,11 +189,18 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
                 key = mbase32.encode(data_rw.data_key)
 
                 if path:
-                    url = "morphis://{}/{}".format(key, path.decode("UTF-8"))
+                    url = "{}{}/{}"\
+                        .format(\
+                            self.maalstroom_url_prefix.decode(),\
+                            key,\
+                            path.decode("UTF-8"))
                 else:
-                    url = "morphis://{}".format(key)
+                    url = "{}{}"\
+                        .format(\
+                            self.maalstroom_url_prefix.decode(),\
+                            key)
 
-                message = ("<a href=\"{}\">{}</a>\n{}"\
+                message = ("<html><head><title>permalink</title></head><body><a href=\"{}\">{}</a>\n{}</body></html>"\
                     .format(url, url, key))\
                         .encode()
 
@@ -187,8 +216,13 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
         if data:
             self.send_response(200)
 
+            rewrite_url = False
+
             if data_rw.mime_type:
                 self.send_header("Content-Type", data_rw.mime_type)
+                if not self.maalstroom_plugin_used and data_rw.mime_type\
+                        in ("text/html", "text/css", "application/javascript"):
+                    rewrite_url = True
             else:
                 if data[0] == 0xFF and data[1] == 0xD8:
                     self.send_header("Content-Type", "image/jpg")
@@ -198,8 +232,10 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
                     self.send_header("Content-Type", "image/gif")
                 elif data[:5] == b"/*CSS":
                     self.send_header("Content-Type", "text/css")
+                    rewrite_url = True
                 elif data[:12] == b"/*JAVASCRIPT":
                     self.send_header("Content-Type", "application/javascript")
+                    rewrite_url = True
                 elif data[:8] == bytes(\
                         [0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70]):
                     self.send_header("Content-Type", "video/mp4")
@@ -208,6 +244,7 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
                     self.send_header("Content-Type", "application/zip")
                 else:
                     self.send_header("Content-Type", "text/html")
+                    rewrite_url = True
 
             self.send_header("Content-Length", data_rw.size)
 
@@ -220,7 +257,12 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
             self.end_headers()
 
             while True:
-                self.wfile.write(data)
+                if rewrite_url:
+                    self.wfile.write(\
+                        data.replace(b"morphis://",\
+                            self.maalstroom_url_prefix))
+                else:
+                    self.wfile.write(data)
 
                 data = data_rw.data_queue.get()
 
@@ -230,6 +272,8 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
             self._handle_error(data_rw)
 
     def do_POST(self):
+        self.__prepare_for_request()
+
         rpath = self.path[1:]
 
         log.info("POST; rpath=[{}].".format(rpath))
@@ -308,9 +352,16 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
         if data_rw.data_key:
             enckey = mbase32.encode(data_rw.data_key)
             if privatekey and path:
-                url = "morphis://{}/{}".format(enckey, path.decode("UTF-8"))
+                url = "{}{}/{}"\
+                    .format(\
+                        self.maalstroom_url_prefix.decode(),\
+                        enckey,\
+                        path.decode("UTF-8"))
             else:
-                url = "morphis://{}".format(enckey)
+                url = "{}{}"\
+                    .format(\
+                        self.maalstroom_url_prefix.decode(),\
+                        enckey)
 
             message = '<a href="{}">perma link</a>'.format(url)
 
@@ -336,6 +387,10 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
         else:
             content = content_entry
             cacheable = False
+
+        if not self.maalstroom_plugin_used:
+            content =\
+                content.replace(b"morphis://", self.maalstroom_url_prefix)
 
         if cacheable and not content_id:
             if callable(content):
@@ -371,6 +426,10 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
             cacheable=False):
         if type(content) is str:
             content = content.encode()
+
+        if not self.maalstroom_plugin_used:
+            content =\
+                content.replace(b"morphis://", self.maalstroom_url_prefix)
 
         if start:
             self.send_response(200)
@@ -598,4 +657,4 @@ def _set_upload_page(content):
     static_upload_page_content[1] =\
         mbase32.encode(enc.generate_ID(static_upload_page_content[1]))
 
-_set_upload_page(b'<html><head><title>MORPHiS Maalstroom Upload</title></head><body><h4 style="${UPDATEABLE_KEY_MODE_DISPLAY}">NOTE: Bookmark this page to save your private key in the bookmark!</h4>Select the file to upload below:</p><form action="upload" method="post" enctype="multipart/form-data"><input type="file" name="fileToUpload" id="fileToUpload"/><div style="${UPDATEABLE_KEY_MODE_DISPLAY}"><br/><br/><label for="privateKey">Private Key</label><textarea name="privateKey" id="privateKey" rows="5" cols="80">${PRIVATE_KEY}</textarea><br/><label for="path">Path</label><input type="textfield" name="path" id="path"/><br/><label for="version">Version</label><input type="textfield" name="version" id="version"/><br/><label for="mime_type">Mime Type</label><input type="textfield" name="mime_type" id="mime_type"/><br/></div><input type="submit" value="Upload File" name="submit"/></form><p style="${STATIC_MODE_DISPLAY}"><a href="morphis://.upload/generate">switch to updateable key mode</a></p><p style="${UPDATEABLE_KEY_MODE_DISPLAY}"><a href="morphis://.upload">switch to static key mode</a></p><h5><- <a href="morphis://">MORPHiS UI</a></h5></body></html>')
+_set_upload_page(b'<html><head><title>MORPHiS Maalstroom Upload</title></head><body><h4 style="${UPDATEABLE_KEY_MODE_DISPLAY}">NOTE: Bookmark this page to save your private key in the bookmark!</h4>Select the file to upload below:</p><form action="upload" method="post" enctype="multipart/form-data"><input type="file" name="fileToUpload" id="fileToUpload"/><div style="${UPDATEABLE_KEY_MODE_DISPLAY}"><br/><br/><label for="privateKey">Private Key</label><textarea name="privateKey" id="privateKey" rows="5" cols="80">${PRIVATE_KEY}</textarea><br/><label for="path">Path</label><input type="textfield" name="path" id="path"/><br/><label for="version">Version</label><input type="textfield" name="version" id="version"/><br/><label for="mime_type">Mime Type</label><input type="textfield" name="mime_type" id="mime_type"/><br/></div><input type="submit" value="Upload File" name="submit"/></form><p style="${STATIC_MODE_DISPLAY}"><a href="morphis://.upload/generate">switch to updateable key mode</a></p><p style="${UPDATEABLE_KEY_MODE_DISPLAY}"><a href="morphis://.upload/">switch to static key mode</a></p><h5><- <a href="morphis://">MORPHiS UI</a></h5></body></html>')

@@ -123,9 +123,9 @@ def __serve_get(handler, rpath, done_event):
             from_addr = req[9:]
 
             if from_addr:
-                iframe_src = "../compose/form/{}".format(from_addr).encode()
+                iframe_src = "compose/form/{}".format(from_addr).encode()
             else:
-                iframe_src = "../compose/form".encode()
+                iframe_src = "compose/form".encode()
 
             content = pages.dmail_compose_dmail_content[0].replace(\
                     b"${IFRAME_SRC}", iframe_src)
@@ -208,7 +208,7 @@ def __serve_get(handler, rpath, done_event):
 
             content = pages.dmail_addr_settings_content[0].replace(\
                 b"${IFRAME_SRC}",\
-                "/addr/settings/edit/{}".format(addr_enc).encode())
+                "edit/{}".format(addr_enc).encode())
 
             handler._send_content([content, None])
         elif req.startswith("/addr/"):
@@ -218,7 +218,7 @@ def __serve_get(handler, rpath, done_event):
                 log.info("Viewing dmail address [{}].".format(addr_enc))
 
             content = pages.dmail_address_page_content[0].replace(\
-                b"${IFRAME_SRC}", "/addr/view/{}".format(addr_enc).encode())
+                b"${IFRAME_SRC}", "view/{}".format(addr_enc).encode())
 
             handler._send_content([content, None])
         elif req.startswith("/tag/view/list/"):
@@ -253,7 +253,7 @@ def __serve_get(handler, rpath, done_event):
             params = req[10:]
 
             content = pages.dmail_tag_view_content[0].replace(\
-                b"${IFRAME_SRC}", "/tag/view/list/{}".format(params).encode())
+                b"${IFRAME_SRC}", "../list/{}".format(params).encode())
 
             handler._send_content([content, None])
         elif req.startswith("/scan/list/"):
@@ -280,7 +280,7 @@ def __serve_get(handler, rpath, done_event):
             addr_enc = req[6:]
 
             content = pages.dmail_address_page_content[0].replace(\
-                b"${IFRAME_SRC}", "/scan/list/{}".format(addr_enc).encode())
+                b"${IFRAME_SRC}", "list/{}".format(addr_enc).encode())
 
             handler._send_content([content, None])
         elif req.startswith("/fetch/view/"):
@@ -344,13 +344,13 @@ def __serve_get(handler, rpath, done_event):
 
             content = pages.dmail_fetch_wrapper[0].replace(\
                 b"${IFRAME_SRC}",\
-                "/fetch/view/{}"\
+                "../../view/{}"\
                     .format(req_data).encode())
             #FIXME: This is getting inefficient now, maybe time for Flask or
             # something like it. Maybe we can use just it's template renderer.
             content = content.replace(\
                 b"${IFRAME2_SRC}",\
-                "/fetch/panel/{}"\
+                "../../panel/{}"\
                     .format(req_data).encode())
 
             handler._send_content([content, None])
@@ -358,7 +358,7 @@ def __serve_get(handler, rpath, done_event):
             req_data = req[7:]
 
             content = pages.dmail_address_page_content[0].replace(\
-                b"${IFRAME_SRC}", "/fetch/wrapper/{}".format(req_data).encode())
+                b"${IFRAME_SRC}", "../wrapper/{}".format(req_data).encode())
 
             handler._send_content([content, None])
         elif req == "/create_address":

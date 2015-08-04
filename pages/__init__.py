@@ -30,8 +30,8 @@ home_page_content = [\
 <div class="msection">
     <h3>MORPHiS Interface</h3>
     <p>
-        <a href="morphis://.upload">Upload</a> (Upload data to the network.)<br/>
-        <a href="morphis://.dmail">Dmail</a> (Encrypted Uncensorable Messaging!)<br/>
+        <a href="morphis://.upload/">Upload</a> (Upload data to the network.)<br/>
+        <a href="morphis://.dmail/">Dmail</a> (Encrypted Uncensorable Messaging!)<br/>
     </p>
 </div>
 </body></html>""", None]
@@ -159,7 +159,7 @@ dmail_page_wrapper =\
     <h5>
         <span><- <a href="morphis://">MORPHiS UI</a></span>
         <span id="footer_right">
-            <span>[<a href="morphis://.dmail">List Dmail Addresses</a>]</span>
+            <span>[<a href="morphis://.dmail/">List Dmail Addresses</a>]</span>
             <span>[<a href="morphis://.dmail/create_address">Create New Dmail Address</a>]</span>
             <span>[<a href="morphis://.dmail/compose">Send a Dmail</a>]</span>
         </span>
@@ -207,8 +207,8 @@ dmail_addr_view_start =\
 </style></head><body class="iframe">
 <h4>Dmail Address [${DMAIL_ADDRESS_SHORT}...].</h4>
 <p class="nomargin">
-    <a href="/tag/view/Inbox/${DMAIL_ADDRESS}">View Inbox</a>
-    [<a href="/scan/${DMAIL_ADDRESS}">Scan Network for New Messages</a>]
+    <a href="../../tag/view/Inbox/${DMAIL_ADDRESS}">View Inbox</a>
+    [<a href="../../scan/${DMAIL_ADDRESS}">Scan Network for New Messages</a>]
 </p>
 <p>
     [<a href="../settings/${DMAIL_ADDRESS}">Address Settings</a>]
@@ -316,7 +316,7 @@ dmail_compose_dmail_form_start =\
 <style type="text/css">
 </style></head><body class="iframe">
 <form action="make_it_so" method="post">
-    <p>
+    <p class="nowrap">
         <label for="sender">From</label>
         <select name="sender">"""
 
