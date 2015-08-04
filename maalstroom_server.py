@@ -160,6 +160,11 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
 
         # At this point we assume it is a key URL.
 
+        if not self.node.chord_engine.peers:
+            self.send_exception("No connected nodes; cannot fetch from the"\
+                " network.")
+            return
+
         path_sep_idx = rpath.find('/')
         if path_sep_idx != -1:
             path = rpath[path_sep_idx+1:].encode()
@@ -179,7 +184,7 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
 
         data_rw = DataResponseWrapper()
 
-        node.loop.call_soon_threadsafe(\
+        self.node.loop.call_soon_threadsafe(\
             asyncio.async,\
             _send_get_data(data_key, significant_bits, path, data_rw))
 
