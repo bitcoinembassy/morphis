@@ -83,6 +83,17 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
             self.maalstroom_url_prefix =\
                 self._maalstroom_http_url_prefix.format(host).encode()
 
+    def __get_connection_count(self, q):
+        cnt = len(self.node.chord_engine.peers)
+        q.put(cnt)
+
+    def _get_connection_count(self):
+        q = queue.Queue()
+
+        self.node.loop.call_soon_threadsafe(self.__get_connection_count, q)
+
+        return q.get()
+
     def do_GET(self):
         self.__prepare_for_request()
 
@@ -91,8 +102,14 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
         if rpath and rpath[-1] == '/':
             rpath = rpath[:-1]
 
+        connection_cnt = None
+
         if not rpath:
-            self._send_content(pages.home_page_content)
+            connection_cnt = self._get_connection_count()
+
+            content = pages.home_page_content[0].replace(\
+                b"${CONNECTIONS}", str(connection_cnt).encode())
+            self._send_content([content, None])
             return
 
         s_upload = ".upload"
@@ -160,7 +177,9 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
 
         # At this point we assume it is a key URL.
 
-        if not self.node.chord_engine.peers:
+        if connection_cnt is None:
+            connection_cnt = self._get_connection_count()
+        if not connection_cnt:
             self.send_exception("No connected nodes; cannot fetch from the"\
                 " network.")
             return
