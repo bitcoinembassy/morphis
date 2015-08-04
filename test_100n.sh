@@ -1,0 +1,1 @@
+rm -f morphis.log ; python3 node.py -l logging-prod.ini --bind 127.0.0.1:6000 --addpeer 127.0.0.1:7000 --nn 1000 --nodecount 100 --dbpoolsize 2 --cleartexttransport --dumptasksonexit --parallellaunch --dburl postgresql://m1:2d8VhzVIovxZy@pg1/m1

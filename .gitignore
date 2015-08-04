@@ -1,4 +1,15 @@
+*.log
 *.swp
 *.so
 *.c
 build/
+__pycache__/
+
+data/
+
+server_key-rsa.mnk
+client_key-rsa.mnk
+node_key-rsa*.mnk
+
+*.sqlite
+*.sqlite-journal
