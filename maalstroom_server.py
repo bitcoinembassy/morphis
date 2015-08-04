@@ -70,7 +70,8 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
     def __prepare_for_request(self):
         if self.headers["X-Maalstroom-Plugin"]:
             self.maalstroom_plugin_used = True
-            self.maalstroom_url_prefix = self._maalstroom_morphis_url_prefix
+            self.maalstroom_url_prefix =\
+                self._maalstroom_morphis_url_prefix.encode()
         else:
             global port
             host = self.headers["Host"]
