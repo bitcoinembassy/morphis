@@ -935,7 +935,9 @@ class SshProtocol(asyncio.Protocol):
 
         assert self.binaryMode
 
-        self._process_encrypted_buffer()
+        r = self._process_encrypted_buffer()
+        if not r:
+            return
 
         # cbuf is clear text buf.
         while True:
@@ -1032,7 +1034,7 @@ class SshProtocol(asyncio.Protocol):
         if self.inCipher != None:
 #            if len(self.buf) > 20: # max(blksize, 20): bs, hmacSize
             if len(self.buf) < blksize:
-                return
+                return False
 
             if len(self.cbuf) == 0:
                 out = self.inCipher.decrypt(self.buf[:blksize])
@@ -1054,15 +1056,15 @@ class SshProtocol(asyncio.Protocol):
                 self.buf = self.buf[blksize:]
 
                 if self.bpLength == blksize:
-                    return
+                    return True
 
             if len(self.buf) < min(\
                     1024, self.bpLength - len(self.cbuf) + self.inHmacSize):
-                return
+                return True
 
             l = min(len(self.buf), self.bpLength - len(self.cbuf))
             if not l:
-                return
+                return True
 
             dsize = l - (l % blksize)
             blks = self.buf[:dsize]
@@ -1081,6 +1083,8 @@ class SshProtocol(asyncio.Protocol):
                 log.debug("len(cbuf)={}, cbuf=[\n{}]".format(len(self.cbuf), hex_dump(self.cbuf)))
         else:
             self.cbuf = self.buf
+
+        return True
 
 class SshServerProtocol(SshProtocol):
     def __init__(self, loop):
