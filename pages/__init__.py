@@ -157,7 +157,7 @@ dmail_page_wrapper =\
 </div>
 <div class="footer">
     <h5>
-        <span><- <a href="morphis://">MORPHiS UI</a></span>
+        <span>&lt;- <a href="morphis://">MORPHiS UI</a></span>
         <span id="footer_right">
             <span>[<a href="morphis://.dmail/">List Dmail Addresses</a>]</span>
             <span>[<a href="morphis://.dmail/create_address">Create New Dmail Address</a>]</span>

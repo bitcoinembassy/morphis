@@ -113,7 +113,7 @@ def __serve_get(handler, rpath, done_event):
                 handler._send_partial_content(sender_element)
 
             handler._send_partial_content(\
-                "<option value="">&lt;Anonymous&gt;</option>")
+                "<option value="">[Anonymous]</option>")
 
             handler._send_partial_content(\
                 pages.dmail_compose_dmail_form_end.replace(\
