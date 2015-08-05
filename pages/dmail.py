@@ -277,7 +277,7 @@ def __serve_get(handler, rpath, done_event):
 
             addr, significant_bits = mutil.decode_key(addr_enc)
 
-            yield from _list_dmail_inbox(handler, addr, significant_bits)
+            yield from _scan_new_dmails(handler, addr, significant_bits)
 
             handler._send_partial_content(pages.dmail_inbox_end)
             handler._end_partial_content()
@@ -561,7 +561,7 @@ def _list_dmails_for_tag(handler, addr, tag):
         handler._send_partial_content("Mailbox is empty.")
 
 @asyncio.coroutine
-def _list_dmail_inbox(handler, addr, significant_bits):
+def _scan_new_dmails(handler, addr, significant_bits):
     de =\
         dmail.DmailEngine(handler.node.chord_engine.tasks, handler.node.db)
 
@@ -663,6 +663,7 @@ def _fetch_and_save_dmail(handler, dmail_addr, dmail_key):
             msg.date = mutil.parse_iso_datetime(dmailobj.date)
 
             msg.hidden = False
+            msg.read = False
 
             tag = DmailTag()
             tag.name = "Inbox"
