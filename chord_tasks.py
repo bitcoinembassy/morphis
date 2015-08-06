@@ -437,13 +437,8 @@ class ChordTasks(object):
 
         max_concurrent_queries = 3
 
-        def dbcall():
-            with self.engine.node.db.open_session() as sess:
-                st = sess.query(Peer).statement.with_only_columns(\
-                    [func.count('*')])
-                return sess.execute(st).scalar()
+        known_peer_cnt = self.engine.last_db_peer_count
 
-        known_peer_cnt = yield from self.loop.run_in_executor(None, dbcall)
         maximum_depth = int(math.log(known_peer_cnt, 2))
 
         if log.isEnabledFor(logging.INFO):
