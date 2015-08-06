@@ -433,10 +433,12 @@ class ChordTasks(object):
         slowpoke_factor = 2 #TODO: Have this dynamically adapt.
         max_initial_queries = int(max_concurrent_queries * slowpoke_factor)
 
+        #FIXME: YOU_ARE_HERE: Remove/fix this concept of maximum_depth.
         known_peer_cnt = self.engine.last_db_peer_count
-
-        #FIXME: YOU_ARE_HERE: Remove this concept.
-        maximum_depth = int(math.log(known_peer_cnt, 2))
+        if known_peer_cnt:
+            maximum_depth = int(math.log(known_peer_cnt, 2))
+        else:
+            maximum_depth = 2
 
         if log.isEnabledFor(logging.INFO):
             log.info("Performing FindNode (node_id=[{}], data_mode={}) to a"\
