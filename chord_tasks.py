@@ -436,9 +436,10 @@ class ChordTasks(object):
         #FIXME: YOU_ARE_HERE: Remove/fix this concept of maximum_depth.
         known_peer_cnt = self.engine.last_db_peer_count
         if known_peer_cnt:
-            maximum_depth = int(math.log(known_peer_cnt, 2))
+            # This is only for safety, probably pointless.
+            maximum_depth = min(3, int(math.log(known_peer_cnt, 2) * 2))
         else:
-            maximum_depth = 2
+            maximum_depth = 3
 
         if log.isEnabledFor(logging.INFO):
             log.info("Performing FindNode (node_id=[{}], data_mode={}) to a"\
@@ -497,26 +498,29 @@ class ChordTasks(object):
                 .format(len(tasks)))
 
         done_cnt = 0
+        max_time = 7.0 #TODO: This is probably excessive!
+        diff = 0
         start = datetime.today()
-        remaining_time = 7.0 #TODO: This is probably excessive!
-        while remaining_time > 0 and done_cnt < max_concurrent_queries:
+        while diff < max_time and done_cnt < max_concurrent_queries:
             try:
                 done, pending =\
                     yield from asyncio.wait(\
-                        tasks, loop=self.loop,\
-                        timeout=remaining_time,\
+                        tasks,\
+                        loop=self.loop,\
+                        timeout=max_time - diff,\
                         return_when=futures.FIRST_COMPLETED)
             except CancelledError:
                 for task in pending:
-                    pending.cancel()
+                    task.cancel()
                 raise
 
             done_cnt += len(done)
+            tasks = list(pending)
 
             if not pending:
                 break
 
-            remaining_time = (start - datetime.today()).total_seconds()
+            diff = (datetime.today() - start).total_seconds()
 
         if not done_cnt:
             log.info("Couldn't open any tunnels in time, giving up.")
@@ -524,10 +528,9 @@ class ChordTasks(object):
                 task.cancel()
             return self._generate_fail_response(data_mode, data_key)
 
-        query_cntr = Counter(0)
-        task_cntr = Counter(0)
-        done_all = asyncio.Event(loop=self.loop)
-
+        # Setup the DataResponseWrapper which is returned from this function
+        # but also is used to pass around some info to helper functions this
+        # main send_find_node(..) function calls.
         sent_data_request = Counter(0)
         data_rw = DataResponseWrapper(data_key)
         if data_msg_type is cp.ChordStoreData:
@@ -540,6 +543,14 @@ class ChordTasks(object):
                 data_rw.path_hash = path_hash
             if targeted:
                 data_rw.targeted = True
+
+        # Instruct our tunnels to relay the FindNode message out further, also
+        # processing the responses and using that data to build further tunnels
+        # and send out the FindNode even deeper. After this loop, we have
+        # done all the finding we are going to do.
+        query_cntr = Counter(0)
+        task_cntr = Counter(0)
+        done_all = asyncio.Event(loop=self.loop)
 
         for depth in range(1, maximum_depth):
             direct_peers_lower = 0
