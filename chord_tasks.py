@@ -500,11 +500,16 @@ class ChordTasks(object):
         start = datetime.today()
         remaining_time = 7.0 #TODO: This is probably excessive!
         while remaining_time > 0 and done_cnt < max_concurrent_queries:
-            done, pending =\
-                yield from asyncio.wait(\
-                    tasks, loop=self.loop,\
-                    timeout=remaining_time,\
-                    return_when=futures.FIRST_COMPLETED)
+            try:
+                done, pending =\
+                    yield from asyncio.wait(\
+                        tasks, loop=self.loop,\
+                        timeout=remaining_time,\
+                        return_when=futures.FIRST_COMPLETED)
+            except CancelledError:
+                for task in pending:
+                    pending.cancel()
+                raise
 
             done_cnt += len(done)
 
