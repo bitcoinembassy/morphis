@@ -1385,6 +1385,10 @@ class ChordTasks(object):
             if cpeer == peer:
                 # Don't include asking peer.
                 continue
+            if not cpeer.full_node:
+                continue
+            if not cpeer.ready:
+                continue
 
             pt[bittrie.XorKey(fnmsg.node_id, cpeer.node_id)] = cpeer
 
