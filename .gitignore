@@ -1,3 +1,5 @@
+test/
+
 *.log
 *.swp
 *.so
