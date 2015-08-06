@@ -44,6 +44,7 @@ class DataResponseWrapper(object):
         self.path_hash = b""
         self.version = None
         self.targeted = False
+        self.data_done = None
 
 class TunnelMeta(object):
     def __init__(self, peer=None, jobs=None):
@@ -510,7 +511,7 @@ class ChordTasks(object):
                         timeout=max_time - diff,\
                         return_when=futures.FIRST_COMPLETED)
             except CancelledError:
-                for task in pending:
+                for task in tasks:
                     task.cancel()
                 raise
 
@@ -573,10 +574,12 @@ class ChordTasks(object):
                     continue
 
                 if row.used:
+                    # We've already sent to this Peer.
                     continue
 
                 tun_meta = row.tun_meta
                 if not tun_meta.queue:
+                    # The tunnel is not open to this Peer anymore.
                     continue
 
                 if log.isEnabledFor(logging.DEBUG):
@@ -596,12 +599,13 @@ class ChordTasks(object):
                     # _process_find_node_relay task for that tunnel.
                     tun_meta.jobs = 1
                     task_cntr.value += 1
-                    asyncio.async(\
+                    task = asyncio.async(\
                         self._process_find_node_relay(\
                             node_id, significant_bits, tun_meta, query_cntr,\
                             done_all, task_cntr, result_trie, data_mode,\
                             far_peers_by_path, sent_data_request, data_rw),\
                         loop=self.loop)
+                    tasks.append(task)
                 else:
                     tun_meta.jobs += 1
 
@@ -612,13 +616,36 @@ class ChordTasks(object):
                 log.info("FindNode search has ended at closest nodes.")
                 break
 
-            yield from done_all.wait()
-            done_all.clear()
+#            yield from done_all.wait()
+#            done_all.clear()
+            try:
+                # Wait upto a second for at least one response.
+                done, pending =\
+                    yield from asyncio.wait(\
+                        tasks,\
+                        loop=self.loop,\
+                        timeout=1,\
+                        return_when=futures.FIRST_COMPLETED)
 
-            assert query_cntr.value == 0
+                tasks = list(pending)
+
+                # Wait a bit more for the rest of the tasks.
+                done, pending =\
+                    yield from asyncio.wait(\
+                        tasks,\
+                        loop=self.loop,\
+                        timeout=0.1)
+
+                tasks = list(pending)
+            except CancelledError:
+                for task in tasks:
+                    task.cancel()
+                raise
+
+#            assert query_cntr.value == 0
 
             if not task_cntr.value:
-                log.info("All tasks exited.")
+                log.info("All tasks (tunnels) exited.")
                 break
 
         if data_mode.value:
@@ -627,9 +654,13 @@ class ChordTasks(object):
             if data_mode is cp.DataMode.get:
                 msg_name = "GetData"
 
+                data_rw.data_done = asyncio.Event(loop=self.loop)
+
                 if significant_bits:
                     closest_datas = []
 
+                    #FIXME: Ahh! If we have it why did we do the above! :)
+                    # Move this up to the top and save us a send_find_node!
                     data_present = yield from\
                         self._check_has_data(\
                             node_id, significant_bits, target_key)
@@ -839,8 +870,14 @@ class ChordTasks(object):
 
                 if data_mode is cp.DataMode.get:
                     # We only send one at a time, stopping at success.
-                    yield from done_all.wait()
-                    done_all.clear()
+#                    yield from done_all.wait()
+#                    done_all.clear()
+                    try:
+                        yield from\
+                            asyncio.wait_for(data_rw.data_done.wait(), 1)
+                        data_rw.data_done.clear()
+                    except asyncio.TimeoutError:
+                        pass
 
                     if data_rw.data is not None: # Handle the 'blank data' blk.
                         # If the data was read and validated successfully, then
@@ -863,12 +900,12 @@ class ChordTasks(object):
                     log.info("Sent StoreData to [{}] nodes."\
                         .format(storing_nodes))
 
-            if query_cntr.value:
-                # query_cntr can be zero if no PeerS were tried.
-                yield from done_all.wait()
-                done_all.clear()
-
-            assert query_cntr.value == 0, query_cntr.value
+#            if query_cntr.value:
+#                # query_cntr can be zero if no PeerS were tried.
+#                yield from done_all.wait()
+#                done_all.clear()
+#
+#            assert query_cntr.value == 0, query_cntr.value
 
             if log.isEnabledFor(logging.INFO):
                 log.info("Finished waiting for {} operations; now"\
@@ -879,7 +916,7 @@ class ChordTasks(object):
         for tun_meta in used_tunnels.values():
             tasks.append(\
                 tun_meta.peer.protocol.close_channel(tun_meta.local_cid))
-        yield from asyncio.wait(tasks, loop=self.loop)
+#        yield from asyncio.wait(tasks, loop=self.loop)
 
         if data_mode.value:
             if data_mode is cp.DataMode.store:
@@ -2014,7 +2051,11 @@ class ChordTasks(object):
                     log.debug("DataResponse is invalid!")
                 return False
 
-        return (yield from self.loop.run_in_executor(None, threadcall))
+        r = yield from self.loop.run_in_executor(None, threadcall)
+
+        data_rw.data_done.set()
+
+        return r
 
     @asyncio.coroutine
     def _retrieve_data(self, data_id):
