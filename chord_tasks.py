@@ -5,6 +5,7 @@ import llog
 
 import asyncio
 from collections import namedtuple
+from concurrent import futures
 from datetime import datetime
 import logging
 import math
@@ -418,14 +419,7 @@ class ChordTasks(object):
 
         if not self.engine.peers:
             log.info("No connected nodes, unable to send FindNode.")
-            if data_mode.value:
-                if data_mode is cp.DataMode.store:
-                    return 0
-                else:
-                    assert data_mode is cp.DataMode.get
-                    return DataResponseWrapper(data_key)
-            else:
-                return 0
+            return self._generate_fail_response(data_mode, data_key)
 
         if not input_trie:
             input_trie = bittrie.BitTrie()
@@ -436,9 +430,12 @@ class ChordTasks(object):
                 input_trie[key] = peer
 
         max_concurrent_queries = 3
+        slowpoke_factor = 2 #TODO: Have this dynamically adapt.
+        max_initial_queries = int(max_concurrent_queries * slowpoke_factor)
 
         known_peer_cnt = self.engine.last_db_peer_count
 
+        #FIXME: YOU_ARE_HERE: Remove this concept.
         maximum_depth = int(math.log(known_peer_cnt, 2))
 
         if log.isEnabledFor(logging.INFO):
@@ -457,6 +454,7 @@ class ChordTasks(object):
 
         data_msg_type = type(data_msg)
 
+        # Build the FindNode message that we are going to send.
         fnmsg = cp.ChordFindNode()
         fnmsg.node_id = node_id
         fnmsg.data_mode = data_mode
@@ -467,6 +465,7 @@ class ChordTasks(object):
             if target_key:
                 fnmsg.target_key = target_key
 
+        # Open the tunnels with upto max_concurrent_queries immediate PeerS.
         for peer in input_trie:
             key = bittrie.XorKey(node_id, peer.node_id)
             vpeer = VPeer(peer)
@@ -474,6 +473,8 @@ class ChordTasks(object):
             result_trie[key] = vpeer
 
             if len(tasks) == max_concurrent_queries:
+                # We still add all immediate PeerS so that later we can ignore
+                # them if they are included in lists returned by querying.
                 continue
             if not peer.ready():
                 continue
@@ -487,20 +488,34 @@ class ChordTasks(object):
 
         if not tasks:
             log.info("Cannot perform FindNode, as we know no closer nodes.")
-            if data_mode.value:
-                if data_mode is cp.DataMode.store:
-                    return 0
-                else:
-                    assert data_mode is cp.DataMode.get
-                    return DataResponseWrapper(data_key)
-            else:
-                return 0
+            return self._generate_fail_response(data_mode, data_key)
 
         if log.isEnabledFor(logging.DEBUG):
             log.debug("Starting {} root level FindNode tasks."\
                 .format(len(tasks)))
 
-        done, pending = yield from asyncio.wait(tasks, loop=self.loop)
+        done_cnt = 0
+        start = datetime.today()
+        remaining_time = 7.0 #TODO: This is probably excessive!
+        while remaining_time > 0 and done_cnt < max_concurrent_queries:
+            done, pending =\
+                yield from asyncio.wait(\
+                    tasks, loop=self.loop,\
+                    timeout=remaining_time,\
+                    return_when=futures.FIRST_COMPLETED)
+
+            done_cnt += len(done)
+
+            if not pending:
+                break
+
+            remaining_time = (start - datetime.today()).total_seconds()
+
+        if not done_cnt:
+            log.info("Couldn't open any tunnels in time, giving up.")
+            for task in tasks:
+                task.cancel()
+            return self._generate_fail_response(data_mode, data_key)
 
         query_cntr = Counter(0)
         task_cntr = Counter(0)
@@ -878,6 +893,16 @@ class ChordTasks(object):
             log.info("FindNode found [{}] Peers.".format(len(rnodes)))
 
         return rnodes
+
+    def _generate_fail_response(data_mode, data_key):
+        if data_mode.value:
+            if data_mode is cp.DataMode.store:
+                return 0
+            else:
+                assert data_mode is cp.DataMode.get
+                return DataResponseWrapper(data_key)
+        else:
+            return 0
 
     def _generate_relay_packets(self, path, payload=None):
         "path: list of indexes."\
