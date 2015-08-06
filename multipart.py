@@ -4,6 +4,7 @@
 import llog
 
 import asyncio
+from collections import deque
 from concurrent import futures
 from datetime import datetime, timedelta
 import functools
@@ -225,7 +226,7 @@ class HashTreeFetch(object):
 
         self._task_semaphore = asyncio.Semaphore(concurrency)
         self._next_position = 0
-        self._failed = []
+        self._failed = deque()
         self._ordered_waiters = []
         self._ordered_waiters_dc = {}
 
@@ -254,8 +255,7 @@ class HashTreeFetch(object):
             delta = timedelta(seconds=self.retry_seconds)
             start = datetime.today()
 
-            while self._failed\
-                    and ((datetime.today() - start) < delta):
+            while self._failed and ((datetime.today() - start) < delta):
                 yield from self._task_semaphore.acquire()
                 if self._abort:
                     return False
@@ -316,7 +316,8 @@ class HashTreeFetch(object):
             position = eposition
 
     def _schedule_retry(self):
-        retry = random.choice(self._failed)
+        retry = self._failed.popleft()
+
         retry_depth, retry_position, data_key, tries = retry
 
         asyncio.async(\
@@ -338,6 +339,7 @@ class HashTreeFetch(object):
         self._task_semaphore.release()
 
         if not data_rw.data:
+            # Fetch failed.
             if retry:
                 retry[3] += 1 # Tries.
 
@@ -351,7 +353,8 @@ class HashTreeFetch(object):
                     return
             else:
                 retry = [depth, position, data_key, 1]
-                self._failed.append(retry)
+
+            self._failed.append(retry)
 
             if log.isEnabledFor(logging.INFO):
                 log.info("Block id [{}] failed, retrying (tries=[{}])."\
@@ -363,7 +366,9 @@ class HashTreeFetch(object):
                 self._schedule_retry()
         else:
             if retry:
-                del self._failed[retry]
+                if log.isEnabledFor(logging.INFO):
+                    log.info("Succeeded with retry [{}] on try [{}]."\
+                        .format(mbase32.encode(data_key), retry[3]))
 
             if self.ordered:
                 if position != self._next_position:
