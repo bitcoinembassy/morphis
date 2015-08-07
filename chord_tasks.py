@@ -510,7 +510,7 @@ class ChordTasks(object):
                         loop=self.loop,\
                         timeout=max_time - diff,\
                         return_when=futures.FIRST_COMPLETED)
-            except CancelledError:
+            except asyncio.CancelledError:
                 for task in tasks:
                     task.cancel()
                 raise
@@ -637,7 +637,7 @@ class ChordTasks(object):
                         timeout=0.1)
 
                 tasks = list(pending)
-            except CancelledError:
+            except asyncio.CancelledError:
                 for task in tasks:
                     task.cancel()
                 raise
