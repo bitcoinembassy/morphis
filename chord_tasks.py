@@ -526,6 +526,7 @@ class ChordTasks(object):
             log.info("Couldn't open any tunnels in time, giving up.")
             for task in tasks:
                 task.cancel()
+            self._close_tunnels(used_tunnels)
             return self._generate_fail_response(data_mode, data_key)
 
         # Setup the DataResponseWrapper which is returned from this function
@@ -639,6 +640,8 @@ class ChordTasks(object):
                 pass
             except asyncio.CancelledError:
                 self._close_tunnels(used_tunnels)
+                for task in tasks:
+                    task.cancel()
                 raise
 
 #            assert query_cntr.value == 0
@@ -911,6 +914,8 @@ class ChordTasks(object):
                     " cleaning up.".format(msg_name))
 
         # Close everything now that we are done.
+        for task in tasks:
+            task.cancel()
         tasks.clear()
         self._close_tunnels(used_tunnels)
 #        yield from asyncio.wait(tasks, loop=self.loop)
@@ -1095,6 +1100,8 @@ class ChordTasks(object):
 
             if not r:
                 return
+        except asyncio.CancelledError:
+            raise
         except:
             log.exception("__process_find_node_relay(..)")
 

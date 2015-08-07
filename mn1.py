@@ -238,6 +238,7 @@ class SshProtocol(asyncio.Protocol):
 
         if self.status is not Status.ready:
             # Ignore this call if we are closed or disconnected.
+            log.warning("close_channel(..) called on unready connection.")
             assert self.status is not Status.new
             return False
 
@@ -257,6 +258,16 @@ class SshProtocol(asyncio.Protocol):
                 log.info("close_channel(..) called on still opening channel."\
                     .format(remote_cid))
             return False
+
+#FIXME: Something like this should go here to signal to waiters on the queue
+# that the channel is closed right away. However, the following causes problems
+# later on where code wasn't expecting such to happen.
+#        queue = self.channel_queues.get(local_cid, None)
+#        if queue:
+#            yield from queue.put(None)
+#        else:
+#            log.warning("No channel queue for local_cid=[{}]."\
+#                .format(local_cid))
 
         if type(remote_cid) is mnetpacket.SshChannelOpenMessage:
             del self._channel_map[local_cid]
