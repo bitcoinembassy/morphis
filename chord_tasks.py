@@ -784,7 +784,7 @@ class ChordTasks(object):
                         # Then this immediate Peer is an open tunnel and will
                         # be handled as described above for case #2.
                         tun_meta.jobs += 1
-                    else:
+                    elif tun_meta.queue:
                         # Then this immediate Peer is not an open tunnel and we
                         # will have to start a task to process its DataStored
                         # message.
@@ -798,6 +798,10 @@ class ChordTasks(object):
                                 data_mode, row, tun_meta, query_cntr,\
                                 done_all, data_rw),\
                             loop=self.loop)
+                    else:
+                        # Then this immediate Peer had its channel closed;
+                        # don't use it.
+                        continue
 
                 tun_meta.peer.protocol.write_channel_data(\
                     tun_meta.local_cid, pkt)
@@ -1103,7 +1107,7 @@ class ChordTasks(object):
                     query_cntr.value -= 1
                     if not query_cntr.value:
                         done_all.set()
-                        return False
+#                        return False
 
                     continue
 
