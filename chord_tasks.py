@@ -511,8 +511,7 @@ class ChordTasks(object):
                         timeout=max_time - diff,\
                         return_when=futures.FIRST_COMPLETED)
             except asyncio.CancelledError:
-                for task in tasks:
-                    task.cancel()
+                self._close_tunnels(used_tunnels)
                 raise
 
             done_cnt += len(done)
@@ -552,6 +551,7 @@ class ChordTasks(object):
         query_cntr = Counter(0)
         task_cntr = Counter(0)
         done_all = asyncio.Event(loop=self.loop)
+        done_one = asyncio.Event(loop=self.loop)
 
         for depth in range(1, maximum_depth):
             direct_peers_lower = 0
@@ -602,8 +602,9 @@ class ChordTasks(object):
                     task = asyncio.async(\
                         self._process_find_node_relay(\
                             node_id, significant_bits, tun_meta, query_cntr,\
-                            done_all, task_cntr, result_trie, data_mode,\
-                            far_peers_by_path, sent_data_request, data_rw),\
+                            done_all, done_one, task_cntr, result_trie,\
+                            data_mode, far_peers_by_path, sent_data_request,\
+                            data_rw),\
                         loop=self.loop)
                     tasks.append(task)
                 else:
@@ -618,28 +619,26 @@ class ChordTasks(object):
 
 #            yield from done_all.wait()
 #            done_all.clear()
+            # Wait upto a second for at least one response.
             try:
-                # Wait upto a second for at least one response.
-                done, pending =\
-                    yield from asyncio.wait(\
-                        tasks,\
-                        loop=self.loop,\
-                        timeout=1,\
-                        return_when=futures.FIRST_COMPLETED)
+                yield from asyncio.wait_for(\
+                    done_one.wait(),\
+                    timeout=1,\
+                    loop=self.loop)
 
-                tasks = list(pending)
+                done_one.clear()
 
                 # Wait a bit more for the rest of the tasks.
-                done, pending =\
-                    yield from asyncio.wait(\
-                        tasks,\
-                        loop=self.loop,\
-                        timeout=0.1)
+                yield from asyncio.wait_for(\
+                        done_all.wait(),\
+                        timeout=0.1,\
+                        loop=self.loop)
 
-                tasks = list(pending)
+                done_all.clear()
+            except asyncio.TimeoutError:
+                pass
             except asyncio.CancelledError:
-                for task in tasks:
-                    task.cancel()
+                self._close_tunnels(used_tunnels)
                 raise
 
 #            assert query_cntr.value == 0
@@ -913,9 +912,7 @@ class ChordTasks(object):
 
         # Close everything now that we are done.
         tasks.clear()
-        for tun_meta in used_tunnels.values():
-            tasks.append(\
-                tun_meta.peer.protocol.close_channel(tun_meta.local_cid))
+        self._close_tunnels(used_tunnels)
 #        yield from asyncio.wait(tasks, loop=self.loop)
 
         if data_mode.value:
@@ -948,6 +945,12 @@ class ChordTasks(object):
             log.info("FindNode found [{}] Peers.".format(len(rnodes)))
 
         return rnodes
+
+    def _close_tunnels(self, used_tunnels):
+        for tun_meta in used_tunnels.values():
+            asyncio.async(\
+                tun_meta.peer.protocol.close_channel(tun_meta.local_cid),\
+                loop=self.loop)
 
     def _generate_fail_response(self, data_mode, data_key):
         if data_mode.value:
@@ -1072,7 +1075,7 @@ class ChordTasks(object):
     @asyncio.coroutine
     def _process_find_node_relay(\
             self, node_id, significant_bits, tun_meta, query_cntr, done_all,\
-            task_cntr, result_trie, data_mode, far_peers_by_path,\
+            done_one, task_cntr, result_trie, data_mode, far_peers_by_path,\
             sent_data_request, data_rw):
         "This method processes an open tunnel's responses, processing the"\
         " incoming messages and appending the PeerS in those messages to the"\
@@ -1087,8 +1090,8 @@ class ChordTasks(object):
         try:
             r = yield from self.__process_find_node_relay(\
                 node_id, significant_bits, tun_meta, query_cntr, done_all,\
-                task_cntr, result_trie, data_mode, far_peers_by_path,\
-                sent_data_request, data_rw)
+                done_one, task_cntr, result_trie, data_mode,\
+                far_peers_by_path, sent_data_request, data_rw)
 
             if not r:
                 return
@@ -1100,6 +1103,7 @@ class ChordTasks(object):
             # consider those jobs now completed and subtract them from the
             # count of ongoing jobs.
             query_cntr.value -= tun_meta.jobs
+            done_one.set()
             if not query_cntr.value:
                 done_all.set()
             tun_meta.jobs = 0
@@ -1113,7 +1117,7 @@ class ChordTasks(object):
     @asyncio.coroutine
     def __process_find_node_relay(\
             self, node_id, significant_bits, tun_meta, query_cntr, done_all,\
-            task_cntr, result_trie, data_mode, far_peers_by_path,\
+            done_one, task_cntr, result_trie, data_mode, far_peers_by_path,\
             sent_data_request, data_rw):
         "Inner function for above call."
         while True:
@@ -1162,6 +1166,7 @@ class ChordTasks(object):
                             query_cntr.value -= 1
                             # There should only be one GetData at a time.
                             assert not query_cntr.value
+                            done_one.set()
                             done_all.set()
                             continue
                     else:
@@ -1180,6 +1185,7 @@ class ChordTasks(object):
                                             tun_meta.peer.dbid, path))
 
                     query_cntr.value -= 1
+                    done_one.set()
                     if not query_cntr.value:
                         done_all.set()
 #                        return False
@@ -1219,6 +1225,7 @@ class ChordTasks(object):
                         # also sending a PeerList.
                         tun_meta.jobs -= 1
                         query_cntr.value -= 1
+                        done_one.set()
                         if not query_cntr.value:
                             done_all.set()
                         continue
@@ -1242,6 +1249,7 @@ class ChordTasks(object):
                             # message instead of also sending a PeerList.
                             tun_meta.jobs -= 1
                             query_cntr.value -= 1
+                            done_one.set()
                             if not query_cntr.value:
                                 done_all.set()
                             continue
@@ -1282,6 +1290,7 @@ class ChordTasks(object):
 
             tun_meta.jobs -= 1
             query_cntr.value -= 1
+            done_one.set()
             if not query_cntr.value:
                 done_all.set()
 
