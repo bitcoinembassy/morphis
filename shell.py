@@ -16,7 +16,7 @@ import enc
 import mbase32
 import mn1
 import multipart
-from mutil import hex_dump, hex_string, decode_key
+from mutil import hex_dump, hex_string, decode_key, calc_raw_distance
 import node
 import rsakey
 import sshtype
@@ -496,7 +496,7 @@ class Shell(cmd.Cmd):
     def do_storedataenc(self, arg):
         "<data> store base58 encoded data."
 
-        data = base58.decode(args)
+        data = base58.decode(arg)
 
         def key_callback(data_key):
             self.writeln("data_key=[{}].".format(mbase32.encode(data_key)))
