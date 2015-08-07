@@ -949,7 +949,7 @@ class ChordTasks(object):
 
         return rnodes
 
-    def _generate_fail_response(data_mode, data_key):
+    def _generate_fail_response(self, data_mode, data_key):
         if data_mode.value:
             if data_mode is cp.DataMode.store:
                 return 0
