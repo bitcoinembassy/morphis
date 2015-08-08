@@ -1,0 +1,1 @@
+python3 node.py -l logging-warn.ini --bind 127.0.0.1:6000 --addpeer 127.0.0.1:7000 --nn 1000 --dbpoolsize 4 --parallellaunch --dumptasksonexit --dburl postgresql://m1:2d8VhzVIovxZy@pg1/m1 --nodecount 20 --dm --reinitds --dssize 32
