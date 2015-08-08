@@ -481,8 +481,6 @@ class ChordTasks(object):
                 fnmsg.target_key = target_key
 
         # Open the tunnels with upto max_concurrent_queries immediate PeerS.
-        max_concurrent_queries *= slowpoke_factor
-
         for peer in input_trie:
             key = bittrie.XorKey(node_id, peer.node_id)
             vpeer = VPeer(peer)
@@ -562,6 +560,8 @@ class ChordTasks(object):
         # processing the responses and using that data to build further tunnels
         # and send out the FindNode even deeper. After this loop, we have
         # done all the finding we are going to do.
+        max_concurrent_queries *= slowpoke_factor
+
         query_cntr = Counter(0)
         task_cntr = Counter(0)
         done_all = asyncio.Event(loop=self.loop)
