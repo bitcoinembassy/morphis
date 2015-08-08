@@ -511,7 +511,7 @@ class ChordTasks(object):
                         timeout=max_time - diff,\
                         return_when=futures.FIRST_COMPLETED)
             except asyncio.CancelledError:
-                self._close_tunnels(used_tunnels)
+                self._close_channels(used_tunnels)
                 raise
 
             done_cnt += len(done)
@@ -526,7 +526,7 @@ class ChordTasks(object):
             log.info("Couldn't open any tunnels in time, giving up.")
             for task in tasks:
                 task.cancel()
-            self._close_tunnels(used_tunnels)
+            self._close_channels(used_tunnels)
             return self._generate_fail_response(data_mode, data_key)
 
         # Setup the DataResponseWrapper which is returned from this function
@@ -639,7 +639,7 @@ class ChordTasks(object):
             except asyncio.TimeoutError:
                 pass
             except asyncio.CancelledError:
-                self._close_tunnels(used_tunnels)
+                self._close_channels(used_tunnels)
                 for task in tasks:
                     task.cancel()
                 raise
@@ -917,7 +917,7 @@ class ChordTasks(object):
         for task in tasks:
             task.cancel()
         tasks.clear()
-        self._close_tunnels(used_tunnels)
+        self._close_channels(used_tunnels)
 #        yield from asyncio.wait(tasks, loop=self.loop)
 
         if data_mode.value:
@@ -951,7 +951,7 @@ class ChordTasks(object):
 
         return rnodes
 
-    def _close_tunnels(self, used_tunnels):
+    def _close_channels(self, used_tunnels):
         for tun_meta in used_tunnels.values():
             asyncio.async(\
                 tun_meta.peer.protocol.close_channel(tun_meta.local_cid),\
