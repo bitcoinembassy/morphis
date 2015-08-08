@@ -668,13 +668,25 @@ def _store_data_multipart(engine, data, key_callback, store_key, concurrency):
 
 @asyncio.coroutine
 def _store_block(engine, i, block_data, key_callback, task_semaphore):
-    snodes = yield from\
-        engine.tasks.send_store_data(block_data, key_callback=key_callback)
+    tries = 0
 
-    if not snodes:
+    while True:
+        snodes = yield from\
+            engine.tasks.send_store_data(block_data, key_callback=key_callback)
+
+        task_semaphore.release()
+
+        if snodes:
+            return True
+
+        tries += 1
+
+        if tries < 5:
+            yield from asyncio.sleep(1)
+            yield from task_semaphore.acquire()
+            continue
+
         if log.isEnabledFor(logging.WARNING):
             log.warn("Failed to upload block #{}.".format(i))
 
-    task_semaphore.release()
-
-    return True
+        return False
