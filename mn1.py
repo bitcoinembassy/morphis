@@ -299,12 +299,15 @@ class SshProtocol(asyncio.Protocol):
     def verify_server_key(self, key_data, sig):
         if self.server_key:
             if self.server_key.asbytes() != key_data:
-                raise SshException("Key provided by server differs from that which we were expecting.")
+                raise SshException("Key provided by server differs from that"\
+                    " which we were expecting (address=[{}])."\
+                        .format(self.address))
         else:
             self.server_key = rsakey.RsaKey(key_data)
 
         if not self.server_key.verify_ssh_sig(self.h, sig):
-            raise SshException("Signature verification failed.")
+            raise SshException("Signature verification failed (address=[{}])."\
+                .format(self.address))
 
         log.info("Signature validated correctly!")
 
