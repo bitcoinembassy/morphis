@@ -237,7 +237,7 @@ class ChordEngine():
         self._async_process_connection_count()
 
         # Let _async_process_connection_count() connect some connections first.
-        self.loop.call_later(5, self._async_do_stabilize)
+        self.loop.call_later(7, self._async_do_stabilize)
 
     def _async_do_stabilize(self):
         self._do_stabilize_handle =\
