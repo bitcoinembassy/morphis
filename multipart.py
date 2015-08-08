@@ -672,8 +672,8 @@ def _store_block(engine, i, block_data, key_callback, task_semaphore):
         engine.tasks.send_store_data(block_data, key_callback=key_callback)
 
     if not snodes:
-        if log.isEnabledFor(logging.DEBUG):
-            log.debug("Failed to upload block #{}.".format(i))
+        if log.isEnabledFor(logging.WARNING):
+            log.warn("Failed to upload block #{}.".format(i))
 
     task_semaphore.release()
 
