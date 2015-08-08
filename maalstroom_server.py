@@ -111,6 +111,9 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
 
             content = pages.home_page_content[0].replace(\
                 b"${CONNECTIONS}", str(connection_cnt).encode())
+            content = content.replace(\
+                b"${MORPHIS_VERSION}", self.node.morphis_version.encode())
+
             self._send_content([content, None])
             return
 

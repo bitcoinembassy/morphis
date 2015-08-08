@@ -74,6 +74,8 @@ class Node():
 
         self.seed_node_enabled = True
 
+        self.morphis_version = None
+
     @property
     def all_nodes(self):
         global nodes
@@ -171,6 +173,8 @@ class Node():
 
     @asyncio.coroutine
     def start(self):
+        self.morphis_version = open("VERSION").read().strip()
+
         if not self._db_initialized:
             self.init_db()
 

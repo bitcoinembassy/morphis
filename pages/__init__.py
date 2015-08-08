@@ -19,7 +19,7 @@ home_page_content = [\
     }
 </style>
 </head><body>
-<p><h2 style="display: inline;">MORPHiS Maalstroom UI</h2>&nbsp;&nbsp;&nbsp;[${CONNECTIONS} Connections]<span style="position: absolute; right: 0em;">(<a href="morphis://.aiwj/explanation">AIWJ</a> - JAVASCRIPT FREE!)</span></p>
+<p><h2 style="display: inline;">MORPHiS Maalstroom UI</h2>&nbsp;&nbsp;&nbsp;[v${MORPHIS_VERSION}]&nbsp;&nbsp;&nbsp;[${CONNECTIONS} Connections]<span style="position: absolute; right: 0em;">(<a href="morphis://.aiwj/explanation">AIWJ</a> - JAVASCRIPT FREE!)</span></p>
 <div class="msection">
     <h3>MORPHiS Web</h3>
     <p>
