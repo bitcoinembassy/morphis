@@ -10,6 +10,7 @@ from datetime import datetime
 import logging
 import math
 import os
+import random
 
 from sqlalchemy import func
 
@@ -221,6 +222,16 @@ class ChordTasks(object):
         data_rw = yield from\
             self.send_find_node(data_id, for_data=True, data_key=data_key,\
                 path_hash=path_hash)
+
+        if data_rw.data:
+            #FIXME: This is not optimal as we start a whole new FindNode for
+            # this. When rewriting this file incorporate this stage into the
+            # retrevial process at the end (and have it async just like this).
+            r = random.randint(1, 5)
+            if r == 1:
+                asyncio.async(\
+                    self.send_store_data(data_rw.data, store_key=False),\
+                    loop=self.loop)
 
         return data_rw
 

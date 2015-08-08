@@ -449,6 +449,15 @@ def get_data(engine, data_key, data_callback, path=None, ordered=False,\
 
     if data_rw.version:
         data_callback.notify_version(data_rw.version)
+    else:
+        #FIXME: Remove this from here after it is integrated into the coming
+        # chord_task rewrite.
+        # Reupload the key to keep prefix searches in the network.
+        r = random.randint(1, 5)
+        if r == 1:
+            asyncio.async(\
+                engine.tasks.send_store_key(data_rw.data, data_key),\
+                loop=engine.loop)
 
     link_depth = 0
 
