@@ -470,6 +470,8 @@ class ChordTasks(object):
                 fnmsg.target_key = target_key
 
         # Open the tunnels with upto max_concurrent_queries immediate PeerS.
+        max_concurrent_queries *= slowpoke_factor
+
         for peer in input_trie:
             key = bittrie.XorKey(node_id, peer.node_id)
             vpeer = VPeer(peer)
