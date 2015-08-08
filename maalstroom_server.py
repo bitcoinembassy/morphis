@@ -171,8 +171,6 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
             self.end_headers()
             return
 
-        error = False
-
         significant_bits = None
 
         # At this point we assume it is a key URL.
@@ -180,7 +178,7 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
         if connection_cnt is None:
             connection_cnt = self._get_connection_count()
         if not connection_cnt:
-            self.send_exception("No connected nodes; cannot fetch from the"\
+            self._send_error("No connected nodes; cannot fetch from the"\
                 " network.")
             return
 
@@ -194,11 +192,9 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
         try:
             data_key, significant_bits = mutil.decode_key(rpath)
         except:
-            error = True
-            log.exception("decode")
-
-        if error:
-            self._handle_error()
+            self._send_error(\
+                "Invalid encoded key: [{}].".format(rpath),\
+                errcode=400)
             return
 
         data_rw = DataResponseWrapper()
