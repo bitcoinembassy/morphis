@@ -15,11 +15,11 @@ Although there is a Makefile which will compile some of the python files with Cy
 
 To run, simply type this:
 
-python3 node.py --bind *:4250 --addpeer 162.252.242.77:8000
+python3 node.py --bind *:4250 --addpeer 162.252.242.77:4250
 
 After you've been connected to the network, you don't need (and please don't) add the addpeer anymore so as to not hammer the official seednode.
 
-You may choose a different port than 4250, it does not mater at all.
+You may choose a different port than 4250 for yourself with the bind parameter, it does not mater at all.
 
 On Windows you may have to put your external IP instead of * as Windows does not seem to understand *. None of that will be neccesary with the official release, it will be a double click affair.
 

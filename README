@@ -8,9 +8,8 @@ I have done this, released the asyncio SSH protocol code as LGPL so that it may 
 
 -------------------------------------------------------------------------------
 
-Maalstroom: morphis://3syweaeb7xwm4q3hxfp9w4nynhcnuob6
-
-Web: http://morph.is
+Maalstroom: morphis://sp1nara3xhndtgswh7fznt414we4mi3y
+Web: https://morph.is
 
 -------------------------------------------------------------------------------
 
@@ -33,10 +32,15 @@ To get some help, try:
 
 > python3 node.py --help
 
+WARNING: If you are running on a shared host, you really should run with the shell disabled:
+
+> python3 node.py --disableshell
+
+NOTE: That will prevent the mcc.py commandline tool from working as well. I will fix that later by having it ssh key based authentication for shell connections.
+
 Then simply point your web browser to localhost:4251, or use the mcc command line client, or ssh to localhost:4250. I recommend using the MORPHiS firefox plugin that will be listed on the front page when you hit localhost:4251. (ANY DEVS THAT CAN HELP WITH THIS DEAD SIMPLE PLUGIN WILL BE SUPER APPRECIATED!)
 
 -------------------------------------------------------------------------------
 
-Contact (d-mail): samq5hzsg9ts58by5543crp3ut7hum5f :)
-
-Contact (e-mail): sam2015@morph.is
+Contact (d-mail): sa4m5ixas6wkchqxdusf476ymzcxh8d6 :)
+Contact (e-mail): sam2015@morph.is :(
