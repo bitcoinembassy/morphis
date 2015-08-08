@@ -267,6 +267,9 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
                 elif data[:8] == bytes(\
                         [0x50, 0x4b, 0x03, 0x04, 0x0a, 0x00, 0x00, 0x00]):
                     self.send_header("Content-Type", "application/zip")
+                elif data[:5] == bytes(\
+                        [0x25, 0x50, 0x44, 0x46, 0x2d]):
+                    self.send_header("Content-Type", "application/pdf")
                 else:
                     self.send_header("Content-Type", "text/html")
                     rewrite_url = True
