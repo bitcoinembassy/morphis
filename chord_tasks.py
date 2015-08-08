@@ -564,10 +564,11 @@ class ChordTasks(object):
 
         query_cntr = Counter(0)
         task_cntr = Counter(0)
+        depth = Counter(0)
         done_all = asyncio.Event(loop=self.loop)
         done_one = asyncio.Event(loop=self.loop)
 
-        for depth in range(1, maximum_depth):
+        for depth.value in range(1, maximum_depth):
             direct_peers_lower = 0
             for row in result_trie:
                 if row is False:
@@ -618,7 +619,7 @@ class ChordTasks(object):
                             node_id, significant_bits, tun_meta, query_cntr,\
                             done_all, done_one, task_cntr, result_trie,\
                             data_mode, far_peers_by_path, sent_data_request,\
-                            data_rw),\
+                            data_rw, depth),\
                         loop=self.loop)
                     tasks.append(task)
                 else:
@@ -645,7 +646,7 @@ class ChordTasks(object):
                 # Wait a bit more for the rest of the tasks.
                 yield from asyncio.wait_for(\
                         done_all.wait(),\
-                        timeout=0.25,\
+                        timeout=0.1,\
                         loop=self.loop)
 
                 done_all.clear()
@@ -1094,7 +1095,7 @@ class ChordTasks(object):
     def _process_find_node_relay(\
             self, node_id, significant_bits, tun_meta, query_cntr, done_all,\
             done_one, task_cntr, result_trie, data_mode, far_peers_by_path,\
-            sent_data_request, data_rw):
+            sent_data_request, data_rw, depth):
         "This method processes an open tunnel's responses, processing the"\
         " incoming messages and appending the PeerS in those messages to the"\
         " result_trie. This method does not close any channel to the tunnel,"\
@@ -1109,7 +1110,7 @@ class ChordTasks(object):
             r = yield from self.__process_find_node_relay(\
                 node_id, significant_bits, tun_meta, query_cntr, done_all,\
                 done_one, task_cntr, result_trie, data_mode,\
-                far_peers_by_path, sent_data_request, data_rw)
+                far_peers_by_path, sent_data_request, data_rw, depth)
 
             if not r:
                 return
@@ -1123,8 +1124,8 @@ class ChordTasks(object):
             # consider those jobs now completed and subtract them from the
             # count of ongoing jobs.
             query_cntr.value -= tun_meta.jobs
-            done_one.set()
             if not query_cntr.value:
+                done_one.set() # Ensure to wakeup waiter since all is closed.
                 done_all.set()
             tun_meta.jobs = 0
 
@@ -1138,12 +1139,14 @@ class ChordTasks(object):
     def __process_find_node_relay(\
             self, node_id, significant_bits, tun_meta, query_cntr, done_all,\
             done_one, task_cntr, result_trie, data_mode, far_peers_by_path,\
-            sent_data_request, data_rw):
+            sent_data_request, data_rw, depth):
         "Inner function for above call."
         while True:
             pkt = yield from tun_meta.queue.get()
             if not pkt:
                 break
+
+            response_depth = 0 # Deep past immediate Peer.
 
             if sent_data_request.value\
                     and cp.ChordMessage.parse_type(pkt) != cp.CHORD_MSG_RELAY:
@@ -1245,9 +1248,11 @@ class ChordTasks(object):
                         # also sending a PeerList.
                         tun_meta.jobs -= 1
                         query_cntr.value -= 1
-                        done_one.set()
                         if not query_cntr.value:
+                            done_one.set()
                             done_all.set()
+                        elif len(path) == depth.value:
+                            done_one.set()
                         continue
                 else:
                     assert data_mode is cp.DataMode.store
@@ -1269,9 +1274,11 @@ class ChordTasks(object):
                             # message instead of also sending a PeerList.
                             tun_meta.jobs -= 1
                             query_cntr.value -= 1
-                            done_one.set()
                             if not query_cntr.value:
+                                done_one.set()
                                 done_all.set()
+                            elif len(path) == depth.value:
+                                done_one.set()
                             continue
 
                 pkt = pkts[1]
@@ -1310,8 +1317,8 @@ class ChordTasks(object):
 
             tun_meta.jobs -= 1
             query_cntr.value -= 1
-            done_one.set()
             if not query_cntr.value:
+                done_one.set()
                 done_all.set()
 
         return True
