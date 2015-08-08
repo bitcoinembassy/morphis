@@ -51,6 +51,8 @@ class DataResponseWrapper(object):
         self.exception = None
         self.timed_out = False
 
+        self.cancelled = Event()
+
 class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
     daemon_threads = True
 
@@ -277,18 +279,25 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
 
             self.end_headers()
 
-            while True:
-                if rewrite_url:
-                    self.wfile.write(\
-                        data.replace(b"morphis://",\
-                            self.maalstroom_url_prefix))
-                else:
-                    self.wfile.write(data)
+            try:
+                while True:
+                    if rewrite_url:
+                        self.wfile.write(\
+                            data.replace(b"morphis://",\
+                                self.maalstroom_url_prefix))
+                    else:
+                        self.wfile.write(data)
 
-                data = data_rw.data_queue.get()
+                    data = data_rw.data_queue.get()
 
-                if data is None:
-                    break
+                    if data is None:
+                        break
+            except ConnectionError:
+                if log.isEnabledFor(logging.INFO):
+                    log.info("Maalstroom request got broken pipe from HTTP"\
+                        " side; cancelling.")
+                data_rw.cancelled.set()
+
         else:
             self._handle_error(data_rw)
 
@@ -546,7 +555,12 @@ class Downloader(multipart.DataCallback):
         self.data_rw.mime_type = val
 
     def notify_data(self, position, data):
+        if self.data_rw.cancelled.is_set():
+            return False
+
         self.data_rw.data_queue.put(data)
+
+        return True
 
 @asyncio.coroutine
 def _send_get_data(data_key, significant_bits, path, data_rw):

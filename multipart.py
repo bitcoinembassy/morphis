@@ -33,6 +33,7 @@ class DataCallback(object):
         pass
 
     def notify_data(self, position, data):
+        # returns: True to continue, False to abort download.
         pass
 
 class BufferingDataCallback(DataCallback):
@@ -56,6 +57,8 @@ class BufferingDataCallback(DataCallback):
 
         self.buf += data
         self.position += data_len
+
+        return True
 
 class BlockType(Enum):
     hash_tree = 0x2D4100
@@ -228,7 +231,7 @@ class HashTreeFetch(object):
         self._next_position = 0
         self._failed = deque()
         self._ordered_waiters = []
-        self._ordered_waiters_dc = {}
+        self._ordered_waiters_dc = {} #FIXME: WTF is this?
 
         self._task_cnt = 0
         self._tasks_done = asyncio.Event()
@@ -338,6 +341,9 @@ class HashTreeFetch(object):
 
         self._task_semaphore.release()
 
+        if self._abort:
+            return
+
         if not data_rw.data:
             # Fetch failed.
             if retry:
@@ -347,9 +353,7 @@ class HashTreeFetch(object):
                     if log.isEnabledFor(logging.INFO):
                         log.info("Block id [{}] failed too much; aborting."\
                             .format(mbase32.encode(data_key)))
-                    self._abort = True
-                    self._task_semaphore.release()
-                    self._tasks_done.set()
+                    self._do_abort()
                     return
             else:
                 retry = [depth, position, data_key, 1]
@@ -376,7 +380,12 @@ class HashTreeFetch(object):
                     yield from self.__wait(position, waiter)
 
             if not depth:
-                self.data_callback.notify_data(position, data_rw.data)
+                r = self.data_callback.notify_data(position, data_rw.data)
+                if not r:
+                    if log.isEnabledFor(logging.DEBUG):
+                        log.debug("Received cancel signal; aborting download.")
+                    self._do_abort()
+                    return
                 self.__notify_position_complete(position + len(data_rw.data))
             else:
                 yield from\
@@ -387,6 +396,16 @@ class HashTreeFetch(object):
         if self._task_cnt <= 0:
             assert self._task_cnt == 0
             self._tasks_done.set()
+
+    def _do_abort(self):
+        if self._abort:
+            return
+
+        self._abort = True
+        self._task_semaphore.release()
+        self._tasks_done.set()
+        for position, waiter in self._ordered_waiters:
+            waiter.cancel()
 
     @asyncio.coroutine
     def __wait(self, position, waiter):
@@ -403,11 +422,13 @@ class HashTreeFetch(object):
         self._next_position = next_position
 
         while self._ordered_waiters:
-            position, waiter = self._ordered_waiters[0]
-            if position > next_position:
-                return
-            waiter.set_result(False)
-            heapq.heappop(self._ordered_waiters)
+            while self._ordered_waiters:
+                position, waiter = self._ordered_waiters[0]
+                if position > next_position:
+                    return
+                waiter.set_result(False)
+                heapq.heappop(self._ordered_waiters)
+                break
 
 ## Functions:
 
