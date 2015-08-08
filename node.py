@@ -339,7 +339,7 @@ def __main():
     if bindaddr:
         bindaddr.split(':') # Just to preemptively test.
     else:
-        bindaddr = "*:4250"
+        bindaddr = ":4250"
     if args.cleartexttransport:
         log.info("Enabling cleartext transport.")
         mn1.enable_cleartext_transport()
