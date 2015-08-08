@@ -632,7 +632,7 @@ class ChordTasks(object):
                 # Wait a bit more for the rest of the tasks.
                 yield from asyncio.wait_for(\
                         done_all.wait(),\
-                        timeout=0.1,\
+                        timeout=0.25,\
                         loop=self.loop)
 
                 done_all.clear()
