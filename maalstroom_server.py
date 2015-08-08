@@ -146,6 +146,10 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
                         rpath[len(s_upload)+1:].encode())
                 content =\
                     content.replace(\
+                        b"${VERSION}",\
+                        str(int(time.time()*1000)).encode())
+                content =\
+                    content.replace(\
                         b"${UPDATEABLE_KEY_MODE_DISPLAY}",\
                         b"")
                 content =\
@@ -153,9 +157,7 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
                         b"${STATIC_MODE_DISPLAY}",\
                         b"display: none")
 
-                content_id = mbase32.encode(enc.generate_ID(content))
-
-                self._send_content((content, content_id))
+                self._send_content(content)
 
             return
         elif rpath.startswith(s_dmail):
@@ -697,4 +699,4 @@ def _set_upload_page(content):
     static_upload_page_content[1] =\
         mbase32.encode(enc.generate_ID(static_upload_page_content[0]))
 
-_set_upload_page(b'<html><head><title>MORPHiS Maalstroom Upload</title></head><body><h4 style="${UPDATEABLE_KEY_MODE_DISPLAY}">NOTE: Bookmark this page to save your private key in the bookmark!</h4>Select the file to upload below:</p><form action="upload" method="post" enctype="multipart/form-data"><input type="file" name="fileToUpload" id="fileToUpload"/><div style="${UPDATEABLE_KEY_MODE_DISPLAY}"><br/><br/><label for="privateKey">Private Key</label><textarea name="privateKey" id="privateKey" rows="5" cols="80">${PRIVATE_KEY}</textarea><br/><label for="path">Path</label><input type="textfield" name="path" id="path"/><br/><label for="version">Version</label><input type="textfield" name="version" id="version"/><br/><label for="mime_type">Mime Type</label><input type="textfield" name="mime_type" id="mime_type"/><br/></div><input type="submit" value="Upload File" name="submit"/></form><p style="${STATIC_MODE_DISPLAY}"><a href="morphis://.upload/generate">switch to updateable key mode</a></p><p style="${UPDATEABLE_KEY_MODE_DISPLAY}"><a href="morphis://.upload/">switch to static key mode</a></p><h5><- <a href="morphis://">MORPHiS UI</a></h5></body></html>')
+_set_upload_page(b'<html><head><title>MORPHiS Maalstroom Upload</title></head><body><h4 style="${UPDATEABLE_KEY_MODE_DISPLAY}">NOTE: Bookmark this page to save your private key in the bookmark!</h4>Select the file to upload below:</p><form action="upload" method="post" enctype="multipart/form-data"><input type="file" name="fileToUpload" id="fileToUpload"/><div style="${UPDATEABLE_KEY_MODE_DISPLAY}"><br/><br/><label for="privateKey">Private Key</label><textarea name="privateKey" id="privateKey" rows="5" cols="80">${PRIVATE_KEY}</textarea><br/><label for="path">Path</label><input type="textfield" name="path" id="path"/><br/><label for="version">Version</label><input type="textfield" name="version" id="version" value="${VERSION}"/><br/><label for="mime_type">Mime Type</label><input type="textfield" name="mime_type" id="mime_type"/><br/></div><input type="submit" value="Upload File" name="submit"/></form><p style="${STATIC_MODE_DISPLAY}"><a href="morphis://.upload/generate">switch to updateable key mode</a></p><p style="${UPDATEABLE_KEY_MODE_DISPLAY}"><a href="morphis://.upload/">switch to static key mode</a></p><h5><- <a href="morphis://">MORPHiS UI</a></h5></body></html>')
