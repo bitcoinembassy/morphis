@@ -260,7 +260,9 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
                     self.send_header("Content-Type", "application/javascript")
                     rewrite_url = True
                 elif data[:8] == bytes(\
-                        [0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70]):
+                        [0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70])\
+                        or data[:8] == bytes(\
+                        [0x00, 0x00, 0x00, 0x1c, 0x66, 0x74, 0x79, 0x70]):
                     self.send_header("Content-Type", "video/mp4")
                 elif data[:8] == bytes(\
                         [0x50, 0x4b, 0x03, 0x04, 0x0a, 0x00, 0x00, 0x00]):
