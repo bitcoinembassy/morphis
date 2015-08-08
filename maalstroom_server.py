@@ -298,6 +298,11 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
                     data = data_rw.data_queue.get()
 
                     if data is None:
+                        if data_rw.timed_out:
+                            log.warning(\
+                                "Request timed out; closing connection.")
+                            self.close_connection = True
+
                         break
             except ConnectionError:
                 if log.isEnabledFor(logging.INFO):

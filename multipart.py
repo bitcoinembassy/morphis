@@ -254,6 +254,9 @@ class HashTreeFetch(object):
 
         yield from self._tasks_done.wait()
 
+        if self._abort:
+            return False
+
         if self._failed:
             delta = timedelta(seconds=self.retry_seconds)
             start = datetime.today()
@@ -266,7 +269,7 @@ class HashTreeFetch(object):
 
             yield from self._tasks_done.wait()
 
-            if self._failed:
+            if self._failed or self._abort:
                 return False
 
         return True
