@@ -26,6 +26,10 @@ Dependencies:
 
 To run, execute the following:
 
+> ./run.sh
+
+Or:
+
 > python3 node.py
 
 To get some help, try:
