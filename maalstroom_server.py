@@ -321,6 +321,12 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
 
         rpath = self.path[1:]
 
+        connection_cnt = self._get_connection_count()
+        if not connection_cnt:
+            self._send_error("No connected nodes; cannot upload to the"\
+                " network.")
+            return
+
         log.info("POST; rpath=[{}].".format(rpath))
 
         if rpath != ".upload/upload":
