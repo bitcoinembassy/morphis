@@ -277,6 +277,8 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
                 elif dh[:5] == bytes(\
                         [0x25, 0x50, 0x44, 0x46, 0x2d]):
                     self.send_header("Content-Type", "application/pdf")
+                elif dh[:4] == b"RIFF" and dh[8:11] == b"AVI":
+                    self.send_header("Content-Type", "video/avi")
                 else:
                     dhl = dh.lower()
 
