@@ -19,7 +19,7 @@ home_page_content = [\
     }
 </style>
 </head><body>
-<p><h2 style="display: inline;">MORPHiS Maalstroom UI</h2><span style="position: absolute; right: 0em;">(<a href="morphis://.aiwj/explanation">AIWJ</a> - JAVASCRIPT FREE!)</span></p>
+<p><h2 style="display: inline;">MORPHiS Maalstroom UI</h2>&nbsp;&nbsp;&nbsp;[v${MORPHIS_VERSION}]&nbsp;&nbsp;&nbsp;[${CONNECTIONS} Connections]<span style="position: absolute; right: 0em;">(<a href="morphis://.aiwj/explanation">AIWJ</a> - JAVASCRIPT FREE!)</span></p>
 <div class="msection">
     <h3>MORPHiS Web</h3>
     <p>
@@ -157,7 +157,7 @@ dmail_page_wrapper =\
 </div>
 <div class="footer">
     <h5>
-        <span><- <a href="morphis://">MORPHiS UI</a></span>
+        <span>&lt;- <a href="morphis://">MORPHiS UI</a></span>
         <span id="footer_right">
             <span>[<a href="morphis://.dmail/">List Dmail Addresses</a>]</span>
             <span>[<a href="morphis://.dmail/create_address">Create New Dmail Address</a>]</span>
@@ -174,7 +174,7 @@ dmail_page_content = [None, None]
 
 dmail_frame_start =\
     b"""<!DOCTYPE html>
-<html><head><base target="_root" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/></head><body class="iframe">
+<html><head><base target="_top" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/></head><body class="iframe">
 """
 
 dmail_frame_end =\
@@ -182,7 +182,7 @@ dmail_frame_end =\
 
 dmail_page_content__f1_start =\
     b"""<!DOCTYPE html>
-<html><head><base target="_root" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/></head><body class="iframe">
+<html><head><base target="_top" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/></head><body class="iframe">
 <h4>Your dmail addresses:</h4>
 """
 
@@ -193,7 +193,7 @@ dmail_address_page_content = [None, None]
 
 dmail_inbox_start =\
     b"""<!DOCTYPE html>
-<html><head><base target="_root" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/></head><body class="iframe">
+<html><head><base target="_top" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/></head><body class="iframe">
 <h4>Dmails for address [<a href="../../addr/${DMAIL_ADDRESS}">${DMAIL_ADDRESS2}</a>]:</h4>
 """
 
@@ -202,7 +202,7 @@ dmail_inbox_end =\
 
 dmail_addr_view_start =\
     b"""<!DOCTYPE html>
-<html><head><base target="_root" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/>
+<html><head><base target="_top" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/>
 <style type="text/css">
 </style></head><body class="iframe">
 <h4>Dmail Address [${DMAIL_ADDRESS_SHORT}...].</h4>
@@ -222,7 +222,7 @@ dmail_addr_settings_content = [None, None]
 
 dmail_iframe_body_start =\
     b"""<!DOCTYPE html>
-<html><head><base target="_root" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/></head><body class="iframe">"""
+<html><head><base target="_top" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/></head><body class="iframe">"""
 
 dmail_addr_settings_edit_content = [dmail_iframe_body_start\
     + b"""<h4>Dmail Address [<a href="../../${DMAIL_ADDRESS}">${DMAIL_ADDRESS_SHORT}...</a>].</h4>
@@ -254,13 +254,13 @@ dmail_addr_settings_edit_content = [dmail_iframe_body_start\
 </body></html>""", None]
 
 dmail_addr_settings_edit_success_content = [dmail_iframe_body_start.decode()\
-    + """<h4>Dmail Address [<a target="_root" href="../../{}">{}</a>].</h4><p>SUCCESS.</p></body></html>""", None]
+    + """<h4>Dmail Address [<a target="_top" href="../../{}">{}</a>].</h4><p>SUCCESS.</p></body></html>""", None]
 
 dmail_tag_view_content = [None, None]
 
 dmail_tag_view_list_start =\
     b"""<!DOCTYPE html>
-<html><head><base target="_root" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/></head><body class="iframe">
+<html><head><base target="_top" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/></head><body class="iframe">
 <h4>Dmails for tag [${TAG_NAME}] of address [<a href="../../../../addr/${DMAIL_ADDRESS}">${DMAIL_ADDRESS2}</a>]:</h4>
 """
 
@@ -269,14 +269,14 @@ dmail_tag_view_list_end =\
 
 dmail_fetch_wrapper = [\
     b"""<!DOCTYPE html>
-<html><head><base target="_root" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/></head><body>
+<html><head><base target="_top" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/></head><body>
 <iframe src="${IFRAME_SRC}" frameborder="0" style="height: calc(100% - 2em);" width="100%"></iframe>
 <iframe src="${IFRAME2_SRC}" class="panel" frameborder="0" style="height: 2em;" width="100%"></iframe>
 </body></html>""", None]
 
 dmail_fetch_panel_content = [\
     b"""<!DOCTYPE html>
-<html><head><base target="_root" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/></head><body class="iframe panel">
+<html><head><base target="_top" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/></head><body class="iframe panel">
 <div class="panel">
     <span>
         [<a target="_self" href="../mark_as_read/${DMAIL_IDS}">Toggle Read</a>]
@@ -290,7 +290,7 @@ dmail_create_address_content = [None, None]
 
 dmail_create_address_form_content = [\
     b"""<!DOCTYPE html>
-<html><head><base target="_root" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/></head><body class="iframe">
+<html><head><base target="_top" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/></head><body class="iframe">
 <form action="make_it_so" method="get">
     <h4>Dmail Address Generation</h4>
     <p>To create yourself a new Dmail Address, simply click the Create button below. Changing these values from their defaults is not needed at all.</p>
@@ -312,7 +312,7 @@ dmail_compose_dmail_content = [None, None]
 
 dmail_compose_dmail_form_start =\
     b"""<!DOCTYPE html>
-<html><head><base target="_root" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/>
+<html><head><base target="_top" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/>
 <style type="text/css">
 </style></head><body class="iframe">
 <form action="make_it_so" method="post">

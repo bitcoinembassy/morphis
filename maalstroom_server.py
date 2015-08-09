@@ -51,6 +51,8 @@ class DataResponseWrapper(object):
         self.exception = None
         self.timed_out = False
 
+        self.cancelled = Event()
+
 class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
     daemon_threads = True
 
@@ -83,6 +85,17 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
             self.maalstroom_url_prefix =\
                 self._maalstroom_http_url_prefix.format(host).encode()
 
+    def __get_connection_count(self, q):
+        cnt = len(self.node.chord_engine.peers)
+        q.put(cnt)
+
+    def _get_connection_count(self):
+        q = queue.Queue()
+
+        self.node.loop.call_soon_threadsafe(self.__get_connection_count, q)
+
+        return q.get()
+
     def do_GET(self):
         self.__prepare_for_request()
 
@@ -91,8 +104,17 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
         if rpath and rpath[-1] == '/':
             rpath = rpath[:-1]
 
+        connection_cnt = None
+
         if not rpath:
-            self._send_content(pages.home_page_content)
+            connection_cnt = self._get_connection_count()
+
+            content = pages.home_page_content[0].replace(\
+                b"${CONNECTIONS}", str(connection_cnt).encode())
+            content = content.replace(\
+                b"${MORPHIS_VERSION}", self.node.morphis_version.encode())
+
+            self._send_content([content, None])
             return
 
         s_upload = ".upload"
@@ -127,6 +149,10 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
                         rpath[len(s_upload)+1:].encode())
                 content =\
                     content.replace(\
+                        b"${VERSION}",\
+                        str(int(time.time()*1000)).encode())
+                content =\
+                    content.replace(\
                         b"${UPDATEABLE_KEY_MODE_DISPLAY}",\
                         b"")
                 content =\
@@ -134,9 +160,7 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
                         b"${STATIC_MODE_DISPLAY}",\
                         b"display: none")
 
-                content_id = mbase32.encode(enc.generate_ID(content))
-
-                self._send_content((content, content_id))
+                self._send_content(content)
 
             return
         elif rpath.startswith(s_dmail):
@@ -154,11 +178,16 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
             self.end_headers()
             return
 
-        error = False
-
         significant_bits = None
 
         # At this point we assume it is a key URL.
+
+        if connection_cnt is None:
+            connection_cnt = self._get_connection_count()
+        if not connection_cnt:
+            self._send_error("No connected nodes; cannot fetch from the"\
+                " network.")
+            return
 
         path_sep_idx = rpath.find('/')
         if path_sep_idx != -1:
@@ -170,16 +199,14 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
         try:
             data_key, significant_bits = mutil.decode_key(rpath)
         except:
-            error = True
-            log.exception("decode")
-
-        if error:
-            self._handle_error()
+            self._send_error(\
+                "Invalid encoded key: [{}].".format(rpath),\
+                errcode=400)
             return
 
         data_rw = DataResponseWrapper()
 
-        node.loop.call_soon_threadsafe(\
+        self.node.loop.call_soon_threadsafe(\
             asyncio.async,\
             _send_get_data(data_key, significant_bits, path, data_rw))
 
@@ -221,7 +248,7 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
 
             if data_rw.mime_type:
                 self.send_header("Content-Type", data_rw.mime_type)
-                if not self.maalstroom_plugin_used and data_rw.mime_type\
+                if data_rw.mime_type\
                         in ("text/html", "text/css", "application/javascript"):
                     rewrite_url = True
             else:
@@ -238,16 +265,26 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
                     self.send_header("Content-Type", "application/javascript")
                     rewrite_url = True
                 elif data[:8] == bytes(\
-                        [0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70]):
+                        [0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70])\
+                        or data[:8] == bytes(\
+                        [0x00, 0x00, 0x00, 0x1c, 0x66, 0x74, 0x79, 0x70]):
                     self.send_header("Content-Type", "video/mp4")
                 elif data[:8] == bytes(\
                         [0x50, 0x4b, 0x03, 0x04, 0x0a, 0x00, 0x00, 0x00]):
                     self.send_header("Content-Type", "application/zip")
+                elif data[:5] == bytes(\
+                        [0x25, 0x50, 0x44, 0x46, 0x2d]):
+                    self.send_header("Content-Type", "application/pdf")
                 else:
                     self.send_header("Content-Type", "text/html")
                     rewrite_url = True
 
-            self.send_header("Content-Length", data_rw.size)
+            rewrite_url = rewrite_url and self.maalstroom_plugin_used
+
+            if rewrite_url:
+                self.send_header("Transfer-Encoding", "chunked")
+            else:
+                self.send_header("Content-Length", data_rw.size)
 
             if data_rw.version is not None:
                 self.send_header("Cache-Control", "max-age=15, public")
@@ -257,18 +294,30 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
 
             self.end_headers()
 
-            while True:
-                if rewrite_url:
-                    self.wfile.write(\
-                        data.replace(b"morphis://",\
-                            self.maalstroom_url_prefix))
-                else:
-                    self.wfile.write(data)
+            try:
+                while True:
+                    if rewrite_url:
+                        self._send_partial_content(data)
+                    else:
+                        self.wfile.write(data)
 
-                data = data_rw.data_queue.get()
+                    data = data_rw.data_queue.get()
 
-                if data is None:
-                    break
+                    if data is None:
+                        if data_rw.timed_out:
+                            log.warning(\
+                                "Request timed out; closing connection.")
+                            self.close_connection = True
+
+                        if rewrite_url:
+                            self._end_partial_content()
+                        break
+            except ConnectionError:
+                if log.isEnabledFor(logging.INFO):
+                    log.info("Maalstroom request got broken pipe from HTTP"\
+                        " side; cancelling.")
+                data_rw.cancelled.set()
+
         else:
             self._handle_error(data_rw)
 
@@ -276,6 +325,12 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
         self.__prepare_for_request()
 
         rpath = self.path[1:]
+
+        connection_cnt = self._get_connection_count()
+        if not connection_cnt:
+            self._send_error("No connected nodes; cannot upload to the"\
+                " network.")
+            return
 
         log.info("POST; rpath=[{}].".format(rpath))
 
@@ -526,7 +581,12 @@ class Downloader(multipart.DataCallback):
         self.data_rw.mime_type = val
 
     def notify_data(self, position, data):
+        if self.data_rw.cancelled.is_set():
+            return False
+
         self.data_rw.data_queue.put(data)
+
+        return True
 
 @asyncio.coroutine
 def _send_get_data(data_key, significant_bits, path, data_rw):
@@ -656,6 +716,6 @@ def _set_upload_page(content):
 
     static_upload_page_content[0] = content
     static_upload_page_content[1] =\
-        mbase32.encode(enc.generate_ID(static_upload_page_content[1]))
+        mbase32.encode(enc.generate_ID(static_upload_page_content[0]))
 
-_set_upload_page(b'<html><head><title>MORPHiS Maalstroom Upload</title></head><body><h4 style="${UPDATEABLE_KEY_MODE_DISPLAY}">NOTE: Bookmark this page to save your private key in the bookmark!</h4>Select the file to upload below:</p><form action="upload" method="post" enctype="multipart/form-data"><input type="file" name="fileToUpload" id="fileToUpload"/><div style="${UPDATEABLE_KEY_MODE_DISPLAY}"><br/><br/><label for="privateKey">Private Key</label><textarea name="privateKey" id="privateKey" rows="5" cols="80">${PRIVATE_KEY}</textarea><br/><label for="path">Path</label><input type="textfield" name="path" id="path"/><br/><label for="version">Version</label><input type="textfield" name="version" id="version"/><br/><label for="mime_type">Mime Type</label><input type="textfield" name="mime_type" id="mime_type"/><br/></div><input type="submit" value="Upload File" name="submit"/></form><p style="${STATIC_MODE_DISPLAY}"><a href="morphis://.upload/generate">switch to updateable key mode</a></p><p style="${UPDATEABLE_KEY_MODE_DISPLAY}"><a href="morphis://.upload/">switch to static key mode</a></p><h5><- <a href="morphis://">MORPHiS UI</a></h5></body></html>')
+_set_upload_page(b'<html><head><title>MORPHiS Maalstroom Upload</title></head><body><h4 style="${UPDATEABLE_KEY_MODE_DISPLAY}">NOTE: Bookmark this page to save your private key in the bookmark!</h4>Select the file to upload below:</p><form action="upload" method="post" enctype="multipart/form-data"><input type="file" name="fileToUpload" id="fileToUpload"/><div style="${UPDATEABLE_KEY_MODE_DISPLAY}"><br/><br/><label for="privateKey">Private Key</label><textarea name="privateKey" id="privateKey" rows="5" cols="80">${PRIVATE_KEY}</textarea><br/><label for="path">Path</label><input type="textfield" name="path" id="path"/><br/><label for="version">Version</label><input type="textfield" name="version" id="version" value="${VERSION}"/><br/><label for="mime_type">Mime Type</label><input type="textfield" name="mime_type" id="mime_type"/><br/></div><input type="submit" value="Upload File" name="submit"/></form><p style="${STATIC_MODE_DISPLAY}"><a href="morphis://.upload/generate">switch to updateable key mode</a></p><p style="${UPDATEABLE_KEY_MODE_DISPLAY}"><a href="morphis://.upload/">switch to static key mode</a></p><h5><- <a href="morphis://">MORPHiS UI</a></h5></body></html>')

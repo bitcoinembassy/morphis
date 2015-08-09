@@ -4,6 +4,7 @@
 import llog
 
 import asyncio
+from collections import deque
 from concurrent import futures
 from datetime import datetime, timedelta
 import functools
@@ -32,6 +33,7 @@ class DataCallback(object):
         pass
 
     def notify_data(self, position, data):
+        # returns: True to continue, False to abort download.
         pass
 
 class BufferingDataCallback(DataCallback):
@@ -55,6 +57,8 @@ class BufferingDataCallback(DataCallback):
 
         self.buf += data
         self.position += data_len
+
+        return True
 
 class BlockType(Enum):
     hash_tree = 0x2D4100
@@ -225,9 +229,9 @@ class HashTreeFetch(object):
 
         self._task_semaphore = asyncio.Semaphore(concurrency)
         self._next_position = 0
-        self._failed = []
+        self._failed = deque()
         self._ordered_waiters = []
-        self._ordered_waiters_dc = {}
+        self._ordered_waiters_dc = {} #FIXME: WTF is this?
 
         self._task_cnt = 0
         self._tasks_done = asyncio.Event()
@@ -250,12 +254,14 @@ class HashTreeFetch(object):
 
         yield from self._tasks_done.wait()
 
+        if self._abort:
+            return False
+
         if self._failed:
             delta = timedelta(seconds=self.retry_seconds)
             start = datetime.today()
 
-            while self._failed\
-                    and ((datetime.today() - start) < delta):
+            while self._failed and ((datetime.today() - start) < delta):
                 yield from self._task_semaphore.acquire()
                 if self._abort:
                     return False
@@ -263,7 +269,7 @@ class HashTreeFetch(object):
 
             yield from self._tasks_done.wait()
 
-            if self._failed:
+            if self._failed or self._abort:
                 return False
 
         return True
@@ -316,7 +322,8 @@ class HashTreeFetch(object):
             position = eposition
 
     def _schedule_retry(self):
-        retry = random.choice(self._failed)
+        retry = self._failed.popleft()
+
         retry_depth, retry_position, data_key, tries = retry
 
         asyncio.async(\
@@ -337,7 +344,11 @@ class HashTreeFetch(object):
 
         self._task_semaphore.release()
 
+        if self._abort:
+            return
+
         if not data_rw.data:
+            # Fetch failed.
             if retry:
                 retry[3] += 1 # Tries.
 
@@ -345,13 +356,12 @@ class HashTreeFetch(object):
                     if log.isEnabledFor(logging.INFO):
                         log.info("Block id [{}] failed too much; aborting."\
                             .format(mbase32.encode(data_key)))
-                    self._abort = True
-                    self._task_semaphore.release()
-                    self._tasks_done.set()
+                    self._do_abort()
                     return
             else:
                 retry = [depth, position, data_key, 1]
-                self._failed.append(retry)
+
+            self._failed.append(retry)
 
             if log.isEnabledFor(logging.INFO):
                 log.info("Block id [{}] failed, retrying (tries=[{}])."\
@@ -363,7 +373,9 @@ class HashTreeFetch(object):
                 self._schedule_retry()
         else:
             if retry:
-                del self._failed[retry]
+                if log.isEnabledFor(logging.INFO):
+                    log.info("Succeeded with retry [{}] on try [{}]."\
+                        .format(mbase32.encode(data_key), retry[3]))
 
             if self.ordered:
                 if position != self._next_position:
@@ -371,7 +383,12 @@ class HashTreeFetch(object):
                     yield from self.__wait(position, waiter)
 
             if not depth:
-                self.data_callback.notify_data(position, data_rw.data)
+                r = self.data_callback.notify_data(position, data_rw.data)
+                if not r:
+                    if log.isEnabledFor(logging.DEBUG):
+                        log.debug("Received cancel signal; aborting download.")
+                    self._do_abort()
+                    return
                 self.__notify_position_complete(position + len(data_rw.data))
             else:
                 yield from\
@@ -382,6 +399,16 @@ class HashTreeFetch(object):
         if self._task_cnt <= 0:
             assert self._task_cnt == 0
             self._tasks_done.set()
+
+    def _do_abort(self):
+        if self._abort:
+            return
+
+        self._abort = True
+        self._task_semaphore.release()
+        self._tasks_done.set()
+        for position, waiter in self._ordered_waiters:
+            waiter.cancel()
 
     @asyncio.coroutine
     def __wait(self, position, waiter):
@@ -398,11 +425,13 @@ class HashTreeFetch(object):
         self._next_position = next_position
 
         while self._ordered_waiters:
-            position, waiter = self._ordered_waiters[0]
-            if position > next_position:
-                return
-            waiter.set_result(False)
-            heapq.heappop(self._ordered_waiters)
+            while self._ordered_waiters:
+                position, waiter = self._ordered_waiters[0]
+                if position > next_position:
+                    return
+                waiter.set_result(False)
+                heapq.heappop(self._ordered_waiters)
+                break
 
 ## Functions:
 
@@ -444,6 +473,15 @@ def get_data(engine, data_key, data_callback, path=None, ordered=False,\
 
     if data_rw.version:
         data_callback.notify_version(data_rw.version)
+    else:
+        #FIXME: Remove this from here after it is integrated into the coming
+        # chord_task rewrite.
+        # Reupload the key to keep prefix searches in the network.
+        r = random.randint(1, 5)
+        if r == 1:
+            asyncio.async(\
+                engine.tasks.send_store_key(data_rw.data, data_key),\
+                loop=engine.loop)
 
     link_depth = 0
 
@@ -633,13 +671,25 @@ def _store_data_multipart(engine, data, key_callback, store_key, concurrency):
 
 @asyncio.coroutine
 def _store_block(engine, i, block_data, key_callback, task_semaphore):
-    snodes = yield from\
-        engine.tasks.send_store_data(block_data, key_callback=key_callback)
+    tries = 0
 
-    if not snodes:
-        if log.isEnabledFor(logging.DEBUG):
-            log.debug("Failed to upload block #{}.".format(i))
+    while True:
+        snodes = yield from\
+            engine.tasks.send_store_data(block_data, key_callback=key_callback)
 
-    task_semaphore.release()
+        task_semaphore.release()
 
-    return True
+        if snodes:
+            return True
+
+        tries += 1
+
+        if tries < 5:
+            yield from asyncio.sleep(1)
+            yield from task_semaphore.acquire()
+            continue
+
+        if log.isEnabledFor(logging.WARNING):
+            log.warn("Failed to upload block #{}.".format(i))
+
+        return False

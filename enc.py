@@ -1,6 +1,7 @@
 # Copyright (c) 2014-2015  Sam Maloney.
 # License: GPL v2.
 
+from hashlib import sha512
 import os
 
 from Crypto.Cipher import AES
@@ -25,7 +26,8 @@ def generate_RSA(bits=4096):
     return new_key;
 
 def generate_ID(data):
-    return SHA512.new(data).digest()
+#    return SHA512.new(data).digest()
+    return sha512(data).digest()
 
 def _generate_ID(data):
     return SHA512.new(data)

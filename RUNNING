@@ -1,0 +1,34 @@
+Running MORPHiS is dead simple, and will be even simplier when I launch the official release.
+
+There are only two dependencies other than Python 3.
+
+pycrypto >= 2.6 (tested with 2.6)
+SQLAlchemy >= 0.9.8 (tested with 0.9.8)
+
+and of course:
+
+Python >= 3.4.1 (tested with 3.4.1 :)
+
+No installation is neccesary.
+
+Although there is a Makefile which will compile some of the python files with Cython to give a big speed boost, it is not at all neccesary and already very fast without compliation. So just ignore the Makefile/Cython unless you are already familiar with Cython. You can try typing make, if it works, it works, if not, don't worry about it.
+
+To run, simply type this:
+
+python3 node.py --bind *:4250
+
+You may choose a different port than 4250 for yourself with the bind parameter, it does not mater at all.
+
+On Windows you may have to put your external IP instead of * as Windows does not seem to understand *. None of that will be neccesary with the official release, it will be a double click affair.
+
+Then, simply point your web browser to:
+
+http://localhost:4251
+
+(NOTE, 4251, not 4250. 4251 is the HTTP port it listens on for the web UI. 4250 is the SSH port that the node talks to other nodes on.)
+
+You do not need to open a firewall port. MORPHiS is designed to not care about firewalls at all. I haven't implemented the skip-a-hop-route yet, which makes the previous statement 100% true, so if you can, do open the 4250 port on your firewall, but, it doesn't mater much (won't affect your performance, you are just not helping the network as much as you could), but absolutely won't matter in the near future after the skip-a-hop-route feature is added.)
+
+If you are going to do an upload, it is best to wait about 10 minutes (only maters for the very first run of a node). This is because otherwise your node won't neccesarily stick the data into optimal nodes and thus making requests for that data harder. You can just upload the data again later to reinforce it. MORPHiS keys are deterministic based upon the data, so a file will always have the same key no mater who or when uploaded it.
+
+That is it. Enjoy!

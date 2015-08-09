@@ -55,6 +55,8 @@ class ChordEngine():
         self.peer_buckets = [{} for i in range(NODE_ID_BITS)] # [{addr: Peer}]
         self.peer_trie = bittrie.BitTrie() # {node_id, Peer}
 
+        self.last_db_peer_count = 0
+
         self.minimum_connections = 10
         self.maximum_connections = 72
         self.hard_maximum_connections = self.maximum_connections * 2
@@ -234,7 +236,8 @@ class ChordEngine():
 
         self._async_process_connection_count()
 
-        self._async_do_stabilize()
+        # Let _async_process_connection_count() connect some connections first.
+        self.loop.call_later(7, self._async_do_stabilize)
 
     def _async_do_stabilize(self):
         self._do_stabilize_handle =\
@@ -304,14 +307,26 @@ class ChordEngine():
 
         def dbcall():
             with self.node.db.open_session() as sess:
-                return sess.query(func.min_(Peer.distance))\
+                st = sess.query(Peer)\
+                    .statement.with_only_columns(\
+                        [func.count('*')])
+
+                peer_cnt = sess.execute(st).scalar()
+
+                min_dist = sess.query(func.min_(Peer.distance))\
                     .filter(Peer.distance != None)\
                     .filter(Peer.distance != 0)\
                     .filter(Peer.connected == False)\
                     .scalar()
 
-        closestdistance =\
+                return peer_cnt, min_dist
+
+        self.last_db_peer_count, closestdistance =\
             yield from self.loop.run_in_executor(None, dbcall)
+
+        if log.isEnabledFor(logging.INFO):
+            log.info("Database Peer count=[{}]."\
+                .format(self.last_db_peer_count))
 
         if not closestdistance:
             return

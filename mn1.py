@@ -238,6 +238,7 @@ class SshProtocol(asyncio.Protocol):
 
         if self.status is not Status.ready:
             # Ignore this call if we are closed or disconnected.
+            log.warning("close_channel(..) called on unready connection.")
             assert self.status is not Status.new
             return False
 
@@ -257,6 +258,16 @@ class SshProtocol(asyncio.Protocol):
                 log.info("close_channel(..) called on still opening channel."\
                     .format(remote_cid))
             return False
+
+#FIXME: Something like this should go here to signal to waiters on the queue
+# that the channel is closed right away. However, the following causes problems
+# later on where code wasn't expecting such to happen.
+#        queue = self.channel_queues.get(local_cid, None)
+#        if queue:
+#            yield from queue.put(None)
+#        else:
+#            log.warning("No channel queue for local_cid=[{}]."\
+#                .format(local_cid))
 
         if type(remote_cid) is mnetpacket.SshChannelOpenMessage:
             del self._channel_map[local_cid]
@@ -288,12 +299,15 @@ class SshProtocol(asyncio.Protocol):
     def verify_server_key(self, key_data, sig):
         if self.server_key:
             if self.server_key.asbytes() != key_data:
-                raise SshException("Key provided by server differs from that which we were expecting.")
+                raise SshException("Key provided by server differs from that"\
+                    " which we were expecting (address=[{}])."\
+                        .format(self.address))
         else:
             self.server_key = rsakey.RsaKey(key_data)
 
         if not self.server_key.verify_ssh_sig(self.h, sig):
-            raise SshException("Signature verification failed.")
+            raise SshException("Signature verification failed (address=[{}])."\
+                .format(self.address))
 
         log.info("Signature validated correctly!")
 
@@ -935,7 +949,9 @@ class SshProtocol(asyncio.Protocol):
 
         assert self.binaryMode
 
-        self._process_encrypted_buffer()
+        r = self._process_encrypted_buffer()
+        if not r:
+            return
 
         # cbuf is clear text buf.
         while True:
@@ -1032,7 +1048,7 @@ class SshProtocol(asyncio.Protocol):
         if self.inCipher != None:
 #            if len(self.buf) > 20: # max(blksize, 20): bs, hmacSize
             if len(self.buf) < blksize:
-                return
+                return False
 
             if len(self.cbuf) == 0:
                 out = self.inCipher.decrypt(self.buf[:blksize])
@@ -1054,15 +1070,15 @@ class SshProtocol(asyncio.Protocol):
                 self.buf = self.buf[blksize:]
 
                 if self.bpLength == blksize:
-                    return
+                    return True
 
             if len(self.buf) < min(\
                     1024, self.bpLength - len(self.cbuf) + self.inHmacSize):
-                return
+                return True
 
             l = min(len(self.buf), self.bpLength - len(self.cbuf))
             if not l:
-                return
+                return True
 
             dsize = l - (l % blksize)
             blks = self.buf[:dsize]
@@ -1081,6 +1097,8 @@ class SshProtocol(asyncio.Protocol):
                 log.debug("len(cbuf)={}, cbuf=[\n{}]".format(len(self.cbuf), hex_dump(self.cbuf)))
         else:
             self.cbuf = self.buf
+
+        return True
 
 class SshServerProtocol(SshProtocol):
     def __init__(self, loop):

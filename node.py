@@ -72,6 +72,10 @@ class Node():
 
         self.web_devel = False
 
+        self.seed_node_enabled = True
+
+        self.morphis_version = None
+
     @property
     def all_nodes(self):
         global nodes
@@ -169,19 +173,42 @@ class Node():
 
     @asyncio.coroutine
     def start(self):
+        self.morphis_version = open("VERSION").read().strip()
+
         if not self._db_initialized:
             self.init_db()
 
+        self.chord_engine.bind_address = self.bind_address
+
         def dbcall():
-            log.info("Clearing out connected state from Peer table.")
             with self.db.open_session() as sess:
+                # Grab Peer count.
+                st = sess.query(db.Peer)\
+                    .statement.with_only_columns(\
+                        [func.count('*')])
+                peer_cnt = sess.execute(st).scalar()
+
+                # Clear out connected state.
                 sess.execute(update(db.Peer, bind=self.db.engine)\
                     .values(connected=False, last_connect_attempt=None))
+
                 sess.commit()
 
-        yield from self.loop.run_in_executor(None, dbcall)
+                return peer_cnt
 
-        self.chord_engine.bind_address = self.bind_address
+        log.info("Clearing out connected state from Peer table.")
+        self.chord_engine.last_db_peer_count =\
+            yield from self.loop.run_in_executor(None, dbcall)
+
+        if not self.chord_engine.last_db_peer_count\
+                and not self.chord_engine.connect_peers\
+                and self.seed_node_enabled:
+            self.chord_engine.connect_peers = ["162.252.242.77:4250"]
+
+            if log.isEnabledFor(logging.INFO):
+                log.info("No PeerS in our database nor specified as a"\
+                    " parameter; using seednodes [{}]."\
+                        .format(self.chord_engine.connect_peers))
 
         yield from self.chord_engine.start()
 
@@ -273,6 +300,9 @@ def __main():
     parser.add_argument("--disableshell", action="store_true",
         help="Disable MORPHiS from allowing ssh shell connections from"\
             " localhost.")
+    parser.add_argument("--dontuseseed", action="store_true",\
+        help="Instruct the node to not attempt to connect to the official"\
+            " MORPHiS seed node in the case that you have no peers.")
     parser.add_argument("--dssize", type=int,\
         help="Specify the datastore size in standard non-IEC-redefined JEDEC"\
             " MBs (default is one gigabyte, as in 1024^3 bytes). Morphis does"\
@@ -313,7 +343,7 @@ def __main():
     if bindaddr:
         bindaddr.split(':') # Just to preemptively test.
     else:
-        bindaddr = "127.0.0.1:4250"
+        bindaddr = ":4250"
     if args.cleartexttransport:
         log.info("Enabling cleartext transport.")
         mn1.enable_cleartext_transport()
@@ -346,6 +376,8 @@ def __main():
                 node.shell_enabled = False
             if args.webdevel:
                 node.web_devel = True
+            if args.dontuseseed:
+                node.seed_node_enabled = False
 
             nodes.append(node)
 
