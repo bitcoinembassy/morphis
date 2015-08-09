@@ -566,7 +566,11 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
 
         self.send_header("Content-Length", len(errmsg))
         self.end_headers()
-        self.wfile.write(errmsg)
+        try:
+            self.wfile.write(errmsg)
+        except ConnectionError:
+            log.info("HTTP client aborted request connection.")
+            return
 
     def _handle_error(self, data_rw=None, errmsg=None, errcode=None):
         if not data_rw:
@@ -584,7 +588,11 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
 
         self.send_header("Content-Length", len(errmsg))
         self.end_headers()
-        self.wfile.write(errmsg)
+        try:
+            self.wfile.write(errmsg)
+        except ConnectionError:
+            log.info("HTTP client aborted request connection.")
+            return
 
 class Downloader(multipart.DataCallback):
     def __init__(self, data_rw):
