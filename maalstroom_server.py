@@ -279,7 +279,7 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
                     self.send_header("Content-Type", "text/html")
                     rewrite_url = True
 
-            rewrite_url = rewrite_url and self.maalstroom_plugin_used
+            rewrite_url = rewrite_url and not self.maalstroom_plugin_used
 
             if rewrite_url:
                 self.send_header("Transfer-Encoding", "chunked")
