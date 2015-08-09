@@ -172,11 +172,17 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
             return
 
         if self.headers["If-None-Match"] == rpath:
-            self.send_response(304)
-            self.send_header("ETag", rpath)
-            self.send_header("Content-Length", 0)
-            self.end_headers()
-            return
+            cache_control = self.headers["Cache-Control"]
+            if cache_control != "max-age=0":
+                self.send_response(304)
+                if cache_control:
+                    # This should only have been sent for an updateable key.
+                    self.send_header("Cache-Control", "max-age=15, public")
+                else:
+                    self.send_header("ETag", rpath)
+                self.send_header("Content-Length", 0)
+                self.end_headers()
+                return
 
         significant_bits = None
 
@@ -300,7 +306,7 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
 
             if data_rw.version is not None:
                 self.send_header("Cache-Control", "max-age=15, public")
-                self.send_header("ETag", rpath)
+#                self.send_header("ETag", rpath)
             else:
                 self.send_header("Cache-Control", "public")
                 self.send_header("ETag", rpath)
@@ -468,11 +474,17 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
             content_entry[1] = content_id
 
         if cacheable and self.headers["If-None-Match"] == content_id:
-            self.send_response(304)
-            self.send_header("ETag", content_id)
-            self.send_header("Content-Length", 0)
-            self.end_headers()
-            return
+            cache_control = self.headers["Cache-Control"]
+            if cache_control != "max-age=0":
+                self.send_response(304)
+                if cache_control:
+                    # This should only have been sent for an updateable key.
+                    self.send_header("Cache-Control", "max-age=15, public")
+                else:
+                    self.send_header("ETag", content_id)
+                self.send_header("Content-Length", 0)
+                self.end_headers()
+                return
 
         if callable(content):
             content = content()
