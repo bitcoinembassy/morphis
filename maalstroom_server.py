@@ -252,32 +252,42 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
                         in ("text/html", "text/css", "application/javascript"):
                     rewrite_url = True
             else:
-                if data[0] == 0xFF and data[1] == 0xD8:
+                dh = data[:160]
+
+                if dh[0] == 0xFF and dh[1] == 0xD8:
                     self.send_header("Content-Type", "image/jpg")
-                elif data[0] == 0x89 and data[1:4] == b"PNG":
+                elif dh[0] == 0x89 and dh[1:4] == b"PNG":
                     self.send_header("Content-Type", "image/png")
-                elif data[:5] == b"GIF89":
+                elif dh[:5] == b"GIF89":
                     self.send_header("Content-Type", "image/gif")
-                elif data[:5] == b"/*CSS":
+                elif dh[:5] == b"/*CSS":
                     self.send_header("Content-Type", "text/css")
                     rewrite_url = True
-                elif data[:12] == b"/*JAVASCRIPT":
+                elif dh[:12] == b"/*JAVASCRIPT":
                     self.send_header("Content-Type", "application/javascript")
                     rewrite_url = True
-                elif data[:8] == bytes(\
+                elif dh[:8] == bytes(\
                         [0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70])\
-                        or data[:8] == bytes(\
+                        or dh[:8] == bytes(\
                         [0x00, 0x00, 0x00, 0x1c, 0x66, 0x74, 0x79, 0x70]):
                     self.send_header("Content-Type", "video/mp4")
-                elif data[:8] == bytes(\
+                elif dh[:8] == bytes(\
                         [0x50, 0x4b, 0x03, 0x04, 0x0a, 0x00, 0x00, 0x00]):
                     self.send_header("Content-Type", "application/zip")
-                elif data[:5] == bytes(\
+                elif dh[:5] == bytes(\
                         [0x25, 0x50, 0x44, 0x46, 0x2d]):
                     self.send_header("Content-Type", "application/pdf")
                 else:
-                    self.send_header("Content-Type", "text/html")
-                    rewrite_url = True
+                    dhl = dh.lower()
+
+                    if (dhl.find(b"<html") > -1 or dhl.find(b"<HTML>") > -1)\
+                            and (dhl.find(b"<head>") > -1\
+                                or dhl.find(b"<HEAD") > -1):
+                        self.send_header("Content-Type", "text/html")
+                        rewrite_url = True
+                    else:
+                        self.send_header(\
+                            "Content-Type", "application/octet-stream")
 
             rewrite_url = rewrite_url and not self.maalstroom_plugin_used
 
