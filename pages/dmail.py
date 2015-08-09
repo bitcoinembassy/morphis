@@ -126,7 +126,7 @@ def __serve_get(handler, rpath, done_event):
             if from_addr:
                 iframe_src = "../compose/form/{}".format(from_addr).encode()
             else:
-                iframe_src = "../compose/form".encode()
+                iframe_src = "compose/form".encode()
 
             content = pages.dmail_compose_dmail_content[0].replace(\
                     b"${IFRAME_SRC}", iframe_src)
