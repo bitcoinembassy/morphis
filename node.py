@@ -173,8 +173,6 @@ class Node():
 
     @asyncio.coroutine
     def start(self):
-        self.morphis_version = open("VERSION").read().strip()
-
         if not self._db_initialized:
             self.init_db()
 
@@ -365,10 +363,13 @@ def __main():
     parallel_launch = args.parallellaunch
     reinitds = args.reinitds
 
+    morphis_version = open("VERSION").read().strip()
+
     while True:
         @asyncio.coroutine
         def _start_node(instance, bindaddr):
             node = Node(loop, instance, dburl)
+            node.morphis_version = morphis_version
 
             if args.enableeval:
                 node.eval_enabled = True
