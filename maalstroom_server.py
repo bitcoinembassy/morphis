@@ -248,7 +248,7 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
 
             if data_rw.mime_type:
                 self.send_header("Content-Type", data_rw.mime_type)
-                if not self.maalstroom_plugin_used and data_rw.mime_type\
+                if data_rw.mime_type\
                         in ("text/html", "text/css", "application/javascript"):
                     rewrite_url = True
             else:
@@ -279,7 +279,12 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
                     self.send_header("Content-Type", "text/html")
                     rewrite_url = True
 
-            self.send_header("Content-Length", data_rw.size)
+            rewrite_url = rewrite_url and self.maalstroom_plugin_used
+
+            if rewrite_url:
+                self.send_header("Transfer-Encoding", "chunked")
+            else:
+                self.send_header("Content-Length", data_rw.size)
 
             if data_rw.version is not None:
                 self.send_header("Cache-Control", "max-age=15, public")
@@ -292,9 +297,7 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
             try:
                 while True:
                     if rewrite_url:
-                        self.wfile.write(\
-                            data.replace(b"morphis://",\
-                                self.maalstroom_url_prefix))
+                        self._send_partial_content(data)
                     else:
                         self.wfile.write(data)
 
@@ -306,6 +309,8 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
                                 "Request timed out; closing connection.")
                             self.close_connection = True
 
+                        if rewrite_url:
+                            self._end_partial_content()
                         break
             except ConnectionError:
                 if log.isEnabledFor(logging.INFO):
