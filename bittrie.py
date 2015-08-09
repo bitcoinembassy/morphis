@@ -1,6 +1,12 @@
 # Copyright (c) 2014-2015  Sam Maloney.
 # License: GPL v2.
 
+import llog
+
+import logging
+
+log = logging.getLogger(__name__)
+
 none_found = object()
 
 class BitTrie(object):
@@ -274,6 +280,22 @@ class XorKey(object):
 
     def __len__(self):
         return len(self.key1)
+
+max_len_value = 0xFFFFFFFF
+
+class __TestLenObj(object):
+    def __init__(self, length):
+        self.length = max_len_value
+
+    def __len__(self):
+        return self.length
+
+try:
+    __test_len_obj = __TestLenObj(max_len_value)
+    __test_len_r = len(__test_len_obj)
+except OverflowError:
+    log.info("Setting max_len_value to 0xFFFF.")
+    max_len_value = 0xFFFF
 
 class ZeroKey(object):
     def __init__(self, length=0xFFFFFFFF):
