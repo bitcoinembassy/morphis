@@ -419,7 +419,7 @@ def __serve_post(handler, rpath, done_event):
 
         sender_dmail_id = dd.get(b"sender")
 
-        if sender_dmail_id:
+        if sender_dmail_id[0]:
             sender_dmail_id = int(sender_dmail_id[0])
 
             if log.isEnabledFor(logging.DEBUG):
