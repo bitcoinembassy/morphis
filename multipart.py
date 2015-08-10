@@ -340,7 +340,11 @@ class HashTreeFetch(object):
 
     @asyncio.coroutine
     def __fetch_hash_tree_ref(self, data_key, depth, position, retry=None):
-        data_rw = yield from self.engine.tasks.send_get_data(data_key)
+        if not retry:
+            data_rw = yield from self.engine.tasks.send_get_data(data_key)
+        else:
+            data_rw = yield from self.engine.tasks.send_get_data(\
+                data_key, retry_factor=retry[3] * 10)
 
         self._task_semaphore.release()
 
@@ -352,7 +356,7 @@ class HashTreeFetch(object):
             if retry:
                 retry[3] += 1 # Tries.
 
-                if retry[3] >= 5:
+                if retry[3] >= 7:
                     if log.isEnabledFor(logging.INFO):
                         log.info("Block id [{}] failed too much; aborting."\
                             .format(mbase32.encode(data_key)))
@@ -469,7 +473,12 @@ def get_data(engine, data_key, data_callback, path=None, ordered=False,\
     data = data_rw.data
 
     if data is None:
-        return None
+        data_rw = yield from engine.tasks.send_get_data(\
+            data_key, path, retry_factor=10)
+        data = data_rw.data
+
+        if data is None:
+            return None
 
     if data_rw.version:
         data_callback.notify_version(data_rw.version)
@@ -480,7 +489,8 @@ def get_data(engine, data_key, data_callback, path=None, ordered=False,\
         r = random.randint(1, 5)
         if r == 1:
             asyncio.async(\
-                engine.tasks.send_store_key(data_rw.data, data_key),\
+                engine.tasks.send_store_key(\
+                    data_rw.data, data_key, retry_factor=50),\
                 loop=engine.loop)
 
     link_depth = 0
@@ -512,7 +522,12 @@ def get_data(engine, data_key, data_callback, path=None, ordered=False,\
             data = data_rw.data
 
             if not data:
-                return None
+                data_rw = yield from engine.tasks.send_get_data(\
+                    block.destination, retry_factor=10)
+                data = data_rw.data
+
+                if not data:
+                    return None
 
             continue
 
@@ -667,15 +682,22 @@ def _store_data_multipart(engine, data, key_callback, store_key, concurrency):
 
     yield from\
         engine.tasks.send_store_data(block_data, store_key=store_key,\
-            key_callback=key_callback)
+            key_callback=key_callback, retry_factor=50)
 
 @asyncio.coroutine
 def _store_block(engine, i, block_data, key_callback, task_semaphore):
     tries = 0
 
     while True:
-        snodes = yield from\
-            engine.tasks.send_store_data(block_data, key_callback=key_callback)
+        if not tries:
+            snodes = yield from\
+                engine.tasks.send_store_data(\
+                    block_data, key_callback=key_callback)
+        else:
+            snodes = yield from\
+                engine.tasks.send_store_data(\
+                    block_data, key_callback=key_callback,\
+                    retry_factor=tries * 10)
 
         task_semaphore.release()
 
@@ -684,7 +706,7 @@ def _store_block(engine, i, block_data, key_callback, task_semaphore):
 
         tries += 1
 
-        if tries < 5:
+        if tries < 7:
             yield from asyncio.sleep(1)
             yield from task_semaphore.acquire()
             continue
