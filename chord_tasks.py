@@ -843,8 +843,8 @@ class ChordTasks(object):
                     # closed.
                     continue
 
-                if log.isEnabledFor(logging.DEBUG):
-                    log.debug("Sending {} to Peer [{}] and path [{}]."\
+                if log.isEnabledFor(logging.INFO):
+                    log.info("Sending {} to Peer [{}] and path [{}]."\
                         .format(msg_name, row.peer.address, row.path))
 
                 if data_mode is cp.DataMode.get:
@@ -901,6 +901,7 @@ class ChordTasks(object):
                                 1 + (retry_factor/10))
                         data_rw.data_done.clear()
                     except asyncio.TimeoutError:
+                        log.info("Timeout waiting for data block.")
                         pass
 
                     if data_rw.data is not None: # Handle the 'blank data' blk.
@@ -1614,17 +1615,21 @@ class ChordTasks(object):
                 data, data_l, version, signature, epubkey, pubkeylen =\
                     yield from self._retrieve_data(data_id)
 
-                assert data is not None
+#                assert data is not None
 
                 drmsg = cp.ChordDataResponse()
-                drmsg.data = data
-                drmsg.original_size = data_l
-                if version is not None:
-                    drmsg.version = version
-                    drmsg.signature = signature
-                    if epubkey:
-                        drmsg.epubkey = epubkey
-                        drmsg.pubkeylen = pubkeylen
+                if data is not None:
+                    drmsg.data = data
+                    drmsg.original_size = data_l
+                    if version is not None:
+                        drmsg.version = version
+                        drmsg.signature = signature
+                        if epubkey:
+                            drmsg.epubkey = epubkey
+                            drmsg.pubkeylen = pubkeylen
+                else:
+                    drmsg.data = b""
+                    drmsg.original_size = 0
 
                 peer.protocol.write_channel_data(local_cid, drmsg.encode())
 
@@ -2028,6 +2033,12 @@ class ChordTasks(object):
             log.info("Received DataResponse from Peer [{}] and path [{}]."\
                 .format(peer_dbid, path))
 
+        if len(drmsg.data) == 0:
+            # This can happen if a node had an error, it sends an empty one so
+            # we aren't waiting.
+            log.info("DataReponse is empty.")
+            return False
+
         def threadcall():
             data = enc.decrypt_data_block(drmsg.data, data_rw.data_key)
 
@@ -2125,17 +2136,35 @@ class ChordTasks(object):
         data_block = yield from self.loop.run_in_executor(None, dbcall)
 
         if not data_block:
-            return None
+            return None, None, None, None, None, None
 
         def iocall():
             filename = self.engine.node.data_block_file_path.format(\
                 self.engine.node.instance, data_block.id)
 
-            with open(filename, "rb") as data_file:
-                data = data_file.read()
-                return data
+            try:
+                with open(filename, "rb") as data_file:
+                    data = data_file.read()
+                    return data
+            except FileNotFoundError:
+                return None
 
         enc_data = yield from self.loop.run_in_executor(None, iocall)
+
+        if enc_data is None:
+            log.warning("Block id=[{}] was missing; Removing DB entry."\
+                .format(data_block.id))
+
+            def dbcall_prune():
+                with self.engine.node.db.open_session() as sess:
+                    sess.query(DataBlock)\
+                        .filter(DataBlock.id == data_block.id)\
+                        .delete(synchronize_session=False)
+                    sess.commit()
+
+            yield from self.loop.run_in_executor(None, dbcall_prune)
+
+            return None, None, None, None, None, None
 
         version =\
             int(data_block.version) if data_block.version is not None else None
@@ -2373,8 +2402,14 @@ class ChordTasks(object):
 
                 if need_pruning:
                     for anid in blocks_to_prune:
-                        os.remove(self.engine.node.data_block_file_path\
-                            .format(self.engine.node.instance, anid))
+                        try:
+                            os.remove(self.engine.node.data_block_file_path\
+                                .format(self.engine.node.instance, anid))
+                        except FileNotFoundError:
+                            if log.isEnabledFor(logging.WARNING):
+                                log.warning("FileNotFoundError pruning block"\
+                                    " id=[{}]; considered pruned anyways."\
+                                        .format(anid))
 
                 return data_block.id, size_diff
 
