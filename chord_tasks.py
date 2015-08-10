@@ -205,7 +205,7 @@ class ChordTasks(object):
         return conn_nodes, bool(new_nodes)
 
     @asyncio.coroutine
-    def send_get_data(self, data_key, path=None):
+    def send_get_data(self, data_key, path=None, retry_factor=1):
         assert type(data_key) in (bytes, bytearray)\
             and len(data_key) == chord.NODE_ID_BYTES,\
             "type(data_key)=[{}], len={}."\
@@ -221,7 +221,7 @@ class ChordTasks(object):
 
         data_rw = yield from\
             self.send_find_node(data_id, for_data=True, data_key=data_key,\
-                path_hash=path_hash)
+                path_hash=path_hash, retry_factor=retry_factor)
 
         if data_rw.data:
             #FIXME: This is not optimal as we start a whole new FindNode for
@@ -236,7 +236,7 @@ class ChordTasks(object):
         return data_rw
 
     @asyncio.coroutine
-    def send_get_targeted_data(self, data_key):
+    def send_get_targeted_data(self, data_key, retry_factor=1):
         assert type(data_key) in (bytes, bytearray)\
             and len(data_key) == chord.NODE_ID_BYTES,\
             "type(data_key)=[{}], len={}."\
@@ -246,13 +246,13 @@ class ChordTasks(object):
 
         data_rw = yield from\
             self.send_find_node(data_id, for_data=True, data_key=data_key,\
-                targeted=True)
+                targeted=True, retry_factor=retry_factor)
 
         return data_rw
 
     @asyncio.coroutine
     def send_find_key(self, data_key_prefix, significant_bits=None,\
-            target_key=None):
+            target_key=None, retry_factor=2):
         assert type(data_key_prefix) in (bytes, bytearray),\
             "type(data_key_prefix)=[{}].".format(type(data_key_prefix))
 
@@ -272,13 +272,14 @@ class ChordTasks(object):
         data_rw = yield from\
             self.send_find_node(data_key_prefix,\
                 significant_bits=significant_bits, for_data=True,\
-                data_key=None, target_key=target_key)
+                data_key=None, target_key=target_key,\
+                retry_factor=retry_factor)
 
         return data_rw
 
     @asyncio.coroutine
     def send_store_key(self, data, data_key=None, targeted=False,\
-            key_callback=None):
+            key_callback=None, retry_factor=5):
         if log.isEnabledFor(logging.INFO):
             data_key_enc = mbase32.encode(data_key) if data_key else None
             log.info("Sending ChordStoreKey for data_key=[{}], targeted=[{}]."\
@@ -295,23 +296,26 @@ class ChordTasks(object):
 
         storing_nodes =\
             yield from self.send_find_node(\
-                data_key, for_data=True, data_msg=skmsg)
+                data_key, for_data=True, data_msg=skmsg,\
+                retry_factor=retry_factor)
 
         return storing_nodes
 
     @asyncio.coroutine
     def send_store_updateable_key_key(\
-            self, pubkey, data_key=None, key_callback=None):
+            self, pubkey, data_key=None, key_callback=None, retry_factor=5):
         assert type(pubkey) in (bytes, bytearray)
 
         r = yield from\
             self.send_store_key(\
-                pubkey, data_key=data_key, key_callback=key_callback)
+                pubkey, data_key=data_key, key_callback=key_callback,\
+                retry_factor=retry_factor)
 
         return r
 
     @asyncio.coroutine
-    def send_store_data(self, data, store_key=False, key_callback=None):
+    def send_store_data(self, data, store_key=False, key_callback=None,\
+            retry_factor=5):
         "Sends a StoreData request, returning the count of nodes that claim"\
         " to have stored it."
 
@@ -335,7 +339,7 @@ class ChordTasks(object):
 
     @asyncio.coroutine
     def send_store_targeted_data(\
-            self, data, store_key=False, key_callback=None):
+            self, data, store_key=False, key_callback=None, retry_factor=20):
         "Sends a StoreData request for a TargetedBlock, returning the count"\
         " of nodes that claim to have stored it."
 
@@ -353,17 +357,19 @@ class ChordTasks(object):
 
         storing_nodes =\
             yield from self.send_find_node(\
-                data_id, for_data=True, data_msg=sdmsg)
+                data_id, for_data=True, data_msg=sdmsg,\
+                retry_factor=retry_factor)
 
         if store_key:
-            yield from self.send_store_key(data, data_key, targeted=True)
+            yield from self.send_store_key(data, data_key, targeted=True,\
+            retry_factor=retry_factor)
 
         return storing_nodes
 
     @asyncio.coroutine
     def send_store_updateable_key(\
             self, data, privatekey, path=None, version=None, store_key=None,\
-            key_callback=None):
+            key_callback=None, retry_factor=5):
         assert not path or type(path) is bytes, type(path)
         assert not version or type(version) is int, type(version)
 
@@ -412,7 +418,7 @@ class ChordTasks(object):
     @asyncio.coroutine
     def send_find_node(self, node_id, significant_bits=None, input_trie=None,\
             for_data=False, data_msg=None, data_key=None, path_hash=None,\
-            targeted=False, target_key=None):
+            targeted=False, target_key=None, retry_factor=1):
         "Returns found nodes sorted by closets. If for_data is True then"\
         " this is really {get/store}_data instead of find_node. If data_msg"\
         " is None than it is get_data and the data is returned. Store data"\
@@ -449,9 +455,9 @@ class ChordTasks(object):
         known_peer_cnt = self.engine.last_db_peer_count
         if known_peer_cnt:
             # This is only for safety, probably pointless.
-            maximum_depth = min(3, int(math.log(known_peer_cnt, 2) * 2))
+            maximum_depth = min(7, int(math.log(known_peer_cnt, 2) * 2))
         else:
-            maximum_depth = 3
+            maximum_depth = 7
 
         if log.isEnabledFor(logging.INFO):
             log.info("Performing FindNode (node_id=[{}], data_mode={}) to a"\
@@ -646,7 +652,7 @@ class ChordTasks(object):
                 # Wait a bit more for the rest of the tasks.
                 yield from asyncio.wait_for(\
                         done_all.wait(),\
-                        timeout=0.1,\
+                        timeout=0.1 * retry_factor,\
                         loop=self.loop)
 
                 done_all.clear()
@@ -837,8 +843,8 @@ class ChordTasks(object):
                     # closed.
                     continue
 
-                if log.isEnabledFor(logging.DEBUG):
-                    log.debug("Sending {} to Peer [{}] and path [{}]."\
+                if log.isEnabledFor(logging.INFO):
+                    log.info("Sending {} to Peer [{}] and path [{}]."\
                         .format(msg_name, row.peer.address, row.path))
 
                 if data_mode is cp.DataMode.get:
@@ -890,9 +896,12 @@ class ChordTasks(object):
 #                    done_all.clear()
                     try:
                         yield from\
-                            asyncio.wait_for(data_rw.data_done.wait(), 1)
+                            asyncio.wait_for(\
+                                data_rw.data_done.wait(),\
+                                1 + (retry_factor/10))
                         data_rw.data_done.clear()
                     except asyncio.TimeoutError:
+                        log.info("Timeout waiting for data block.")
                         pass
 
                     if data_rw.data is not None: # Handle the 'blank data' blk.
@@ -1606,17 +1615,21 @@ class ChordTasks(object):
                 data, data_l, version, signature, epubkey, pubkeylen =\
                     yield from self._retrieve_data(data_id)
 
-                assert data is not None
+#                assert data is not None
 
                 drmsg = cp.ChordDataResponse()
-                drmsg.data = data
-                drmsg.original_size = data_l
-                if version is not None:
-                    drmsg.version = version
-                    drmsg.signature = signature
-                    if epubkey:
-                        drmsg.epubkey = epubkey
-                        drmsg.pubkeylen = pubkeylen
+                if data is not None:
+                    drmsg.data = data
+                    drmsg.original_size = data_l
+                    if version is not None:
+                        drmsg.version = version
+                        drmsg.signature = signature
+                        if epubkey:
+                            drmsg.epubkey = epubkey
+                            drmsg.pubkeylen = pubkeylen
+                else:
+                    drmsg.data = b""
+                    drmsg.original_size = 0
 
                 peer.protocol.write_channel_data(local_cid, drmsg.encode())
 
@@ -2020,6 +2033,12 @@ class ChordTasks(object):
             log.info("Received DataResponse from Peer [{}] and path [{}]."\
                 .format(peer_dbid, path))
 
+        if len(drmsg.data) == 0:
+            # This can happen if a node had an error, it sends an empty one so
+            # we aren't waiting.
+            log.info("DataReponse is empty.")
+            return False
+
         def threadcall():
             data = enc.decrypt_data_block(drmsg.data, data_rw.data_key)
 
@@ -2117,17 +2136,35 @@ class ChordTasks(object):
         data_block = yield from self.loop.run_in_executor(None, dbcall)
 
         if not data_block:
-            return None
+            return None, None, None, None, None, None
 
         def iocall():
             filename = self.engine.node.data_block_file_path.format(\
                 self.engine.node.instance, data_block.id)
 
-            with open(filename, "rb") as data_file:
-                data = data_file.read()
-                return data
+            try:
+                with open(filename, "rb") as data_file:
+                    data = data_file.read()
+                    return data
+            except FileNotFoundError:
+                return None
 
         enc_data = yield from self.loop.run_in_executor(None, iocall)
+
+        if enc_data is None:
+            log.warning("Block id=[{}] was missing; Removing DB entry."\
+                .format(data_block.id))
+
+            def dbcall_prune():
+                with self.engine.node.db.open_session() as sess:
+                    sess.query(DataBlock)\
+                        .filter(DataBlock.id == data_block.id)\
+                        .delete(synchronize_session=False)
+                    sess.commit()
+
+            yield from self.loop.run_in_executor(None, dbcall_prune)
+
+            return None, None, None, None, None, None
 
         version =\
             int(data_block.version) if data_block.version is not None else None
@@ -2365,8 +2402,14 @@ class ChordTasks(object):
 
                 if need_pruning:
                     for anid in blocks_to_prune:
-                        os.remove(self.engine.node.data_block_file_path\
-                            .format(self.engine.node.instance, anid))
+                        try:
+                            os.remove(self.engine.node.data_block_file_path\
+                                .format(self.engine.node.instance, anid))
+                        except FileNotFoundError:
+                            if log.isEnabledFor(logging.WARNING):
+                                log.warning("FileNotFoundError pruning block"\
+                                    " id=[{}]; considered pruned anyways."\
+                                        .format(anid))
 
                 return data_block.id, size_diff
 

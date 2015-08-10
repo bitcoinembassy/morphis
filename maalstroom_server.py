@@ -172,11 +172,17 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
             return
 
         if self.headers["If-None-Match"] == rpath:
-            self.send_response(304)
-            self.send_header("ETag", rpath)
-            self.send_header("Content-Length", 0)
-            self.end_headers()
-            return
+            cache_control = self.headers["Cache-Control"]
+            if cache_control != "max-age=0":
+                self.send_response(304)
+                if cache_control:
+                    # This should only have been sent for an updateable key.
+                    self.send_header("Cache-Control", "max-age=15, public")
+                else:
+                    self.send_header("ETag", rpath)
+                self.send_header("Content-Length", 0)
+                self.end_headers()
+                return
 
         significant_bits = None
 
@@ -252,32 +258,44 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
                         in ("text/html", "text/css", "application/javascript"):
                     rewrite_url = True
             else:
-                if data[0] == 0xFF and data[1] == 0xD8:
+                dh = data[:160]
+
+                if dh[0] == 0xFF and dh[1] == 0xD8:
                     self.send_header("Content-Type", "image/jpg")
-                elif data[0] == 0x89 and data[1:4] == b"PNG":
+                elif dh[0] == 0x89 and dh[1:4] == b"PNG":
                     self.send_header("Content-Type", "image/png")
-                elif data[:5] == b"GIF89":
+                elif dh[:5] == b"GIF89":
                     self.send_header("Content-Type", "image/gif")
-                elif data[:5] == b"/*CSS":
+                elif dh[:5] == b"/*CSS":
                     self.send_header("Content-Type", "text/css")
                     rewrite_url = True
-                elif data[:12] == b"/*JAVASCRIPT":
+                elif dh[:12] == b"/*JAVASCRIPT":
                     self.send_header("Content-Type", "application/javascript")
                     rewrite_url = True
-                elif data[:8] == bytes(\
+                elif dh[:8] == bytes(\
                         [0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70])\
-                        or data[:8] == bytes(\
+                        or dh[:8] == bytes(\
                         [0x00, 0x00, 0x00, 0x1c, 0x66, 0x74, 0x79, 0x70]):
                     self.send_header("Content-Type", "video/mp4")
-                elif data[:8] == bytes(\
+                elif dh[:8] == bytes(\
                         [0x50, 0x4b, 0x03, 0x04, 0x0a, 0x00, 0x00, 0x00]):
                     self.send_header("Content-Type", "application/zip")
-                elif data[:5] == bytes(\
+                elif dh[:5] == bytes(\
                         [0x25, 0x50, 0x44, 0x46, 0x2d]):
                     self.send_header("Content-Type", "application/pdf")
+                elif dh[:4] == b"RIFF" and dh[8:11] == b"AVI":
+                    self.send_header("Content-Type", "video/avi")
                 else:
-                    self.send_header("Content-Type", "text/html")
-                    rewrite_url = True
+                    dhl = dh.lower()
+
+                    if (dhl.find(b"<html") > -1 or dhl.find(b"<HTML>") > -1)\
+                            and (dhl.find(b"<head>") > -1\
+                                or dhl.find(b"<HEAD") > -1):
+                        self.send_header("Content-Type", "text/html")
+                        rewrite_url = True
+                    else:
+                        self.send_header(\
+                            "Content-Type", "application/octet-stream")
 
             rewrite_url = rewrite_url and not self.maalstroom_plugin_used
 
@@ -288,6 +306,7 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
 
             if data_rw.version is not None:
                 self.send_header("Cache-Control", "max-age=15, public")
+#                self.send_header("ETag", rpath)
             else:
                 self.send_header("Cache-Control", "public")
                 self.send_header("ETag", rpath)
@@ -455,11 +474,17 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
             content_entry[1] = content_id
 
         if cacheable and self.headers["If-None-Match"] == content_id:
-            self.send_response(304)
-            self.send_header("ETag", content_id)
-            self.send_header("Content-Length", 0)
-            self.end_headers()
-            return
+            cache_control = self.headers["Cache-Control"]
+            if cache_control != "max-age=0":
+                self.send_response(304)
+                if cache_control:
+                    # This should only have been sent for an updateable key.
+                    self.send_header("Cache-Control", "max-age=15, public")
+                else:
+                    self.send_header("ETag", content_id)
+                self.send_header("Content-Length", 0)
+                self.end_headers()
+                return
 
         if callable(content):
             content = content()
@@ -541,7 +566,11 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
 
         self.send_header("Content-Length", len(errmsg))
         self.end_headers()
-        self.wfile.write(errmsg)
+        try:
+            self.wfile.write(errmsg)
+        except ConnectionError:
+            log.info("HTTP client aborted request connection.")
+            return
 
     def _handle_error(self, data_rw=None, errmsg=None, errcode=None):
         if not data_rw:
@@ -559,7 +588,11 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
 
         self.send_header("Content-Length", len(errmsg))
         self.end_headers()
-        self.wfile.write(errmsg)
+        try:
+            self.wfile.write(errmsg)
+        except ConnectionError:
+            log.info("HTTP client aborted request connection.")
+            return
 
 class Downloader(multipart.DataCallback):
     def __init__(self, data_rw):
