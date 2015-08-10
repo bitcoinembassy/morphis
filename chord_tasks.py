@@ -896,7 +896,9 @@ class ChordTasks(object):
 #                    done_all.clear()
                     try:
                         yield from\
-                            asyncio.wait_for(data_rw.data_done.wait(), 1)
+                            asyncio.wait_for(\
+                                data_rw.data_done.wait(),\
+                                1 + (retry_factor/10))
                         data_rw.data_done.clear()
                     except asyncio.TimeoutError:
                         pass
