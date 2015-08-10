@@ -680,12 +680,17 @@ def _store_data_multipart(engine, data, key_callback, store_key, concurrency):
 
     block_data = block.encode()
 
+#    yield from\
+#        engine.tasks.send_store_data(block_data, store_key=store_key,\
+#            key_callback=key_callback, retry_factor=50)
     yield from\
-        engine.tasks.send_store_data(block_data, store_key=store_key,\
-            key_callback=key_callback, retry_factor=50)
+        _store_block(\
+            engine, -1, block_data, key_callback, task_semaphore,\
+            store_key=store_key)
 
 @asyncio.coroutine
-def _store_block(engine, i, block_data, key_callback, task_semaphore):
+def _store_block(engine, i, block_data, key_callback, task_semaphore,\
+        store_key=False):
     tries = 0
     storing_nodes = 0
 
