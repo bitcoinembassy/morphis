@@ -687,6 +687,7 @@ def _store_data_multipart(engine, data, key_callback, store_key, concurrency):
 @asyncio.coroutine
 def _store_block(engine, i, block_data, key_callback, task_semaphore):
     tries = 0
+    storing_nodes = 0
 
     while True:
         if not tries:
@@ -701,7 +702,9 @@ def _store_block(engine, i, block_data, key_callback, task_semaphore):
 
         task_semaphore.release()
 
-        if snodes:
+        storing_nodes += snodes
+
+        if storing_nodes >= 3:
             return True
 
         tries += 1
@@ -712,6 +715,7 @@ def _store_block(engine, i, block_data, key_callback, task_semaphore):
             continue
 
         if log.isEnabledFor(logging.WARNING):
-            log.warn("Failed to upload block #{}.".format(i))
+            log.warn("Failed to upload block #{} enough (storing_nodes=[{}])."\
+                .format(i, storing_nodes))
 
         return False
