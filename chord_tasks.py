@@ -576,6 +576,7 @@ class ChordTasks(object):
 
         for depth.value in range(1, maximum_depth):
             direct_peers_lower = 0
+            current_depth_step_query_cnt = 0
             for row in result_trie:
                 if row is False:
                     # Row is ourself. Prevent infinite loops.
@@ -587,11 +588,11 @@ class ChordTasks(object):
                 if row.path is None:
                     # Already asked direct peers, and only asking ones we
                     # haven't asked before.
-                    direct_peers_lower += 1
-                    if direct_peers_lower == len(used_tunnels):
-                        # Only deal with results closer than the furthest of
-                        # the direct peers we used.
-                        break
+#                    direct_peers_lower += 1
+#                    if direct_peers_lower == len(used_tunnels):
+#                        # Only deal with results closer than the furthest of
+#                        # the direct peers we used.
+#                        break
                     continue
 
                 if row.used:
@@ -614,6 +615,7 @@ class ChordTasks(object):
 
                 row.used = True
                 query_cntr.value += 1
+                current_depth_step_query_cnt += 1
 
                 if tun_meta.jobs is None:
                     # If this is the first relay for this tunnel, then start a
@@ -631,10 +633,11 @@ class ChordTasks(object):
                 else:
                     tun_meta.jobs += 1
 
-                if query_cntr.value == max_concurrent_queries:
+#                if query_cntr.value == max_concurrent_queries:
+                if current_depth_step_query_cnt == max_concurrent_queries:
                     break
 
-            if not query_cntr.value:
+            if not current_depth_step_query_cnt:
                 log.info("FindNode search has ended at closest nodes.")
                 break
 
@@ -1474,21 +1477,21 @@ class ChordTasks(object):
 
             pt[bittrie.XorKey(fnmsg.node_id, cpeer.node_id)] = cpeer
 
-        # We don't want to deal with further nodes than ourselves.
-        pt[bittrie.XorKey(fnmsg.node_id, self.engine.node_id)] = True
+#        # We don't want to deal with further nodes than ourselves.
+#        pt[bittrie.XorKey(fnmsg.node_id, self.engine.node_id)] = True
 
         cnt = 3
         rlist = []
 
         for r in pt:
-            if r is True:
-                log.info("No more nodes closer than ourselves.")
-                break
+#            if r is True:
+#                log.info("No more nodes closer than ourselves.")
+#                break
 
             if log.isEnabledFor(logging.DEBUG):
                 log.debug("nn: {} FOUND: {:7} {:22} node_id=[{}] diff=[{}]"\
                     .format(self.engine.node.instance, r.dbid, r.address,\
-                        mutil.hex_string(r.node_id),\
+                        mbase32.encode(r.node_id),\
                         mutil.hex_string(\
                             mutil.calc_raw_distance(\
                                 r.node_id, fnmsg.node_id))))
