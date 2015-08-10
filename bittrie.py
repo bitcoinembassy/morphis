@@ -298,7 +298,7 @@ except OverflowError:
     max_len_value = 0xFFFF
 
 class ZeroKey(object):
-    def __init__(self, length=0xFFFFFFFF):
+    def __init__(self, length=max_len_value):
         self.length = length
 
     def __getitem__(self, idx):
