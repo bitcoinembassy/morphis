@@ -147,7 +147,7 @@ def __serve_get(handler, rpath, done_event):
         elif req.startswith("/addr/settings/edit/publish?"):
             query = req[28:]
 
-            qdict = urllib.parse.parse_qs(query)
+            qdict = urllib.parse.parse_qs(query, keep_blank_values=True)
 
             addr_enc = qdict["dmail_address"][0]
             difficulty = qdict["difficulty"][0]
@@ -373,7 +373,7 @@ def __serve_get(handler, rpath, done_event):
         elif req.startswith("/create_address/make_it_so?"):
             query = req[27:]
 
-            qdict = urllib.parse.parse_qs(query)
+            qdict = urllib.parse.parse_qs(query, keep_blank_values=True)
 
             prefix = qdict["prefix"][0]
             difficulty = int(qdict["difficulty"][0])
@@ -406,7 +406,7 @@ def __serve_post(handler, rpath, done_event):
         if log.isEnabledFor(logging.DEBUG):
             log.debug("data=[{}].".format(data))
 
-        dd = urllib.parse.parse_qs(data)
+        dd = urllib.parse.parse_qs(data, keep_blank_values=True)
 
         if log.isEnabledFor(logging.DEBUG):
             log.debug("dd=[{}].".format(dd))
@@ -419,7 +419,7 @@ def __serve_post(handler, rpath, done_event):
 
         sender_dmail_id = dd.get(b"sender")
 
-        if sender_dmail_id:
+        if sender_dmail_id[0]:
             sender_dmail_id = int(sender_dmail_id[0])
 
             if log.isEnabledFor(logging.DEBUG):
