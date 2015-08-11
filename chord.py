@@ -145,8 +145,6 @@ class ChordEngine():
 
     @asyncio.coroutine
     def add_peers(self, peers, process_check_connections=True):
-        assert type(peers[0]) is Peer
-
         log.info("Adding upto {} peers.".format(len(peers)))
 
         def dbcall():
@@ -157,6 +155,8 @@ class ChordEngine():
                 added = []
 
                 for peer in peers:
+                    assert type(peer) is Peer
+
                     if not check_address(peer.address):
                         continue
 

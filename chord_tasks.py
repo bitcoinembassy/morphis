@@ -80,6 +80,9 @@ class ChordTasks(object):
         self.engine = engine
         self.loop = engine.loop
 
+        self.last_peer_add_time = None
+        self.add_peer_memory_cache = {} # {Peer.address, Peer}
+
     @asyncio.coroutine
     def send_node_info(self, peer):
         log.info("Sending ChordNodeInfo message.")
@@ -947,6 +950,9 @@ class ChordTasks(object):
 #        yield from asyncio.wait(tasks, loop=self.loop)
 
         if data_mode.value:
+            asyncio.async(\
+                self._possibly_add_peers(result_trie), loop=self.loop)
+
             if data_mode is cp.DataMode.store:
                 return storing_nodes
             else:
@@ -976,6 +982,45 @@ class ChordTasks(object):
             log.info("FindNode found [{}] Peers.".format(len(rnodes)))
 
         return rnodes
+
+    @asyncio.coroutine
+    def _possibly_add_peers(self, result_trie):
+        only_memory = False
+
+        if self.last_peer_add_time:
+            diff = datetime.today() - self.last_peer_add_time
+
+            if diff.total_seconds() < 1:
+                return
+
+            if diff.total_seconds() < 15:
+                only_memory = True
+
+        self.last_peer_add_time = datetime.today()
+
+        conn_nodes = self.add_peer_memory_cache
+
+        for vpeer in result_trie:
+            if not vpeer or not vpeer.path:
+                continue
+
+            node = vpeer.peer
+
+            # Do not trust hearsay node_id; add_peers will recalculate it from
+            # the public key.
+            node.node_id = None
+
+            conn_nodes.setdefault(node.address, node)
+
+        if only_memory:
+            return
+
+        log.info("Adding noticed PeerS to the database.")
+
+        new_nodes = yield from self.engine.add_peers(\
+            conn_nodes.values(), process_check_connections=False)
+
+        conn_nodes.clear()
 
     def _close_channels(self, used_tunnels):
         for tun_meta in used_tunnels.values():
