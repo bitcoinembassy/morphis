@@ -228,7 +228,7 @@ dmail_addr_settings_edit_content = [dmail_iframe_body_start\
     + b"""<h4>Dmail Address [<a href="../../${DMAIL_ADDRESS}">${DMAIL_ADDRESS_SHORT}...</a>].</h4>
 <p>NOTE: Difficulty is the anti-spam setting that determines how much work it is to send you a Dmail. Its effect is exponential (work=2^difficulty). Do not set it too low -- I would recommend no lower than 20. If 2^difficulty is lower than the amount of nodes in the network, then the network will likely have trouble finding your Dmails.</p>
 <p><b>NOTE</b>: If you turn this up, you will no longer see any new Dmails that were sent to you while you had the lower setting. This is because they won't include enough work to be found. Dmails stored locally already (Inbox) won't be affected. In a future version of Maalstroom this will be solved. For now it is not because it will take a bunch more UI to allow you to manage properly, and I want to release ASAP :).</p>
-<form action="publish" method="get">
+<form action="morphis://.dmail/addr/settings/edit/publish" method="get">
     <input type="hidden" name="dmail_address" id="dmail_address" value="${DMAIL_ADDRESS}"/>
     <p>
         <label for="difficulty">Difficulty</label>
@@ -291,7 +291,7 @@ dmail_create_address_content = [None, None]
 dmail_create_address_form_content = [\
     b"""<!DOCTYPE html>
 <html><head><base target="_top" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/></head><body class="iframe">
-<form action="make_it_so" method="get">
+<form action="morphis://.dmail/create_address/make_it_so" method="get">
     <h4>Dmail Address Generation</h4>
     <p>To create yourself a new Dmail Address, simply click the Create button below. Changing these values from their defaults is not needed at all.</p>
     <p>
@@ -315,7 +315,7 @@ dmail_compose_dmail_form_start =\
 <html><head><base target="_top" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/>
 <style type="text/css">
 </style></head><body class="iframe">
-<form action="make_it_so" method="post">
+<form action="morphis://.dmail/compose/make_it_so" method="post">
     <p class="nowrap">
         <label for="sender">From</label>
         <select name="sender">"""
