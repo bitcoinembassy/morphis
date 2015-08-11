@@ -46,6 +46,8 @@ class DataResponseWrapper(object):
         self.version = None
         self.targeted = False
         self.data_done = None
+        self.data_present_cnt = 0
+        self.will_store_cnt = 0
 
 class TunnelMeta(object):
     def __init__(self, peer=None, jobs=None):
@@ -509,6 +511,22 @@ class ChordTasks(object):
             if target_key:
                 fnmsg.target_key = target_key
 
+        # Setup the DataResponseWrapper which is returned from this function
+        # but also is used to pass around some info to helper functions this
+        # main send_find_node(..) function calls.
+        sent_data_request = Counter(0)
+        data_rw = DataResponseWrapper(data_key)
+        if data_msg_type is cp.ChordStoreData:
+            if data_msg.pubkey:
+                data_rw.pubkey = data_msg.pubkey
+            if data_msg.path_hash:
+                data_rw.path_hash = data_msg.path_hash
+        else:
+            if path_hash:
+                data_rw.path_hash = path_hash
+            if targeted:
+                data_rw.targeted = True
+
         # Open the tunnels with upto max_concurrent_queries immediate PeerS.
         for peer in input_trie:
             key = bittrie.XorKey(node_id, peer.node_id)
@@ -528,7 +546,7 @@ class ChordTasks(object):
 
             tasks.append(self._send_find_node(\
                 vpeer, fnmsg, result_trie, tun_meta, data_mode,\
-                far_peers_by_path))
+                far_peers_by_path, data_rw))
 
         if not tasks:
             log.info("Cannot perform FindNode, as we know no closer nodes.")
@@ -569,22 +587,6 @@ class ChordTasks(object):
             self._close_channels(used_tunnels)
             return self._generate_fail_response(data_mode, data_key)
 
-        # Setup the DataResponseWrapper which is returned from this function
-        # but also is used to pass around some info to helper functions this
-        # main send_find_node(..) function calls.
-        sent_data_request = Counter(0)
-        data_rw = DataResponseWrapper(data_key)
-        if data_msg_type is cp.ChordStoreData:
-            if data_msg.pubkey:
-                data_rw.pubkey = data_msg.pubkey
-            if data_msg.path_hash:
-                data_rw.path_hash = data_msg.path_hash
-        else:
-            if path_hash:
-                data_rw.path_hash = path_hash
-            if targeted:
-                data_rw.targeted = True
-
         # Instruct our tunnels to relay the FindNode message out further, also
         # processing the responses and using that data to build further tunnels
         # and send out the FindNode even deeper. After this loop, we have
@@ -598,6 +600,11 @@ class ChordTasks(object):
         done_one = asyncio.Event(loop=self.loop)
 
         for depth.value in range(1, maximum_depth):
+            if data_rw.data_present_cnt > 1 * (retry_factor/10):
+                break;
+            if data_rw.will_store_cnt > 1 * (retry_factor/10):
+                break;
+
             direct_peers_lower = 0
             current_depth_step_query_cnt = 0
             for row in result_trie:
@@ -1095,7 +1102,7 @@ class ChordTasks(object):
 
     @asyncio.coroutine
     def _send_find_node(self, vpeer, fnmsg, result_trie, tun_meta,\
-            data_mode, far_peers_by_path):
+            data_mode, far_peers_by_path, data_rw):
         "Opens a channel and sends a 'root level' FIND_NODE to the passed"\
         " connected peer, adding results to the passed result_trie, and then"\
         " exiting. The channel is left open so that the caller may route to"\
@@ -1124,7 +1131,15 @@ class ChordTasks(object):
         if data_mode.value:
             if data_mode is cp.DataMode.store:
                 msg = cp.ChordStorageInterest(pkt)
+
+                if log.isEnabledFor(logging.INFO):
+                    log.info("Peer (dbid=[{}]) said will_store=[{}]."\
+                        .format(vpeer.peer.dbid, msg.will_store))
+
                 vpeer.will_store = msg.will_store
+
+                if msg.will_store:
+                    data_rw.will_store_cnt += 1
             elif data_mode is cp.DataMode.get:
                 msg = cp.ChordDataPresence(pkt)
 
@@ -1135,9 +1150,14 @@ class ChordTasks(object):
                                 msg.first_id))
 
                 if fnmsg.significant_bits:
-                    vpeer.data_present = msg.first_id
+                    data_present = msg.first_id
                 else:
-                    vpeer.data_present = msg.data_present
+                    data_present = msg.data_present
+
+                if data_present:
+                    data_rw.data_present_cnt += 1
+
+                vpeer.data_present = data_present
             else:
                 assert False
 
@@ -1301,11 +1321,13 @@ class ChordTasks(object):
                                 .format(pmsg.data_present, pmsg.first_id))
 
                     if significant_bits:
-                        t = pmsg.first_id
+                        data_present = pmsg.first_id
                     else:
-                        t = pmsg.data_present
+                        data_present = pmsg.data_present
 
-                    if t:
+                    if data_present:
+                        data_rw.data_present_cnt += 1
+
                         apath = (tun_meta.peer.dbid,) + path
                         rvpeer = far_peers_by_path.get(apath)
                         if rvpeer is None:
@@ -1335,6 +1357,11 @@ class ChordTasks(object):
                     assert data_mode is cp.DataMode.store
 
                     imsg = cp.ChordStorageInterest(pkts[0])
+
+                    if log.isEnabledFor(logging.INFO):
+                        log.info("Peer (path=[??]) said will_store=[{}]."\
+                            .format(imsg.will_store))
+
                     if imsg.will_store:
                         apath = (tun_meta.peer.dbid,) + path
                         rvpeer = far_peers_by_path.get(apath)
@@ -1344,6 +1371,7 @@ class ChordTasks(object):
                                 "[{}].".format(apath))
                         else:
                             rvpeer.will_store = True
+                            data_rw.will_store_cnt += 1
                     else:
                         if len(pkts) == 1:
                             # If a node has no closer peers, it may close
@@ -1588,8 +1616,10 @@ class ChordTasks(object):
                 else:
                     pmsg.data_present = data_present
 
-                log.info("Writing DataPresence (data_present=[{}]) response."\
-                    .format(data_present))
+                if log.isEnabledFor(logging.INFO):
+                    log.info("Writing DataPresence (data_present=[{}])"\
+                        " response."\
+                            .format(data_present))
 
                 peer.protocol.write_channel_data(local_cid, pmsg.encode())
             elif fnmsg.data_mode is cp.DataMode.store:
