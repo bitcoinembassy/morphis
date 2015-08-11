@@ -57,8 +57,8 @@ class ChordEngine():
 
         self.last_db_peer_count = 0
 
-        self.minimum_connections = 10
-        self.maximum_connections = 72
+        self.minimum_connections = 32
+        self.maximum_connections = 256
         self.hard_maximum_connections = self.maximum_connections * 2
 
         self.connect_peers = None # ["host:port"]
