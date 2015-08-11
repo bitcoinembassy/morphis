@@ -42,6 +42,7 @@ class DataResponseWrapper(object):
         self.data_key = data_key
         self.data = None
         self.pubkey = None
+        self.signature = None
         self.path_hash = b""
         self.version = None
         self.targeted = False
@@ -257,9 +258,35 @@ class ChordTasks(object):
                 # Increase chance of uploading a block if it was hard to fetch.
                 r = min(r, r * (retry_factor/10))
             if r >= 5:
-                asyncio.async(\
-                    self.send_store_data(data_rw.data, store_key=False),\
-                    loop=self.loop)
+                if data_rw.version:
+                    if log.isEnabledFor(logging.INFO):
+                        log.info("Healing updateable key block [{}]."\
+                            .format(mbase32.encode(data_key)))
+
+                    sdmsg = cp.ChordStoreData()
+                    sdmsg.data = data_rw.data
+                    sdmsg.pubkey = data_rw.pubkey
+                    sdmsg.path_hash = data_rw.path_hash
+                    sdmsg.version = data_rw.version
+                    sdmsg.signature = data_rw.signature
+
+                    asyncio.async(\
+                        self.send_find_node(\
+                            data_id, for_data=True, data_msg=sdmsg),\
+                        loop=self.loop)
+
+                    asyncio.async(\
+                        self.send_store_updateable_key_key(\
+                            data_rw.pubkey, data_key),\
+                        loop=self.loop)
+                else:
+                    if log.isEnabledFor(logging.INFO):
+                        log.info("Healing block [{}]."\
+                            .format(mbase32.encode(data_key)))
+
+                    asyncio.async(\
+                        self.send_store_data(data_rw.data, store_key=False),\
+                        loop=self.loop)
 
         return data_rw
 
@@ -2189,6 +2216,9 @@ class ChordTasks(object):
                         if log.isEnabledFor(logging.DEBUG):
                             log.debug("DataResponse is invalid!")
                         return False
+
+                # Return the signature to the original caller.
+                data_rw.signature = drmsg.signature
 
                 hm = bytearray()
                 hm += sshtype.encodeBinary(data_rw.path_hash)
