@@ -465,7 +465,7 @@ def __serve_post(handler, rpath, done_event):
         else:
             handler._send_content(\
                 "FAIL.<br/><p>Dmail timed out being stored on the network;"\
-                    "please try again.</p>"\
+                    " please try again.</p>"\
                         .format(dest_addr_enc[0].decode()).encode())
 
     else:

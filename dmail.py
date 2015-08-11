@@ -539,8 +539,11 @@ class DmailEngine(object):
 
             if retry > 32:
                 break
+
             elif retry > 3:
                 yield from asyncio.sleep(1)
+
+            retry += 1
 
         key_enc = mbase32.encode(key)
         id_enc = mbase32.encode(enc.generate_ID(key))
