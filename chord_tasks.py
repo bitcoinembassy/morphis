@@ -148,19 +148,39 @@ class ChordTasks(object):
                     " searching inbetween closest and furthest.")
                 return
 
+#        closest_found_distance = 0
+#        log.warning("Stabilize FindNode id=[{:0512b}]."\
+#            .format(int.from_bytes(self.engine.node_id, "big")))
+
         # Fetch each bucket starting at furthest, stopping when we get to the
         # closest that we found above.
-        node_id = bytearray(self.engine.node_id)
+        orig_node_id = self.engine.node_id
+
         for bit in range(chord.NODE_ID_BITS-1, -1, -1):
             if log.isEnabledFor(logging.INFO):
                 log.info("Performing FindNode for bucket [{}]."\
                     .format(bit+1))
 
-            if bit != chord.NODE_ID_BITS-1:
-                byte_ = chord.NODE_ID_BYTES - 1 - ((bit+1) >> 3)
-                node_id[byte_] ^= 1 << ((bit+1) % 8) # Undo last change.
+            node_id = bytearray(orig_node_id)
+
+            # Change the most significant bit so that the resulting id is
+            # inside the bucket for said bit difference.
             byte_ = chord.NODE_ID_BYTES - 1 - (bit >> 3)
-            node_id[byte_] ^= 1 << (bit % 8)
+            bit_pos = bit % 8
+            node_id[byte_] ^= 1 << bit_pos
+
+            # Randomize the remaining less significant bits so that we are
+            # performing a FindNode for a random ID within the bucket.
+            if bit_pos:
+                bit_mask = 1 << (bit_pos - 1)
+                bit_mask ^= bit_mask - 1
+                node_id[byte_] ^= random.randint(0, 255) & bit_mask
+
+            for i in range(byte_ + 1, chord.NODE_ID_BYTES):
+                node_id[i] ^= random.randint(0, 255)
+
+#            log.warning("Stabilize FindNode id=[{:0512b}]."\
+#                .format(int.from_bytes(node_id, "big")))
 
             assert mutil.calc_log_distance(\
                 node_id, self.engine.node_id)[0] == (bit + 1),\
