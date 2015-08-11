@@ -1546,7 +1546,7 @@ class ChordTasks(object):
 #        # We don't want to deal with further nodes than ourselves.
 #        pt[bittrie.XorKey(fnmsg.node_id, self.engine.node_id)] = True
 
-        cnt = 3
+        cnt = 20
         rlist = []
 
         for r in pt:

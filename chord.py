@@ -29,7 +29,7 @@ import enc
 from db import Peer
 from mutil import hex_dump, log_base2_8bit, hex_string, calc_log_distance
 
-BUCKET_SIZE = 8
+BUCKET_SIZE = 16
 
 NODE_ID_BITS = enc.ID_BITS
 NODE_ID_BYTES = NODE_ID_BITS >> 3
