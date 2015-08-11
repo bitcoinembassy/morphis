@@ -80,6 +80,9 @@ class ChordTasks(object):
         self.engine = engine
         self.loop = engine.loop
 
+        self.last_peer_add_time = None
+        self.add_peer_memory_cache = {} # {Peer.address, Peer}
+
     @asyncio.coroutine
     def send_node_info(self, peer):
         log.info("Sending ChordNodeInfo message.")
@@ -145,19 +148,39 @@ class ChordTasks(object):
                     " searching inbetween closest and furthest.")
                 return
 
+#        closest_found_distance = 0
+#        log.warning("Stabilize FindNode id=[{:0512b}]."\
+#            .format(int.from_bytes(self.engine.node_id, "big")))
+
         # Fetch each bucket starting at furthest, stopping when we get to the
         # closest that we found above.
-        node_id = bytearray(self.engine.node_id)
+        orig_node_id = self.engine.node_id
+
         for bit in range(chord.NODE_ID_BITS-1, -1, -1):
             if log.isEnabledFor(logging.INFO):
                 log.info("Performing FindNode for bucket [{}]."\
                     .format(bit+1))
 
-            if bit != chord.NODE_ID_BITS-1:
-                byte_ = chord.NODE_ID_BYTES - 1 - ((bit+1) >> 3)
-                node_id[byte_] ^= 1 << ((bit+1) % 8) # Undo last change.
+            node_id = bytearray(orig_node_id)
+
+            # Change the most significant bit so that the resulting id is
+            # inside the bucket for said bit difference.
             byte_ = chord.NODE_ID_BYTES - 1 - (bit >> 3)
-            node_id[byte_] ^= 1 << (bit % 8)
+            bit_pos = bit % 8
+            node_id[byte_] ^= 1 << bit_pos
+
+            # Randomize the remaining less significant bits so that we are
+            # performing a FindNode for a random ID within the bucket.
+            if bit_pos:
+                bit_mask = 1 << (bit_pos - 1)
+                bit_mask ^= bit_mask - 1
+                node_id[byte_] ^= random.randint(0, 255) & bit_mask
+
+            for i in range(byte_ + 1, chord.NODE_ID_BYTES):
+                node_id[i] ^= random.randint(0, 255)
+
+#            log.warning("Stabilize FindNode id=[{:0512b}]."\
+#                .format(int.from_bytes(node_id, "big")))
 
             assert mutil.calc_log_distance(\
                 node_id, self.engine.node_id)[0] == (bit + 1),\
@@ -947,6 +970,9 @@ class ChordTasks(object):
 #        yield from asyncio.wait(tasks, loop=self.loop)
 
         if data_mode.value:
+            asyncio.async(\
+                self._possibly_add_peers(result_trie), loop=self.loop)
+
             if data_mode is cp.DataMode.store:
                 return storing_nodes
             else:
@@ -976,6 +1002,45 @@ class ChordTasks(object):
             log.info("FindNode found [{}] Peers.".format(len(rnodes)))
 
         return rnodes
+
+    @asyncio.coroutine
+    def _possibly_add_peers(self, result_trie):
+        only_memory = False
+
+        if self.last_peer_add_time:
+            diff = datetime.today() - self.last_peer_add_time
+
+            if diff.total_seconds() < 1:
+                return
+
+            if diff.total_seconds() < 15:
+                only_memory = True
+
+        self.last_peer_add_time = datetime.today()
+
+        conn_nodes = self.add_peer_memory_cache
+
+        for vpeer in result_trie:
+            if not vpeer or not vpeer.path:
+                continue
+
+            node = vpeer.peer
+
+            # Do not trust hearsay node_id; add_peers will recalculate it from
+            # the public key.
+            node.node_id = None
+
+            conn_nodes.setdefault(node.address, node)
+
+        if only_memory:
+            return
+
+        log.info("Adding noticed PeerS to the database.")
+
+        new_nodes = yield from self.engine.add_peers(\
+            conn_nodes.values(), process_check_connections=False)
+
+        conn_nodes.clear()
 
     def _close_channels(self, used_tunnels):
         for tun_meta in used_tunnels.values():
@@ -1063,8 +1128,8 @@ class ChordTasks(object):
             elif data_mode is cp.DataMode.get:
                 msg = cp.ChordDataPresence(pkt)
 
-                if log.isEnabledFor(logging.DEBUG):
-                    log.debug("Peer (dbid=[{}]) said data_present=[{}],"\
+                if log.isEnabledFor(logging.INFO):
+                    log.info("Peer (dbid=[{}]) said data_present=[{}],"\
                         " first_id=[{}]."\
                             .format(vpeer.peer.dbid, msg.data_present,\
                                 msg.first_id))
@@ -1230,8 +1295,8 @@ class ChordTasks(object):
                 if data_mode is cp.DataMode.get:
                     pmsg = cp.ChordDataPresence(pkts[0])
 
-                    if log.isEnabledFor(logging.DEBUG):
-                        log.debug("Peer (dbid=[??]) said data_present=[{}],"\
+                    if log.isEnabledFor(logging.INFO):
+                        log.info("Peer (dbid=[??]) said data_present=[{}],"\
                             " first_id=[{}]."\
                                 .format(pmsg.data_present, pmsg.first_id))
 
@@ -1300,8 +1365,9 @@ class ChordTasks(object):
             pmsg = cp.ChordPeerList(pkt)
 
             if log.isEnabledFor(logging.INFO):
-                log.info("Peer (id=[{}]) returned PeerList of size {}."\
-                    .format(tun_meta.peer.dbid, len(pmsg.peers)))
+                log.info("Peer (tun_meta.peer.dbid=[{}], path=[{}]) returned"\
+                    " PeerList of size {}."\
+                    .format(tun_meta.peer.dbid, path, len(pmsg.peers)))
 
             # Add returned PeerS to result_trie.
             idx = 0
@@ -1480,7 +1546,7 @@ class ChordTasks(object):
 #        # We don't want to deal with further nodes than ourselves.
 #        pt[bittrie.XorKey(fnmsg.node_id, self.engine.node_id)] = True
 
-        cnt = 3
+        cnt = 20
         rlist = []
 
         for r in pt:

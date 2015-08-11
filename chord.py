@@ -29,7 +29,7 @@ import enc
 from db import Peer
 from mutil import hex_dump, log_base2_8bit, hex_string, calc_log_distance
 
-BUCKET_SIZE = 8
+BUCKET_SIZE = 16
 
 NODE_ID_BITS = enc.ID_BITS
 NODE_ID_BYTES = NODE_ID_BITS >> 3
@@ -57,8 +57,8 @@ class ChordEngine():
 
         self.last_db_peer_count = 0
 
-        self.minimum_connections = 10
-        self.maximum_connections = 72
+        self.minimum_connections = 32
+        self.maximum_connections = 256
         self.hard_maximum_connections = self.maximum_connections * 2
 
         self.connect_peers = None # ["host:port"]
@@ -145,8 +145,6 @@ class ChordEngine():
 
     @asyncio.coroutine
     def add_peers(self, peers, process_check_connections=True):
-        assert type(peers[0]) is Peer
-
         log.info("Adding upto {} peers.".format(len(peers)))
 
         def dbcall():
@@ -157,6 +155,8 @@ class ChordEngine():
                 added = []
 
                 for peer in peers:
+                    assert type(peer) is Peer
+
                     if not check_address(peer.address):
                         continue
 
