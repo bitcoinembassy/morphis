@@ -1128,8 +1128,8 @@ class ChordTasks(object):
             elif data_mode is cp.DataMode.get:
                 msg = cp.ChordDataPresence(pkt)
 
-                if log.isEnabledFor(logging.DEBUG):
-                    log.debug("Peer (dbid=[{}]) said data_present=[{}],"\
+                if log.isEnabledFor(logging.INFO):
+                    log.info("Peer (dbid=[{}]) said data_present=[{}],"\
                         " first_id=[{}]."\
                             .format(vpeer.peer.dbid, msg.data_present,\
                                 msg.first_id))
@@ -1295,8 +1295,8 @@ class ChordTasks(object):
                 if data_mode is cp.DataMode.get:
                     pmsg = cp.ChordDataPresence(pkts[0])
 
-                    if log.isEnabledFor(logging.DEBUG):
-                        log.debug("Peer (dbid=[??]) said data_present=[{}],"\
+                    if log.isEnabledFor(logging.INFO):
+                        log.info("Peer (dbid=[??]) said data_present=[{}],"\
                             " first_id=[{}]."\
                                 .format(pmsg.data_present, pmsg.first_id))
 
@@ -1365,8 +1365,9 @@ class ChordTasks(object):
             pmsg = cp.ChordPeerList(pkt)
 
             if log.isEnabledFor(logging.INFO):
-                log.info("Peer (id=[{}]) returned PeerList of size {}."\
-                    .format(tun_meta.peer.dbid, len(pmsg.peers)))
+                log.info("Peer (tun_meta.peer.dbid=[{}], path=[{}]) returned"\
+                    " PeerList of size {}."\
+                    .format(tun_meta.peer.dbid, path, len(pmsg.peers)))
 
             # Add returned PeerS to result_trie.
             idx = 0
