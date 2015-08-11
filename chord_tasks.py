@@ -253,7 +253,10 @@ class ChordTasks(object):
             # this. When rewriting this file incorporate this stage into the
             # retrevial process at the end (and have it async just like this).
             r = random.randint(1, 5)
-            if r == 1:
+            if retry_factor > 1:
+                # Increase chance of uploading a block if it was hard to fetch.
+                r = min(r, r * (retry_factor/10))
+            if r >= 5:
                 asyncio.async(\
                     self.send_store_data(data_rw.data, store_key=False),\
                     loop=self.loop)
