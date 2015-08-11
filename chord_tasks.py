@@ -1181,7 +1181,7 @@ class ChordTasks(object):
                     log.info("Peer (dbid=[{}]) said data_present=[{}],"\
                         " first_id=[{}]."\
                             .format(vpeer.peer.dbid, msg.data_present,\
-                                msg.first_id))
+                                mbase32.encode(msg.first_id)))
 
                 if fnmsg.significant_bits:
                     data_present = msg.first_id
@@ -1352,7 +1352,8 @@ class ChordTasks(object):
                     if log.isEnabledFor(logging.INFO):
                         log.info("Peer (dbid=[??]) said data_present=[{}],"\
                             " first_id=[{}]."\
-                                .format(pmsg.data_present, pmsg.first_id))
+                                .format(pmsg.data_present,\
+                                    mbase32.encode(pmsg.first_id)))
 
                     if significant_bits:
                         data_present = pmsg.first_id
