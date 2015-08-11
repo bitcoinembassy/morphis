@@ -524,18 +524,32 @@ class DmailEngine(object):
             log.debug("dmail block data=[\n{}]."\
                 .format(mutil.hex_dump(tb_data)))
 
-        storing_nodes = yield from\
-            self.task_engine.send_store_targeted_data(\
-                tb_data, store_key=True, key_callback=key_callback)
+        total_storing = 0
+        retry = 0
+        while True:
+            storing_nodes = yield from\
+                self.task_engine.send_store_targeted_data(\
+                    tb_data, store_key=True, key_callback=key_callback,\
+                    retry_factor=retry * 10)
+
+            total_storing += storing_nodes
+
+            if total_storing >= 3:
+                break
+
+            if retry > 32:
+                break
+            elif retry > 3:
+                yield from asyncio.sleep(1)
 
         key_enc = mbase32.encode(key)
         id_enc = mbase32.encode(enc.generate_ID(key))
 
         if log.isEnabledFor(logging.INFO):
             log.info("Dmail sent; key=[{}], id=[{}], storing_nodes=[{}]."\
-                .format(key_enc, id_enc, storing_nodes))
+                .format(key_enc, id_enc, total_storing))
 
-        return storing_nodes
+        return total_storing
 
     @asyncio.coroutine
     def fetch_recipient_dmail_sites(self, recipients):

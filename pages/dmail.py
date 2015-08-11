@@ -450,16 +450,24 @@ def __serve_post(handler, rpath, done_event):
         de =\
             dmail.DmailEngine(handler.node.chord_engine.tasks, handler.node.db)
 
-        yield from de.send_dmail(\
-            sender_asymkey,\
-            recipients,\
-            subject,\
-            None,\
-            content)
+        storing_nodes =\
+            yield from de.send_dmail(\
+                sender_asymkey,\
+                recipients,\
+                subject,\
+                None,\
+                content)
 
-        handler._send_content(\
-            "SUCCESS.<br/><p>Dmail successfully sent to: {}</p>"\
-                .format(dest_addr_enc[0].decode()).encode())
+        if storing_nodes:
+            handler._send_content(\
+                "SUCCESS.<br/><p>Dmail successfully sent to: {}</p>"\
+                    .format(dest_addr_enc[0].decode()).encode())
+        else:
+            handler._send_content(\
+                "FAIL.<br/><p>Dmail timed out being stored on the network;"\
+                    "please try again.</p>"\
+                        .format(dest_addr_enc[0].decode()).encode())
+
     else:
         handler._handle_error()
 
