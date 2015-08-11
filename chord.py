@@ -179,8 +179,9 @@ class ChordEngine():
                         q = q.filter(Peer.address == peer.address)
 
                     if q.scalar() > 0:
-                        if log.isEnabledFor(logging.INFO):
-                            log.info("Peer [{}] already in list.".format(peer.address))
+                        if log.isEnabledFor(logging.DEBUG):
+                            log.debug("Peer [{}] already in list."\
+                                .format(peer.address))
                         continue
 
                     peer.connected = False
