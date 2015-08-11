@@ -253,7 +253,10 @@ class ChordTasks(object):
             # this. When rewriting this file incorporate this stage into the
             # retrevial process at the end (and have it async just like this).
             r = random.randint(1, 5)
-            if r == 1:
+            if retry_factor > 1:
+                # Increase chance of uploading a block if it was hard to fetch.
+                r = min(r, r * (retry_factor/10))
+            if r >= 5:
                 asyncio.async(\
                     self.send_store_data(data_rw.data, store_key=False),\
                     loop=self.loop)
@@ -472,9 +475,9 @@ class ChordTasks(object):
                 key = bittrie.XorKey(node_id, peer.node_id)
                 input_trie[key] = peer
 
-        max_concurrent_queries = 3
-        slowpoke_factor = 2 #TODO: Have this dynamically adapt.
-        max_initial_queries = int(max_concurrent_queries * slowpoke_factor)
+        max_initial_queries = 3
+        slowpoke_factor = 2
+        max_concurrent_queries = max_initial_queries * slowpoke_factor
 
         #FIXME: YOU_ARE_HERE: Remove/fix this concept of maximum_depth.
         known_peer_cnt = self.engine.last_db_peer_count
@@ -527,14 +530,14 @@ class ChordTasks(object):
             if targeted:
                 data_rw.targeted = True
 
-        # Open the tunnels with upto max_concurrent_queries immediate PeerS.
+        # Open the tunnels with upto max_initial_queries immediate PeerS.
         for peer in input_trie:
             key = bittrie.XorKey(node_id, peer.node_id)
             vpeer = VPeer(peer)
             # Store immediate PeerS in the result_trie.
             result_trie[key] = vpeer
 
-            if len(tasks) == max_concurrent_queries:
+            if len(tasks) == max_initial_queries:
                 # We still add all immediate PeerS so that later we can ignore
                 # them if they are included in lists returned by querying.
                 continue
@@ -560,7 +563,7 @@ class ChordTasks(object):
         max_time = 7.0 #TODO: This is probably excessive!
         diff = 0
         start = datetime.today()
-        while diff < max_time and done_cnt < max_concurrent_queries:
+        while diff < max_time and done_cnt < max_initial_queries:
             try:
                 done, pending =\
                     yield from asyncio.wait(\
@@ -591,18 +594,20 @@ class ChordTasks(object):
         # processing the responses and using that data to build further tunnels
         # and send out the FindNode even deeper. After this loop, we have
         # done all the finding we are going to do.
-        max_concurrent_queries *= slowpoke_factor
-
         query_cntr = Counter(0)
         task_cntr = Counter(0)
         depth = Counter(0)
         done_all = asyncio.Event(loop=self.loop)
         done_one = asyncio.Event(loop=self.loop)
 
+        wanted = 1 if data_mode is cp.DataMode.get else max_initial_queries
+        if retry_factor > 1:
+            wanted = min(wanted, wanted + 1 * (retry_factor/10))
+
         for depth.value in range(1, maximum_depth):
-            if data_rw.data_present_cnt > 1 * (retry_factor/10):
+            if data_rw.data_present_cnt >= wanted:
                 break;
-            if data_rw.will_store_cnt > 1 * (retry_factor/10):
+            if data_rw.will_store_cnt >= wanted:
                 break;
 
             direct_peers_lower = 0
@@ -703,6 +708,8 @@ class ChordTasks(object):
                 log.info("All tasks (tunnels) exited.")
                 break
 
+        # Proceed to the second stage of the request.
+        # FIXME: Write this whole stuff to merge these two so it can be async.
         if data_mode.value:
             storing_nodes = 0
 
@@ -948,7 +955,7 @@ class ChordTasks(object):
                 else:
                     assert data_mode is cp.DataMode.store
 
-                    if storing_nodes == max_concurrent_queries:
+                    if storing_nodes == max_initial_queries:
                         break
 
             if data_mode is cp.DataMode.store:
