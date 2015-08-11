@@ -600,9 +600,13 @@ class ChordTasks(object):
         done_one = asyncio.Event(loop=self.loop)
 
         for depth.value in range(1, maximum_depth):
-            if data_rw.data_present_cnt > 1 * (retry_factor/10):
+            wanted = 1
+            if retry_factor > 1:
+                wanted = min(1, 1 * (retry_factor/10))
+
+            if data_rw.data_present_cnt >= wanted:
                 break;
-            if data_rw.will_store_cnt > 1 * (retry_factor/10):
+            if data_rw.will_store_cnt >= wanted:
                 break;
 
             direct_peers_lower = 0
