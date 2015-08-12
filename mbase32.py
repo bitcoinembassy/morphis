@@ -4,9 +4,12 @@
 charset = "13456789abcdefghijkmnopqrstuwxyz"
 
 def encode(val):
-    assert type(val) in (bytes, bytearray), type(val)
-
     result = ""
+
+    if not val:
+        return result
+
+    assert type(val) in (bytes, bytearray), type(val)
 
     r = 0
     rbits = 0
@@ -29,6 +32,9 @@ def encode(val):
 
 def decode(val, padded=True):
     result = bytearray()
+
+    if not val:
+        return result
 
     a = 0
     abits = 0

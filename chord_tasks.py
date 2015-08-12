@@ -506,13 +506,7 @@ class ChordTasks(object):
         slowpoke_factor = 2
         max_concurrent_queries = max_initial_queries * slowpoke_factor
 
-        #FIXME: YOU_ARE_HERE: Remove/fix this concept of maximum_depth.
-        known_peer_cnt = self.engine.last_db_peer_count
-        if known_peer_cnt:
-            # This is only for safety, probably pointless.
-            maximum_depth = min(7, int(math.log(known_peer_cnt, 2) * 2))
-        else:
-            maximum_depth = 7
+        maximum_depth = 512
 
         if log.isEnabledFor(logging.INFO):
             log.info("Performing FindNode (node_id=[{}], data_mode={}) to a"\
@@ -1181,7 +1175,7 @@ class ChordTasks(object):
                     log.info("Peer (dbid=[{}]) said data_present=[{}],"\
                         " first_id=[{}]."\
                             .format(vpeer.peer.dbid, msg.data_present,\
-                                msg.first_id))
+                                mbase32.encode(msg.first_id)))
 
                 if fnmsg.significant_bits:
                     data_present = msg.first_id
@@ -1277,8 +1271,6 @@ class ChordTasks(object):
             if not pkt:
                 break
 
-            response_depth = 0 # Deep past immediate Peer.
-
             if sent_data_request.value\
                     and cp.ChordMessage.parse_type(pkt) != cp.CHORD_MSG_RELAY:
                 # This co-routine only expects unwrapped packets in the case
@@ -1352,7 +1344,8 @@ class ChordTasks(object):
                     if log.isEnabledFor(logging.INFO):
                         log.info("Peer (dbid=[??]) said data_present=[{}],"\
                             " first_id=[{}]."\
-                                .format(pmsg.data_present, pmsg.first_id))
+                                .format(pmsg.data_present,\
+                                    mbase32.encode(pmsg.first_id)))
 
                     if significant_bits:
                         data_present = pmsg.first_id

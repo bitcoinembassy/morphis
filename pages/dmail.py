@@ -177,14 +177,35 @@ def __serve_get(handler, rpath, done_event):
 
             private_key = rsakey.RsaKey(privdata=dmail_address.site_privatekey)
 
-            r = yield from\
-                handler.node.chord_engine.tasks.send_store_updateable_key(\
-                    dms.export(), private_key,\
-                    version=int(time.time()*1000), store_key=True)
+            total_storing = 0
+            retry = 0
+            while True:
+                storing_nodes = yield from\
+                    handler.node.chord_engine.tasks.send_store_updateable_key(\
+                        dms.export(), private_key,\
+                        version=int(time.time()*1000), store_key=True)
 
-            handler._send_content(\
-                pages.dmail_addr_settings_edit_success_content[0]\
-                    .format(addr_enc, addr_enc[:32]).encode())
+                total_storing += storing_nodes
+
+                if total_storing >= 3:
+                    break
+
+                if retry > 32:
+                    break
+                elif retry > 3:
+                    yield from asyncio.sleep(1)
+
+                retry += 1
+
+            if storing_nodes:
+                handler._send_content(\
+                    pages.dmail_addr_settings_edit_success_content[0]\
+                        .format(addr_enc, addr_enc[:32]).encode())
+            else:
+                handler._send_content(\
+                    pages.dmail_addr_settings_edit_fail_content[0]\
+                        .format(addr_enc, addr_enc[:32]).encode())
+
         elif req.startswith("/addr/settings/edit/"):
             addr_enc = req[20:]
 
@@ -379,13 +400,25 @@ def __serve_get(handler, rpath, done_event):
             difficulty = int(qdict["difficulty"][0])
 
             log.info("prefix=[{}].".format(prefix))
-            privkey, dmail_key, dms =\
+            privkey, dmail_key, dms, storing_nodes =\
                 yield from _create_dmail_address(handler, prefix, difficulty)
 
             dmail_key_enc = mbase32.encode(dmail_key)
 
             handler._send_partial_content(pages.dmail_frame_start, True)
-            handler._send_partial_content(b"SUCCESS<br/>")
+            if storing_nodes:
+                handler._send_partial_content(b"SUCCESS<br/>")
+            else:
+                handler._send_partial_content(
+                    "PARTIAL SUCCESS<br/>"\
+                    "<p>Your Dmail site was generated successfully; however,"\
+                    " it failed to be stored on the network. To remedy this,"\
+                    " simply go to your Dmail address page and click the"\
+                    " [<a href=\"morphis://.dmail/addr/settings/{}\">Address"\
+                    " Settings</a>] link, and then click the \"Republish"\
+                    " Dmail Site\" button.</p>"\
+                        .format(dmail_key_enc).encode())
+
             handler._send_partial_content(\
                 """<p>New dmail address: <a href="../addr/{}">{}</a></p>"""\
                     .format(dmail_key_enc, dmail_key_enc).encode())
@@ -465,7 +498,7 @@ def __serve_post(handler, rpath, done_event):
         else:
             handler._send_content(\
                 "FAIL.<br/><p>Dmail timed out being stored on the network;"\
-                    "please try again.</p>"\
+                    " please try again.</p>"\
                         .format(dest_addr_enc[0].decode()).encode())
 
     else:
@@ -853,6 +886,6 @@ def _format_dmail(dm, valid_sig):
 @asyncio.coroutine
 def _create_dmail_address(handler, prefix, difficulty):
     de = dmail.DmailEngine(handler.node.chord_engine.tasks, handler.node.db)
-    privkey, data_key, dms =\
+    privkey, data_key, dms, storing_nodes =\
         yield from de.generate_dmail_address(prefix, difficulty)
-    return privkey, data_key, dms
+    return privkey, data_key, dms, storing_nodes
