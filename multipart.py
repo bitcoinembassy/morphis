@@ -369,7 +369,7 @@ class HashTreeFetch(object):
             if retry:
                 retry[3] += 1 # Tries.
 
-                if retry[3] >= 7:
+                if retry[3] >= 32:
                     if log.isEnabledFor(logging.INFO):
                         log.info("Block id [{}] failed too much; aborting."\
                             .format(mbase32.encode(data_key)))
