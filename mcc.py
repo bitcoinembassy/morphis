@@ -134,12 +134,14 @@ def __main():
     if args.create_dmail:
         log.info("Creating and uploading dmail site.")
 
-        privkey, data_key, dms =\
+        privkey, data_key, dms, storing_nodes =\
             yield from de.generate_dmail_address(args.prefix)
 
         print("privkey: {}".format(base58.encode(privkey._encode_key())))
         print("x: {}".format(base58.encode(sshtype.encodeMpint(dms.dh.x))))
         print("dmail address: {}".format(mbase32.encode(data_key)))
+        print("storing_nodes=[{}]."\
+            .format(base58.encode(privkey._encode_key())))
 
     if args.send_dmail:
         log.info("Sending dmail.")

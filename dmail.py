@@ -198,9 +198,26 @@ class DmailEngine(object):
 
         log.info("Uploading dmail site.")
 
-        r = yield from self.task_engine.send_store_updateable_key(\
-            dms.export(), privkey, version=int(time.time()*1000),\
-            store_key=True, key_callback=key_callback)
+        total_storing = 0
+        retry = 0
+        while True:
+            storing_nodes = yield from\
+                self.task_engine.send_store_updateable_key(\
+                    dms.export(), privkey, version=int(time.time()*1000),\
+                    store_key=True, key_callback=key_callback,\
+                    retry_factor=retry * 10)
+
+            total_storing += storing_nodes
+
+            if total_storing >= 3:
+                break
+
+            if retry > 32:
+                break
+            elif retry > 3:
+                yield from asyncio.sleep(1)
+
+            retry += 1
 
         def dbcall():
             with self.db.open_session() as sess:
@@ -222,7 +239,7 @@ class DmailEngine(object):
 
         yield from self.loop.run_in_executor(None, dbcall)
 
-        return privkey, data_key, dms
+        return privkey, data_key, dms, total_storing
 
     @asyncio.coroutine
     def send_dmail_text(self, subject, message_text):
@@ -539,7 +556,6 @@ class DmailEngine(object):
 
             if retry > 32:
                 break
-
             elif retry > 3:
                 yield from asyncio.sleep(1)
 
