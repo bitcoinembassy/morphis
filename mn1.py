@@ -423,9 +423,16 @@ class SshProtocol(asyncio.Protocol):
             if not r:
                 return r
         except Exception as e:
-            log.exception("Exception performing connect task (closing connection):")
-            self.close()
-            raise
+            if log.isEnabledFor(logging.DEBUG):
+                log.exception("Exception performing connect task"\
+                    " (closing connection):")
+                self.close()
+                raise
+            else:
+                log.warning("Error performing connect task: {}"\
+                    .format(e))
+                self.close()
+                return
 
         # Connected and fully authenticated at this point.
         self.status = Status.ready
