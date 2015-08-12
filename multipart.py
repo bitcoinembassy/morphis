@@ -258,10 +258,23 @@ class HashTreeFetch(object):
             return False
 
         if self._failed:
-            delta = timedelta(seconds=self.retry_seconds)
-            start = datetime.today()
+            max_delta = timedelta(seconds=self.retry_seconds)
 
-            while self._failed and ((datetime.today() - start) < delta):
+            last_fail_count = 0
+
+            while True:
+                current_fail_count = len(self._failed)
+
+                if not current_fail_count:
+                    break
+
+                if current_fail_count != last_fail_count:
+                    start = datetime.today()
+                    last_fail_count = current_fail_count
+
+                if (datetime.today() - start) > max_delta:
+                    break
+
                 yield from self._task_semaphore.acquire()
                 if self._abort:
                     return False
