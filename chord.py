@@ -90,6 +90,26 @@ class ChordEngine():
         self._bind_port = int(value.split(':')[1])
 
     @asyncio.coroutine
+    def __rebuild_peer_trie(self):
+        "Recycle self.peer_trie because I didn't fully implement pruning."
+
+        #FIXME: Fix bittrie.py to prune itself properly, this is a temp hack
+        # to prevent it from leaking memory.
+
+        node_id = self.node_id
+
+        while True:
+
+            new_trie = bittrie.BitTrie()
+
+            for peer in self.peers.values():
+                xorkey = bittrie.XorKey(node_id, peer.node_id)
+                new_trie[xorkey] = peer
+
+            self.peer_trie = new_trie
+            yield from asyncio.sleep(3600) # Only do every hour.
+
+    @asyncio.coroutine
     def connect_peer(self, addr):
         "Returns Peer connected to, or dbpeer of already connected Peer,"
         "or None on connection error or invalid address."
@@ -239,6 +259,9 @@ class ChordEngine():
 
         # Let _async_process_connection_count() connect some connections first.
         self.loop.call_later(7, self._async_do_stabilize)
+
+        # Temp hack to fix memory leak due to incomplete BitTrie prune impl.
+        asyncio.async(self.__rebuild_peer_trie(), loop=self.loop)
 
     def _async_do_stabilize(self):
         self._do_stabilize_handle =\
