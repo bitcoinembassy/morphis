@@ -238,6 +238,7 @@ class ChordTasks(object):
                 .format(type(data_key), len(data_key))
 
         if path:
+            orig_data_key = data_key
             path_hash = enc.generate_ID(path)
             data_key = enc.generate_ID(data_key + path_hash)
         else:
@@ -274,6 +275,9 @@ class ChordTasks(object):
                         self.send_find_node(\
                             data_id, for_data=True, data_msg=sdmsg),\
                         loop=self.loop)
+
+                    if path:
+                        data_key = orig_data_key
 
                     asyncio.async(\
                         self.send_store_updateable_key_key(\
