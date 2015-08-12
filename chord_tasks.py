@@ -500,7 +500,8 @@ class ChordTasks(object):
 
         if not input_trie:
             input_trie = bittrie.BitTrie()
-            for peer in self.engine.peer_trie:
+#            for peer in self.engine.peer_trie:
+            for peer in self.engine.peers.values():
                 if not peer.full_node:
                     continue
                 key = bittrie.XorKey(node_id, peer.node_id)
