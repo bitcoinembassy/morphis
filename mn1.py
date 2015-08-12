@@ -238,7 +238,9 @@ class SshProtocol(asyncio.Protocol):
 
         if self.status is not Status.ready:
             # Ignore this call if we are closed or disconnected.
-            log.warning("close_channel(..) called on unready connection.")
+            if log.isEnabledFor(logging.DEBUG):
+                log.debug("close_channel({}) called on closing connection."\
+                    .format(local_cid))
             assert self.status is not Status.new
             return False
 
