@@ -726,6 +726,9 @@ def start_maalstroom_server(the_node):
 
     node = the_node
 
+#    client_engine = client_engine.ClientEngine(node.chord_engine, node.loop)
+#    yield from client_engine.start()
+
     log.info("Starting Maalstroom server instance.")
 
     server = ThreadedHTTPServer((host, port), MaalstroomHandler)
