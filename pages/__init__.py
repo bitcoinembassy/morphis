@@ -19,7 +19,7 @@ home_page_content = [\
     }
 </style>
 </head><body>
-<p><h2 style="display: inline;">MORPHiS Maalstroom UI</h2>&nbsp;&nbsp;&nbsp;[v${MORPHIS_VERSION}]&nbsp;&nbsp;&nbsp;[${CONNECTIONS} Connections]<span style="position: absolute; right: 0em;">(<a href="morphis://.aiwj/explanation">AIWJ</a> - JAVASCRIPT FREE!)</span></p>
+<div class="valign_container header_non_fs"><h2 style="display: inline;">MORPHiS Maalstroom UI</h2><span class="valign"><span class="h-3">&nbsp;&nbsp;&nbsp;[v${MORPHIS_VERSION}]&nbsp;[${CONNECTIONS} Connections]</span><span class="right_float"><span class="h-3 bold" style="margin: 0;">(<a href="morphis://.aiwj/explanation">AIWJ</a> - JAVASCRIPT FREE!)</span></span></div>
 <div class="msection">
     <h3>MORPHiS Web</h3>
     <p>
@@ -45,8 +45,24 @@ html, body {
     padding: 0;
     margin: 0;
 }
+.right_float {
+    position: fixed;
+    right: 0em;
+}
+.h-1 {
+    font-size: 95%;
+}
+.h-2 {
+    font-size: 85%;
+}
+.h-3 {
+    font-size: 75%;
+}
 body.iframe {
     height: 0%;
+}
+div.header_non_fs {
+    margin-top: 1em;
 }
 div.header {
     height: 3em;
@@ -111,14 +127,20 @@ form p * {
 label:after {
     content: ": ";
 }
-iframe.panel {
-    background-color: #86CBD2;
+.valign_container {
+    display: table;
 }
-body.panel {
+.valign_container .valign {
+    display: table-cell;
+    vertical-align: middle;
+    height: 100%;
+}
+body.panel_container {
+    background-color: #86CBD2;
     display: table;
     height: 100%;
 }
-body.panel div.panel {
+.panel_container .panel {
     display: table-cell;
     vertical-align: middle;
     height: 100%;
@@ -127,6 +149,9 @@ body.panel div.panel {
 }
 .italic {
     font-style: italic;
+}
+.bold {
+    font-weight: bold;
 }
 .strikethrough {
     text-decoration: line-through;
@@ -274,12 +299,12 @@ dmail_fetch_wrapper = [\
     b"""<!DOCTYPE html>
 <html><head><base target="_top" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/></head><body>
 <iframe src="${IFRAME_SRC}" frameborder="0" style="height: calc(100% - 2em);" width="100%"></iframe>
-<iframe src="${IFRAME2_SRC}" class="panel" frameborder="0" style="height: 2em;" width="100%"></iframe>
+<iframe src="${IFRAME2_SRC}" frameborder="0" style="height: 2em;" width="100%"></iframe>
 </body></html>""", None]
 
 dmail_fetch_panel_content = [\
     b"""<!DOCTYPE html>
-<html><head><base target="_top" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/></head><body class="iframe panel">
+<html><head><base target="_top" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/></head><body class="iframe panel_container">
 <div class="panel">
     <span>
         [<a target="_self" href="../mark_as_read/${DMAIL_IDS}">Toggle Read</a>]
