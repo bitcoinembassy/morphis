@@ -577,6 +577,8 @@ class ChordTasks(object):
                 vpeer, fnmsg, result_trie, tun_meta, data_mode,\
                 far_peers_by_path, data_rw))
 
+            vpeer.used = True
+
         if not tasks:
             log.info("Cannot perform FindNode, as we know no closer nodes.")
             return self._generate_fail_response(data_mode, data_key)
@@ -646,18 +648,32 @@ class ChordTasks(object):
                     # the loop maybe, do checks. For now, just ignoring it to
                     # prevent infinite loops.
                     continue
-                if row.path is None:
-                    # Already asked direct peers, and only asking ones we
-                    # haven't asked before.
-#                    direct_peers_lower += 1
-#                    if direct_peers_lower == len(used_tunnels):
-#                        # Only deal with results closer than the furthest of
-#                        # the direct peers we used.
-#                        break
-                    continue
 
                 if row.used:
                     # We've already sent to this Peer.
+                    continue
+
+                if row.path is None:
+                    # This is a immediate (direct connected) Peer.
+                    peer = row.peer
+
+                    if not peer.ready():
+                        continue
+
+                    tun_meta = TunnelMeta(peer)
+                    used_tunnels[row] = tun_meta
+
+                    task = asyncio.async(\
+                        self._send_find_node(\
+                            row, fnmsg, result_trie, tun_meta, data_mode,\
+                            far_peers_by_path, data_rw),\
+                        loop=self.loop)
+
+                    tasks.append(task)
+
+                    row.used = True
+
+                    current_depth_step_query_cnt += 1
                     continue
 
                 tun_meta = row.tun_meta
