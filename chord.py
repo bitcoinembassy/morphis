@@ -945,9 +945,17 @@ class ChordEngine():
             log.info("Received CHORD_MSG_FIND_NODE message.")
             msg = cp.ChordFindNode(data)
 
-            r = yield from\
-                self.tasks.process_find_node_request(\
-                    msg, data, peer, queue, local_cid)
+            task = self.tasks.process_find_node_request(\
+                msg, data, peer, queue, local_cid)
+
+            done, pending =\
+                yield from asyncio.wait([task], loop=self.loop, timeout=60)
+
+            if pending:
+                if log.isEnabledFor(logging.INFO):
+                    log.info("Peer requested tunnel operation took too long;"\
+                        " aborting.")
+                yield from peer.protocol.close_channel(local_cid);
 
             return True
 
