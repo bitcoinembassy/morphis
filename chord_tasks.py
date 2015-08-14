@@ -1594,6 +1594,13 @@ class ChordTasks(object):
             if not pkt:
                 break
 
+            packet_type = cp.ChordMessage.parse_type(pkt)
+
+            if packet_type != cp.CHORD_MSG_DATA_STORED
+                    and packet_type != cp.CHORD_MSG_DATA_RESPONSE:
+                # Ignore late packets from stage 1.
+                continue
+
             if data_mode is cp.DataMode.get:
                 rmsg = cp.ChordDataResponse(pkt)
 
