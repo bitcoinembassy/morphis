@@ -1596,7 +1596,7 @@ class ChordTasks(object):
 
             packet_type = cp.ChordMessage.parse_type(pkt)
 
-            if packet_type != cp.CHORD_MSG_DATA_STORED
+            if packet_type != cp.CHORD_MSG_DATA_STORED\
                     and packet_type != cp.CHORD_MSG_DATA_RESPONSE:
                 # Ignore late packets from stage 1.
                 continue
