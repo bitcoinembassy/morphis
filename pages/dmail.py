@@ -267,7 +267,12 @@ def __serve_get(handler, rpath, done_event):
                 b"${DMAIL_ADDRESS2}",\
                 "{}...".format(addr_enc[:32]).encode())
 
-            handler._send_partial_content(start, True)
+            acharset = handler.get_accept_charset()
+
+            handler._send_partial_content(\
+                start,\
+                True,\
+                content_type="text/html; charset={}".format(acharset))
 
             yield from\
                 _list_dmails_for_tag(handler, mbase32.decode(addr_enc), tag)
@@ -328,15 +333,7 @@ def __serve_get(handler, rpath, done_event):
 
             dmail_text = _format_dmail(dm, valid_sig)
 
-            acharset = handler.headers["Accept-Charset"]
-            if acharset:
-                if acharset.find("ISO-8859-1") > -1\
-                        and acharset.find("UTF-8") == -1:
-                    acharset = "ISO-8859-1"
-                else:
-                    acharset = "UTF-8"
-            else:
-                acharset = "UTF-8"
+            acharset = handler.get_accept_charset()
 
             handler._send_content(\
                 dmail_text.encode(acharset),

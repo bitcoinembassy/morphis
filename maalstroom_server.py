@@ -67,6 +67,8 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
         self._maalstroom_http_url_prefix = "http://{}/"
         self._maalstroom_morphis_url_prefix = "morphis://"
 
+        self._accept_charset = None
+
         super().__init__(a, b, c)
 
     def __prepare_for_request(self):
@@ -448,6 +450,23 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
             self.wfile.write(bytes(message, "UTF-8"))
         else:
             self._handle_error(data_rw)
+
+    def get_accept_charset(self):
+        if self._accept_charset:
+            return self._accept_charset
+
+        acharset = self.headers["Accept-Charset"]
+        if acharset:
+            if acharset.find("ISO-8859-1") > -1\
+                    and acharset.find("UTF-8") == -1:
+                acharset = "ISO-8859-1"
+            else:
+                acharset = "UTF-8"
+        else:
+            acharset = "UTF-8"
+
+        self._accept_charset = acharset
+        return acharset
 
     def _send_204(self):
         self.send_response(204)
