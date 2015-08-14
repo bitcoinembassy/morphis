@@ -328,8 +328,19 @@ def __serve_get(handler, rpath, done_event):
 
             dmail_text = _format_dmail(dm, valid_sig)
 
+            acharset = handler.headers["Accept-Charset"]
+            if acharset:
+                if acharset.find("ISO-8859-1") > -1\
+                        and acharset.find("UTF-8") == -1:
+                    acharset = "ISO-8859-1"
+                else:
+                    acharset = "UTF-8"
+            else:
+                acharset = "UTF-8"
+
             handler._send_content(\
-                dmail_text.encode(), content_type="text/plain")
+                dmail_text.encode(acharset),
+                content_type="text/plain; charset={}".format(acharset))
         elif req.startswith("/fetch/panel/mark_as_read/"):
             req_data = req[26:]
 
@@ -439,18 +450,37 @@ def __serve_post(handler, rpath, done_event):
         if log.isEnabledFor(logging.DEBUG):
             log.debug("data=[{}].".format(data))
 
-        dd = urllib.parse.parse_qs(data, keep_blank_values=True)
+        charset = handler.headers["Content-Type"]
+        if charset:
+            p0 = charset.find("charset=")
+            if p0 > -1:
+                p0 += 8
+                p1 = charset.find(' ', p0+8)
+                if p1 == -1:
+                    p1 = charset.find(';', p0+8)
+                if p1 > -1:
+                    charset = charset[p0:p1].strip()
+                else:
+                    charset = charset[p0:].strip()
+
+                if log.isEnabledFor(logging.DEBUG):
+                    log.debug("Form charset=[{}].".format(charset))
+            else:
+                charset = "UTF-8"
+
+        qs = data.decode(charset)
+        dd = urllib.parse.parse_qs(qs, keep_blank_values=True)
 
         if log.isEnabledFor(logging.DEBUG):
             log.debug("dd=[{}].".format(dd))
 
-        subject = dd.get(b"subject")
+        subject = dd.get("subject")
         if subject:
-            subject = subject[0].decode()
+            subject = subject[0]
         else:
             subject = ""
 
-        sender_dmail_id = dd.get(b"sender")
+        sender_dmail_id = dd.get("sender")
 
         if sender_dmail_id[0]:
             sender_dmail_id = int(sender_dmail_id[0])
@@ -467,16 +497,16 @@ def __serve_post(handler, rpath, done_event):
         else:
             sender_asymkey = None
 
-        dest_addr_enc = dd.get(b"destination")
+        dest_addr_enc = dd.get("destination")
         if not dest_addr_enc:
             handler._send_error("You must specify a destination.", 400)
             return
 
         recipient, significant_bits =\
-            mutil.decode_key(dest_addr_enc[0].decode())
+            mutil.decode_key(dest_addr_enc[0])
         recipients = [(dest_addr_enc, bytes(recipient), significant_bits)]
 
-        content = dd.get(b"content")
+        content = dd.get("content")
         if content:
             content = content[0]
 
@@ -494,12 +524,12 @@ def __serve_post(handler, rpath, done_event):
         if storing_nodes:
             handler._send_content(\
                 "SUCCESS.<br/><p>Dmail successfully sent to: {}</p>"\
-                    .format(dest_addr_enc[0].decode()).encode())
+                    .format(dest_addr_enc[0]).encode())
         else:
             handler._send_content(\
                 "FAIL.<br/><p>Dmail timed out being stored on the network;"\
                     " please try again.</p>"\
-                        .format(dest_addr_enc[0].decode()).encode())
+                        .format(dest_addr_enc[0]).encode())
 
     else:
         handler._handle_error()

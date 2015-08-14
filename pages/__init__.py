@@ -318,7 +318,7 @@ dmail_compose_dmail_form_start =\
 <html><head><base target="_top" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/>
 <style type="text/css">
 </style></head><body class="iframe">
-<form action="morphis://.dmail/compose/make_it_so" method="post">
+<form action="morphis://.dmail/compose/make_it_so" method="post" accept-charset="UTF-8 ISO-8859-1">
     <p class="nowrap">
         <label for="sender">From</label>
         <select name="sender">"""
