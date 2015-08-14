@@ -666,7 +666,8 @@ class ChordTasks(object):
                     task = asyncio.async(\
                         self._send_find_node(\
                             row, fnmsg, result_trie, tun_meta, data_mode,\
-                            far_peers_by_path, data_rw),\
+                            far_peers_by_path, data_rw, done_one=done_one,\
+                            done_all=done_all, query_cntr=query_cntr),\
                         loop=self.loop)
 
                     tasks.append(task)
@@ -1151,7 +1152,8 @@ class ChordTasks(object):
 
     @asyncio.coroutine
     def _send_find_node(self, vpeer, fnmsg, result_trie, tun_meta,\
-            data_mode, far_peers_by_path, data_rw):
+            data_mode, far_peers_by_path, data_rw, done_all=None,\
+            done_one=None, query_cntr=None):
         "Opens a channel and sends a 'root level' FIND_NODE to the passed"\
         " connected peer, adding results to the passed result_trie, and then"\
         " exiting. The channel is left open so that the caller may route to"\
@@ -1162,6 +1164,11 @@ class ChordTasks(object):
         local_cid, queue =\
             yield from peer.protocol.open_channel("mpeer", True)
         if not queue:
+            if query_cntr:
+                query_cntr.value -= 1
+                done_one.set()
+                if query_cntr.value == 0:
+                    done_all.set
             return
 
         if log.isEnabledFor(logging.DEBUG):
@@ -1172,6 +1179,11 @@ class ChordTasks(object):
 
         pkt = yield from queue.get()
         if not pkt:
+            if query_cntr:
+                query_cntr.value -= 1
+                done_one.set()
+                if query_cntr.value == 0:
+                    done_all.set
             return
 
         tun_meta.queue = queue
@@ -1212,6 +1224,11 @@ class ChordTasks(object):
 
             pkt = yield from queue.get()
             if not pkt:
+                if query_cntr:
+                    query_cntr.value -= 1
+                    done_one.set()
+                    if query_cntr.value == 0:
+                        done_all.set
                 return
 
         msg = cp.ChordPeerList(pkt)
@@ -1236,6 +1253,12 @@ class ChordTasks(object):
                 far_peers_by_path.setdefault((peer.dbid, idx), tvpeer)
 
             idx += 1
+
+        if query_cntr:
+            query_cntr.value -= 1
+            done_one.set()
+            if query_cntr.value == 0:
+                done_all.set
 
     @asyncio.coroutine
     def _process_find_node_relay(\
