@@ -601,7 +601,9 @@ def _list_dmails_for_tag(handler, addr, tag):
         is_read = "" if msg.read else "(unread)"
 
         subject = msg.subject
-        if len(subject) > 80:
+        if not subject:
+            subject = "[no subject]"
+        elif len(subject) > 80:
             subject = subject[:80] + "..."
 
         sender_key = msg.sender_dmail_key
