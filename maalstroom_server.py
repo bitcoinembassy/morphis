@@ -57,6 +57,10 @@ class DataResponseWrapper(object):
 class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
     daemon_threads = True
 
+#FIXME: Strip down this to be the bare minimum, just the do_{GET,POST} that
+# immediately hands off to an event loop based instance, having all the
+# write_content(..) Etc. methods in that event loop based instance, all writing
+# to a Pipe that this handler simply relays to the out stream.
 class MaalstroomHandler(BaseHTTPRequestHandler):
     def __init__(self, a, b, c):
         global node
