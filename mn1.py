@@ -199,7 +199,8 @@ class SshProtocol(asyncio.Protocol):
             else:
                 self.write_data((edmsg.encode(), msg.encode()))
         else:
-            assert type(remote_cid) is mnetpacket.SshChannelOpenMessage
+            assert type(remote_cid) is mnetpacket.SshChannelOpenMessage,\
+                type(remote_cid)
 
             self._channel_map[local_cid] =\
                 ChannelStatus.implicit_data_sent
