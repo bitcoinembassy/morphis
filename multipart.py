@@ -60,6 +60,16 @@ class BufferingDataCallback(DataCallback):
 
         return True
 
+class KeyCallback(object):
+    def notify_key(self, key):
+        pass
+
+    def notify_referred_key(self, key):
+        "This gets called when a link is requested to be stored, the link"
+        " is returned with notify_key(..) and the linked key is returned"
+        " via this call, notify_referred_key(..)."
+        pass
+
 class BlockType(Enum):
     hash_tree = 0x2D4100
     link = 0x2D4200
@@ -562,6 +572,12 @@ def store_data(engine, data, privatekey=None, path=None, version=None,\
         key_callback=None, store_key=True, mime_type="", concurrency=64):
     data_len = len(data)
 
+    if isinstance(key_callback, KeyCallback):
+        key_callback_obj = key_callback
+        key_callback = key_callback_obj.notify_key
+    else:
+        key_callback_obj = None
+
     if mime_type or (privatekey and data_len > consts.MAX_DATA_BLOCK_SIZE):
         store_link = True
 
@@ -571,6 +587,8 @@ def store_data(engine, data, privatekey=None, path=None, version=None,\
         def key_callback(key):
             nonlocal root_block_key
             root_block_key = key
+            if key_callback_obj:
+                key_callback_obj.notify_referred_key(key)
     else:
         store_link = False
 
@@ -724,6 +742,11 @@ def _store_block(engine, i, block_data, key_callback, task_semaphore,\
 
         if storing_nodes >= 3:
             return True
+        else:
+            if log.isEnabledFor(logging.INFO):
+                log.info("Only stored block #{} to [{}] nodes so far;"\
+                    " trying again."\
+                        .format(i, storing_nodes))
 
         tries += 1
 

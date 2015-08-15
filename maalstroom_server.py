@@ -40,6 +40,7 @@ class DataResponseWrapper(object):
         self.size = None
 
         self.data_key = None
+        self.referred_key = None # If data_key is a link on upload.
 
         self.path = None
         self.version = None
@@ -64,6 +65,8 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
 
         self.maalstroom_plugin_used = False
         self.maalstroom_url_prefix = None
+        self.maalstroom_url_prefix_str = None
+
         self._maalstroom_http_url_prefix = "http://{}/"
         self._maalstroom_morphis_url_prefix = "morphis://"
 
@@ -74,8 +77,10 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
     def __prepare_for_request(self):
         if self.headers["X-Maalstroom-Plugin"]:
             self.maalstroom_plugin_used = True
+            self.maalstroom_url_prefix_str =\
+                self._maalstroom_morphis_url_prefix
             self.maalstroom_url_prefix =\
-                self._maalstroom_morphis_url_prefix.encode()
+                self.maalstroom_url_prefix_str.encode()
         else:
             global port
             host = self.headers["Host"]
@@ -84,8 +89,10 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
                     " host=[{}]."\
                         .format(host))
             # Host header includes port.
+            self.maalstroom_url_prefix_str =\
+                self._maalstroom_http_url_prefix.format(host)
             self.maalstroom_url_prefix =\
-                self._maalstroom_http_url_prefix.format(host).encode()
+                self.maalstroom_url_prefix_str.encode()
 
     def __get_connection_count(self, q):
         cnt = len(self.node.chord_engine.peers)
@@ -227,13 +234,13 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
                 if path:
                     url = "{}{}/{}"\
                         .format(\
-                            self.maalstroom_url_prefix.decode(),\
+                            self.maalstroom_url_prefix_str,\
                             key,\
                             path.decode("UTF-8"))
                 else:
                     url = "{}{}"\
                         .format(\
-                            self.maalstroom_url_prefix.decode(),\
+                            self.maalstroom_url_prefix_str,\
                             key)
 
                 message = ("<html><head><title>permalink</title></head><body><a href=\"{}\">{}</a>\n{}</body></html>"\
@@ -431,16 +438,27 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
             if privatekey and path:
                 url = "{}{}/{}"\
                     .format(\
-                        self.maalstroom_url_prefix.decode(),\
+                        self.maalstroom_url_prefix_str,\
                         enckey,\
                         path.decode("UTF-8"))
             else:
                 url = "{}{}"\
                     .format(\
-                        self.maalstroom_url_prefix.decode(),\
+                        self.maalstroom_url_prefix_str,\
                         enckey)
 
-            message = '<a href="{}">perma link</a>'.format(url)
+            if privatekey:
+                message = '<a id="key" href="{}">updateable key link</a>'\
+                    .format(url)
+
+                if data_rw.referred_key:
+                    message +=\
+                        '<br/><a id="referred_key" href="{}{}">perma link</a>'\
+                            .format(\
+                                self.maalstroom_url_prefix_str,\
+                                mbase32.encode(data_rw.referred_key))
+            else:
+                message = '<a id="key" href="{}">perma link</a>'.format(url)
 
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
@@ -697,12 +715,22 @@ def _send_get_data(data_key, significant_bits, path, data_rw):
 
     data_rw.data_queue.put(None)
 
+class KeyCallback(multipart.KeyCallback):
+    def __init__(self, data_rw):
+        self.data_rw = data_rw
+
+    def notify_key(self, key):
+        self.data_rw.data_key = key
+
+    def notify_referred_key(self, key):
+        self.data_rw.referred_key = key
+
 @asyncio.coroutine
 def _send_store_data(data, data_rw, privatekey=None, path=None, version=None,\
         mime_type=""):
+
     try:
-        def key_callback(data_key):
-            data_rw.data_key = data_key
+        key_callback = KeyCallback(data_rw)
 
         yield from multipart.store_data(\
             node.chord_engine, data, privatekey=privatekey, path=path,\
