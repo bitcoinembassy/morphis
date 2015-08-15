@@ -748,6 +748,27 @@ def _store_block(engine, i, block_data, key_callback, task_semaphore,\
                     " trying again."\
                         .format(i, storing_nodes))
 
+        if tries == 10:
+            # Grab the data_key this time for use on next try's logic below.
+            data_key = None
+            orig_key_callback = key_callback
+            def key_callback(key):
+                nonlocal data_key, key_callback
+                data_key = key
+                orig_key_callback(key)
+                key_callback = orig_key_callback
+        elif tries == 11:
+            data_rw =\
+                yield from\
+                    engine.tasks.send_get_data(data_key, retry_factor=100)
+            if data_rw.data is not None\
+                    and data_rw.data_present_cnt + storing_nodes >= 3:
+                if log.isEnabledFor(logging.INFO):
+                    log.info("Block #{} is already redundant enough on the"\
+                        "network; not uploading it anymore for now."\
+                            .format(i))
+                return True
+
         tries += 1
 
         if tries < 32:
