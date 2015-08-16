@@ -760,8 +760,8 @@ def _store_block(engine, i, block_data, key_callback, task_semaphore,\
         else:
             if log.isEnabledFor(logging.INFO):
                 log.info("Only stored block #{} to [{}] nodes so far;"\
-                    " trying again."\
-                        .format(i, storing_nodes))
+                    " trying again (tries=[{}])."\
+                        .format(i, storing_nodes, tries))
 
         if tries == 10:
             # Grab the data_key this time for use on next try's logic below.
@@ -788,7 +788,7 @@ def _store_block(engine, i, block_data, key_callback, task_semaphore,\
         tries += 1
 
         if tries < 32:
-            yield from asyncio.sleep(1.1**tries)
+            yield from asyncio.sleep(1.1**1.1**tries)
             yield from task_semaphore.acquire()
             continue
 
