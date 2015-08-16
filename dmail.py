@@ -205,7 +205,7 @@ class DmailEngine(object):
                 self.task_engine.send_store_updateable_key(\
                     dms.export(), privkey, version=int(time.time()*1000),\
                     store_key=True, key_callback=key_callback,\
-                    retry_factor=retry * 10)
+                    retry_factor=retry * 20)
 
             total_storing += storing_nodes
 
@@ -375,7 +375,8 @@ class DmailEngine(object):
 
         while True:
             data_rw = yield from self.task_engine.send_find_key(\
-                start, target_key=target, significant_bits=significant_bits)
+                start, target_key=target, significant_bits=significant_bits,\
+                retry_factor=100)
 
             key = data_rw.data_key
 
@@ -590,7 +591,8 @@ class DmailEngine(object):
             else:
                 recipient = entry
 
-            data_rw = yield from self.task_engine.send_get_data(recipient)
+            data_rw = yield from self.task_engine.send_get_data(recipient,\
+                retry_factor=100)
 
             if not data_rw.data:
                 if log.isEnabledFor(logging.INFO):
