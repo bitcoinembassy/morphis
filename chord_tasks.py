@@ -837,6 +837,8 @@ class ChordTasks(object):
 
             #NOTE: result_trie is [] when significant_bits.
 
+            done_one.clear()
+
             for row in result_trie:
                 if row is False:
                     # Row is ourself.
@@ -963,7 +965,7 @@ class ChordTasks(object):
                         asyncio.async(\
                             self._wait_for_data_stored(\
                                 data_mode, row, tun_meta, query_cntr,\
-                                done_all, data_rw),\
+                                done_one, done_all, data_rw),\
                             loop=self.loop)
                     else:
                         # Then this immediate Peer had its channel closed;
@@ -1006,9 +1008,22 @@ class ChordTasks(object):
                         break
 
             if data_mode is cp.DataMode.store:
+                yield from asyncio.wait_for(\
+                    done_one.wait(),\
+                    timeout=1,\
+                    loop=self.loop)
+
+                done_one.clear()
+
+                # Wait a bit more for the rest of the tasks.
+                yield from asyncio.wait_for(\
+                        done_all.wait(),\
+                        timeout=0.1 * retry_factor,\
+                        loop=self.loop)
+
                 if log.isEnabledFor(logging.INFO):
-                    log.info("Sent StoreData to [{}] nodes."\
-                        .format(data_rw.storing_nodes))
+                    log.info("Sent StoreData to [{}/{}] tried nodes."\
+                        .format(data_rw.storing_nodes, stores_sent))
 
 #            if query_cntr.value:
 #                # query_cntr can be zero if no PeerS were tried.
@@ -1590,7 +1605,7 @@ class ChordTasks(object):
 
     @asyncio.coroutine
     def _wait_for_data_stored(self, data_mode, vpeer, tun_meta, query_cntr,\
-            done_all, data_rw):
+            done_one, done_all, data_rw):
         "This is a coroutine that is used in data_mode and is started for"\
         " immediate PeerS that do not have a tunnel open (and thus a tunnel"\
         " coroutine already processing it."
@@ -1637,6 +1652,7 @@ class ChordTasks(object):
             assert tun_meta.jobs == 1
             tun_meta.jobs -= 1
             query_cntr.value -= 1
+            done_one.set()
             if not query_cntr.value:
                 done_all.set()
 
