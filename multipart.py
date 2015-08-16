@@ -763,7 +763,7 @@ def _store_block(engine, i, block_data, key_callback, task_semaphore,\
                     " trying again (tries=[{}])."\
                         .format(i, storing_nodes, tries))
 
-        if tries == 3:
+        if tries == 1:
             # Grab the data_key this time for use on next try's logic below.
             data_key = None
             orig_key_callback = key_callback
@@ -772,10 +772,11 @@ def _store_block(engine, i, block_data, key_callback, task_semaphore,\
                 data_key = key
                 orig_key_callback(key)
                 key_callback = orig_key_callback
-        elif tries == 4:
+        elif tries == 2:
             data_rw =\
                 yield from\
-                    engine.tasks.send_get_data(data_key, retry_factor=100)
+                    engine.tasks.send_get_data(data_key, retry_factor=30,\
+                        scan_only=True)
             if data_rw.data is not None and data_rw.data_present_cnt:
                 storing_nodes += data_rw.data_present_cnt
                 if log.isEnabledFor(logging.INFO):
@@ -790,7 +791,7 @@ def _store_block(engine, i, block_data, key_callback, task_semaphore,\
 
         tries += 1
 
-        if tries < 7:
+        if tries < 5:
 #            yield from asyncio.sleep(1.1**1.1**tries)
             yield from task_semaphore.acquire()
             continue
