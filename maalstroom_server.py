@@ -15,6 +15,7 @@ import time
 
 import base58
 import chord
+import client_engine as cengine
 import enc
 import rsakey
 import mbase32
@@ -30,6 +31,7 @@ port = 4251
 
 node = None
 server = None
+client_engine = None
 
 upload_page_content = None
 static_upload_page_content = [None, None]
@@ -98,16 +100,28 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
             self.maalstroom_url_prefix =\
                 self.maalstroom_url_prefix_str.encode()
 
-    def __get_connection_count(self, q):
-        cnt = len(self.node.chord_engine.peers)
-        q.put(cnt)
-
     def _get_connection_count(self):
         q = queue.Queue()
-
         self.node.loop.call_soon_threadsafe(self.__get_connection_count, q)
-
         return q.get()
+
+    def __get_connection_count(self, q):
+        global node
+        cnt = len(node.chord_engine.peers)
+        q.put(cnt)
+
+    def _get_latest_version_number(self):
+        q = queue.Queue()
+        self.node.loop.call_soon_threadsafe(\
+            self.__get_latest_version_number, q)
+        return q.get()
+
+    def __get_latest_version_number(self, q):
+        global client_engine
+        if not client_engine:
+            q.put(None)
+            return
+        q.put(client_engine.latest_version_number)
 
     def do_GET(self):
         self.__prepare_for_request()
@@ -121,11 +135,28 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
 
         if not rpath:
             connection_cnt = self._get_connection_count()
+            current_version = self.node.morphis_version
+
+            latest_version_number = self._get_latest_version_number()
+
+            if latest_version_number\
+                    and current_version != latest_version_number:
+                version_str =\
+                    '<span class="strikethrough nomargin">{}</span>]'\
+                    '&nbsp;[<a href="{}{}">{} AVAILABLE</a>'\
+                        .format(current_version,\
+                            self.maalstroom_url_prefix_str,\
+                            "sp1nara3xhndtgswh7fznt414we4mi3y6kdwbkz4jmt8ocb6"\
+                                "x4w1faqjotjkcrefta11swe3h53dt6oru3r13t667pr7"\
+                                "cpe3ocxeuma/latest_version",\
+                            latest_version_number)
+            else:
+                version_str = current_version
 
             content = pages.home_page_content[0].replace(\
                 b"${CONNECTIONS}", str(connection_cnt).encode())
             content = content.replace(\
-                b"${MORPHIS_VERSION}", self.node.morphis_version.encode())
+                b"${MORPHIS_VERSION}", version_str.encode())
 
             self._send_content([content, None])
             return
@@ -758,9 +789,6 @@ def start_maalstroom_server(the_node):
 
     node = the_node
 
-#    client_engine = client_engine.ClientEngine(node.chord_engine, node.loop)
-#    yield from client_engine.start()
-
     log.info("Starting Maalstroom server instance.")
 
     server = ThreadedHTTPServer((host, port), MaalstroomHandler)
@@ -774,6 +802,15 @@ def start_maalstroom_server(the_node):
         server.server_close()
 
     node.loop.run_in_executor(None, threadcall)
+
+    asyncio.async(_create_client_engine(), loop=node.loop)
+
+@asyncio.coroutine
+def _create_client_engine():
+    global node, client_engine
+    yield from node.ready.wait()
+    client_engine = cengine.ClientEngine(node.chord_engine, node.loop)
+    yield from client_engine.start()
 
 def shutdown():
     if not server:

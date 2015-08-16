@@ -17,6 +17,7 @@ from enum import Enum
 import consts
 import enc
 import mbase32
+import node
 import peer as mnpeer
 import sshtype
 
@@ -39,11 +40,21 @@ class DataCallback(object):
 class BufferingDataCallback(DataCallback):
     def __init__(self):
         self.version = None
-        self.buf = bytearray()
+        self.size = None
+        self.mime_type = None
+        self.data = None
         self.position = 0
 
     def notify_version(self, version):
         self.version = version
+
+    def notify_size(self, size):
+        if size > node.MAX_DATA_BLOCK_SIZE:
+            self.data = bytearray()
+        self.size = size
+
+    def notify_mime_type(self, mime_type):
+        self.mime_type = mime_type
 
     def notify_data(self, position, data):
         if position != self.position:
@@ -55,7 +66,11 @@ class BufferingDataCallback(DataCallback):
             log.info("Received data; position=[{}], len=[{}]."\
                 .format(position, data_len))
 
-        self.buf += data
+        if self.data is None:
+            self.data = data
+        else:
+            self.data += data
+
         self.position += data_len
 
         return True
@@ -482,9 +497,9 @@ def get_data_buffered(engine, data_key, path=None, retry_seconds=30,\
             return False, None
 
     if log.isEnabledFor(logging.INFO):
-        log.info("Download complete; len=[{}].".format(len(cb.buf)))
+        log.info("Download complete; len=[{}].".format(len(cb.data)))
 
-    return cb.buf, cb.version
+    return cb
 
 @asyncio.coroutine
 def get_data(engine, data_key, data_callback, path=None, ordered=False,\
@@ -544,12 +559,12 @@ def get_data(engine, data_key, data_callback, path=None, ordered=False,\
             data_rw = yield from engine.tasks.send_get_data(block.destination)
             data = data_rw.data
 
-            if not data:
+            if data is None:
                 data_rw = yield from engine.tasks.send_get_data(\
                     block.destination, retry_factor=10)
                 data = data_rw.data
 
-                if not data:
+                if data is None:
                     return None
 
             continue

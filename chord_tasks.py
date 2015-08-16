@@ -114,6 +114,8 @@ class ChordTasks(object):
 
         yield from self.engine._check_update_remote_address(msg, peer)
 
+        self.engine._notify_protocol_ready()
+
     @asyncio.coroutine
     def perform_stabilize(self):
         found_new_nodes = False
@@ -239,6 +241,9 @@ class ChordTasks(object):
                 .format(type(data_key), len(data_key))
 
         if path:
+            if type(path) is str:
+                path = path.encode()
+
             orig_data_key = data_key
             path_hash = enc.generate_ID(path)
             data_key = enc.generate_ID(data_key + path_hash)
