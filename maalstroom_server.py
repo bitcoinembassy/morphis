@@ -247,9 +247,9 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
                             self.maalstroom_url_prefix_str,\
                             key)
 
-                message = ("<html><head><title>permalink</title></head><body><a href=\"{}\">{}</a>\n{}</body></html>"\
-                    .format(url, url, key))\
-                        .encode()
+                message = "<html><head><title>Redirecting to Full Key</title>"\
+                    "</head><body><a href=\"{}\">{}</a>\n{}</body></html>"\
+                        .format(url, url, key).encode()
 
                 self.send_response(301)
                 self.send_header("Location", url)
