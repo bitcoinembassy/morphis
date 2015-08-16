@@ -763,7 +763,7 @@ def _store_block(engine, i, block_data, key_callback, task_semaphore,\
                     " trying again (tries=[{}])."\
                         .format(i, storing_nodes, tries))
 
-        if tries == 10:
+        if tries == 3:
             # Grab the data_key this time for use on next try's logic below.
             data_key = None
             orig_key_callback = key_callback
@@ -772,12 +772,15 @@ def _store_block(engine, i, block_data, key_callback, task_semaphore,\
                 data_key = key
                 orig_key_callback(key)
                 key_callback = orig_key_callback
-        elif tries == 11:
+        elif tries == 4:
             data_rw =\
                 yield from\
                     engine.tasks.send_get_data(data_key, retry_factor=100)
             if data_rw.data is not None and data_rw.data_present_cnt:
                 storing_nodes += data_rw.data_present_cnt
+                if log.isEnabledFor(logging.INFO):
+                    log.info("Block #{} was found [{}] times on the network."\
+                        .format(i, data_rw.data_present_cnt))
                 if storing_nodes >= 3:
                     if log.isEnabledFor(logging.INFO):
                         log.info("Block #{} is already redundant enough on"\
