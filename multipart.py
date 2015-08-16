@@ -790,7 +790,7 @@ def _store_block(engine, i, block_data, key_callback, task_semaphore,\
 
         tries += 1
 
-        if tries < 32:
+        if tries < 7:
 #            yield from asyncio.sleep(1.1**1.1**tries)
             yield from task_semaphore.acquire()
             continue
