@@ -240,7 +240,8 @@ class ChordTasks(object):
         return conn_nodes, bool(new_nodes)
 
     @asyncio.coroutine
-    def send_get_data(self, data_key, path=None, retry_factor=1):
+    def send_get_data(self, data_key, path=None, scan_only=False,\
+            retry_factor=1):
         assert type(data_key) in (bytes, bytearray)\
             and len(data_key) == chord.NODE_ID_BYTES,\
             "type(data_key)=[{}], len={}."\
@@ -260,7 +261,8 @@ class ChordTasks(object):
 
         data_rw = yield from\
             self.send_find_node(data_id, for_data=True, data_key=data_key,\
-                path_hash=path_hash, retry_factor=retry_factor)
+                path_hash=path_hash, scan_only=scan_only,\
+                retry_factor=retry_factor)
 
         if data_rw.data:
             #FIXME: This is not optimal as we start a whole new FindNode for
@@ -489,7 +491,7 @@ class ChordTasks(object):
     @asyncio.coroutine
     def send_find_node(self, node_id, significant_bits=None, input_trie=None,\
             for_data=False, data_msg=None, data_key=None, path_hash=None,\
-            targeted=False, target_key=None, retry_factor=1):
+            targeted=False, target_key=None, scan_only=False, retry_factor=1):
         "Returns found nodes sorted by closets. If for_data is True then"\
         " this is really {get/store}_data instead of find_node. If data_msg"\
         " is None than it is get_data and the data is returned. Store data"\
@@ -750,9 +752,9 @@ class ChordTasks(object):
                 # Wait a bit more for the rest of the tasks.
                 try:
                     yield from asyncio.wait_for(\
-                            done_all.wait(),\
-                            timeout=0.1 * retry_factor,\
-                            loop=self.loop)
+                        done_all.wait(),\
+                        timeout=0.1 * retry_factor,\
+                        loop=self.loop)
                 except asyncio.TimeoutError:
                     pass
 
@@ -771,7 +773,7 @@ class ChordTasks(object):
 
         # Proceed to the second stage of the request.
         # FIXME: Write this whole stuff to merge these two so it can be async.
-        if data_mode.value:
+        if data_mode.value and not scan_only:
             stores_sent = 0
 
             if data_mode is cp.DataMode.get:
@@ -1036,9 +1038,9 @@ class ChordTasks(object):
                 # Wait a bit more for the rest of the tasks.
                 try:
                     yield from asyncio.wait_for(\
-                            done_all.wait(),\
-                            timeout=0.1 * retry_factor,\
-                            loop=self.loop)
+                        done_all.wait(),\
+                        timeout=0.1 * retry_factor,\
+                        loop=self.loop)
                 except asyncio.TimeoutError:
                     pass
 
@@ -1056,6 +1058,15 @@ class ChordTasks(object):
             if log.isEnabledFor(logging.INFO):
                 log.info("Finished waiting for {} operations; now"\
                     " cleaning up.".format(msg_name))
+
+        if scan_only:
+            try:
+                yield from asyncio.wait_for(\
+                    done_all.wait(),\
+                    timeout=0.1 * retry_factor,\
+                    loop=self.loop)
+            except asyncio.TimeoutError:
+                pass
 
         # Close everything now that we are done.
         for task in tasks:
