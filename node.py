@@ -76,6 +76,8 @@ class Node():
 
         self.morphis_version = None
 
+        self.ready = asyncio.Event(loop=loop)
+
     @property
     def all_nodes(self):
         global nodes
@@ -209,6 +211,8 @@ class Node():
                         .format(self.chord_engine.connect_peers))
 
         yield from self.chord_engine.start()
+
+        self.ready.set()
 
     def stop(self):
         self.chord_engine.stop()

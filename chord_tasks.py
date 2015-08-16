@@ -49,6 +49,7 @@ class DataResponseWrapper(object):
         self.data_done = None
         self.data_present_cnt = 0
         self.will_store_cnt = 0
+        self.storing_nodes = 0
 
 class TunnelMeta(object):
     def __init__(self, peer=None, jobs=None):
@@ -112,6 +113,8 @@ class ChordTasks(object):
         yield from peer.protocol.close_channel(local_cid)
 
         yield from self.engine._check_update_remote_address(msg, peer)
+
+        self.engine._notify_protocol_ready()
 
     @asyncio.coroutine
     def perform_stabilize(self):
@@ -238,6 +241,9 @@ class ChordTasks(object):
                 .format(type(data_key), len(data_key))
 
         if path:
+            if type(path) is str:
+                path = path.encode()
+
             orig_data_key = data_key
             path_hash = enc.generate_ID(path)
             data_key = enc.generate_ID(data_key + path_hash)
@@ -663,6 +669,8 @@ class ChordTasks(object):
                     tun_meta = TunnelMeta(peer)
                     used_tunnels[row] = tun_meta
 
+                    query_cntr.value += 1
+
                     task = asyncio.async(\
                         self._send_find_node(\
                             row, fnmsg, result_trie, tun_meta, data_mode,\
@@ -723,22 +731,26 @@ class ChordTasks(object):
 #            done_all.clear()
             # Wait upto a second for at least one response.
             try:
-                yield from asyncio.wait_for(\
-                    done_one.wait(),\
-                    timeout=1,\
-                    loop=self.loop)
+                try:
+                    yield from asyncio.wait_for(\
+                        done_one.wait(),\
+                        timeout=1,\
+                        loop=self.loop)
+                except asyncio.TimeoutError:
+                    pass
 
                 done_one.clear()
 
                 # Wait a bit more for the rest of the tasks.
-                yield from asyncio.wait_for(\
-                        done_all.wait(),\
-                        timeout=0.1 * retry_factor,\
-                        loop=self.loop)
+                try:
+                    yield from asyncio.wait_for(\
+                            done_all.wait(),\
+                            timeout=0.1 * retry_factor,\
+                            loop=self.loop)
+                except asyncio.TimeoutError:
+                    pass
 
                 done_all.clear()
-            except asyncio.TimeoutError:
-                pass
             except asyncio.CancelledError:
                 self._close_channels(used_tunnels)
                 for task in tasks:
@@ -754,7 +766,7 @@ class ChordTasks(object):
         # Proceed to the second stage of the request.
         # FIXME: Write this whole stuff to merge these two so it can be async.
         if data_mode.value:
-            storing_nodes = 0
+            stores_sent = 0
 
             if data_mode is cp.DataMode.get:
                 msg_name = "GetData"
@@ -834,6 +846,8 @@ class ChordTasks(object):
 
             #NOTE: result_trie is [] when significant_bits.
 
+            done_one.clear()
+
             for row in result_trie:
                 if row is False:
                     # Row is ourself.
@@ -901,8 +915,8 @@ class ChordTasks(object):
 
                         if not r:
                             log.info("We failed to store the data.")
-                        else:
-                            storing_nodes += 1
+
+                        #NOTE: We don't count ourselves in storing_nodes.
 
                         # Store it still elsewhere if others want it as well.
                         continue
@@ -960,7 +974,7 @@ class ChordTasks(object):
                         asyncio.async(\
                             self._wait_for_data_stored(\
                                 data_mode, row, tun_meta, query_cntr,\
-                                done_all, data_rw),\
+                                done_one, done_all, data_rw),\
                             loop=self.loop)
                     else:
                         # Then this immediate Peer had its channel closed;
@@ -998,15 +1012,33 @@ class ChordTasks(object):
                 else:
                     assert data_mode is cp.DataMode.store
 
-                    if storing_nodes == max_initial_queries:
+                    stores_sent += 1
+                    if stores_sent == max_initial_queries:
                         break
 
             if data_mode is cp.DataMode.store:
-                storing_nodes += query_cntr.value
+                try:
+                    yield from asyncio.wait_for(\
+                        done_one.wait(),\
+                        timeout=1,\
+                        loop=self.loop)
+                except asyncio.TimeoutError:
+                    pass
+
+                done_one.clear()
+
+                # Wait a bit more for the rest of the tasks.
+                try:
+                    yield from asyncio.wait_for(\
+                            done_all.wait(),\
+                            timeout=0.1 * retry_factor,\
+                            loop=self.loop)
+                except asyncio.TimeoutError:
+                    pass
 
                 if log.isEnabledFor(logging.INFO):
-                    log.info("Sent StoreData to [{}] nodes."\
-                        .format(storing_nodes))
+                    log.info("Sent StoreData to [{}/{}] tried nodes."\
+                        .format(data_rw.storing_nodes, stores_sent))
 
 #            if query_cntr.value:
 #                # query_cntr can be zero if no PeerS were tried.
@@ -1031,7 +1063,8 @@ class ChordTasks(object):
                 self._possibly_add_peers(result_trie), loop=self.loop)
 
             if data_mode is cp.DataMode.store:
-                return storing_nodes
+                assert data_rw.storing_nodes >= 0
+                return data_rw.storing_nodes
             else:
                 assert data_mode is cp.DataMode.get
 
@@ -1367,12 +1400,15 @@ class ChordTasks(object):
                             # DataStored messages now.
                             continue
                         else:
+                            store_msg = cp.ChordDataStored(pkts[0])
                             if log.isEnabledFor(logging.DEBUG):
-                                store_msg = cp.ChordDataStored(pkts[0])
                                 log.debug("Received DataStored (stored=[{}])"\
                                     " message from Peer (dbid={})."\
                                         .format(store_msg.stored,\
                                             tun_meta.peer.dbid, path))
+
+                            if store_msg.stored:
+                                data_rw.storing_nodes += 1
 
                     query_cntr.value -= 1
                     done_one.set()
@@ -1584,7 +1620,7 @@ class ChordTasks(object):
 
     @asyncio.coroutine
     def _wait_for_data_stored(self, data_mode, vpeer, tun_meta, query_cntr,\
-            done_all, data_rw):
+            done_one, done_all, data_rw):
         "This is a coroutine that is used in data_mode and is started for"\
         " immediate PeerS that do not have a tunnel open (and thus a tunnel"\
         " coroutine already processing it."
@@ -1622,12 +1658,16 @@ class ChordTasks(object):
 
                 msg = cp.ChordDataStored(pkt)
 
+                if msg.stored:
+                    data_rw.storing_nodes += 1
+
             break
 
         if tun_meta.jobs:
             assert tun_meta.jobs == 1
             tun_meta.jobs -= 1
             query_cntr.value -= 1
+            done_one.set()
             if not query_cntr.value:
                 done_all.set()
 

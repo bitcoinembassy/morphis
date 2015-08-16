@@ -55,6 +55,8 @@ class ChordEngine():
         self.peer_buckets = [{} for i in range(NODE_ID_BITS)] # [{addr: Peer}]
         self.peer_trie = bittrie.BitTrie() # {node_id, Peer}
 
+        self.protocol_ready = asyncio.Event(loop=self.loop)
+
         self.last_db_peer_count = 0
 
         self.minimum_connections = 32
@@ -941,6 +943,8 @@ class ChordEngine():
 
             yield from self._check_update_remote_address(msg, peer)
 
+            self._notify_protocol_ready()
+
         elif packet_type == cp.CHORD_MSG_FIND_NODE:
             log.info("Received CHORD_MSG_FIND_NODE message.")
             msg = cp.ChordFindNode(data)
@@ -986,6 +990,12 @@ class ChordEngine():
         else:
             log.warning("Ignoring unrecognized packet (packet_type=[{}])."\
                 .format(packet_type))
+
+    def _notify_protocol_ready(self):
+        if self.protocol_ready.is_set():
+            return
+
+        self.protocol_ready.set()
 
     @asyncio.coroutine
     def _check_update_remote_address(self, msg, peer):

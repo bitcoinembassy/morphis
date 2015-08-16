@@ -601,15 +601,20 @@ def _list_dmails_for_tag(handler, addr, tag):
         is_read = "" if msg.read else "(unread)"
 
         subject = msg.subject
-        if len(subject) > 80:
+        if not subject:
+            subject = "[no subject]"
+        elif len(subject) > 80:
             subject = subject[:80] + "..."
 
         sender_key = msg.sender_dmail_key
         if sender_key:
+            sender_key_enc = mbase32.encode(sender_key)
             if msg.sender_valid:
-                sender_key = mbase32.encode(sender_key[:32]) + "..."
+                sender_key = """<span class="italic" title="{}">""".format(sender_key_enc)\
+                    + sender_key_enc[:32] + "</span>..."
             else:
-                sender_key = """<span class="strikethrough">""" + mbase32.encode(sender_key[:32]) + "</span>..."
+                sender_key = """<span class="strikethrough">"""\
+                    + sender_key_enc[:32] + "</span>..."
         else:
             sender_key = "Anonymous"
 

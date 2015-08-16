@@ -17,6 +17,7 @@ from enum import Enum
 import consts
 import enc
 import mbase32
+import node
 import peer as mnpeer
 import sshtype
 
@@ -39,11 +40,21 @@ class DataCallback(object):
 class BufferingDataCallback(DataCallback):
     def __init__(self):
         self.version = None
-        self.buf = bytearray()
+        self.size = None
+        self.mime_type = None
+        self.data = None
         self.position = 0
 
     def notify_version(self, version):
         self.version = version
+
+    def notify_size(self, size):
+        if size > node.MAX_DATA_BLOCK_SIZE:
+            self.data = bytearray()
+        self.size = size
+
+    def notify_mime_type(self, mime_type):
+        self.mime_type = mime_type
 
     def notify_data(self, position, data):
         if position != self.position:
@@ -55,10 +66,24 @@ class BufferingDataCallback(DataCallback):
             log.info("Received data; position=[{}], len=[{}]."\
                 .format(position, data_len))
 
-        self.buf += data
+        if self.data is None:
+            self.data = data
+        else:
+            self.data += data
+
         self.position += data_len
 
         return True
+
+class KeyCallback(object):
+    def notify_key(self, key):
+        pass
+
+    def notify_referred_key(self, key):
+        "This gets called when a link is requested to be stored, the link"
+        " is returned with notify_key(..) and the linked key is returned"
+        " via this call, notify_referred_key(..)."
+        pass
 
 class BlockType(Enum):
     hash_tree = 0x2D4100
@@ -472,9 +497,9 @@ def get_data_buffered(engine, data_key, path=None, retry_seconds=30,\
             return False, None
 
     if log.isEnabledFor(logging.INFO):
-        log.info("Download complete; len=[{}].".format(len(cb.buf)))
+        log.info("Download complete; len=[{}].".format(len(cb.data)))
 
-    return cb.buf, cb.version
+    return cb
 
 @asyncio.coroutine
 def get_data(engine, data_key, data_callback, path=None, ordered=False,\
@@ -534,12 +559,12 @@ def get_data(engine, data_key, data_callback, path=None, ordered=False,\
             data_rw = yield from engine.tasks.send_get_data(block.destination)
             data = data_rw.data
 
-            if not data:
+            if data is None:
                 data_rw = yield from engine.tasks.send_get_data(\
                     block.destination, retry_factor=10)
                 data = data_rw.data
 
-                if not data:
+                if data is None:
                     return None
 
             continue
@@ -562,6 +587,12 @@ def store_data(engine, data, privatekey=None, path=None, version=None,\
         key_callback=None, store_key=True, mime_type="", concurrency=64):
     data_len = len(data)
 
+    if isinstance(key_callback, KeyCallback):
+        key_callback_obj = key_callback
+        key_callback = key_callback_obj.notify_key
+    else:
+        key_callback_obj = None
+
     if mime_type or (privatekey and data_len > consts.MAX_DATA_BLOCK_SIZE):
         store_link = True
 
@@ -571,6 +602,8 @@ def store_data(engine, data, privatekey=None, path=None, version=None,\
         def key_callback(key):
             nonlocal root_block_key
             root_block_key = key
+            if key_callback_obj:
+                key_callback_obj.notify_referred_key(key)
     else:
         store_link = False
 
@@ -724,11 +757,38 @@ def _store_block(engine, i, block_data, key_callback, task_semaphore,\
 
         if storing_nodes >= 3:
             return True
+        else:
+            if log.isEnabledFor(logging.INFO):
+                log.info("Only stored block #{} to [{}] nodes so far;"\
+                    " trying again."\
+                        .format(i, storing_nodes))
+
+        if tries == 10:
+            # Grab the data_key this time for use on next try's logic below.
+            data_key = None
+            orig_key_callback = key_callback
+            def key_callback(key):
+                nonlocal data_key, key_callback
+                data_key = key
+                orig_key_callback(key)
+                key_callback = orig_key_callback
+        elif tries == 11:
+            data_rw =\
+                yield from\
+                    engine.tasks.send_get_data(data_key, retry_factor=100)
+            if data_rw.data is not None and data_rw.data_present_cnt:
+                storing_nodes += data_rw.data_present_cnt
+                if storing_nodes >= 3:
+                    if log.isEnabledFor(logging.INFO):
+                        log.info("Block #{} is already redundant enough on"\
+                            " the network; not uploading it anymore for now."\
+                                .format(i))
+                    return True
 
         tries += 1
 
         if tries < 32:
-            yield from asyncio.sleep(tries)
+            yield from asyncio.sleep(1.1**tries)
             yield from task_semaphore.acquire()
             continue
 
