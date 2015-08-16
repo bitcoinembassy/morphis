@@ -726,22 +726,26 @@ class ChordTasks(object):
 #            done_all.clear()
             # Wait upto a second for at least one response.
             try:
-                yield from asyncio.wait_for(\
-                    done_one.wait(),\
-                    timeout=1,\
-                    loop=self.loop)
+                try:
+                    yield from asyncio.wait_for(\
+                        done_one.wait(),\
+                        timeout=1,\
+                        loop=self.loop)
+                except asyncio.TimeoutError:
+                    pass
 
                 done_one.clear()
 
                 # Wait a bit more for the rest of the tasks.
-                yield from asyncio.wait_for(\
-                        done_all.wait(),\
-                        timeout=0.1 * retry_factor,\
-                        loop=self.loop)
+                try:
+                    yield from asyncio.wait_for(\
+                            done_all.wait(),\
+                            timeout=0.1 * retry_factor,\
+                            loop=self.loop)
+                except asyncio.TimeoutError:
+                    pass
 
                 done_all.clear()
-            except asyncio.TimeoutError:
-                pass
             except asyncio.CancelledError:
                 self._close_channels(used_tunnels)
                 for task in tasks:
@@ -1008,18 +1012,24 @@ class ChordTasks(object):
                         break
 
             if data_mode is cp.DataMode.store:
-                yield from asyncio.wait_for(\
-                    done_one.wait(),\
-                    timeout=1,\
-                    loop=self.loop)
+                try:
+                    yield from asyncio.wait_for(\
+                        done_one.wait(),\
+                        timeout=1,\
+                        loop=self.loop)
+                except asyncio.TimeoutError:
+                    pass
 
                 done_one.clear()
 
                 # Wait a bit more for the rest of the tasks.
-                yield from asyncio.wait_for(\
-                        done_all.wait(),\
-                        timeout=0.1 * retry_factor,\
-                        loop=self.loop)
+                try:
+                    yield from asyncio.wait_for(\
+                            done_all.wait(),\
+                            timeout=0.1 * retry_factor,\
+                            loop=self.loop)
+                except asyncio.TimeoutError:
+                    pass
 
                 if log.isEnabledFor(logging.INFO):
                     log.info("Sent StoreData to [{}/{}] tried nodes."\
