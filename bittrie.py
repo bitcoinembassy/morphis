@@ -340,7 +340,7 @@ def _del_test():
 
 def _speed_test():
     bt = BitTrie()
-#bt = {}
+#    bt = {}
 
     rval = os.urandom(512>>3)
 
@@ -371,8 +371,11 @@ def _speed_test():
     print("get: {}".format(bt.get(int(88).to_bytes(512>>3, "big"))))
     print("took: {}".format(datetime.today() - now))
 
+    print("find speed test:")
+
     cnt = 42
     now = datetime.today()
+
     for i in bt.find(int(100).to_bytes(512>>3, "big")):
         print("find: {}".format(i))
         print("took: {}".format(datetime.today() - now))

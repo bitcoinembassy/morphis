@@ -55,6 +55,8 @@ class ChordEngine():
         self.peer_buckets = [{} for i in range(NODE_ID_BITS)] # [{addr: Peer}]
         self.peer_trie = bittrie.BitTrie() # {node_id, Peer}
 
+        self.protocol_ready = asyncio.Event(loop=self.loop)
+
         self.last_db_peer_count = 0
 
         self.minimum_connections = 32
@@ -88,6 +90,26 @@ class ChordEngine():
     def bind_address(self, value):
         self._bind_address = value
         self._bind_port = int(value.split(':')[1])
+
+    @asyncio.coroutine
+    def __rebuild_peer_trie(self):
+        "Recycle self.peer_trie because I didn't fully implement pruning."
+
+        #FIXME: Fix bittrie.py to prune itself properly, this is a temp hack
+        # to prevent it from leaking memory.
+
+        node_id = self.node_id
+
+        while True:
+
+            new_trie = bittrie.BitTrie()
+
+            for peer in self.peers.values():
+                xorkey = bittrie.XorKey(node_id, peer.node_id)
+                new_trie[xorkey] = peer
+
+            self.peer_trie = new_trie
+            yield from asyncio.sleep(3600) # Only do every hour.
 
     @asyncio.coroutine
     def connect_peer(self, addr):
@@ -239,6 +261,9 @@ class ChordEngine():
 
         # Let _async_process_connection_count() connect some connections first.
         self.loop.call_later(7, self._async_do_stabilize)
+
+        # Temp hack to fix memory leak due to incomplete BitTrie prune impl.
+        asyncio.async(self.__rebuild_peer_trie(), loop=self.loop)
 
     def _async_do_stabilize(self):
         self._do_stabilize_handle =\
@@ -906,6 +931,7 @@ class ChordEngine():
             log.info("Received CHORD_MSG_NODE_INFO message.")
             msg = cp.ChordNodeInfo(data)
 
+            peer.version = msg.version
             peer.full_node = True
 
             # Respond to them. Even though it doesn't make sense for now as
@@ -914,17 +940,33 @@ class ChordEngine():
             # that don't belong at the lower SSH level.
             rmsg = cp.ChordNodeInfo()
             rmsg.sender_address = self.bind_address
+            rmsg.version = self.node.morphis_version
+
             peer.protocol.write_channel_data(local_cid, rmsg.encode())
 
             yield from self._check_update_remote_address(msg, peer)
+
+            if log.isEnabledFor(logging.INFO):
+                log.info("Inbound Node (addr=[{}]) reports as version=[{}]."\
+                    .format(peer.address, peer.version))
+
+            self._notify_protocol_ready()
 
         elif packet_type == cp.CHORD_MSG_FIND_NODE:
             log.info("Received CHORD_MSG_FIND_NODE message.")
             msg = cp.ChordFindNode(data)
 
-            r = yield from\
-                self.tasks.process_find_node_request(\
-                    msg, data, peer, queue, local_cid)
+            task = self.tasks.process_find_node_request(\
+                msg, data, peer, queue, local_cid)
+
+            done, pending =\
+                yield from asyncio.wait([task], loop=self.loop, timeout=60)
+
+            if pending:
+                if log.isEnabledFor(logging.INFO):
+                    log.info("Peer requested tunnel operation took too long;"\
+                        " aborting.")
+                yield from peer.protocol.close_channel(local_cid);
 
             return True
 
@@ -955,6 +997,12 @@ class ChordEngine():
         else:
             log.warning("Ignoring unrecognized packet (packet_type=[{}])."\
                 .format(packet_type))
+
+    def _notify_protocol_ready(self):
+        if self.protocol_ready.is_set():
+            return
+
+        self.protocol_ready.set()
 
     @asyncio.coroutine
     def _check_update_remote_address(self, msg, peer):

@@ -382,16 +382,16 @@ class Shell(cmd.Cmd):
             return
 
         start = datetime.today()
-        data, version =\
+        data_rw =\
             yield from multipart.get_data_buffered(\
                 self.peer.engine, data_key, path=path)
         diff = datetime.today() - start
 
         self.writeln("send_get_data(..) took: {}.".format(diff))
-        self.writeln("version=[{}].".format(version))
+        self.writeln("version=[{}].".format(data_rw.version))
         self.writeln("data:")
-        if data is not None:
-            self.write_raw(data)
+        if data_rw.data is not None:
+            self.write_raw(data_rw.data)
             self.writeln("")
         else:
             self.writeln("Not found.")

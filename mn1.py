@@ -199,7 +199,8 @@ class SshProtocol(asyncio.Protocol):
             else:
                 self.write_data((edmsg.encode(), msg.encode()))
         else:
-            assert type(remote_cid) is mnetpacket.SshChannelOpenMessage
+            assert type(remote_cid) is mnetpacket.SshChannelOpenMessage,\
+                type(remote_cid)
 
             self._channel_map[local_cid] =\
                 ChannelStatus.implicit_data_sent
@@ -238,7 +239,9 @@ class SshProtocol(asyncio.Protocol):
 
         if self.status is not Status.ready:
             # Ignore this call if we are closed or disconnected.
-            log.warning("close_channel(..) called on unready connection.")
+            if log.isEnabledFor(logging.DEBUG):
+                log.debug("close_channel({}) called on closing connection."\
+                    .format(local_cid))
             assert self.status is not Status.new
             return False
 
@@ -421,9 +424,16 @@ class SshProtocol(asyncio.Protocol):
             if not r:
                 return r
         except Exception as e:
-            log.exception("Exception performing connect task (closing connection):")
-            self.close()
-            raise
+            if log.isEnabledFor(logging.DEBUG):
+                log.exception("Exception performing connect task"\
+                    " (closing connection):")
+                self.close()
+                raise
+            else:
+                log.warning("Error performing connect task: {}"\
+                    .format(e))
+                self.close()
+                return
 
         # Connected and fully authenticated at this point.
         self.status = Status.ready

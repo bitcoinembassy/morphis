@@ -15,6 +15,7 @@ import time
 
 import base58
 import chord
+import client_engine as cengine
 import enc
 import rsakey
 import mbase32
@@ -30,6 +31,7 @@ port = 4251
 
 node = None
 server = None
+client_engine = None
 
 upload_page_content = None
 static_upload_page_content = [None, None]
@@ -40,6 +42,7 @@ class DataResponseWrapper(object):
         self.size = None
 
         self.data_key = None
+        self.referred_key = None # If data_key is a link on upload.
 
         self.path = None
         self.version = None
@@ -56,6 +59,10 @@ class DataResponseWrapper(object):
 class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
     daemon_threads = True
 
+#FIXME: Strip down this to be the bare minimum, just the do_{GET,POST} that
+# immediately hands off to an event loop based instance, having all the
+# write_content(..) Etc. methods in that event loop based instance, all writing
+# to a Pipe that this handler simply relays to the out stream.
 class MaalstroomHandler(BaseHTTPRequestHandler):
     def __init__(self, a, b, c):
         global node
@@ -64,16 +71,22 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
 
         self.maalstroom_plugin_used = False
         self.maalstroom_url_prefix = None
+        self.maalstroom_url_prefix_str = None
+
         self._maalstroom_http_url_prefix = "http://{}/"
         self._maalstroom_morphis_url_prefix = "morphis://"
+
+        self._accept_charset = None
 
         super().__init__(a, b, c)
 
     def __prepare_for_request(self):
         if self.headers["X-Maalstroom-Plugin"]:
             self.maalstroom_plugin_used = True
+            self.maalstroom_url_prefix_str =\
+                self._maalstroom_morphis_url_prefix
             self.maalstroom_url_prefix =\
-                self._maalstroom_morphis_url_prefix.encode()
+                self.maalstroom_url_prefix_str.encode()
         else:
             global port
             host = self.headers["Host"]
@@ -82,19 +95,33 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
                     " host=[{}]."\
                         .format(host))
             # Host header includes port.
+            self.maalstroom_url_prefix_str =\
+                self._maalstroom_http_url_prefix.format(host)
             self.maalstroom_url_prefix =\
-                self._maalstroom_http_url_prefix.format(host).encode()
-
-    def __get_connection_count(self, q):
-        cnt = len(self.node.chord_engine.peers)
-        q.put(cnt)
+                self.maalstroom_url_prefix_str.encode()
 
     def _get_connection_count(self):
         q = queue.Queue()
-
         self.node.loop.call_soon_threadsafe(self.__get_connection_count, q)
-
         return q.get()
+
+    def __get_connection_count(self, q):
+        global node
+        cnt = len(node.chord_engine.peers)
+        q.put(cnt)
+
+    def _get_latest_version_number(self):
+        q = queue.Queue()
+        self.node.loop.call_soon_threadsafe(\
+            self.__get_latest_version_number, q)
+        return q.get()
+
+    def __get_latest_version_number(self, q):
+        global client_engine
+        if not client_engine:
+            q.put(None)
+            return
+        q.put(client_engine.latest_version_number)
 
     def do_GET(self):
         self.__prepare_for_request()
@@ -108,11 +135,28 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
 
         if not rpath:
             connection_cnt = self._get_connection_count()
+            current_version = self.node.morphis_version
+
+            latest_version_number = self._get_latest_version_number()
+
+            if latest_version_number\
+                    and current_version != latest_version_number:
+                version_str =\
+                    '<span class="strikethrough nomargin">{}</span>]'\
+                    '&nbsp;[<a href="{}{}">{} AVAILABLE</a>'\
+                        .format(current_version,\
+                            self.maalstroom_url_prefix_str,\
+                            "sp1nara3xhndtgswh7fznt414we4mi3y6kdwbkz4jmt8ocb6"\
+                                "x4w1faqjotjkcrefta11swe3h53dt6oru3r13t667pr7"\
+                                "cpe3ocxeuma/latest_version",\
+                            latest_version_number)
+            else:
+                version_str = current_version
 
             content = pages.home_page_content[0].replace(\
                 b"${CONNECTIONS}", str(connection_cnt).encode())
             content = content.replace(\
-                b"${MORPHIS_VERSION}", self.node.morphis_version.encode())
+                b"${MORPHIS_VERSION}", version_str.encode())
 
             self._send_content([content, None])
             return
@@ -225,18 +269,18 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
                 if path:
                     url = "{}{}/{}"\
                         .format(\
-                            self.maalstroom_url_prefix.decode(),\
+                            self.maalstroom_url_prefix_str,\
                             key,\
                             path.decode("UTF-8"))
                 else:
                     url = "{}{}"\
                         .format(\
-                            self.maalstroom_url_prefix.decode(),\
+                            self.maalstroom_url_prefix_str,\
                             key)
 
-                message = ("<html><head><title>permalink</title></head><body><a href=\"{}\">{}</a>\n{}</body></html>"\
-                    .format(url, url, key))\
-                        .encode()
+                message = "<html><head><title>Redirecting to Full Key</title>"\
+                    "</head><body><a href=\"{}\">{}</a>\n{}</body></html>"\
+                        .format(url, url, key).encode()
 
                 self.send_response(301)
                 self.send_header("Location", url)
@@ -429,16 +473,27 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
             if privatekey and path:
                 url = "{}{}/{}"\
                     .format(\
-                        self.maalstroom_url_prefix.decode(),\
+                        self.maalstroom_url_prefix_str,\
                         enckey,\
                         path.decode("UTF-8"))
             else:
                 url = "{}{}"\
                     .format(\
-                        self.maalstroom_url_prefix.decode(),\
+                        self.maalstroom_url_prefix_str,\
                         enckey)
 
-            message = '<a href="{}">perma link</a>'.format(url)
+            if privatekey:
+                message = '<a id="key" href="{}">updateable key link</a>'\
+                    .format(url)
+
+                if data_rw.referred_key:
+                    message +=\
+                        '<br/><a id="referred_key" href="{}{}">perma link</a>'\
+                            .format(\
+                                self.maalstroom_url_prefix_str,\
+                                mbase32.encode(data_rw.referred_key))
+            else:
+                message = '<a id="key" href="{}">perma link</a>'.format(url)
 
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
@@ -448,6 +503,23 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
             self.wfile.write(bytes(message, "UTF-8"))
         else:
             self._handle_error(data_rw)
+
+    def get_accept_charset(self):
+        if self._accept_charset:
+            return self._accept_charset
+
+        acharset = self.headers["Accept-Charset"]
+        if acharset:
+            if acharset.find("ISO-8859-1") > -1\
+                    and acharset.find("UTF-8") == -1:
+                acharset = "ISO-8859-1"
+            else:
+                acharset = "UTF-8"
+        else:
+            acharset = "UTF-8"
+
+        self._accept_charset = acharset
+        return acharset
 
     def _send_204(self):
         self.send_response(204)
@@ -678,12 +750,22 @@ def _send_get_data(data_key, significant_bits, path, data_rw):
 
     data_rw.data_queue.put(None)
 
+class KeyCallback(multipart.KeyCallback):
+    def __init__(self, data_rw):
+        self.data_rw = data_rw
+
+    def notify_key(self, key):
+        self.data_rw.data_key = key
+
+    def notify_referred_key(self, key):
+        self.data_rw.referred_key = key
+
 @asyncio.coroutine
 def _send_store_data(data, data_rw, privatekey=None, path=None, version=None,\
         mime_type=""):
+
     try:
-        def key_callback(data_key):
-            data_rw.data_key = data_key
+        key_callback = KeyCallback(data_rw)
 
         yield from multipart.store_data(\
             node.chord_engine, data, privatekey=privatekey, path=path,\
@@ -720,6 +802,15 @@ def start_maalstroom_server(the_node):
         server.server_close()
 
     node.loop.run_in_executor(None, threadcall)
+
+    asyncio.async(_create_client_engine(), loop=node.loop)
+
+@asyncio.coroutine
+def _create_client_engine():
+    global node, client_engine
+    yield from node.ready.wait()
+    client_engine = cengine.ClientEngine(node.chord_engine, node.loop)
+    yield from client_engine.start()
 
 def shutdown():
     if not server:

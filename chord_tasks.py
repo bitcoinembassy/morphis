@@ -49,6 +49,7 @@ class DataResponseWrapper(object):
         self.data_done = None
         self.data_present_cnt = 0
         self.will_store_cnt = 0
+        self.storing_nodes = 0
 
 class TunnelMeta(object):
     def __init__(self, peer=None, jobs=None):
@@ -97,6 +98,7 @@ class ChordTasks(object):
 
         msg = cp.ChordNodeInfo()
         msg.sender_address = self.engine.bind_address
+        msg.version = self.engine.node.morphis_version
 
         peer.protocol.write_channel_data(local_cid, msg.encode())
 
@@ -107,11 +109,18 @@ class ChordTasks(object):
         msg = cp.ChordNodeInfo(data)
         log.info("Received ChordNodeInfo message.")
 
+        peer.version = msg.version
         peer.full_node = True
 
         yield from peer.protocol.close_channel(local_cid)
 
         yield from self.engine._check_update_remote_address(msg, peer)
+
+        if log.isEnabledFor(logging.INFO):
+            log.info("Outbound Node (addr=[{}]) reports as version=[{}]."\
+                .format(peer.address, peer.version))
+
+        self.engine._notify_protocol_ready()
 
     @asyncio.coroutine
     def perform_stabilize(self):
@@ -231,13 +240,18 @@ class ChordTasks(object):
         return conn_nodes, bool(new_nodes)
 
     @asyncio.coroutine
-    def send_get_data(self, data_key, path=None, retry_factor=1):
+    def send_get_data(self, data_key, path=None, scan_only=False,\
+            retry_factor=1):
         assert type(data_key) in (bytes, bytearray)\
             and len(data_key) == chord.NODE_ID_BYTES,\
             "type(data_key)=[{}], len={}."\
                 .format(type(data_key), len(data_key))
 
         if path:
+            if type(path) is str:
+                path = path.encode()
+
+            orig_data_key = data_key
             path_hash = enc.generate_ID(path)
             data_key = enc.generate_ID(data_key + path_hash)
         else:
@@ -247,7 +261,8 @@ class ChordTasks(object):
 
         data_rw = yield from\
             self.send_find_node(data_id, for_data=True, data_key=data_key,\
-                path_hash=path_hash, retry_factor=retry_factor)
+                path_hash=path_hash, scan_only=scan_only,\
+                retry_factor=retry_factor)
 
         if data_rw.data:
             #FIXME: This is not optimal as we start a whole new FindNode for
@@ -274,6 +289,9 @@ class ChordTasks(object):
                         self.send_find_node(\
                             data_id, for_data=True, data_msg=sdmsg),\
                         loop=self.loop)
+
+                    if path:
+                        data_key = orig_data_key
 
                     asyncio.async(\
                         self.send_store_updateable_key_key(\
@@ -473,7 +491,7 @@ class ChordTasks(object):
     @asyncio.coroutine
     def send_find_node(self, node_id, significant_bits=None, input_trie=None,\
             for_data=False, data_msg=None, data_key=None, path_hash=None,\
-            targeted=False, target_key=None, retry_factor=1):
+            targeted=False, target_key=None, scan_only=False, retry_factor=1):
         "Returns found nodes sorted by closets. If for_data is True then"\
         " this is really {get/store}_data instead of find_node. If data_msg"\
         " is None than it is get_data and the data is returned. Store data"\
@@ -496,7 +514,8 @@ class ChordTasks(object):
 
         if not input_trie:
             input_trie = bittrie.BitTrie()
-            for peer in self.engine.peer_trie:
+#            for peer in self.engine.peer_trie:
+            for peer in self.engine.peers.values():
                 if not peer.full_node:
                     continue
                 key = bittrie.XorKey(node_id, peer.node_id)
@@ -572,6 +591,8 @@ class ChordTasks(object):
                 vpeer, fnmsg, result_trie, tun_meta, data_mode,\
                 far_peers_by_path, data_rw))
 
+            vpeer.used = True
+
         if not tasks:
             log.info("Cannot perform FindNode, as we know no closer nodes.")
             return self._generate_fail_response(data_mode, data_key)
@@ -641,18 +662,35 @@ class ChordTasks(object):
                     # the loop maybe, do checks. For now, just ignoring it to
                     # prevent infinite loops.
                     continue
-                if row.path is None:
-                    # Already asked direct peers, and only asking ones we
-                    # haven't asked before.
-#                    direct_peers_lower += 1
-#                    if direct_peers_lower == len(used_tunnels):
-#                        # Only deal with results closer than the furthest of
-#                        # the direct peers we used.
-#                        break
-                    continue
 
                 if row.used:
                     # We've already sent to this Peer.
+                    continue
+
+                if row.path is None:
+                    # This is a immediate (direct connected) Peer.
+                    peer = row.peer
+
+                    if not peer.ready():
+                        continue
+
+                    tun_meta = TunnelMeta(peer)
+                    used_tunnels[row] = tun_meta
+
+                    query_cntr.value += 1
+
+                    task = asyncio.async(\
+                        self._send_find_node(\
+                            row, fnmsg, result_trie, tun_meta, data_mode,\
+                            far_peers_by_path, data_rw, done_one=done_one,\
+                            done_all=done_all, query_cntr=query_cntr),\
+                        loop=self.loop)
+
+                    tasks.append(task)
+
+                    row.used = True
+
+                    current_depth_step_query_cnt += 1
                     continue
 
                 tun_meta = row.tun_meta
@@ -701,22 +739,26 @@ class ChordTasks(object):
 #            done_all.clear()
             # Wait upto a second for at least one response.
             try:
-                yield from asyncio.wait_for(\
-                    done_one.wait(),\
-                    timeout=1,\
-                    loop=self.loop)
+                try:
+                    yield from asyncio.wait_for(\
+                        done_one.wait(),\
+                        timeout=1,\
+                        loop=self.loop)
+                except asyncio.TimeoutError:
+                    pass
 
                 done_one.clear()
 
                 # Wait a bit more for the rest of the tasks.
-                yield from asyncio.wait_for(\
+                try:
+                    yield from asyncio.wait_for(\
                         done_all.wait(),\
                         timeout=0.1 * retry_factor,\
                         loop=self.loop)
+                except asyncio.TimeoutError:
+                    pass
 
                 done_all.clear()
-            except asyncio.TimeoutError:
-                pass
             except asyncio.CancelledError:
                 self._close_channels(used_tunnels)
                 for task in tasks:
@@ -731,8 +773,8 @@ class ChordTasks(object):
 
         # Proceed to the second stage of the request.
         # FIXME: Write this whole stuff to merge these two so it can be async.
-        if data_mode.value:
-            storing_nodes = 0
+        if data_mode.value and not scan_only:
+            stores_sent = 0
 
             if data_mode is cp.DataMode.get:
                 msg_name = "GetData"
@@ -812,6 +854,8 @@ class ChordTasks(object):
 
             #NOTE: result_trie is [] when significant_bits.
 
+            done_one.clear()
+
             for row in result_trie:
                 if row is False:
                     # Row is ourself.
@@ -879,8 +923,8 @@ class ChordTasks(object):
 
                         if not r:
                             log.info("We failed to store the data.")
-                        else:
-                            storing_nodes += 1
+
+                        #NOTE: We don't count ourselves in storing_nodes.
 
                         # Store it still elsewhere if others want it as well.
                         continue
@@ -938,7 +982,7 @@ class ChordTasks(object):
                         asyncio.async(\
                             self._wait_for_data_stored(\
                                 data_mode, row, tun_meta, query_cntr,\
-                                done_all, data_rw),\
+                                done_one, done_all, data_rw),\
                             loop=self.loop)
                     else:
                         # Then this immediate Peer had its channel closed;
@@ -976,15 +1020,33 @@ class ChordTasks(object):
                 else:
                     assert data_mode is cp.DataMode.store
 
-                    if storing_nodes == max_initial_queries:
+                    stores_sent += 1
+                    if stores_sent == max_initial_queries:
                         break
 
             if data_mode is cp.DataMode.store:
-                storing_nodes += query_cntr.value
+                try:
+                    yield from asyncio.wait_for(\
+                        done_one.wait(),\
+                        timeout=1,\
+                        loop=self.loop)
+                except asyncio.TimeoutError:
+                    pass
+
+                done_one.clear()
+
+                # Wait a bit more for the rest of the tasks.
+                try:
+                    yield from asyncio.wait_for(\
+                        done_all.wait(),\
+                        timeout=0.1 * retry_factor,\
+                        loop=self.loop)
+                except asyncio.TimeoutError:
+                    pass
 
                 if log.isEnabledFor(logging.INFO):
-                    log.info("Sent StoreData to [{}] nodes."\
-                        .format(storing_nodes))
+                    log.info("Sent StoreData to [{}/{}] tried nodes."\
+                        .format(data_rw.storing_nodes, stores_sent))
 
 #            if query_cntr.value:
 #                # query_cntr can be zero if no PeerS were tried.
@@ -996,6 +1058,15 @@ class ChordTasks(object):
             if log.isEnabledFor(logging.INFO):
                 log.info("Finished waiting for {} operations; now"\
                     " cleaning up.".format(msg_name))
+
+        if scan_only:
+            try:
+                yield from asyncio.wait_for(\
+                    done_all.wait(),\
+                    timeout=0.1 * retry_factor,\
+                    loop=self.loop)
+            except asyncio.TimeoutError:
+                pass
 
         # Close everything now that we are done.
         for task in tasks:
@@ -1009,7 +1080,8 @@ class ChordTasks(object):
                 self._possibly_add_peers(result_trie), loop=self.loop)
 
             if data_mode is cp.DataMode.store:
-                return storing_nodes
+                assert data_rw.storing_nodes >= 0
+                return data_rw.storing_nodes
             else:
                 assert data_mode is cp.DataMode.get
 
@@ -1130,7 +1202,8 @@ class ChordTasks(object):
 
     @asyncio.coroutine
     def _send_find_node(self, vpeer, fnmsg, result_trie, tun_meta,\
-            data_mode, far_peers_by_path, data_rw):
+            data_mode, far_peers_by_path, data_rw, done_all=None,\
+            done_one=None, query_cntr=None):
         "Opens a channel and sends a 'root level' FIND_NODE to the passed"\
         " connected peer, adding results to the passed result_trie, and then"\
         " exiting. The channel is left open so that the caller may route to"\
@@ -1141,6 +1214,11 @@ class ChordTasks(object):
         local_cid, queue =\
             yield from peer.protocol.open_channel("mpeer", True)
         if not queue:
+            if query_cntr:
+                query_cntr.value -= 1
+                done_one.set()
+                if query_cntr.value == 0:
+                    done_all.set
             return
 
         if log.isEnabledFor(logging.DEBUG):
@@ -1151,6 +1229,11 @@ class ChordTasks(object):
 
         pkt = yield from queue.get()
         if not pkt:
+            if query_cntr:
+                query_cntr.value -= 1
+                done_one.set()
+                if query_cntr.value == 0:
+                    done_all.set
             return
 
         tun_meta.queue = queue
@@ -1191,6 +1274,11 @@ class ChordTasks(object):
 
             pkt = yield from queue.get()
             if not pkt:
+                if query_cntr:
+                    query_cntr.value -= 1
+                    done_one.set()
+                    if query_cntr.value == 0:
+                        done_all.set
                 return
 
         msg = cp.ChordPeerList(pkt)
@@ -1215,6 +1303,12 @@ class ChordTasks(object):
                 far_peers_by_path.setdefault((peer.dbid, idx), tvpeer)
 
             idx += 1
+
+        if query_cntr:
+            query_cntr.value -= 1
+            done_one.set()
+            if query_cntr.value == 0:
+                done_all.set
 
     @asyncio.coroutine
     def _process_find_node_relay(\
@@ -1323,12 +1417,15 @@ class ChordTasks(object):
                             # DataStored messages now.
                             continue
                         else:
+                            store_msg = cp.ChordDataStored(pkts[0])
                             if log.isEnabledFor(logging.DEBUG):
-                                store_msg = cp.ChordDataStored(pkts[0])
                                 log.debug("Received DataStored (stored=[{}])"\
                                     " message from Peer (dbid={})."\
                                         .format(store_msg.stored,\
                                             tun_meta.peer.dbid, path))
+
+                            if store_msg.stored:
+                                data_rw.storing_nodes += 1
 
                     query_cntr.value -= 1
                     done_one.set()
@@ -1540,7 +1637,7 @@ class ChordTasks(object):
 
     @asyncio.coroutine
     def _wait_for_data_stored(self, data_mode, vpeer, tun_meta, query_cntr,\
-            done_all, data_rw):
+            done_one, done_all, data_rw):
         "This is a coroutine that is used in data_mode and is started for"\
         " immediate PeerS that do not have a tunnel open (and thus a tunnel"\
         " coroutine already processing it."
@@ -1549,6 +1646,13 @@ class ChordTasks(object):
             pkt = yield from tun_meta.queue.get()
             if not pkt:
                 break
+
+            packet_type = cp.ChordMessage.parse_type(pkt)
+
+            if packet_type != cp.CHORD_MSG_DATA_STORED\
+                    and packet_type != cp.CHORD_MSG_DATA_RESPONSE:
+                # Ignore late packets from stage 1.
+                continue
 
             if data_mode is cp.DataMode.get:
                 rmsg = cp.ChordDataResponse(pkt)
@@ -1571,12 +1675,16 @@ class ChordTasks(object):
 
                 msg = cp.ChordDataStored(pkt)
 
+                if msg.stored:
+                    data_rw.storing_nodes += 1
+
             break
 
         if tun_meta.jobs:
             assert tun_meta.jobs == 1
             tun_meta.jobs -= 1
             query_cntr.value -= 1
+            done_one.set()
             if not query_cntr.value:
                 done_all.set()
 
@@ -2055,15 +2163,15 @@ class ChordTasks(object):
 
         if self.engine.node.datastore_size\
                 < self.engine.node.datastore_max_size:
-            # We only store stuff closer than 2^2 less then the maximum
-            # distance.
-            log_dist, direction =\
-                mutil.calc_log_distance(self.engine.node_id, data_id)
-            if log_dist > chord.NODE_ID_BITS - 2:
-                # Too far.
-                if log.isEnabledFor(logging.DEBUG):
-                    log.debug("Don't want data; too far.")
-                return False, False
+#            # We only store stuff closer than 2^2 less then the maximum
+#            # distance.
+#            log_dist, direction =\
+#                mutil.calc_log_distance(self.engine.node_id, data_id)
+#            if log_dist > chord.NODE_ID_BITS - 2:
+#                # Too far.
+#                if log.isEnabledFor(logging.DEBUG):
+#                    log.debug("Don't want data; too far.")
+#                return False, False
 
             # Check if we have this block.
             def dbcall():

@@ -44,6 +44,7 @@ class RsaKey(asymkey.AsymKey):
         self.q = None
 
         self.__public_key = None
+        self.__public_key_bytes = None
         self.__private_key = None
         self.__rsassa_pss_signer = None
         self.__rsassa_pss_verifier = None
@@ -72,10 +73,18 @@ class RsaKey(asymkey.AsymKey):
         self.size = util.bit_length(self.n)
 
     def asbytes(self):
+        m = self.__public_key_bytes
+
+        if m:
+            return m
+
         m = bytearray()
         m += sshtype.encodeString('ssh-rsa')
         m += sshtype.encodeMpint(self.e)
         m += sshtype.encodeMpint(self.n)
+
+        self.__public_key_bytes = m
+
         return m
 
     def __str__(self):
@@ -176,6 +185,8 @@ class RsaKey(asymkey.AsymKey):
         return verifier
 
     def _encode_key(self):
+        "Encode the private components into an mnk structure."
+
         if (self.p is None) or (self.q is None):
             raise SshException('Not enough key info to write private key file')
         """

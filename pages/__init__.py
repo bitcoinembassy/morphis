@@ -19,7 +19,7 @@ home_page_content = [\
     }
 </style>
 </head><body>
-<p><h2 style="display: inline;">MORPHiS Maalstroom UI</h2>&nbsp;&nbsp;&nbsp;[v${MORPHIS_VERSION}]&nbsp;&nbsp;&nbsp;[${CONNECTIONS} Connections]<span style="position: absolute; right: 0em;">(<a href="morphis://.aiwj/explanation">AIWJ</a> - JAVASCRIPT FREE!)</span></p>
+<div class="valign_container header_non_fs"><h2 style="display: inline;">MORPHiS Maalstroom UI</h2><span class="valign"><span class="h-3">&nbsp;&nbsp;&nbsp;[v${MORPHIS_VERSION}]&nbsp;[${CONNECTIONS} Connections]</span><span class="right_float"><span class="h-3 bold" style="margin: 0;">(<a href="morphis://.aiwj/explanation">AIWJ</a> - JAVASCRIPT FREE!)</span></span></div>
 <div class="msection">
     <h3>MORPHiS Web</h3>
     <p>
@@ -45,8 +45,24 @@ html, body {
     padding: 0;
     margin: 0;
 }
+.right_float {
+    position: fixed;
+    right: 0em;
+}
+.h-1 {
+    font-size: 95%;
+}
+.h-2 {
+    font-size: 85%;
+}
+.h-3 {
+    font-size: 75%;
+}
 body.iframe {
     height: 0%;
+}
+div.header_non_fs {
+    margin-top: 1em;
 }
 div.header {
     height: 3em;
@@ -111,14 +127,20 @@ form p * {
 label:after {
     content: ": ";
 }
-iframe.panel {
-    background-color: #86CBD2;
+.valign_container {
+    display: table;
 }
-body.panel {
+.valign_container .valign {
+    display: table-cell;
+    vertical-align: middle;
+    height: 100%;
+}
+body.panel_container {
+    background-color: #86CBD2;
     display: table;
     height: 100%;
 }
-body.panel div.panel {
+.panel_container .panel {
     display: table-cell;
     vertical-align: middle;
     height: 100%;
@@ -127,6 +149,9 @@ body.panel div.panel {
 }
 .italic {
     font-style: italic;
+}
+.bold {
+    font-weight: bold;
 }
 .strikethrough {
     text-decoration: line-through;
@@ -227,7 +252,8 @@ dmail_iframe_body_start =\
 dmail_addr_settings_edit_content = [dmail_iframe_body_start\
     + b"""<h4>Dmail Address [<a href="../../${DMAIL_ADDRESS}">${DMAIL_ADDRESS_SHORT}...</a>].</h4>
 <p>NOTE: Difficulty is the anti-spam setting that determines how much work it is to send you a Dmail. Its effect is exponential (work=2^difficulty). Do not set it too low -- I would recommend no lower than 20. If 2^difficulty is lower than the amount of nodes in the network, then the network will likely have trouble finding your Dmails.</p>
-<p><b>NOTE</b>: If you turn this up, you will no longer see any new Dmails that were sent to you while you had the lower setting. This is because they won't include enough work to be found. Dmails stored locally already (Inbox) won't be affected. In a future version of Maalstroom this will be solved. For now it is not because it will take a bunch more UI to allow you to manage properly, and I want to release ASAP :).</p>
+<p><b>NOTE</b>: At difficulty=20, sending you a Dmail will take ~30 seconds. A setting of 21 will take 1 minute. At 22, it is 2 minutes, 23 = 4 minutes, 24 = 8 minutes, 25 = 16 minutes, 26 = 32 minutes, 27 = 64 minutes, 28 = 128 minutes, 29 = 256 minutes, and 30 = 512 minutes, Etc. <b>Every 10 that you increase it is 1024x more cpu work for the sender.</b> The maximum value of difficulty=512 will take more time than the lifespan of the universe. If you want to receive Dmails anytime soon, don't increase this value much. Also, there is no point in increasing it unless you are going to publish your address and thus expect to be the target of spam. The times here are a rough guide and depend on the processing capability of the sending computer.</p>
+<p><b>NOTE</b>: If you turn this up, you will no longer see any new Dmails that were sent to you while you had the lower setting. This is because they won't include enough work to be found. Dmails stored locally already (Inbox) won't be affected. In a future version of Maalstroom this will be solved. For now it is not, because it will take a bunch more UI to allow you to manage properly, and I want to release ASAP :).</p>
 <form action="morphis://.dmail/addr/settings/edit/publish" method="get">
     <input type="hidden" name="dmail_address" id="dmail_address" value="${DMAIL_ADDRESS}"/>
     <p>
@@ -274,12 +300,12 @@ dmail_fetch_wrapper = [\
     b"""<!DOCTYPE html>
 <html><head><base target="_top" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/></head><body>
 <iframe src="${IFRAME_SRC}" frameborder="0" style="height: calc(100% - 2em);" width="100%"></iframe>
-<iframe src="${IFRAME2_SRC}" class="panel" frameborder="0" style="height: 2em;" width="100%"></iframe>
+<iframe src="${IFRAME2_SRC}" frameborder="0" style="height: 2em;" width="100%"></iframe>
 </body></html>""", None]
 
 dmail_fetch_panel_content = [\
     b"""<!DOCTYPE html>
-<html><head><base target="_top" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/></head><body class="iframe panel">
+<html><head><base target="_top" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/></head><body class="iframe panel_container">
 <div class="panel">
     <span>
         [<a target="_self" href="../mark_as_read/${DMAIL_IDS}">Toggle Read</a>]
@@ -318,7 +344,7 @@ dmail_compose_dmail_form_start =\
 <html><head><base target="_top" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/>
 <style type="text/css">
 </style></head><body class="iframe">
-<form action="morphis://.dmail/compose/make_it_so" method="post">
+<form action="morphis://.dmail/compose/make_it_so" method="post" accept-charset="UTF-8 ISO-8859-1">
     <p class="nowrap">
         <label for="sender">From</label>
         <select name="sender">"""
