@@ -2146,15 +2146,15 @@ class ChordTasks(object):
 
         if self.engine.node.datastore_size\
                 < self.engine.node.datastore_max_size:
-            # We only store stuff closer than 2^2 less then the maximum
-            # distance.
-            log_dist, direction =\
-                mutil.calc_log_distance(self.engine.node_id, data_id)
-            if log_dist > chord.NODE_ID_BITS - 2:
-                # Too far.
-                if log.isEnabledFor(logging.DEBUG):
-                    log.debug("Don't want data; too far.")
-                return False, False
+#            # We only store stuff closer than 2^2 less then the maximum
+#            # distance.
+#            log_dist, direction =\
+#                mutil.calc_log_distance(self.engine.node_id, data_id)
+#            if log_dist > chord.NODE_ID_BITS - 2:
+#                # Too far.
+#                if log.isEnabledFor(logging.DEBUG):
+#                    log.debug("Don't want data; too far.")
+#                return False, False
 
             # Check if we have this block.
             def dbcall():
