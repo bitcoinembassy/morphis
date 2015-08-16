@@ -98,6 +98,7 @@ class ChordTasks(object):
 
         msg = cp.ChordNodeInfo()
         msg.sender_address = self.engine.bind_address
+        msg.version = self.engine.node.morphis_version
 
         peer.protocol.write_channel_data(local_cid, msg.encode())
 
@@ -108,11 +109,16 @@ class ChordTasks(object):
         msg = cp.ChordNodeInfo(data)
         log.info("Received ChordNodeInfo message.")
 
+        peer.version = msg.version
         peer.full_node = True
 
         yield from peer.protocol.close_channel(local_cid)
 
         yield from self.engine._check_update_remote_address(msg, peer)
+
+        if log.isEnabledFor(logging.INFO):
+            log.info("Outbound Node (addr=[{}]) reports as version=[{}]."\
+                .format(peer.address, peer.version))
 
         self.engine._notify_protocol_ready()
 

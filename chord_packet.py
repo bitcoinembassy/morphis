@@ -102,6 +102,7 @@ class ChordRelay(ChordMessage):
 class ChordNodeInfo(ChordMessage):
     def __init__(self, buf = None):
         self.sender_address = ""
+        self.version = None
 
         super().__init__(CHORD_MSG_NODE_INFO, buf)
 
@@ -109,6 +110,7 @@ class ChordNodeInfo(ChordMessage):
         nbuf = super().encode()
 
         nbuf += sshtype.encodeString(self.sender_address)
+        nbuf += sshtype.encodeString(self.version)
 
         return nbuf
 
@@ -116,7 +118,12 @@ class ChordNodeInfo(ChordMessage):
         super().parse()
 
         i = 1
-        l, self.sender_address = sshtype.parseString(self.buf[i:])
+        i, self.sender_address = sshtype.parse_string_from(self.buf, i)
+        if i == len(self.buf):
+            return
+        if len(self.buf) - i > 64:
+            raise ChordException("Version string in packet is too long.")
+        i, self.version = sshtype.parse_string_from(self.buf, i)
 
 class ChordGetPeers(ChordMessage):
     def __init__(self, buf = None):

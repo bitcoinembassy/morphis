@@ -931,6 +931,7 @@ class ChordEngine():
             log.info("Received CHORD_MSG_NODE_INFO message.")
             msg = cp.ChordNodeInfo(data)
 
+            peer.version = msg.version
             peer.full_node = True
 
             # Respond to them. Even though it doesn't make sense for now as
@@ -939,9 +940,15 @@ class ChordEngine():
             # that don't belong at the lower SSH level.
             rmsg = cp.ChordNodeInfo()
             rmsg.sender_address = self.bind_address
+            rmsg.version = self.node.morphis_version
+
             peer.protocol.write_channel_data(local_cid, rmsg.encode())
 
             yield from self._check_update_remote_address(msg, peer)
+
+            if log.isEnabledFor(logging.INFO):
+                log.info("Inbound Node (addr=[{}]) reports as version=[{}]."\
+                    .format(peer.address, peer.version))
 
             self._notify_protocol_ready()
 
