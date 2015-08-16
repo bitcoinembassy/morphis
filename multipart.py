@@ -761,18 +761,19 @@ def _store_block(engine, i, block_data, key_callback, task_semaphore,\
             data_rw =\
                 yield from\
                     engine.tasks.send_get_data(data_key, retry_factor=100)
-            if data_rw.data is not None\
-                    and data_rw.data_present_cnt + storing_nodes >= 3:
-                if log.isEnabledFor(logging.INFO):
-                    log.info("Block #{} is already redundant enough on the"\
-                        "network; not uploading it anymore for now."\
-                            .format(i))
-                return True
+            if data_rw.data is not None and data_rw.data_present_cnt:
+                storing_nodes += data_rw.data_present_cnt
+                if storing_nodes >= 3:
+                    if log.isEnabledFor(logging.INFO):
+                        log.info("Block #{} is already redundant enough on"\
+                            " the network; not uploading it anymore for now."\
+                                .format(i))
+                    return True
 
         tries += 1
 
         if tries < 32:
-            yield from asyncio.sleep(tries)
+            yield from asyncio.sleep(1)
             yield from task_semaphore.acquire()
             continue
 
