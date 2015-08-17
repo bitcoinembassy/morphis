@@ -36,6 +36,8 @@ client_engine = None
 upload_page_content = None
 static_upload_page_content = [None, None]
 
+update_test = False
+
 class DataResponseWrapper(object):
     def __init__(self):
         self.data = None
@@ -807,9 +809,10 @@ def start_maalstroom_server(the_node):
 
 @asyncio.coroutine
 def _create_client_engine():
-    global node, client_engine
+    global node, client_engine, update_test
     yield from node.ready.wait()
-    client_engine = cengine.ClientEngine(node.chord_engine, node.loop)
+    client_engine =\
+        cengine.ClientEngine(node.chord_engine, node.loop, update_test)
     yield from client_engine.start()
 
 def shutdown():

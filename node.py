@@ -331,6 +331,8 @@ def __main():
     parser.add_argument("--reinitds", action="store_true",\
         help="Allow reinitialization of the Datastore. This will only happen"\
             " if the Datastore directory has already been manually deleted.")
+    parser.add_argument("--updatetest", action="store_true",\
+        help="Enable update test mode; for development purposes.")
     parser.add_argument("--webdevel", action="store_true",\
         help="Enable web development mode. This causes Maalstroom to reload"\
             " the web UI modules every request.")
@@ -392,6 +394,8 @@ def __main():
             if maalstroom_enabled:
                 if maaluppage:
                     maalstroom.set_upload_page(maaluppage)
+                if args.updatetest:
+                    maalstroom.update_test = True
                 yield from maalstroom.start_maalstroom_server(node)
 
             node.init_db()
