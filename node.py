@@ -248,14 +248,14 @@ def main():
     except KeyboardInterrupt:
         log.warning("Got KeyboardInterrupt; shutting down.")
         if dumptasksonexit or log.isEnabledFor(logging.DEBUG):
-            try:
-                for task in asyncio.Task.all_tasks(loop=loop):
-                    print("Task [{}]:".format(task))
-                    task.print_stack()
-            except:
-                log.exception("Task")
-    except:
-        log.exception("loop.run_forever() threw:")
+#            try:
+            for task in asyncio.Task.all_tasks(loop=loop):
+                print("Task [{}]:".format(task))
+                task.print_stack()
+#            except:
+#                log.exception("Task")
+#    except:
+#        log.exception("loop.run_forever() threw:")
 
     for node in nodes:
         node.stop()
