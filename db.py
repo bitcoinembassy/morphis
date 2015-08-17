@@ -195,16 +195,12 @@ class Db():
             session = self.Session()
             try:
                 yield session
-                session.rollback()
-            except:
-                try:
-                    session.rollback()
-                except:
-                    pass
-
-                raise
             finally:
-                session.close()
+                try:
+                    session.close()
+                except TypeError:
+                    log.error("SqlAlchemy crashed; workaround engaged;"\
+                        " Session leaked! Upgrade to 1.0.8 to prevent this!")
         finally:
             if self.sqlite_lock:
                 self.sqlite_lock.release()
