@@ -19,8 +19,8 @@ import client_engine as cengine
 import enc
 import rsakey
 import mbase32
-import pages
-import pages.dmail
+import maalstroom.templates as templates
+import maalstroom.dmail
 import multipart
 import mutil
 
@@ -155,7 +155,7 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
             else:
                 version_str = current_version
 
-            content = pages.home_page_content[0].replace(\
+            content = templates.home_page_content[0].replace(\
                 b"${CONNECTIONS}", str(connection_cnt).encode())
             content = content.replace(\
                 b"${MORPHIS_VERSION}", version_str.encode())
@@ -215,10 +215,10 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
             return
         elif rpath.startswith(s_dmail):
             if self.node.web_devel:
-                importlib.reload(pages)
-                importlib.reload(pages.dmail)
+                importlib.reload(templates)
+                importlib.reload(maalstroom.dmail)
 
-            pages.dmail.serve_get(self, rpath)
+            maalstroom.dmail.serve_get(self, rpath)
             return
 
         if self.headers["If-None-Match"] == rpath:
@@ -404,7 +404,7 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
         log.info("POST; rpath=[{}].".format(rpath))
 
         if rpath != ".upload/upload":
-            pages.dmail.serve_post(self, rpath)
+            maalstroom.dmail.serve_post(self, rpath)
             return
 
         if log.isEnabledFor(logging.DEBUG):

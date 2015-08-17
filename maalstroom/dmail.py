@@ -19,7 +19,7 @@ import enc
 import dmail
 import mbase32
 import mutil
-import pages
+import maalstroom.templates as templates
 import rsakey
 import sshtype
 
@@ -72,16 +72,16 @@ def _serve_post(handler, rpath, done_event):
 @asyncio.coroutine
 def __serve_get(handler, rpath, done_event):
     if len(rpath) == len(s_dmail):
-        handler._send_content(pages.dmail_page_content)
+        handler._send_content(templates.dmail_page_content)
     else:
         req = rpath[len(s_dmail):]
         log.info("req=[{}].".format(req))
         if req == "/css":
             handler._send_content(\
-                pages.dmail_css_content, content_type="text/css")
+                templates.dmail_css_content, content_type="text/css")
         elif req == "/address_list":
             handler._send_partial_content(
-                pages.dmail_page_content__f1_start, True)
+                templates.dmail_page_content__f1_start, True)
 
             site_keys = yield from _list_dmail_addresses(handler)
 
@@ -94,13 +94,13 @@ def __serve_get(handler, rpath, done_event):
 
                 handler._send_partial_content(resp)
 
-            handler._send_partial_content(pages.dmail_page_content__f1_end)
+            handler._send_partial_content(templates.dmail_page_content__f1_end)
             handler._end_partial_content()
         elif req.startswith("/compose/form"):
             dest_addr_enc = req[14:] if len(req) > 14 else ""
 
             handler._send_partial_content(\
-                pages.dmail_compose_dmail_form_start, True)
+                templates.dmail_compose_dmail_form_start, True)
 
             site_keys = yield from _list_dmail_addresses(handler)
 
@@ -116,7 +116,7 @@ def __serve_get(handler, rpath, done_event):
                 "<option value="">[Anonymous]</option>")
 
             handler._send_partial_content(\
-                pages.dmail_compose_dmail_form_end.replace(\
+                templates.dmail_compose_dmail_form_end.replace(\
                     b"${DEST_ADDR}", dest_addr_enc.encode()))
 
             handler._end_partial_content()
@@ -128,21 +128,21 @@ def __serve_get(handler, rpath, done_event):
             else:
                 iframe_src = "compose/form".encode()
 
-            content = pages.dmail_compose_dmail_content[0].replace(\
+            content = templates.dmail_compose_dmail_content[0].replace(\
                     b"${IFRAME_SRC}", iframe_src)
 
             handler._send_content([content, None])
         elif req.startswith("/addr/view/"):
             addr_enc = req[11:]
 
-            start = pages.dmail_addr_view_start.replace(\
+            start = templates.dmail_addr_view_start.replace(\
                 b"${DMAIL_ADDRESS}", addr_enc.encode())
             start = start.replace(\
                 b"${DMAIL_ADDRESS_SHORT}", addr_enc[:32].encode())
 
             handler._send_partial_content(start, True)
 
-            handler._send_partial_content(pages.dmail_addr_view_end)
+            handler._send_partial_content(templates.dmail_addr_view_end)
             handler._end_partial_content()
         elif req.startswith("/addr/settings/edit/publish?"):
             query = req[28:]
@@ -199,11 +199,11 @@ def __serve_get(handler, rpath, done_event):
 
             if storing_nodes:
                 handler._send_content(\
-                    pages.dmail_addr_settings_edit_success_content[0]\
+                    templates.dmail_addr_settings_edit_success_content[0]\
                         .format(addr_enc, addr_enc[:32]).encode())
             else:
                 handler._send_content(\
-                    pages.dmail_addr_settings_edit_fail_content[0]\
+                    templates.dmail_addr_settings_edit_fail_content[0]\
                         .format(addr_enc, addr_enc[:32]).encode())
 
         elif req.startswith("/addr/settings/edit/"):
@@ -212,7 +212,7 @@ def __serve_get(handler, rpath, done_event):
             dmail_address = yield from\
                 _load_dmail_address(handler, mbase32.decode(addr_enc))
 
-            content = pages.dmail_addr_settings_edit_content[0].replace(\
+            content = templates.dmail_addr_settings_edit_content[0].replace(\
                 b"${DIFFICULTY}",\
                 str(dmail_address.keys[0].difficulty).encode())
             content = content.replace(\
@@ -232,7 +232,7 @@ def __serve_get(handler, rpath, done_event):
         elif req.startswith("/addr/settings/"):
             addr_enc = req[15:]
 
-            content = pages.dmail_addr_settings_content[0].replace(\
+            content = templates.dmail_addr_settings_content[0].replace(\
                 b"${IFRAME_SRC}",\
                 "edit/{}".format(addr_enc).encode())
 
@@ -243,7 +243,7 @@ def __serve_get(handler, rpath, done_event):
             if log.isEnabledFor(logging.INFO):
                 log.info("Viewing dmail address [{}].".format(addr_enc))
 
-            content = pages.dmail_address_page_content[0].replace(\
+            content = templates.dmail_address_page_content[0].replace(\
                 b"${IFRAME_SRC}", "view/{}".format(addr_enc).encode())
 
             handler._send_content([content, None])
@@ -258,7 +258,7 @@ def __serve_get(handler, rpath, done_event):
                 log.info("Viewing dmails with tag [{}] for address [{}]."\
                     .format(tag, addr_enc))
 
-            start = pages.dmail_tag_view_list_start.replace(\
+            start = templates.dmail_tag_view_list_start.replace(\
                 b"${TAG_NAME}", tag.encode())
             #FIXME: This is getting inefficient now, maybe time for Flask or
             # something like it. Maybe we can use just it's template renderer.
@@ -277,13 +277,13 @@ def __serve_get(handler, rpath, done_event):
             yield from\
                 _list_dmails_for_tag(handler, mbase32.decode(addr_enc), tag)
 
-            handler._send_partial_content(pages.dmail_tag_view_list_end)
+            handler._send_partial_content(templates.dmail_tag_view_list_end)
             handler._end_partial_content()
 
         elif req.startswith("/tag/view/"):
             params = req[10:]
 
-            content = pages.dmail_tag_view_content[0].replace(\
+            content = templates.dmail_tag_view_content[0].replace(\
                 b"${IFRAME_SRC}", "../list/{}".format(params).encode())
 
             handler._send_content(content)
@@ -294,7 +294,7 @@ def __serve_get(handler, rpath, done_event):
                 log.info("Viewing inbox for dmail address [{}]."\
                     .format(addr_enc))
 
-            start = pages.dmail_inbox_start.replace(\
+            start = templates.dmail_inbox_start.replace(\
                 b"${DMAIL_ADDRESS}", addr_enc.encode())
             start = start.replace(\
                 b"${DMAIL_ADDRESS2}", "{}...".format(addr_enc[:32]).encode())
@@ -305,12 +305,12 @@ def __serve_get(handler, rpath, done_event):
 
             yield from _scan_new_dmails(handler, addr, significant_bits)
 
-            handler._send_partial_content(pages.dmail_inbox_end)
+            handler._send_partial_content(templates.dmail_inbox_end)
             handler._end_partial_content()
         elif req.startswith("/scan/"):
             addr_enc = req[6:]
 
-            content = pages.dmail_address_page_content[0].replace(\
+            content = templates.dmail_address_page_content[0].replace(\
                 b"${IFRAME_SRC}", "list/{}".format(addr_enc).encode())
 
             handler._send_content([content, None])
@@ -369,14 +369,14 @@ def __serve_get(handler, rpath, done_event):
         elif req.startswith("/fetch/panel/"):
             req_data = req[13:]
 
-            content = pages.dmail_fetch_panel_content[0].replace(\
+            content = templates.dmail_fetch_panel_content[0].replace(\
                 b"${DMAIL_IDS}", req_data.encode())
 
             handler._send_content([content, None])
         elif req.startswith("/fetch/wrapper/"):
             req_data = req[15:]
 
-            content = pages.dmail_fetch_wrapper[0].replace(\
+            content = templates.dmail_fetch_wrapper[0].replace(\
                 b"${IFRAME_SRC}",\
                 "../../view/{}"\
                     .format(req_data).encode())
@@ -391,14 +391,14 @@ def __serve_get(handler, rpath, done_event):
         elif req.startswith("/fetch/"):
             req_data = req[7:]
 
-            content = pages.dmail_address_page_content[0].replace(\
+            content = templates.dmail_address_page_content[0].replace(\
                 b"${IFRAME_SRC}", "../wrapper/{}".format(req_data).encode())
 
             handler._send_content([content, None])
         elif req == "/create_address":
-            handler._send_content(pages.dmail_create_address_content)
+            handler._send_content(templates.dmail_create_address_content)
         elif req == "/create_address/form":
-            handler._send_content(pages.dmail_create_address_form_content)
+            handler._send_content(templates.dmail_create_address_form_content)
         elif req.startswith("/create_address/make_it_so?"):
             query = req[27:]
 
@@ -413,7 +413,7 @@ def __serve_get(handler, rpath, done_event):
 
             dmail_key_enc = mbase32.encode(dmail_key)
 
-            handler._send_partial_content(pages.dmail_frame_start, True)
+            handler._send_partial_content(templates.dmail_frame_start, True)
             if storing_nodes:
                 handler._send_partial_content(b"SUCCESS<br/>")
             else:
@@ -430,7 +430,7 @@ def __serve_get(handler, rpath, done_event):
             handler._send_partial_content(\
                 """<p>New dmail address: <a href="../addr/{}">{}</a></p>"""\
                     .format(dmail_key_enc, dmail_key_enc).encode())
-            handler._send_partial_content(pages.dmail_frame_end)
+            handler._send_partial_content(templates.dmail_frame_end)
             handler._end_partial_content()
         else:
             handler._handle_error()
