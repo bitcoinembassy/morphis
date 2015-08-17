@@ -209,9 +209,9 @@ class Db():
         if self.sqlite_lock:
             return
 
-        t = text("LOCK \"{}\" IN SHARE ROW EXCLUSIVE MODE"\
-            .format(tableobj.__table__.name))
-        sess.connection().execute(t)
+        st = "LOCK \"{}\" IN SHARE ROW EXCLUSIVE MODE"\
+            .format(tableobj.__table__.name)
+        sess.execute(st)
 
     def init_engine(self):
         is_sqlite = self.url.startswith("sqlite:")
@@ -256,8 +256,8 @@ class Db():
                 tmp_Base.metadata.create_all(self.engine)
             except ProgrammingError:
                 with self.open_session() as sess:
-                    t = text("CREATE SCHEMA {}".format(self.schema))
-                    sess.connection().execute(t)
+                    st = "CREATE SCHEMA {}".format(self.schema)
+                    sess.execute(st)
                     sess.commit()
 
                 tmp_Base.metadata.create_all(self.engine)
