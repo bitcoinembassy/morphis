@@ -495,7 +495,7 @@ def __serve_post(handler, rpath, done_event):
             sender_asymkey = None
 
         dest_addr_enc = dd.get("destination")
-        if not dest_addr_enc:
+        if not dest_addr_enc[0]:
             handler._send_error("You must specify a destination.", 400)
             return
 

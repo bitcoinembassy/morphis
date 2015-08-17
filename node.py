@@ -246,16 +246,16 @@ def main():
     try:
         loop.run_forever()
     except KeyboardInterrupt:
-        log.info("Got KeyboardInterrupt; shutting down.")
+        log.warning("Got KeyboardInterrupt; shutting down.")
         if dumptasksonexit or log.isEnabledFor(logging.DEBUG):
-            try:
-                for task in asyncio.Task.all_tasks(loop=loop):
-                    print("Task [{}]:".format(task))
-                    task.print_stack()
-            except:
-                log.exception("Task")
-    except:
-        log.exception("loop.run_forever() threw:")
+#            try:
+            for task in asyncio.Task.all_tasks(loop=loop):
+                print("Task [{}]:".format(task))
+                task.print_stack()
+#            except:
+#                log.exception("Task")
+#    except:
+#        log.exception("loop.run_forever() threw:")
 
     for node in nodes:
         node.stop()
@@ -331,6 +331,8 @@ def __main():
     parser.add_argument("--reinitds", action="store_true",\
         help="Allow reinitialization of the Datastore. This will only happen"\
             " if the Datastore directory has already been manually deleted.")
+    parser.add_argument("--updatetest", action="store_true",\
+        help="Enable update test mode; for development purposes.")
     parser.add_argument("--webdevel", action="store_true",\
         help="Enable web development mode. This causes Maalstroom to reload"\
             " the web UI modules every request.")
@@ -392,6 +394,8 @@ def __main():
             if maalstroom_enabled:
                 if maaluppage:
                     maalstroom.set_upload_page(maaluppage)
+                if args.updatetest:
+                    maalstroom.update_test = True
                 yield from maalstroom.start_maalstroom_server(node)
 
             node.init_db()

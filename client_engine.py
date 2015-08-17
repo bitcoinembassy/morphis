@@ -10,7 +10,7 @@ import multipart
 log = logging.getLogger(__name__)
 
 class ClientEngine(object):
-    def __init__(self, engine, db):
+    def __init__(self, engine, db, test_mode=False):
         self.engine = engine
         self.db = db
         self.loop = engine.loop
@@ -21,6 +21,14 @@ class ClientEngine(object):
         self._dmail_engine = None
 
         self.__running = False
+
+        self._data_key =\
+            mbase32.decode("sp1nara3xhndtgswh7fznt414we4mi3y6kdwbkz4jmt8ocb6x"\
+                "4w1faqjotjkcrefta11swe3h53dt6oru3r13t667pr7cpe3ocxeuma")
+        if test_mode:
+            self._path = b"test_version"
+        else:
+            self._path = b"latest_version"
 
     @asyncio.coroutine
     def start(self):
@@ -43,24 +51,13 @@ class ClientEngine(object):
 
     @asyncio.coroutine
     def _start_version_poller(self):
-        #TODO: Have this intelligently wait for some connections.
-#        yield from asyncio.sleep(15, loop=self.loop)
-
         while self.__running:
-            data_key = mbase32.decode("sp1nara3xhndtgswh7fznt414we4mi3y6kdwbk"\
-                "z4jmt8ocb6x4w1faqjotjkcrefta11swe3h53dt6oru3r13t667pr7cpe3oc"\
-                "xeuma")
-            path = b"latest_version"
-
-#            data_rw =\
-#                yield from self.engine.send_get_data(data_key, path=path)
-
             data_rw = multipart.BufferingDataCallback()
 
             r =\
                 yield from\
-                    multipart.get_data(self.engine, data_key,\
-                        data_callback=data_rw, path=path)
+                    multipart.get_data(self.engine, self._data_key,\
+                        data_callback=data_rw, path=self._path)
 
             if data_rw.data:
                 if data_rw.version:
