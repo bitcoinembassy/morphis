@@ -246,7 +246,7 @@ def main():
     try:
         loop.run_forever()
     except KeyboardInterrupt:
-        log.info("Got KeyboardInterrupt; shutting down.")
+        log.warning("Got KeyboardInterrupt; shutting down.")
         if dumptasksonexit or log.isEnabledFor(logging.DEBUG):
             try:
                 for task in asyncio.Task.all_tasks(loop=loop):
