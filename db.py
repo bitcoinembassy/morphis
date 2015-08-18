@@ -201,6 +201,9 @@ class Db():
                 except TypeError:
                     log.error("SqlAlchemy crashed; workaround engaged;"\
                         " Session leaked! Upgrade to 1.0.8 to prevent this!")
+        except:
+            log.exception("Db session contextmanager.")
+            raise
         finally:
             if self.sqlite_lock:
                 self.sqlite_lock.release()
