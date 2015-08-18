@@ -75,14 +75,41 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
         self.maalstroom_url_prefix = None
         self.maalstroom_url_prefix_str = None
 
+        self._inq = queue.Queue(1)
+        self._outq = queue.Queue()
+
+        self._maalstroom_dispatcher =\
+            MaalstroomDispatcher(self._inq, self._outq)
+
         self._maalstroom_http_url_prefix = "http://{}/"
         self._maalstroom_morphis_url_prefix = "morphis://"
 
-        self._accept_charset = None
+        log.info("HANDLER: [{}].".format(self))
 
         super().__init__(a, b, c)
 
-    def __prepare_for_request(self):
+    def do_GET(self):
+        self._prepare_for_request()
+
+        self.node.loop.call_soon_threadsafe(\
+            asyncio.async,\
+            do_GET(self, rpath))
+
+        self._write_response()
+
+    def do_POST(self):
+        self._prepare_for_request()
+
+        self.node.loop.call_soon_threadsafe(\
+            asyncio.async,\
+            do_POST(self, rpath))
+
+        #TODO: YOU_ARE_HERE: Read from in and send to inq while checking an\
+        # abort event.
+
+        self._write_response()
+
+    def _prepare_for_request(self):
         if self.headers["X-Maalstroom-Plugin"]:
             self.maalstroom_plugin_used = True
             self.maalstroom_url_prefix_str =\
@@ -101,6 +128,29 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
                 self._maalstroom_http_url_prefix.format(host)
             self.maalstroom_url_prefix =\
                 self.maalstroom_url_prefix_str.encode()
+
+    def _write_response(self):
+        outq = self._outq
+
+        while True:
+            resp = outq.get()
+
+            if not resp:
+                break
+
+            self.wfile.write(resp)
+
+class MaalstroomDispatcher(object):
+    def __init__(self, handler, inq, outq):
+        self.node = handler.node
+        self.handler = handler
+
+        self.inq = inq
+        self.outq = outq
+
+        self._accept_charset = None
+
+        super().__init__(a, b, c)
 
     def _get_connection_count(self):
         q = queue.Queue()
@@ -125,8 +175,9 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
             return
         q.put(client_engine.latest_version_number)
 
+    @asyncio.coroutine
     def do_GET(self):
-        self.__prepare_for_request()
+        self._prepare_for_request()
 
         rpath = self.path[1:]
 
@@ -391,7 +442,7 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
             self._handle_error(data_rw)
 
     def do_POST(self):
-        self.__prepare_for_request()
+        self._prepare_for_request()
 
         rpath = self.path[1:]
 
@@ -825,7 +876,7 @@ def shutdown():
 
     log.info("Shutting down Maalstroom server instance.")
     server.server_close()
-    log.info("Mallstroom server instance stopped.")
+    log.info("Maalstroom server instance stopped.")
 
 def set_upload_page(filepath):
     global upload_page_content
