@@ -1211,8 +1211,19 @@ class ChordTasks(object):
 
         peer = vpeer.peer
 
-        local_cid, queue =\
-            yield from peer.protocol.open_channel("mpeer", True)
+        try:
+            local_cid, queue =\
+                yield from asyncio.wait_for(\
+                    peer.protocol.open_channel("mpeer", True),\
+                    timeout=60,\
+                    loop=self.loop)
+        except asyncio.TimeoutError:
+            if log.isEnabledFor(logging.INFO):
+                log.info("Timeout opening channel to Peer (dbid=[{}])."\
+                    .format(peer.dbid))
+            peer.protocol.close()
+            queue = None
+
         if not queue:
             if query_cntr:
                 query_cntr.value -= 1
