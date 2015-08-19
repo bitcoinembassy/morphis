@@ -1225,6 +1225,14 @@ class ChordTasks(object):
             queue = None
 
         if not queue:
+            if self.engine.node.tormode:
+                if not peer.protocol.closed():
+                    if log.isEnabledFor(logging.INFO):
+                        log.info("Closing stalled connection to Peer"\
+                            " (dbid=[{}])."\
+                                .format(peer.dbid))
+                    peer.protocol.close()
+
             if query_cntr:
                 query_cntr.value -= 1
                 done_one.set()

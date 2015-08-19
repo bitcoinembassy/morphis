@@ -112,6 +112,9 @@ class SshProtocol(asyncio.Protocol):
             self.transport.close()
         self.status = Status.closed
 
+    def closed(self):
+        return self.status is Status.closed
+
     @asyncio.coroutine
     def open_channel(self, channel_type, block=False):
         "Returns the channel queue for the new channel."
