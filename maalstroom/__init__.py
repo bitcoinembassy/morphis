@@ -61,6 +61,9 @@ class DataResponseWrapper(object):
 class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
     daemon_threads = True
 
+class Flush(object):
+    pass
+
 #FIXME: Strip down this to be the bare minimum, just the do_{GET,POST} that
 # immediately hands off to an event loop based instance, having all the
 # write_content(..) Etc. methods in that event loop based instance, all writing
@@ -144,7 +147,10 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
             resp = outq.get()
 
             if not resp:
+                log.info("Finished response.")
                 break
+            elif resp is Flush:
+                self.wfile.flush()
 
             self.wfile.write(resp)
 
@@ -169,8 +175,37 @@ class MaalstroomDispatcher(object):
             return None
         return client_engine.latest_version_number
 
+    def send_response(self, code):
+        # Maybe this should go through queue but then is less efficient and
+        # this seems to work and is thread safe as we synchronized, it is only
+        # a matter of if these are blocking calls, which i haven't checked in
+        # the python source, but, in Linux sockets, there is no blocking
+        # write in essence (buffered by kernel) so this should be find and
+        # even optimal -- until we switch to asyncio http server. Abstracting
+        # it from handler just in case and to make switching easier as
+        # refactoring a non statically compiled language like Python is the
+        # definition of pain.
+        self.handler.send_response(code)
+
+    def send_header(self, key, value):
+        self.handler.send_header(key, value)
+
+    def end_headers(self):
+        self.handler.end_headers()
+
+    def write(self, data):
+        self.outq.put(data)
+
+    def flush(self):
+        self.outq.put(Flush)
+
+    def finish_response(self):
+        log.info("Finishing response.")
+        self.outq.put(None)
+
     @asyncio.coroutine
     def do_GET(self, rpath):
+        print(__name__)
         if not rpath:
             connection_cnt = self.connection_count
             current_version = self.node.morphis_version
@@ -330,7 +365,8 @@ class MaalstroomDispatcher(object):
                 self.send_header("Content-Length", len(message))
                 self.end_headers()
 
-                self.wfile.write(message)
+                self.write(message)
+                self.finish_response()
                 return
 
         if data:
@@ -405,7 +441,7 @@ class MaalstroomDispatcher(object):
                     if rewrite_url:
                         self._send_partial_content(data)
                     else:
-                        self.wfile.write(data)
+                        self.write(data)
 
                     data = data_rw.data_queue.get()
 
@@ -417,6 +453,8 @@ class MaalstroomDispatcher(object):
 
                         if rewrite_url:
                             self._end_partial_content()
+                        else:
+                            self.finish_response()
                         break
             except ConnectionError:
                 if log.isEnabledFor(logging.INFO):
@@ -544,7 +582,8 @@ class MaalstroomDispatcher(object):
             self.send_header("Content-Length", len(message))
             self.end_headers()
 
-            self.wfile.write(bytes(message, "UTF-8"))
+            self.write(bytes(message, "UTF-8"))
+            self.finish_response()
         else:
             self._handle_error(data_rw)
 
@@ -601,6 +640,7 @@ class MaalstroomDispatcher(object):
                     self.send_header("ETag", content_id)
                 self.send_header("Content-Length", 0)
                 self.end_headers()
+                self.finish_response()
                 return
 
         if callable(content):
@@ -617,7 +657,8 @@ class MaalstroomDispatcher(object):
             self._send_no_cache()
 
         self.end_headers()
-        self.wfile.write(content)
+        self.write(content)
+        self.finish_response()
         return
 
     def _send_partial_content(self, content, start=False, content_type=None,\
@@ -647,16 +688,17 @@ class MaalstroomDispatcher(object):
 #        else:
 #            add_line = False
 
-        self.wfile.write("{:x}\r\n".format(chunklen).encode())
-        self.wfile.write(content)
+        self.write("{:x}\r\n".format(chunklen).encode())
+        self.write(content)
 #        if add_line:
-#            self.wfile.write(b"\r\n")
-        self.wfile.write(b"\r\n")
+#            self.write(b"\r\n")
+        self.write(b"\r\n")
 
-        self.wfile.flush()
+        self.flush()
 
     def _end_partial_content(self):
-        self.wfile.write(b"0\r\n\r\n")
+        self.write(b"0\r\n\r\n")
+        self.finish_response()
 
     def _send_no_cache(self):
         self.send_header("Cache-Control",\
@@ -685,7 +727,8 @@ class MaalstroomDispatcher(object):
         self.send_header("Content-Length", len(errmsg))
         self.end_headers()
         try:
-            self.wfile.write(errmsg)
+            self.write(errmsg)
+            self.finish_response()
         except ConnectionError:
             log.info("HTTP client aborted request connection.")
             return
@@ -707,7 +750,8 @@ class MaalstroomDispatcher(object):
         self.send_header("Content-Length", len(errmsg))
         self.end_headers()
         try:
-            self.wfile.write(errmsg)
+            self.write(errmsg)
+            self.finish_response()
         except ConnectionError:
             log.info("HTTP client aborted request connection.")
             return
