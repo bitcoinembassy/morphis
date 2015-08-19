@@ -242,6 +242,10 @@ class ChordEngine():
     def start(self):
         self.running = True
 
+        if self.node.offline_mode:
+            log.info("Offline mode is enabled; not binding or connecting.")
+            return
+
         host, port = self._bind_address.split(':')
         self.server = self.loop.create_server(\
             self._create_server_protocol, host, port)

@@ -79,6 +79,7 @@ class Node():
         self.ready = asyncio.Event(loop=loop)
 
         self.tormode = False
+        self.offline_mode = False
 
     @property
     def all_nodes(self):
@@ -328,6 +329,8 @@ def __main():
         help="Override Maalstroom upload page with the specified file.")
     parser.add_argument("--nodecount", type=int,\
         help="Specify amount of nodes to start.")
+    parser.add_argument("--offline", action="store_true",\
+        help="Enable offline mode. Only Maalstroom will be enabled.")
     parser.add_argument("--parallellaunch", action="store_true",\
         help="Enable parallel launch of the nodecount nodes.")
     parser.add_argument("--reinitds", action="store_true",\
@@ -394,6 +397,8 @@ def __main():
                 node.seed_node_enabled = False
             if args.tormode:
                 node.tormode = True
+            if args.offline:
+                node.offline_mode = True
 
             nodes.append(node)
 
