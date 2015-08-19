@@ -434,6 +434,9 @@ class ChordEngine():
 
         peer = mnpeer.Peer(self, dbpeer)
 
+        if self.node.tormode:
+            peer.address = dbpeer.address
+
         client = self.loop.create_connection(\
             partial(self._create_client_protocol, peer),\
             host, port)
@@ -729,8 +732,11 @@ class ChordEngine():
         return True, add_to_peers
 
     def add_to_peers(self, peer):
-        address = "{}:{}".format(\
-            peer.protocol.address[0], peer.protocol.address[1])
+        if self.node.tormode:
+            address = peer.address
+        else:
+            address = "{}:{}".format(\
+                peer.protocol.address[0], peer.protocol.address[1])
 
         existing = self.peers.setdefault(address, peer)
         if existing is not peer:

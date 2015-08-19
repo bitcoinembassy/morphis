@@ -78,6 +78,8 @@ class Node():
 
         self.ready = asyncio.Event(loop=loop)
 
+        self.tormode = False
+
     @property
     def all_nodes(self):
         global nodes
@@ -331,6 +333,11 @@ def __main():
     parser.add_argument("--reinitds", action="store_true",\
         help="Allow reinitialization of the Datastore. This will only happen"\
             " if the Datastore directory has already been manually deleted.")
+    parser.add_argument("--tormode", action="store_true",\
+        help="Enable torify mode. This makes MORPHiS work better over torify"\
+            " or proxychains. Currently it fixes the remote address check so"\
+            " that more than one connection can work at a time. You still"\
+            " have to wrap MORPHiS with torify or proxychains yourself.")
     parser.add_argument("--updatetest", action="store_true",\
         help="Enable update test mode; for development purposes.")
     parser.add_argument("--webdevel", action="store_true",\
@@ -385,6 +392,8 @@ def __main():
                 node.web_devel = True
             if args.dontuseseed:
                 node.seed_node_enabled = False
+            if args.tormode:
+                node.tormode = True
 
             nodes.append(node)
 
