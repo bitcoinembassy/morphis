@@ -175,7 +175,6 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
                 b"AIWJ - Asynchronous IFrames Without Javascript!")
             return
         elif rpath == "images/favicon.ico":
-            log.debug(self.headers)
             self._send_content(\
                 pages.favicon_content, content_type="image/png")
             return
