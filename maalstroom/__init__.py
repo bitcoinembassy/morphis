@@ -78,8 +78,8 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
         self._inq = queue.Queue(1)
         self._outq = queue.Queue()
 
-        self._maalstroom_dispatcher =\
-            MaalstroomDispatcher(self._inq, self._outq)
+        self._dispatcher =\
+            MaalstroomDispatcher(self, self._inq, self._outq)
 
         self._maalstroom_http_url_prefix = "http://{}/"
         self._maalstroom_morphis_url_prefix = "morphis://"
@@ -93,7 +93,7 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
 
         self.node.loop.call_soon_threadsafe(\
             asyncio.async,\
-            do_GET(self, rpath))
+            self._dispatcher.do_GET(self._get_rpath()))
 
         self._write_response()
 
@@ -102,12 +102,20 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
 
         self.node.loop.call_soon_threadsafe(\
             asyncio.async,\
-            do_POST(self, rpath))
+            self._dispatcher.do_POST(self._get_rpath()))
 
         #TODO: YOU_ARE_HERE: Read from in and send to inq while checking an\
         # abort event.
 
         self._write_response()
+
+    def _get_rpath(self):
+        rpath = self.path[1:]
+
+        if rpath and rpath[-1] == '/':
+            rpath = rpath[:-1]
+
+        return rpath
 
     def _prepare_for_request(self):
         if self.headers["X-Maalstroom-Plugin"]:
@@ -150,47 +158,24 @@ class MaalstroomDispatcher(object):
 
         self._accept_charset = None
 
-        super().__init__(a, b, c)
+    @property
+    def connection_count(self):
+        return len(self.node.chord_engine.peers)
 
-    def _get_connection_count(self):
-        q = queue.Queue()
-        self.node.loop.call_soon_threadsafe(self.__get_connection_count, q)
-        return q.get()
-
-    def __get_connection_count(self, q):
-        global node
-        cnt = len(node.chord_engine.peers)
-        q.put(cnt)
-
-    def _get_latest_version_number(self):
-        q = queue.Queue()
-        self.node.loop.call_soon_threadsafe(\
-            self.__get_latest_version_number, q)
-        return q.get()
-
-    def __get_latest_version_number(self, q):
+    @property
+    def latest_version_number(self):
         global client_engine
         if not client_engine:
-            q.put(None)
-            return
-        q.put(client_engine.latest_version_number)
+            return None
+        return client_engine.latest_version_number
 
     @asyncio.coroutine
-    def do_GET(self):
-        self._prepare_for_request()
-
-        rpath = self.path[1:]
-
-        if rpath and rpath[-1] == '/':
-            rpath = rpath[:-1]
-
-        connection_cnt = None
-
+    def do_GET(self, rpath):
         if not rpath:
-            connection_cnt = self._get_connection_count()
+            connection_cnt = self.connection_count
             current_version = self.node.morphis_version
 
-            latest_version_number = self._get_latest_version_number()
+            latest_version_number = self.latest_version_number
 
             if latest_version_number\
                     and current_version != latest_version_number:
@@ -198,7 +183,7 @@ class MaalstroomDispatcher(object):
                     '<span class="strikethrough nomargin">{}</span>]'\
                     '&nbsp;[<a href="{}{}">{} AVAILABLE</a>'\
                         .format(current_version,\
-                            self.maalstroom_url_prefix_str,\
+                            self.handler.maalstroom_url_prefix_str,\
                             "sp1nara3xhndtgswh7fznt414we4mi3y6kdwbkz4jmt8ocb6"\
                                 "x4w1faqjotjkcrefta11swe3h53dt6oru3r13t667pr7"\
                                 "cpe3ocxeuma/latest_version",\
@@ -272,8 +257,8 @@ class MaalstroomDispatcher(object):
             maalstroom.dmail.serve_get(self, rpath)
             return
 
-        if self.headers["If-None-Match"] == rpath:
-            cache_control = self.headers["Cache-Control"]
+        if self.handler.headers["If-None-Match"] == rpath:
+            cache_control = self.handler.headers["Cache-Control"]
             if cache_control != "max-age=0":
                 self.send_response(304)
                 if cache_control:
@@ -326,13 +311,13 @@ class MaalstroomDispatcher(object):
                 if path:
                     url = "{}{}/{}"\
                         .format(\
-                            self.maalstroom_url_prefix_str,\
+                            self.handler.maalstroom_url_prefix_str,\
                             key,\
                             path.decode("UTF-8"))
                 else:
                     url = "{}{}"\
                         .format(\
-                            self.maalstroom_url_prefix_str,\
+                            self.handler.maalstroom_url_prefix_str,\
                             key)
 
                 message = "<html><head><title>Redirecting to Full Key</title>"\
@@ -398,7 +383,8 @@ class MaalstroomDispatcher(object):
                         self.send_header(\
                             "Content-Type", "application/octet-stream")
 
-            rewrite_url = rewrite_url and not self.maalstroom_plugin_used
+            rewrite_url = rewrite_url\
+                and not self.handler.maalstroom_plugin_used
 
             if rewrite_url:
                 self.send_header("Transfer-Encoding", "chunked")
@@ -459,11 +445,12 @@ class MaalstroomDispatcher(object):
             return
 
         if log.isEnabledFor(logging.DEBUG):
-            log.info(self.headers)
+            log.info(self.handler.headers)
 
-        if self.headers["Content-Type"] == "application/x-www-form-urlencoded":
+        if self.handler.headers["Content-Type"]\
+                == "application/x-www-form-urlencoded":
             log.debug("Content-Type=[application/x-www-form-urlencoded].")
-            data = self.rfile.read(int(self.headers["Content-Length"]))
+            data = self.rfile.read(int(self.handler.headers["Content-Length"]))
             privatekey = None
         else:
             if log.isEnabledFor(logging.DEBUG):
@@ -472,10 +459,10 @@ class MaalstroomDispatcher(object):
 
             form = cgi.FieldStorage(\
                 fp=self.rfile,\
-                headers=self.headers,\
+                headers=self.handler.headers,\
                 environ={\
                     "REQUEST_METHOD": "POST",\
-                    "CONTENT_TYPE": self.headers["Content-Type"]})
+                    "CONTENT_TYPE": self.handler.headers["Content-Type"]})
 
             if log.isEnabledFor(logging.DEBUG):
                 log.debug("form=[{}].".format(form))
@@ -530,13 +517,13 @@ class MaalstroomDispatcher(object):
             if privatekey and path:
                 url = "{}{}/{}"\
                     .format(\
-                        self.maalstroom_url_prefix_str,\
+                        self.handler.maalstroom_url_prefix_str,\
                         enckey,\
                         path.decode("UTF-8"))
             else:
                 url = "{}{}"\
                     .format(\
-                        self.maalstroom_url_prefix_str,\
+                        self.handler.maalstroom_url_prefix_str,\
                         enckey)
 
             if privatekey:
@@ -547,7 +534,7 @@ class MaalstroomDispatcher(object):
                     message +=\
                         '<br/><a id="referred_key" href="{}{}">perma link</a>'\
                             .format(\
-                                self.maalstroom_url_prefix_str,\
+                                self.handler.maalstroom_url_prefix_str,\
                                 mbase32.encode(data_rw.referred_key))
             else:
                 message = '<a id="key" href="{}">perma link</a>'.format(url)
@@ -565,7 +552,7 @@ class MaalstroomDispatcher(object):
         if self._accept_charset:
             return self._accept_charset
 
-        acharset = self.headers["Accept-Charset"]
+        acharset = self.handler.headers["Accept-Charset"]
         if acharset:
             if acharset.find("ISO-8859-1") > -1\
                     and acharset.find("UTF-8") == -1:
@@ -592,9 +579,10 @@ class MaalstroomDispatcher(object):
             content = content_entry
             cacheable = False
 
-        if not self.maalstroom_plugin_used:
+        if not self.handler.maalstroom_plugin_used:
             content =\
-                content.replace(b"morphis://", self.maalstroom_url_prefix)
+                content.replace(\
+                    b"morphis://", self.handler.maalstroom_url_prefix)
 
         if cacheable and not content_id:
             if callable(content):
@@ -602,8 +590,8 @@ class MaalstroomDispatcher(object):
             content_id = mbase32.encode(enc.generate_ID(content))
             content_entry[1] = content_id
 
-        if cacheable and self.headers["If-None-Match"] == content_id:
-            cache_control = self.headers["Cache-Control"]
+        if cacheable and self.handler.headers["If-None-Match"] == content_id:
+            cache_control = self.handler.headers["Cache-Control"]
             if cache_control != "max-age=0":
                 self.send_response(304)
                 if cache_control:
@@ -637,9 +625,10 @@ class MaalstroomDispatcher(object):
         if type(content) is str:
             content = content.encode()
 
-        if not self.maalstroom_plugin_used:
+        if not self.handler.maalstroom_plugin_used:
             content =\
-                content.replace(b"morphis://", self.maalstroom_url_prefix)
+                content.replace(\
+                    b"morphis://", self.maalstroom_url_prefix)
 
         if start:
             self.send_response(200)
