@@ -174,6 +174,11 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
             self._send_content(\
                 b"AIWJ - Asynchronous IFrames Without Javascript!")
             return
+        elif rpath == "images/favicon.ico":
+            log.debug(self.headers)
+            self._send_content(\
+                pages.favicon_content, content_type="image/png")
+            return
         elif rpath.startswith(s_upload):
             if rpath.startswith(".upload/generate"):
                 priv_key =\

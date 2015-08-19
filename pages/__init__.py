@@ -5,6 +5,7 @@
 home_page_content = [\
     b"""<!DOCTYPE html>
 <html><head><title>ALL TOGETHER NOW WE SING IN UNISON - MORPHiS Maalstroom UI</title>
+<link rel="icon" type="image/png" href="/images/favicon.ico"/>
 <link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/>
 <style type="text/css">
     div.msection {
@@ -35,6 +36,8 @@ home_page_content = [\
     </p>
 </div>
 </body></html>""", None]
+
+favicon_content = [None, None]
 
 dmail_css_content = [\
     b"""* {
@@ -369,6 +372,10 @@ dmail_compose_dmail_form_end =\
 
 initialized_template = False
 if not initialized_template:
+    fh = open("favicon.ico", "rb")
+    if fh:
+        favicon_content[0] = fh.read()
+
     dmail_page_content[0] =\
         dmail_page_wrapper.replace(b"${IFRAME_SRC}", b"address_list")
 
