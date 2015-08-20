@@ -462,7 +462,7 @@ class MaalstroomDispatcher(object):
         self.send_response(204)
         self.send_header("Content-Length", 0)
         self.end_headers()
-        return
+        self.finish_response()
 
     def _send_content(self, content_entry, cacheable=True, content_type=None):
         if type(content_entry) in (list, tuple):
