@@ -206,7 +206,6 @@ class MaalstroomDispatcher(object):
 
     @asyncio.coroutine
     def do_GET(self, rpath):
-        print(__name__)
         if not rpath:
             current_version = self.node.morphis_version
 
@@ -247,7 +246,7 @@ class MaalstroomDispatcher(object):
             return
         elif rpath == "images/favicon.ico":
             self._send_content(\
-                pages.favicon_content, content_type="image/png")
+                templates.favicon_content, content_type="image/png")
             return
         elif rpath.startswith(s_upload):
             if rpath.startswith(".upload/generate"):
@@ -331,6 +330,10 @@ class MaalstroomDispatcher(object):
 
         data_rw = DataResponseWrapper()
 
+        #TODO: YOU_ARE_HERE: Merge this in! This is why big downloads don't
+        # start right away! It doesn't send headers till first data! But we
+        # have version rigth away from root block, don't need to wait that
+        # long. Etc.
         self.node.loop.call_soon_threadsafe(\
             asyncio.async,\
             _send_get_data(data_key, significant_bits, path, data_rw))
