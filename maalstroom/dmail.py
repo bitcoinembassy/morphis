@@ -27,50 +27,8 @@ log = logging.getLogger(__name__)
 
 s_dmail = ".dmail"
 
+@asyncio.coroutine
 def serve_get(handler, rpath):
-    done_event = threading.Event()
-
-    #FIXME: Is it safe to call the handler's out stream from the loop thread?
-    # Because that is what I'm doing here.
-    handler.node.loop.call_soon_threadsafe(\
-        asyncio.async,\
-        _serve_get(handler, rpath, done_event))
-
-    done_event.wait()
-
-def serve_post(handler, rpath):
-    done_event = threading.Event()
-
-    #FIXME: Is it safe to call the handler's out stream from the loop thread?
-    # Because that is what I'm doing here.
-    handler.node.loop.call_soon_threadsafe(\
-        asyncio.async,\
-        _serve_post(handler, rpath, done_event))
-
-    done_event.wait()
-
-@asyncio.coroutine
-def _serve_get(handler, rpath, done_event):
-    try:
-        yield from __serve_get(handler, rpath, done_event)
-    except Exception as e:
-        log.exception("__serve_get(..)")
-        handler.send_exception(e)
-
-    done_event.set()
-
-@asyncio.coroutine
-def _serve_post(handler, rpath, done_event):
-    try:
-        yield from __serve_post(handler, rpath, done_event)
-    except Exception as e:
-        log.exception("__serve_post(..)")
-        handler.send_exception(e)
-
-    done_event.set()
-
-@asyncio.coroutine
-def __serve_get(handler, rpath, done_event):
     if len(rpath) == len(s_dmail):
         handler._send_content(templates.dmail_page_content)
     else:
@@ -436,7 +394,7 @@ def __serve_get(handler, rpath, done_event):
             handler._handle_error()
 
 @asyncio.coroutine
-def __serve_post(handler, rpath, done_event):
+def serve_post(handler, rpath):
     assert rpath.startswith(s_dmail)
 
     req = rpath[len(s_dmail):]

@@ -87,12 +87,13 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
         self._maalstroom_http_url_prefix = "http://{}/"
         self._maalstroom_morphis_url_prefix = "morphis://"
 
-        log.info("HANDLER: [{}].".format(self))
-
         super().__init__(a, b, c)
 
     def do_GET(self):
         self._prepare_for_request()
+
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("Handler do_GET(): path=[{}].".format(self.path))
 
         self.node.loop.call_soon_threadsafe(\
             asyncio.async,\
@@ -147,10 +148,10 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
             resp = outq.get()
 
             if not resp:
-                log.info("Finished response.")
                 break
             elif resp is Flush:
                 self.wfile.flush()
+                continue
 
             self.wfile.write(resp)
 
@@ -194,20 +195,19 @@ class MaalstroomDispatcher(object):
         self.handler.end_headers()
 
     def write(self, data):
+        assert type(data) in (bytes, bytearray)
         self.outq.put(data)
 
     def flush(self):
         self.outq.put(Flush)
 
     def finish_response(self):
-        log.info("Finishing response.")
         self.outq.put(None)
 
     @asyncio.coroutine
     def do_GET(self, rpath):
         print(__name__)
         if not rpath:
-            connection_cnt = self.connection_count
             current_version = self.node.morphis_version
 
             latest_version_number = self.latest_version_number
@@ -227,7 +227,7 @@ class MaalstroomDispatcher(object):
                 version_str = current_version
 
             content = templates.home_page_content[0].replace(\
-                b"${CONNECTIONS}", str(connection_cnt).encode())
+                b"${CONNECTIONS}", str(self.connection_count).encode())
             content = content.replace(\
                 b"${MORPHIS_VERSION}", version_str.encode())
 
@@ -286,10 +286,10 @@ class MaalstroomDispatcher(object):
             return
         elif rpath.startswith(s_dmail):
             if self.node.web_devel:
-                importlib.reload(templates)
+                importlib.reload(maalstroom.templates)
                 importlib.reload(maalstroom.dmail)
 
-            maalstroom.dmail.serve_get(self, rpath)
+            yield from maalstroom.dmail.serve_get(self, rpath)
             return
 
         if self.handler.headers["If-None-Match"] == rpath:
@@ -309,9 +309,7 @@ class MaalstroomDispatcher(object):
 
         # At this point we assume it is a key URL.
 
-        if connection_cnt is None:
-            connection_cnt = self._get_connection_count()
-        if not connection_cnt:
+        if not self.connection_count:
             self._send_error("No connected nodes; cannot fetch from the"\
                 " network.")
             return
@@ -465,13 +463,8 @@ class MaalstroomDispatcher(object):
         else:
             self._handle_error(data_rw)
 
-    def do_POST(self):
-        self._prepare_for_request()
-
-        rpath = self.path[1:]
-
-        connection_cnt = self._get_connection_count()
-        if not connection_cnt:
+    def do_POST(self, rpath):
+        if not self.connection_count:
             self._send_error("No connected nodes; cannot upload to the"\
                 " network.")
             return
@@ -479,7 +472,7 @@ class MaalstroomDispatcher(object):
         log.info("POST; rpath=[{}].".format(rpath))
 
         if rpath != ".upload/upload":
-            maalstroom.dmail.serve_post(self, rpath)
+            yield from maalstroom.dmail.serve_post(self, rpath)
             return
 
         if log.isEnabledFor(logging.DEBUG):
@@ -637,6 +630,7 @@ class MaalstroomDispatcher(object):
                     # This should only have been sent for an updateable key.
                     self.send_header("Cache-Control", "max-age=15, public")
                 else:
+                    self.send_header("Cache-Control", "public")
                     self.send_header("ETag", content_id)
                 self.send_header("Content-Length", 0)
                 self.end_headers()
@@ -669,7 +663,7 @@ class MaalstroomDispatcher(object):
         if not self.handler.maalstroom_plugin_used:
             content =\
                 content.replace(\
-                    b"morphis://", self.maalstroom_url_prefix)
+                    b"morphis://", self.handler.maalstroom_url_prefix)
 
         if start:
             self.send_response(200)
