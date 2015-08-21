@@ -77,6 +77,10 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
 
         self._write_response()
 
+    def log_message(self, mformat, *args):
+        if log.isEnabledFor(logging.INFO):
+            log.info("{}: {}".format(self.address_string(), args))
+
     def _get_rpath(self):
         rpath = self.path[1:]
 
