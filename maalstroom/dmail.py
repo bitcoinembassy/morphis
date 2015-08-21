@@ -29,6 +29,8 @@ s_dmail = ".dmail"
 
 @asyncio.coroutine
 def serve_get(handler, rpath):
+    log.info("Service .dmail request.")
+
     if len(rpath) == len(s_dmail):
         handler._send_content(templates.dmail_page_content)
     else:
@@ -391,7 +393,7 @@ def serve_get(handler, rpath):
             handler._send_partial_content(templates.dmail_frame_end)
             handler._end_partial_content()
         else:
-            handler._handle_error()
+            handler.send_error(errcode=400)
 
 @asyncio.coroutine
 def serve_post(handler, rpath):
@@ -454,7 +456,7 @@ def serve_post(handler, rpath):
 
         dest_addr_enc = dd.get("destination")
         if not dest_addr_enc[0]:
-            handler._send_error("You must specify a destination.", 400)
+            handler.send_error("You must specify a destination.", 400)
             return
 
         recipient, significant_bits =\
@@ -487,7 +489,7 @@ def serve_post(handler, rpath):
                         .format(dest_addr_enc[0]).encode())
 
     else:
-        handler._handle_error()
+        handler.send_error(errcode=400)
 
 @asyncio.coroutine
 def _fetch_dmail_address(handler, dmail_address_id):

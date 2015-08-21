@@ -4,26 +4,18 @@
 import llog
 
 import asyncio
-import cgi
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import importlib
 import logging
 import queue
 from socketserver import ThreadingMixIn
-from threading import Event
-import time
 
-import base58
-import chord
 import client_engine as cengine
 import enc
-import rsakey
 import mbase32
 import maalstroom.templates as templates
 import maalstroom.dispatcher as dispatcher
 import maalstroom.dmail
-import multipart
-import mutil
 
 log = logging.getLogger(__name__)
 
@@ -42,6 +34,7 @@ update_test = False
 class MaalstroomHandler(BaseHTTPRequestHandler):
     def __init__(self, a, b, c):
         global node
+        self.loop = node.loop
         self.protocol_version = "HTTP/1.1"
         self.node = node
 
@@ -66,7 +59,7 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
         if log.isEnabledFor(logging.DEBUG):
             log.debug("Handler do_GET(): path=[{}].".format(self.path))
 
-        self.node.loop.call_soon_threadsafe(\
+        self.loop.call_soon_threadsafe(\
             asyncio.async,\
             self._dispatcher.do_GET(self._get_rpath()))
 
@@ -75,7 +68,7 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         self._prepare_for_request()
 
-        self.node.loop.call_soon_threadsafe(\
+        self.loop.call_soon_threadsafe(\
             asyncio.async,\
             self._dispatcher.do_POST(self._get_rpath()))
 
@@ -111,6 +104,11 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
                 self._maalstroom_http_url_prefix.format(host)
             self.maalstroom_url_prefix =\
                 self.maalstroom_url_prefix_str.encode()
+
+        if self.node.web_devel:
+            importlib.reload(maalstroom.templates)
+            importlib.reload(maalstroom.dispatcher)
+            importlib.reload(maalstroom.dmail)
 
     def _write_response(self):
         outq = self._outq

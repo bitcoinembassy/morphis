@@ -3,13 +3,19 @@ import llog
 import asyncio
 import importlib
 import logging
+from threading import Event
+import time
 
+import base58
+import chord
 import client_engine as cengine
 import enc
 import maalstroom
 import maalstroom.templates as templates
 import mbase32
 import multipart
+import mutil
+import rsakey
 
 log = logging.getLogger(__name__)
 
@@ -17,6 +23,8 @@ class MaalstroomDispatcher(object):
     def __init__(self, handler, inq, outq):
         self.node = handler.node
         self.handler = handler
+
+        self.loop = handler.loop
 
         self.inq = inq
         self.outq = outq
@@ -91,22 +99,32 @@ class MaalstroomDispatcher(object):
             self._send_content([content, None])
             return
 
-        s_upload = ".upload"
-        s_dmail = ".dmail"
-        s_aiwj = ".aiwj"
-
         if log.isEnabledFor(logging.DEBUG):
             log.debug("rpath=[{}].".format(rpath))
 
-        if rpath.startswith(s_aiwj):
+        if rpath[0] == '.':
+            yield from self.dispatch_GET(rpath)
+            return
+
+        # Otherwise, we are doing a get_data(..).
+        # At this point we assume it is a key URL.
+
+        yield from self.dispatch_get_data(rpath)
+
+
+    @asyncio.coroutine
+    def dispatch_GET(self, rpath):
+        assert rpath[0] == '.'
+
+        if rpath.startswith(".aiwj"):
             self._send_content(\
                 b"AIWJ - Asynchronous IFrames Without Javascript!")
             return
-        elif rpath == "images/favicon.ico":
+        elif rpath == ".images/favicon.ico":
             self._send_content(\
                 templates.favicon_content, content_type="image/png")
             return
-        elif rpath.startswith(s_upload):
+        elif rpath.startswith(".upload"):
             if rpath.startswith(".upload/generate"):
                 priv_key =\
                     base58.encode(\
@@ -118,13 +136,13 @@ class MaalstroomDispatcher(object):
                 self.end_headers()
                 return
 
-            if len(rpath) == len(s_upload):
+            if len(rpath) == 7: # len(".upload")
                 self._send_content(static_upload_page_content)
             else:
                 content =\
                     upload_page_content.replace(\
                         b"${PRIVATE_KEY}",\
-                        rpath[len(s_upload)+1:].encode())
+                        rpath[8:].encode()) # 8 = len(".upload/")
                 content =\
                     content.replace(\
                         b"${VERSION}",\
@@ -141,15 +159,14 @@ class MaalstroomDispatcher(object):
                 self._send_content(content)
 
             return
-        elif rpath.startswith(s_dmail):
-            if self.node.web_devel:
-                importlib.reload(maalstroom.templates)
-                importlib.reload(maalstroom.dmail)
-
+        elif rpath.startswith(".dmail"):
             yield from maalstroom.dmail.serve_get(self, rpath)
             return
 
+    @asyncio.coroutine
+    def dispatch_get_data(self, rpath):
         if self.handler.headers["If-None-Match"] == rpath:
+            # If browser has it cached.
             cache_control = self.handler.headers["Cache-Control"]
             if cache_control != "max-age=0":
                 self.send_response(304)
@@ -162,12 +179,8 @@ class MaalstroomDispatcher(object):
                 self.end_headers()
                 return
 
-        significant_bits = None
-
-        # At this point we assume it is a key URL.
-
         if not self.connection_count:
-            self._send_error("No connected nodes; cannot fetch from the"\
+            self.send_error("No connected nodes; cannot fetch from the"\
                 " network.")
             return
 
@@ -180,64 +193,79 @@ class MaalstroomDispatcher(object):
 
         try:
             data_key, significant_bits = mutil.decode_key(rpath)
-        except:
-            self._send_error(\
-                "Invalid encoded key: [{}].".format(rpath),\
-                errcode=400)
+        except IndexError as e:
+            self.send_error("Invalid encoded key: [{}].".format(rpath), 400)
             return
 
-        data_rw = DataResponseWrapper()
-
-        #TODO: YOU_ARE_HERE: Merge this in! This is why big downloads don't
-        # start right away! It doesn't send headers till first data! But we
-        # have version rigth away from root block, don't need to wait that
-        # long. Etc.
-        self.node.loop.call_soon_threadsafe(\
-            asyncio.async,\
-            _send_get_data(data_key, significant_bits, path, data_rw))
-
-        data = data_rw.data_queue.get()
-
         if significant_bits:
-            if data_rw.data_key:
-                key = mbase32.encode(data_rw.data_key)
+            # Resolve key via send_find_key.
 
-                if path:
-                    url = "{}{}/{}"\
-                        .format(\
-                            self.handler.maalstroom_url_prefix_str,\
-                            key,\
-                            path.decode("UTF-8"))
-                else:
-                    url = "{}{}"\
-                        .format(\
-                            self.handler.maalstroom_url_prefix_str,\
-                            key)
+            try:
+                data_rw =\
+                    yield from asyncio.wait_for(\
+                        self.node.chord_engine.tasks.send_find_key(\
+                            data_key, significant_bits),\
+                        15.0,\
+                        loop=self.loop)
+                data_key = data_rw.data_key
+            except asyncio.TimeoutError:
+                self.send_error(b"Key Not Found", errcode=404)
+                pass
 
-                message = "<html><head><title>Redirecting to Full Key</title>"\
-                    "</head><body><a href=\"{}\">{}</a>\n{}</body></html>"\
-                        .format(url, url, key).encode()
+            if log.isEnabledFor(logging.INFO):
+                log.info("Found key=[{}].".format(mbase32.encode(data_key)))
 
-                self.send_response(301)
-                self.send_header("Location", url)
-                self.send_header("Content-Type", "text/html")
-                self.send_header("Content-Length", len(message))
-                self.end_headers()
+            key_enc = mbase32.encode(data_rw.data_key)
 
-                self.write(message)
-                self.finish_response()
-                return
+            if path:
+                url = "{}{}/{}"\
+                    .format(\
+                        self.handler.maalstroom_url_prefix_str,\
+                        key_enc,\
+                        path.decode("UTF-8"))
+            else:
+                url = "{}{}"\
+                    .format(\
+                        self.handler.maalstroom_url_prefix_str,\
+                        key_enc)
+
+            message = "<html><head><title>Redirecting to Full Key</title>"\
+                "</head><body><a href=\"{}\">{}</a>\n{}</body></html>"\
+                    .format(url, url, key_enc).encode()
+
+            self.send_response(301)
+            self.send_header("Location", url)
+            self.send_header("Content-Type", "text/html")
+            self.send_header("Content-Length", len(message))
+            self.end_headers()
+
+            self.write(message)
+            self.finish_response()
+            return
+
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("Sending GetData: key=[{}], path=[{}]."\
+                .format(mbase32.encode(data_key), significant_bits, path))
+
+        try:
+            data_callback = Downloader(self)
+
+            r = yield from multipart.get_data(\
+                    node.chord_engine, data_key, data_callback, path=path,
+                    ordered=True)
+        except:
+            log.exception("send_get_data(..)")
 
         if data:
             self.send_response(200)
 
-            rewrite_url = False
+            rewrite_urls = False
 
             if data_rw.mime_type:
                 self.send_header("Content-Type", data_rw.mime_type)
                 if data_rw.mime_type\
                         in ("text/html", "text/css", "application/javascript"):
-                    rewrite_url = True
+                    rewrite_urls = True
             else:
                 dh = data[:160]
 
@@ -249,10 +277,10 @@ class MaalstroomDispatcher(object):
                     self.send_header("Content-Type", "image/gif")
                 elif dh[:5] == b"/*CSS":
                     self.send_header("Content-Type", "text/css")
-                    rewrite_url = True
+                    rewrite_urls = True
                 elif dh[:12] == b"/*JAVASCRIPT":
                     self.send_header("Content-Type", "application/javascript")
-                    rewrite_url = True
+                    rewrite_urls = True
                 elif dh[:8] == bytes(\
                         [0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70])\
                         or dh[:8] == bytes(\
@@ -273,15 +301,15 @@ class MaalstroomDispatcher(object):
                             and (dhl.find(b"<head>") > -1\
                                 or dhl.find(b"<HEAD") > -1):
                         self.send_header("Content-Type", "text/html")
-                        rewrite_url = True
+                        rewrite_urls = True
                     else:
                         self.send_header(\
                             "Content-Type", "application/octet-stream")
 
-            rewrite_url = rewrite_url\
+            rewrite_urls = rewrite_urls\
                 and not self.handler.maalstroom_plugin_used
 
-            if rewrite_url:
+            if rewrite_urls:
                 self.send_header("Transfer-Encoding", "chunked")
             else:
                 self.send_header("Content-Length", data_rw.size)
@@ -297,7 +325,7 @@ class MaalstroomDispatcher(object):
 
             try:
                 while True:
-                    if rewrite_url:
+                    if rewrite_urls:
                         self._send_partial_content(data)
                     else:
                         self.write(data)
@@ -310,7 +338,7 @@ class MaalstroomDispatcher(object):
                                 "Request timed out; closing connection.")
                             self.close_connection = True
 
-                        if rewrite_url:
+                        if rewrite_urls:
                             self._end_partial_content()
                         else:
                             self.finish_response()
@@ -324,9 +352,10 @@ class MaalstroomDispatcher(object):
         else:
             self._handle_error(data_rw)
 
+    @asyncio.coroutine
     def do_POST(self, rpath):
         if not self.connection_count:
-            self._send_error("No connected nodes; cannot upload to the"\
+            self.send_error("No connected nodes; cannot upload to the"\
                 " network.")
             return
 
@@ -565,42 +594,29 @@ class MaalstroomDispatcher(object):
 #        self.send_header("Last-Modified", "Sun, 2 Aug 2015 00:00:00 GMT")
 
     def send_exception(self, exception, errcode=500):
-        self._send_error(\
+        self.send_error(\
             errmsg=str("{}: {}".format(type(exception).__name__, exception)),\
             errcode=errcode)
 
-    def _send_error(self, errmsg, errcode=500):
+    def send_error(self, msg=None, errcode=500):
         if errcode == 400:
-            errmsg = "400 Bad Request.\n\n{}"\
-                .format(errmsg).encode()
-            self.send_response(400)
-        else:
-            errmsg = "500 Internal Server Error.\n\n{}"\
-                .format(errmsg).encode()
-            self.send_response(500)
-
-        self.send_header("Content-Length", len(errmsg))
-        self.end_headers()
-        try:
-            self.write(errmsg)
-            self.finish_response()
-        except ConnectionError:
-            log.info("HTTP client aborted request connection.")
-            return
-
-    def _handle_error(self, data_rw=None, errmsg=None, errcode=None):
-        if not data_rw:
             errmsg = b"400 Bad Request."
             self.send_response(400)
-        elif data_rw.exception:
-            errmsg = b"500 Internal Server Error."
-            self.send_response(500)
-        elif data_rw.timed_out:
+        elif errcode == 404:
+            errmsg = b"404 Not Found."
+            self.send_response(404)
+        elif errcode == 408:
             errmsg = b"408 Request Timeout."
             self.send_response(408)
         else:
-            errmsg = b"404 Not Found."
-            self.send_response(404)
+            errmsg = b"500 Internal Server Error."
+            self.send_response(500)
+
+        if msg:
+            if type(msg) is str:
+                msg = msg.encode()
+
+            errmsg += b"\n\n" + msg
 
         self.send_header("Content-Length", len(errmsg))
         self.end_headers()
@@ -610,63 +626,6 @@ class MaalstroomDispatcher(object):
         except ConnectionError:
             log.info("HTTP client aborted request connection.")
             return
-
-@asyncio.coroutine
-def _send_get_data(data_key, significant_bits, path, data_rw):
-    if log.isEnabledFor(logging.DEBUG):
-        log.debug(\
-            "Sending GetData: key=[{}], significant_bits=[{}], path=[{}]."\
-                .format(mbase32.encode(data_key), significant_bits, path))
-
-    try:
-        if significant_bits:
-            future = asyncio.async(\
-                node.chord_engine.tasks.send_find_key(\
-                    data_key, significant_bits),
-                loop=node.loop)
-
-            yield from asyncio.wait_for(future, 15.0, loop=node.loop)
-
-            ct_data_rw = future.result()
-
-            data_key = ct_data_rw.data_key
-
-            if not data_key:
-                data_rw.data = b"Key Not Found"
-                data_rw.version = -1
-                data_rw.data_queue.put(None)
-                return
-
-            if log.isEnabledFor(logging.INFO):
-                log.info("Found key=[{}].".format(mbase32.encode(data_key)))
-
-            data_rw.data_key = bytes(data_key)
-            data_rw.data_queue.put(None)
-            return
-
-#        future = asyncio.async(\
-#            node.chord_engine.tasks.send_get_data(data_key),\
-#            loop=node.loop)
-#
-#        yield from asyncio.wait_for(future, 15.0, loop=node.loop)
-#
-#        ct_data_rw = future.result()
-
-        data_callback = Downloader(data_rw)
-
-        r = yield from multipart.get_data(\
-                node.chord_engine, data_key, data_callback, path=path,
-                ordered=True)
-
-        if r is False:
-            raise asyncio.TimeoutError()
-    except asyncio.TimeoutError:
-        data_rw.timed_out = True
-    except:
-        log.exception("send_get_data(..)")
-        data_rw.exception = True
-
-    data_rw.data_queue.put(None)
 
 class KeyCallback(multipart.KeyCallback):
     def __init__(self, data_rw):
