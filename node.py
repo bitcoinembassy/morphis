@@ -205,7 +205,10 @@ class Node():
         if not self.chord_engine.last_db_peer_count\
                 and not self.chord_engine.connect_peers\
                 and self.seed_node_enabled:
-            self.chord_engine.connect_peers = ["162.252.242.77:4250"]
+            self.chord_engine.connect_peers = [\
+                "162.252.242.77:4250",\
+                "45.79.172.110:4252",\
+                "139.162.130.68:4252"]
 
             if log.isEnabledFor(logging.INFO):
                 log.info("No PeerS in our database nor specified as a"\
