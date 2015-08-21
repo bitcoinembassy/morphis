@@ -220,7 +220,8 @@ class Node():
         self.ready.set()
 
     def stop(self):
-        self.chord_engine.stop()
+        if self.chord_engine:
+            self.chord_engine.stop()
 
     def load_key(self):
         self.node_key = self._load_key()
