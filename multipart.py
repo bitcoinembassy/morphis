@@ -744,11 +744,16 @@ def _store_block(engine, i, block_data, key_callback, task_semaphore,\
         if not tries:
             snodes = yield from\
                 engine.tasks.send_store_data(\
-                    block_data, key_callback=key_callback)
+                    block_data, store_key=store_key, key_callback=key_callback)
         else:
+            if store_key:
+                if tries > 1:
+                    store_key = False
+
             snodes = yield from\
                 engine.tasks.send_store_data(\
-                    block_data, key_callback=key_callback,\
+                    block_data, store_key=store_key,\
+                    key_callback=key_callback,\
                     retry_factor=tries * 10)
 
         task_semaphore.release()
