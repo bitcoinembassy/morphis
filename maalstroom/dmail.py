@@ -244,7 +244,7 @@ def serve_get(handler, rpath):
             content = templates.dmail_tag_view_content[0].replace(\
                 b"${IFRAME_SRC}", "../list/{}".format(params).encode())
 
-            handler._send_content([content, None])
+            handler._send_content(content)
         elif req.startswith("/scan/list/"):
             addr_enc = req[11:]
 
