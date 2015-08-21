@@ -121,6 +121,9 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
             elif resp is Flush:
                 self.wfile.flush()
                 continue
+            elif resp is Close:
+                self.close_connection = True
+                break
 
             self.wfile.write(resp)
 
@@ -128,6 +131,9 @@ class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
     daemon_threads = True
 
 class Flush(object):
+    pass
+
+class Close(object):
     pass
 
 @asyncio.coroutine

@@ -106,11 +106,8 @@ class MaalstroomDispatcher(object):
             yield from self.dispatch_GET(rpath)
             return
 
-        # Otherwise, we are doing a get_data(..).
         # At this point we assume it is a key URL.
-
         yield from self.dispatch_get_data(rpath)
-
 
     @asyncio.coroutine
     def dispatch_GET(self, rpath):
@@ -247,23 +244,31 @@ class MaalstroomDispatcher(object):
             log.debug("Sending GetData: key=[{}], path=[{}]."\
                 .format(mbase32.encode(data_key), significant_bits, path))
 
-        try:
-            data_callback = Downloader(self)
+        queue = asyncio.Queue(loop=self.loop)
 
-            r = yield from multipart.get_data(\
-                    node.chord_engine, data_key, data_callback, path=path,
-                    ordered=True)
+        try:
+            data_callback = Downloader(self, queue)
+
+            asyncio.async(\
+                multipart.get_data(\
+                    self.node.chord_engine, data_key, data_callback, path=path,
+                    ordered=True),
+                loop=self.loop)
         except:
             log.exception("send_get_data(..)")
+
+        log.debug("Waiting for first data.")
+
+        data = yield from queue.get()
 
         if data:
             self.send_response(200)
 
             rewrite_urls = False
 
-            if data_rw.mime_type:
-                self.send_header("Content-Type", data_rw.mime_type)
-                if data_rw.mime_type\
+            if data_callback.mime_type:
+                self.send_header("Content-Type", data_callback.mime_type)
+                if data_callback.mime_type\
                         in ("text/html", "text/css", "application/javascript"):
                     rewrite_urls = True
             else:
@@ -312,9 +317,9 @@ class MaalstroomDispatcher(object):
             if rewrite_urls:
                 self.send_header("Transfer-Encoding", "chunked")
             else:
-                self.send_header("Content-Length", data_rw.size)
+                self.send_header("Content-Length", data_callback.size)
 
-            if data_rw.version is not None:
+            if data_callback.version is not None:
                 self.send_header("Cache-Control", "max-age=15, public")
 #                self.send_header("ETag", rpath)
             else:
@@ -330,27 +335,33 @@ class MaalstroomDispatcher(object):
                     else:
                         self.write(data)
 
-                    data = data_rw.data_queue.get()
+                    data = yield from queue.get()
 
                     if data is None:
-                        if data_rw.timed_out:
-                            log.warning(\
-                                "Request timed out; closing connection.")
-                            self.close_connection = True
+#                        if data_rw.timed_out:
+#                            log.warning(\
+#                                "Request timed out; closing connection.")
+#                            self.close_connection = True
 
                         if rewrite_urls:
                             self._end_partial_content()
                         else:
                             self.finish_response()
                         break
+                    elif data is Error:
+                        if rewrite_urls:
+                            self._fail_partial_content()
+                        else:
+                            self.close()
+                        break
             except ConnectionError:
                 if log.isEnabledFor(logging.INFO):
                     log.info("Maalstroom request got broken pipe from HTTP"\
                         " side; cancelling.")
-                data_rw.cancelled.set()
+                data_callback.abort = True
 
         else:
-            self._handle_error(data_rw)
+            self.send_error(b"Data not found on network.", 404)
 
     @asyncio.coroutine
     def do_POST(self, rpath):
@@ -580,6 +591,14 @@ class MaalstroomDispatcher(object):
 
         self.flush()
 
+    def _fail_partial_content(self):
+        log.info("Closing chunked response as failed.")
+        self.write(b"1\r\n")
+        self.close()
+
+    def close(self):
+        self.outq.put(maalstroom.Close)
+
     def _end_partial_content(self):
         self.write(b"0\r\n\r\n")
         self.finish_response()
@@ -656,31 +675,46 @@ def _send_store_data(data, data_rw, privatekey=None, path=None, version=None,\
     data_rw.is_done.set()
 
 class Downloader(multipart.DataCallback):
-    def __init__(self, data_rw):
+    def __init__(self, dispatcher, queue):
         super().__init__()
 
-        self.data_rw = data_rw
+        self.queue = queue
+
+        self.version = None
+        self.size = None
+        self.mime_type = None
+
+        self.abort = False
 
     def notify_version(self, version):
-        self.data_rw.version = version
+        self.version = version
 
     def notify_size(self, size):
         if log.isEnabledFor(logging.INFO):
             log.info("Download size=[{}].".format(size))
-        self.data_rw.size = size
+        self.size = size
 
     def notify_mime_type(self, val):
         if log.isEnabledFor(logging.INFO):
             log.info("mime_type=[{}].".format(val))
-        self.data_rw.mime_type = val
+        self.mime_type = val
 
     def notify_data(self, position, data):
-        if self.data_rw.cancelled.is_set():
+        if self.abort:
             return False
 
-        self.data_rw.data_queue.put(data)
+        self.queue.put_nowait(data)
 
         return True
+
+    def notify_finished(self, success):
+        if success:
+            self.queue.put_nowait(None)
+        else:
+            self.queue.put_nowait(Error)
+
+class Error(object):
+    pass
 
 class DataResponseWrapper(object):
     def __init__(self):
