@@ -407,9 +407,15 @@ class MaalstroomDispatcher(object):
         if log.isEnabledFor(logging.DEBUG):
             log.debug("headers=[{}].".format(self.handler.headers))
 
+        version = None
+        path = None
+        mime_type = None
+
         if self.handler.headers["Content-Type"]\
                 == "application/x-www-form-urlencoded":
             log.debug("Content-Type=[application/x-www-form-urlencoded].")
+
+#FIXME: YOU_ARE_HERE
             data = self.rfile.read(int(self.handler.headers["Content-Length"]))
             privatekey = None
         else:
@@ -446,12 +452,9 @@ class MaalstroomDispatcher(object):
             if log.isEnabledFor(logging.INFO):
                 log.info("filename=[{}].".format(filename))
 
-            try:
-                privatekey = form["privateKey"].value
+            privatekey = form["privateKey"].value
 
-                if privatekey == "${PRIVATE_KEY}":
-                    raise KeyError()
-
+            if privatekey and privatekey != "${PRIVATE_KEY}":
                 if log.isEnabledFor(logging.INFO):
                     log.info("privatekey=[{}].".format(privatekey))
 
@@ -466,26 +469,30 @@ class MaalstroomDispatcher(object):
                 else:
                     version = int(version)
                 mime_type = form["mime_type"].value
-            except KeyError:
+            else:
                 privatekey = None
 
         if log.isEnabledFor(logging.DEBUG):
             log.debug("data=[{}].".format(data))
 
-        data_rw = DataResponseWrapper()
+        if not privatekey:
+            assert not version and not path and not mime_type
 
-        if privatekey:
-            node.loop.call_soon_threadsafe(\
-                asyncio.async, _send_store_data(\
-                    data, data_rw, privatekey, path, version, mime_type))
-        else:
-            node.loop.call_soon_threadsafe(\
-                asyncio.async, _send_store_data(data, data_rw))
+        try:
+            key_callback = KeyCallback()
 
-        data_rw.is_done.wait()
+            yield from multipart.store_data(\
+                self.node.chord_engine, data, privatekey=privatekey,\
+                path=path, version=version, key_callback=key_callback,\
+                mime_type=mime_type)
+        except asyncio.TimeoutError:
+            self.send_error(errcode=408)
+        except Exception as e:
+            log.exception("send_store_data(..)")
+            self.send_exception(e)
 
-        if data_rw.data_key:
-            enckey = mbase32.encode(data_rw.data_key)
+        if key_callback.data_key:
+            enckey = mbase32.encode(key_callback.data_key)
             if privatekey and path:
                 url = "{}{}/{}"\
                     .format(\
@@ -502,12 +509,12 @@ class MaalstroomDispatcher(object):
                 message = '<a id="key" href="{}">updateable key link</a>'\
                     .format(url)
 
-                if data_rw.referred_key:
+                if key_callback.referred_key:
                     message +=\
                         '<br/><a id="referred_key" href="{}{}">perma link</a>'\
                             .format(\
                                 self.handler.maalstroom_url_prefix_str,\
-                                mbase32.encode(data_rw.referred_key))
+                                mbase32.encode(key_callback.referred_key))
             else:
                 message = '<a id="key" href="{}">perma link</a>'.format(url)
 
@@ -518,8 +525,6 @@ class MaalstroomDispatcher(object):
 
             self.write(bytes(message, "UTF-8"))
             self.finish_response()
-        else:
-            self._handle_error(data_rw)
 
     def get_accept_charset(self):
         if self._accept_charset:
@@ -687,14 +692,15 @@ class MaalstroomDispatcher(object):
             return
 
 class KeyCallback(multipart.KeyCallback):
-    def __init__(self, data_rw):
-        self.data_rw = data_rw
+    def __init__(self):
+        self.data_key = None
+        self.referred_key = None
 
     def notify_key(self, key):
-        self.data_rw.data_key = key
+        self.data_key = key
 
     def notify_referred_key(self, key):
-        self.data_rw.referred_key = key
+        self.referred_key = key
 
 @asyncio.coroutine
 def _send_store_data(data, data_rw, privatekey=None, path=None, version=None,\
@@ -755,24 +761,3 @@ class Downloader(multipart.DataCallback):
 
 class Error(object):
     pass
-
-class DataResponseWrapper(object):
-    def __init__(self):
-        self.data = None
-        self.size = None
-
-        self.data_key = None
-        self.referred_key = None # If data_key is a link on upload.
-
-        self.path = None
-        self.version = None
-        self.mime_type = None
-
-        self.is_done = Event()
-        self.data_queue = queue.Queue()
-
-        self.exception = None
-        self.timed_out = False
-
-        self.cancelled = Event()
-
