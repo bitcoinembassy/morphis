@@ -31,6 +31,8 @@ static_upload_page_content = [None, None]
 
 update_test = False
 
+req_dict = []
+
 class MaalstroomHandler(BaseHTTPRequestHandler):
     def __init__(self, a, b, c):
         global node

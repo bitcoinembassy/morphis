@@ -1,6 +1,7 @@
 import llog
 
 import asyncio
+import cgi
 import importlib
 import logging
 from threading import Event
@@ -101,7 +102,7 @@ class MaalstroomDispatcher(object):
             content = content.replace(\
                 b"${MORPHIS_VERSION}", version_str.encode())
 
-            self._send_content([content, None])
+            self.send_content([content, None])
             return
 
         if log.isEnabledFor(logging.DEBUG):
@@ -123,11 +124,11 @@ class MaalstroomDispatcher(object):
         assert rpath[0] == '.'
 
         if rpath.startswith(".aiwj"):
-            self._send_content(\
+            self.send_content(\
                 b"AIWJ - Asynchronous IFrames Without Javascript!")
             return
         elif rpath == ".images/favicon.ico":
-            self._send_content(\
+            self.send_content(\
                 templates.favicon_content, content_type="image/png")
             return
         elif rpath.startswith(".upload"):
@@ -163,7 +164,7 @@ class MaalstroomDispatcher(object):
                         b"${STATIC_MODE_DISPLAY}",\
                         b"display: none")
 
-                self._send_content(content)
+                self.send_content(content)
 
             return
         elif rpath.startswith(".dmail"):
@@ -270,6 +271,14 @@ class MaalstroomDispatcher(object):
 
         log.debug("Waiting for first data.")
 
+        #TODO: This can be improved. Right now it causes the response to wait
+        # for the first block of data to be fetched (which could be after a
+        # few hash blocks are fetched) before it allows us to send the headers.
+        # This would cause the browser to report the size rigth away instead of
+        # seeming to take longer. It would require the response to be always be
+        # chunked as we don't know until we get that first data if we are going
+        # to rewrite or not. Such improvement wouldn't increase the speed or
+        # anything so it can wait as it is only cosmetic likely.
         data = yield from queue.get()
 
         if data:
@@ -342,20 +351,15 @@ class MaalstroomDispatcher(object):
             try:
                 while True:
                     if rewrite_urls:
-                        self._send_partial_content(data)
+                        self.send_partial_content(data)
                     else:
                         self.write(data)
 
                     data = yield from queue.get()
 
                     if data is None:
-#                        if data_rw.timed_out:
-#                            log.warning(\
-#                                "Request timed out; closing connection.")
-#                            self.close_connection = True
-
                         if rewrite_urls:
-                            self._end_partial_content()
+                            self.end_partial_content()
                         else:
                             self.finish_response()
                         break
@@ -376,6 +380,8 @@ class MaalstroomDispatcher(object):
 
     @asyncio.coroutine
     def do_POST(self, rpath):
+        self.finished_request = False
+
         if not self.connection_count:
             self.send_error("No connected nodes; cannot upload to the"\
                 " network.")
@@ -515,7 +521,7 @@ class MaalstroomDispatcher(object):
         self.end_headers()
         self.finish_response()
 
-    def _send_content(self, content_entry, cacheable=True, content_type=None):
+    def send_content(self, content_entry, cacheable=True, content_type=None):
         if type(content_entry) in (list, tuple):
             content = content_entry[0]
             content_id = content_entry[1]
@@ -567,7 +573,7 @@ class MaalstroomDispatcher(object):
         self.finish_response()
         return
 
-    def _send_partial_content(self, content, start=False, content_type=None,\
+    def send_partial_content(self, content, start=False, content_type=None,\
             cacheable=False):
         if type(content) is str:
             content = content.encode()
@@ -610,7 +616,7 @@ class MaalstroomDispatcher(object):
     def close(self):
         self.outq.put(maalstroom.Close)
 
-    def _end_partial_content(self):
+    def end_partial_content(self):
         self.write(b"0\r\n\r\n")
         self.finish_response()
 

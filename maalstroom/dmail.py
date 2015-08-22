@@ -32,15 +32,15 @@ def serve_get(handler, rpath):
     log.info("Service .dmail request.")
 
     if len(rpath) == len(s_dmail):
-        handler._send_content(templates.dmail_page_content)
+        handler.send_content(templates.dmail_page_content)
     else:
         req = rpath[len(s_dmail):]
         log.info("req=[{}].".format(req))
         if req == "/css":
-            handler._send_content(\
+            handler.send_content(\
                 templates.dmail_css_content, content_type="text/css")
         elif req == "/address_list":
-            handler._send_partial_content(
+            handler.send_partial_content(
                 templates.dmail_page_content__f1_start, True)
 
             site_keys = yield from _list_dmail_addresses(handler)
@@ -52,14 +52,14 @@ def serve_get(handler, rpath):
                     """ {}</span><br/>"""\
                         .format(site_key_enc, site_key_enc)
 
-                handler._send_partial_content(resp)
+                handler.send_partial_content(resp)
 
-            handler._send_partial_content(templates.dmail_page_content__f1_end)
-            handler._end_partial_content()
+            handler.send_partial_content(templates.dmail_page_content__f1_end)
+            handler.end_partial_content()
         elif req.startswith("/compose/form"):
             dest_addr_enc = req[14:] if len(req) > 14 else ""
 
-            handler._send_partial_content(\
+            handler.send_partial_content(\
                 templates.dmail_compose_dmail_form_start, True)
 
             site_keys = yield from _list_dmail_addresses(handler)
@@ -70,16 +70,16 @@ def serve_get(handler, rpath):
                 sender_element = """<option value="{}">{}</option>"""\
                     .format(dbid, site_key_enc)
 
-                handler._send_partial_content(sender_element)
+                handler.send_partial_content(sender_element)
 
-            handler._send_partial_content(\
+            handler.send_partial_content(\
                 "<option value="">[Anonymous]</option>")
 
-            handler._send_partial_content(\
+            handler.send_partial_content(\
                 templates.dmail_compose_dmail_form_end.replace(\
                     b"${DEST_ADDR}", dest_addr_enc.encode()))
 
-            handler._end_partial_content()
+            handler.end_partial_content()
         elif req.startswith("/compose"):
             from_addr = req[9:] if len(req) > 9 else ""
 
@@ -91,7 +91,7 @@ def serve_get(handler, rpath):
             content = templates.dmail_compose_dmail_content[0].replace(\
                     b"${IFRAME_SRC}", iframe_src)
 
-            handler._send_content([content, None])
+            handler.send_content([content, None])
         elif req.startswith("/addr/view/"):
             addr_enc = req[11:]
 
@@ -100,10 +100,10 @@ def serve_get(handler, rpath):
             start = start.replace(\
                 b"${DMAIL_ADDRESS_SHORT}", addr_enc[:32].encode())
 
-            handler._send_partial_content(start, True)
+            handler.send_partial_content(start, True)
 
-            handler._send_partial_content(templates.dmail_addr_view_end)
-            handler._end_partial_content()
+            handler.send_partial_content(templates.dmail_addr_view_end)
+            handler.end_partial_content()
         elif req.startswith("/addr/settings/edit/publish?"):
             query = req[28:]
 
@@ -158,11 +158,11 @@ def serve_get(handler, rpath):
                 retry += 1
 
             if storing_nodes:
-                handler._send_content(\
+                handler.send_content(\
                     templates.dmail_addr_settings_edit_success_content[0]\
                         .format(addr_enc, addr_enc[:32]).encode())
             else:
-                handler._send_content(\
+                handler.send_content(\
                     templates.dmail_addr_settings_edit_fail_content[0]\
                         .format(addr_enc, addr_enc[:32]).encode())
 
@@ -188,7 +188,7 @@ def serve_get(handler, rpath):
                 b"${TARGET_KEY}",\
                 base58.encode(dmail_address.keys[0].target_key).encode())
 
-            handler._send_content([content, None])
+            handler.send_content([content, None])
         elif req.startswith("/addr/settings/"):
             addr_enc = req[15:]
 
@@ -196,7 +196,7 @@ def serve_get(handler, rpath):
                 b"${IFRAME_SRC}",\
                 "edit/{}".format(addr_enc).encode())
 
-            handler._send_content([content, None])
+            handler.send_content([content, None])
         elif req.startswith("/addr/"):
             addr_enc = req[6:]
 
@@ -206,7 +206,7 @@ def serve_get(handler, rpath):
             content = templates.dmail_address_page_content[0].replace(\
                 b"${IFRAME_SRC}", "view/{}".format(addr_enc).encode())
 
-            handler._send_content([content, None])
+            handler.send_content([content, None])
         elif req.startswith("/tag/view/list/"):
             params = req[15:]
 
@@ -229,7 +229,7 @@ def serve_get(handler, rpath):
 
             acharset = handler.get_accept_charset()
 
-            handler._send_partial_content(\
+            handler.send_partial_content(\
                 start,\
                 True,\
                 content_type="text/html; charset={}".format(acharset))
@@ -237,8 +237,8 @@ def serve_get(handler, rpath):
             yield from\
                 _list_dmails_for_tag(handler, mbase32.decode(addr_enc), tag)
 
-            handler._send_partial_content(templates.dmail_tag_view_list_end)
-            handler._end_partial_content()
+            handler.send_partial_content(templates.dmail_tag_view_list_end)
+            handler.end_partial_content()
 
         elif req.startswith("/tag/view/"):
             params = req[10:]
@@ -246,7 +246,7 @@ def serve_get(handler, rpath):
             content = templates.dmail_tag_view_content[0].replace(\
                 b"${IFRAME_SRC}", "../list/{}".format(params).encode())
 
-            handler._send_content(content)
+            handler.send_content(content)
         elif req.startswith("/scan/list/"):
             addr_enc = req[11:]
 
@@ -259,21 +259,21 @@ def serve_get(handler, rpath):
             start = start.replace(\
                 b"${DMAIL_ADDRESS2}", "{}...".format(addr_enc[:32]).encode())
 
-            handler._send_partial_content(start, True)
+            handler.send_partial_content(start, True)
 
             addr, significant_bits = mutil.decode_key(addr_enc)
 
             yield from _scan_new_dmails(handler, addr, significant_bits)
 
-            handler._send_partial_content(templates.dmail_inbox_end)
-            handler._end_partial_content()
+            handler.send_partial_content(templates.dmail_inbox_end)
+            handler.end_partial_content()
         elif req.startswith("/scan/"):
             addr_enc = req[6:]
 
             content = templates.dmail_address_page_content[0].replace(\
                 b"${IFRAME_SRC}", "list/{}".format(addr_enc).encode())
 
-            handler._send_content([content, None])
+            handler.send_content([content, None])
         elif req.startswith("/fetch/view/"):
             keys = req[12:]
             p0 = keys.index('/')
@@ -295,7 +295,7 @@ def serve_get(handler, rpath):
 
             acharset = handler.get_accept_charset()
 
-            handler._send_content(\
+            handler.send_content(\
                 dmail_text.encode(acharset),
                 content_type="text/plain; charset={}".format(acharset))
         elif req.startswith("/fetch/panel/mark_as_read/"):
@@ -332,7 +332,7 @@ def serve_get(handler, rpath):
             content = templates.dmail_fetch_panel_content[0].replace(\
                 b"${DMAIL_IDS}", req_data.encode())
 
-            handler._send_content([content, None])
+            handler.send_content([content, None])
         elif req.startswith("/fetch/wrapper/"):
             req_data = req[15:]
 
@@ -347,18 +347,18 @@ def serve_get(handler, rpath):
                 "../../panel/{}"\
                     .format(req_data).encode())
 
-            handler._send_content([content, None])
+            handler.send_content([content, None])
         elif req.startswith("/fetch/"):
             req_data = req[7:]
 
             content = templates.dmail_address_page_content[0].replace(\
                 b"${IFRAME_SRC}", "../wrapper/{}".format(req_data).encode())
 
-            handler._send_content([content, None])
+            handler.send_content([content, None])
         elif req == "/create_address":
-            handler._send_content(templates.dmail_create_address_content)
+            handler.send_content(templates.dmail_create_address_content)
         elif req == "/create_address/form":
-            handler._send_content(templates.dmail_create_address_form_content)
+            handler.send_content(templates.dmail_create_address_form_content)
         elif req.startswith("/create_address/make_it_so?"):
             query = req[27:]
 
@@ -373,11 +373,11 @@ def serve_get(handler, rpath):
 
             dmail_key_enc = mbase32.encode(dmail_key)
 
-            handler._send_partial_content(templates.dmail_frame_start, True)
+            handler.send_partial_content(templates.dmail_frame_start, True)
             if storing_nodes:
-                handler._send_partial_content(b"SUCCESS<br/>")
+                handler.send_partial_content(b"SUCCESS<br/>")
             else:
-                handler._send_partial_content(
+                handler.send_partial_content(
                     "PARTIAL SUCCESS<br/>"\
                     "<p>Your Dmail site was generated successfully; however,"\
                     " it failed to be stored on the network. To remedy this,"\
@@ -387,11 +387,11 @@ def serve_get(handler, rpath):
                     " Dmail Site\" button.</p>"\
                         .format(dmail_key_enc).encode())
 
-            handler._send_partial_content(\
+            handler.send_partial_content(\
                 """<p>New dmail address: <a href="../addr/{}">{}</a></p>"""\
                     .format(dmail_key_enc, dmail_key_enc).encode())
-            handler._send_partial_content(templates.dmail_frame_end)
-            handler._end_partial_content()
+            handler.send_partial_content(templates.dmail_frame_end)
+            handler.end_partial_content()
         else:
             handler.send_error(errcode=400)
 
@@ -479,11 +479,11 @@ def serve_post(handler, rpath):
                 content)
 
         if storing_nodes:
-            handler._send_content(\
+            handler.send_content(\
                 "SUCCESS.<br/><p>Dmail successfully sent to: {}</p>"\
                     .format(dest_addr_enc[0]).encode())
         else:
-            handler._send_content(\
+            handler.send_content(\
                 "FAIL.<br/><p>Dmail timed out being stored on the network;"\
                     " please try again.</p>"\
                         .format(dest_addr_enc[0]).encode())
@@ -578,7 +578,7 @@ def _list_dmails_for_tag(handler, addr, tag):
         else:
             sender_key = "Anonymous"
 
-        handler._send_partial_content(\
+        handler.send_partial_content(\
             """<span class="nowrap">{}: <a href="../../../../fetch/{}/{}" title="{}">{}</a>&nbsp;-&nbsp;{}</span><span class="right_text tag">{}</span><br/>"""\
                 .format(\
                     mutil.format_human_no_ms_datetime(msg.date),\
@@ -591,7 +591,7 @@ def _list_dmails_for_tag(handler, addr, tag):
                     is_read))
 
     if not msgs:
-        handler._send_partial_content("Mailbox is empty.")
+        handler.send_partial_content("Mailbox is empty.")
 
 @asyncio.coroutine
 def _scan_new_dmails(handler, addr, significant_bits):
@@ -620,7 +620,7 @@ def _scan_new_dmails(handler, addr, significant_bits):
         yield from _fetch_and_save_dmail(handler, addr, key)
 
         addr_enc = mbase32.encode(addr)
-        handler._send_partial_content(\
+        handler.send_partial_content(\
             """<a href="../../fetch/{}/{}">{}</a><br/>"""\
                 .format(addr_enc, key_enc, key_enc))
 
@@ -635,16 +635,16 @@ def _scan_new_dmails(handler, addr, significant_bits):
         yield from de.scan_dmail_address(\
             addr, significant_bits, key_callback=key_callback)
     except dmail.DmailException as e:
-        handler._send_partial_content("DmailException: {}".format(e))
+        handler.send_partial_content("DmailException: {}".format(e))
 
     if tasks:
         yield from asyncio.wait(tasks, loop=handler.node.loop)
 
     if new_dmail_cnt:
-        handler._send_partial_content("Moved {} Dmails to Inbox."\
+        handler.send_partial_content("Moved {} Dmails to Inbox."\
             .format(new_dmail_cnt))
     else:
-        handler._send_partial_content("No new Dmails.")
+        handler.send_partial_content("No new Dmails.")
 
 @asyncio.coroutine
 def _check_have_dmail(handler, dmail_key):
@@ -826,7 +826,7 @@ def _fetch_dmail(handler, dmail_addr, dmail_key):
         yield from de.fetch_dmail(bytes(dmail_key), x, target_key)
 
     if not dm:
-        handler._send_partial_content(\
+        handler.send_partial_content(\
             "Dmail for key [{}] was not found."\
                 .format(dmail_key_enc))
         return None, None
