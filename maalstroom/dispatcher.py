@@ -131,6 +131,7 @@ class MaalstroomDispatcher(object):
                 self.send_header("Location", "{}".format(priv_key))
                 self.send_header("Content-Length", 0)
                 self.end_headers()
+                self.finish_response()
                 return
 
             if len(rpath) == 7: # len(".upload")
@@ -174,6 +175,7 @@ class MaalstroomDispatcher(object):
                     self.send_header("ETag", rpath)
                 self.send_header("Content-Length", 0)
                 self.end_headers()
+                self.finish_response()
                 return
 
         if not self.connection_count:
