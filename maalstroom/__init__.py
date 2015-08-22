@@ -10,6 +10,7 @@ import importlib
 import logging
 import queue
 from socketserver import ThreadingMixIn
+import threading
 
 import client_engine as cengine
 import enc
@@ -49,8 +50,11 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
         self._inq = asyncio.Queue(loop=self.loop)
         self._outq = queue.Queue()
 
+        self._abort_event = threading.Event()
+
         self._dispatcher =\
-            dispatcher.MaalstroomDispatcher(self, self._inq, self._outq)
+            dispatcher.MaalstroomDispatcher(\
+                self, self._inq, self._outq, self._abort_event)
 
         self._maalstroom_http_url_prefix = "http://{}/"
         self._maalstroom_morphis_url_prefix = "morphis://"
@@ -95,6 +99,8 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
         return rpath
 
     def _prepare_for_request(self):
+        self._abort_event.clear()
+
         if self.headers["X-Maalstroom-Plugin"]:
             self.maalstroom_plugin_used = True
             self.maalstroom_url_prefix_str =\
@@ -155,7 +161,12 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
                 self.close_connection = True
                 break
 
-            self.wfile.write(resp)
+            try:
+                self.wfile.write(resp)
+            except ConnectionError as e:
+                log.warning("Browser broke connection: {}".format(e))
+                self._abort_event.set()
+                break
 
 class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
     daemon_threads = True

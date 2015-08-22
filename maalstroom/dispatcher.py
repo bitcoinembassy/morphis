@@ -22,7 +22,7 @@ import rsakey
 log = logging.getLogger(__name__)
 
 class MaalstroomDispatcher(object):
-    def __init__(self, handler, inq, outq):
+    def __init__(self, handler, inq, outq, abort_event):
         self.node = handler.node
         self.handler = handler
 
@@ -31,9 +31,10 @@ class MaalstroomDispatcher(object):
         self.inq = inq
         self.outq = outq
 
-        self._accept_charset = None
-
         self.finished_request = False
+
+        self._abort_event = abort_event
+        self._accept_charset = None
 
     @property
     def connection_count(self):
@@ -259,6 +260,7 @@ class MaalstroomDispatcher(object):
 
         queue = asyncio.Queue(loop=self.loop)
 
+        # Start the download.
         try:
             data_callback = Downloader(self, queue)
 
@@ -349,38 +351,41 @@ class MaalstroomDispatcher(object):
 
             self.end_headers()
 
-            try:
-                while True:
+            while True:
+                if rewrite_urls:
+                    self.send_partial_content(data)
+                else:
+                    self.write(data)
+
+                data = yield from queue.get()
+
+                if data is None:
                     if rewrite_urls:
-                        self.send_partial_content(data)
+                        self.end_partial_content()
                     else:
-                        self.write(data)
+                        self.finish_response()
+                    break
+                elif data is Error:
+                    if rewrite_urls:
+                        self._fail_partial_content()
+                    else:
+                        self.close()
+                    break
 
-                    data = yield from queue.get()
-
-                    if data is None:
-                        if rewrite_urls:
-                            self.end_partial_content()
-                        else:
-                            self.finish_response()
-                        break
-                    elif data is Error:
-                        if rewrite_urls:
-                            self._fail_partial_content()
-                        else:
-                            self.close()
-                        break
-            except ConnectionError:
-                if log.isEnabledFor(logging.INFO):
-                    log.info("Maalstroom request got broken pipe from HTTP"\
-                        " side; cancelling.")
-                data_callback.abort = True
-
+                if self._abort_event.is_set():
+                    if log.isEnabledFor(logging.INFO):
+                        log.info(\
+                            "Maalstroom request got broken pipe from HTTP"\
+                            " side; cancelling.")
+                    data_callback.abort = True
+                    break
         else:
             self.send_error(b"Data not found on network.", 404)
 
     @asyncio.coroutine
     def do_POST(self, rpath):
+        self.finished_request = False
+
         try:
             yield from self._do_POST(rpath)
         except KeyboardInterrupt:
@@ -389,10 +394,12 @@ class MaalstroomDispatcher(object):
             log.exception(e)
             self.send_exception(e)
 
+        if not self.finished_request:
+            log.warning("Request (rpath=[{}]) finished without calling"\
+                " finish_response()!".format(rpath))
+
     @asyncio.coroutine
     def _do_POST(self, rpath):
-        self.finished_request = False
-
         if not self.connection_count:
             self.send_error("No connected nodes; cannot upload to the"\
                 " network.")
@@ -688,12 +695,8 @@ class MaalstroomDispatcher(object):
 
         self.send_header("Content-Length", len(errmsg))
         self.end_headers()
-        try:
-            self.write(errmsg)
-            self.finish_response()
-        except ConnectionError:
-            log.info("HTTP client aborted request connection.")
-            return
+        self.write(errmsg)
+        self.finish_response()
 
 class KeyCallback(multipart.KeyCallback):
     def __init__(self):
