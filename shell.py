@@ -650,9 +650,11 @@ class Shell(cmd.Cmd):
 
         engine = self.peer.engine
 
-        self.writeln("Node:\n\tid=[{}]\n\tbind_port=[{}]\n\tconnections={}"\
-            .format(mbase32.encode(engine.node_id), engine._bind_port,
-                len(engine.peers)))
+        self.writeln("Node:\n\tversion=[{}]\n\tid=[{}]\n\tbind_port=[{}]\n"\
+            "\tconnections={}"\
+                .format(engine.node.morphis_version,\
+                    mbase32.encode(engine.node_id), engine._bind_port,\
+                    len(engine.peers)))
 
     @asyncio.coroutine
     def do_time(self, arg):

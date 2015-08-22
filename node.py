@@ -220,7 +220,8 @@ class Node():
         self.ready.set()
 
     def stop(self):
-        self.chord_engine.stop()
+        if self.chord_engine:
+            self.chord_engine.stop()
 
     def load_key(self):
         self.node_key = self._load_key()
@@ -267,7 +268,7 @@ def main():
     loop.close()
 
     if maalstroom_enabled:
-        import maalstroom_server as maalstroom
+        import maalstroom
         maalstroom.shutdown()
 
     log.info("Shutdown.")
@@ -409,7 +410,7 @@ def __main():
                 node.db.pool_size = db_pool_size
 
             if maalstroom_enabled:
-                import maalstroom_server as maalstroom
+                import maalstroom
 
                 if maaluppage:
                     maalstroom.set_upload_page(maaluppage)

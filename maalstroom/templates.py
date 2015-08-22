@@ -5,7 +5,7 @@
 home_page_content = [\
     b"""<!DOCTYPE html>
 <html><head><title>ALL TOGETHER NOW WE SING IN UNISON - MORPHiS Maalstroom UI</title>
-<link rel="icon" type="image/png" href="/images/favicon.ico"/>
+<link rel="icon" type="image/png" href="/.images/favicon.ico"/>
 <link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/>
 <style type="text/css">
     div.msection {
