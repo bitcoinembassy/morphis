@@ -3,6 +3,7 @@ import llog
 import asyncio
 import cgi
 import importlib
+import io
 import logging
 from threading import Event
 import time
@@ -380,6 +381,16 @@ class MaalstroomDispatcher(object):
 
     @asyncio.coroutine
     def do_POST(self, rpath):
+        try:
+            yield from self._do_POST(rpath)
+        except KeyboardInterrupt:
+            raise
+        except Exception as e:
+            log.exception(e)
+            self.send_exception(e)
+
+    @asyncio.coroutine
+    def _do_POST(self, rpath):
         self.finished_request = False
 
         if not self.connection_count:
@@ -394,7 +405,7 @@ class MaalstroomDispatcher(object):
             return
 
         if log.isEnabledFor(logging.DEBUG):
-            log.info(self.handler.headers)
+            log.debug("headers=[{}].".format(self.handler.headers))
 
         if self.handler.headers["Content-Type"]\
                 == "application/x-www-form-urlencoded":
@@ -404,10 +415,22 @@ class MaalstroomDispatcher(object):
         else:
             if log.isEnabledFor(logging.DEBUG):
                 log.debug("Content-Type=[{}]."\
-                    .format(self.headers["Content-Type"]))
+                    .format(self.handler.headers["Content-Type"]))
+
+            #TODO: Improve this to stream input, but multipart.py needs to be
+            # improved to handle a stream as input for uploads as well.
+            datas = []
+            inq = self.inq
+            while True:
+                data = yield from inq.get()
+                if not data:
+                    break;
+                datas.append(data)
+
+            data = b''.join(datas)
 
             form = cgi.FieldStorage(\
-                fp=self.rfile,\
+                fp=io.BytesIO(data),\
                 headers=self.handler.headers,\
                 environ={\
                     "REQUEST_METHOD": "POST",\
@@ -631,7 +654,7 @@ class MaalstroomDispatcher(object):
 
     def send_exception(self, exception, errcode=500):
         self.send_error(\
-            errmsg=str("{}: {}".format(type(exception).__name__, exception)),\
+            str("{}: {}".format(type(exception).__name__, exception)),\
             errcode=errcode)
 
     def send_error(self, msg=None, errcode=500):

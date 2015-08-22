@@ -4,6 +4,7 @@
 import llog
 
 import asyncio
+import functools
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import importlib
 import logging
@@ -44,7 +45,8 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
         self.maalstroom_url_prefix = None
         self.maalstroom_url_prefix_str = None
 
-        self._inq = queue.Queue(1)
+#        self._inq = queue.Queue()
+        self._inq = asyncio.Queue(loop=self.loop)
         self._outq = queue.Queue()
 
         self._dispatcher =\
@@ -74,9 +76,10 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
             asyncio.async,\
             self._dispatcher.do_POST(self._get_rpath()))
 
-        #TODO: YOU_ARE_HERE: Read from in and send to inq while checking an\
-        # abort event.
+        log.warning("Reading request.")
+        self._read_request()
 
+        log.warning("Writing response.")
         self._write_response()
 
     def log_message(self, mformat, *args):
@@ -115,6 +118,27 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
             importlib.reload(maalstroom.templates)
             importlib.reload(maalstroom.dispatcher)
             importlib.reload(maalstroom.dmail)
+
+    def _read_request(self):
+        inq = self._inq
+        loop = self.loop
+
+        rlen = int(self.headers["Content-Length"])
+
+        while rlen:
+            data = self.rfile.read(min(rlen, 65536))
+            self.loop.call_soon_threadsafe(\
+                functools.partial(\
+                    asyncio.async,\
+                    inq.put(data),\
+                    loop=self.loop))
+            rlen -= len(data)
+
+        self.loop.call_soon_threadsafe(\
+            functools.partial(\
+                asyncio.async,\
+                inq.put(None),\
+                loop=self.loop))
 
     def _write_response(self):
         outq = self._outq
