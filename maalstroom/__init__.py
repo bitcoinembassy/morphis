@@ -52,9 +52,7 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
 
         self._abort_event = threading.Event()
 
-        self._dispatcher =\
-            dispatcher.MaalstroomDispatcher(\
-                self, self._inq, self._outq, self._abort_event)
+        self._dispatcher = self._create_dispatcher()
 
         self._maalstroom_http_url_prefix = "http://{}/"
         self._maalstroom_morphis_url_prefix = "morphis://"
@@ -90,13 +88,9 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
         if log.isEnabledFor(logging.INFO):
             log.info("{}: {}".format(self.address_string(), args))
 
-    def _get_rpath(self):
-        rpath = self.path[1:]
-
-        if rpath and rpath[-1] == '/':
-            rpath = rpath[:-1]
-
-        return rpath
+    def _create_dispatcher(self):
+        return dispatcher.MaalstroomDispatcher(\
+            self, self._inq, self._outq, self._abort_event)
 
     def _prepare_for_request(self):
         self._abort_event.clear()
@@ -124,6 +118,16 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
             importlib.reload(maalstroom.templates)
             importlib.reload(maalstroom.dispatcher)
             importlib.reload(maalstroom.dmail)
+
+            self._dispatcher = self._create_dispatcher()
+
+    def _get_rpath(self):
+        rpath = self.path[1:]
+
+        if rpath and rpath[-1] == '/':
+            rpath = rpath[:-1]
+
+        return rpath
 
     def _read_request(self):
         inq = self._inq
