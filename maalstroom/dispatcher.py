@@ -423,17 +423,7 @@ class MaalstroomDispatcher(object):
                 log.debug("Content-Type=[{}]."\
                     .format(self.handler.headers["Content-Type"]))
 
-            #TODO: Improve this to stream input, but multipart.py needs to be
-            # improved to handle a stream as input for uploads as well.
-            datas = []
-            inq = self.inq
-            while True:
-                data = yield from inq.get()
-                if not data:
-                    break;
-                datas.append(data)
-
-            data = b''.join(datas)
+            data = yield from self.read_request()
 
             form = cgi.FieldStorage(\
                 fp=io.BytesIO(data),\
@@ -525,6 +515,20 @@ class MaalstroomDispatcher(object):
 
             self.write(bytes(message, "UTF-8"))
             self.finish_response()
+
+    @asyncio.coroutine
+    def read_request(self):
+        #TODO: Improve this to stream input, but multipart.py needs to be
+        # improved to handle a stream as input for uploads as well.
+        datas = []
+        inq = self.inq
+        while True:
+            data = yield from inq.get()
+            if not data:
+                break;
+            datas.append(data)
+
+        return b''.join(datas)
 
     def get_accept_charset(self):
         if self._accept_charset:

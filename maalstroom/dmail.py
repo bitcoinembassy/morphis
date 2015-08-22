@@ -28,22 +28,22 @@ log = logging.getLogger(__name__)
 s_dmail = ".dmail"
 
 @asyncio.coroutine
-def serve_get(handler, rpath):
+def serve_get(dispatcher, rpath):
     log.info("Service .dmail request.")
 
     if len(rpath) == len(s_dmail):
-        handler.send_content(templates.dmail_page_content)
+        dispatcher.send_content(templates.dmail_page_content)
     else:
         req = rpath[len(s_dmail):]
         log.info("req=[{}].".format(req))
         if req == "/css":
-            handler.send_content(\
+            dispatcher.send_content(\
                 templates.dmail_css_content, content_type="text/css")
         elif req == "/address_list":
-            handler.send_partial_content(
+            dispatcher.send_partial_content(
                 templates.dmail_page_content__f1_start, True)
 
-            site_keys = yield from _list_dmail_addresses(handler)
+            site_keys = yield from _list_dmail_addresses(dispatcher)
 
             for dbid, site_key in site_keys:
                 site_key_enc = mbase32.encode(site_key)
@@ -52,17 +52,18 @@ def serve_get(handler, rpath):
                     """ {}</span><br/>"""\
                         .format(site_key_enc, site_key_enc)
 
-                handler.send_partial_content(resp)
+                dispatcher.send_partial_content(resp)
 
-            handler.send_partial_content(templates.dmail_page_content__f1_end)
-            handler.end_partial_content()
+            dispatcher.send_partial_content(\
+                templates.dmail_page_content__f1_end)
+            dispatcher.end_partial_content()
         elif req.startswith("/compose/form"):
             dest_addr_enc = req[14:] if len(req) > 14 else ""
 
-            handler.send_partial_content(\
+            dispatcher.send_partial_content(\
                 templates.dmail_compose_dmail_form_start, True)
 
-            site_keys = yield from _list_dmail_addresses(handler)
+            site_keys = yield from _list_dmail_addresses(dispatcher)
 
             for dbid, site_key in site_keys:
                 site_key_enc = mbase32.encode(site_key)
@@ -70,16 +71,16 @@ def serve_get(handler, rpath):
                 sender_element = """<option value="{}">{}</option>"""\
                     .format(dbid, site_key_enc)
 
-                handler.send_partial_content(sender_element)
+                dispatcher.send_partial_content(sender_element)
 
-            handler.send_partial_content(\
+            dispatcher.send_partial_content(\
                 "<option value="">[Anonymous]</option>")
 
-            handler.send_partial_content(\
+            dispatcher.send_partial_content(\
                 templates.dmail_compose_dmail_form_end.replace(\
                     b"${DEST_ADDR}", dest_addr_enc.encode()))
 
-            handler.end_partial_content()
+            dispatcher.end_partial_content()
         elif req.startswith("/compose"):
             from_addr = req[9:] if len(req) > 9 else ""
 
@@ -91,7 +92,7 @@ def serve_get(handler, rpath):
             content = templates.dmail_compose_dmail_content[0].replace(\
                     b"${IFRAME_SRC}", iframe_src)
 
-            handler.send_content([content, None])
+            dispatcher.send_content([content, None])
         elif req.startswith("/addr/view/"):
             addr_enc = req[11:]
 
@@ -100,10 +101,10 @@ def serve_get(handler, rpath):
             start = start.replace(\
                 b"${DMAIL_ADDRESS_SHORT}", addr_enc[:32].encode())
 
-            handler.send_partial_content(start, True)
+            dispatcher.send_partial_content(start, True)
 
-            handler.send_partial_content(templates.dmail_addr_view_end)
-            handler.end_partial_content()
+            dispatcher.send_partial_content(templates.dmail_addr_view_end)
+            dispatcher.end_partial_content()
         elif req.startswith("/addr/settings/edit/publish?"):
             query = req[28:]
 
@@ -121,7 +122,7 @@ def serve_get(handler, rpath):
 
             dmail_address = yield from\
                 _process_dmail_address(\
-                    handler, mbase32.decode(addr_enc), processor)
+                    dispatcher, mbase32.decode(addr_enc), processor)
 
             dh = dhgroup14.DhGroup14()
             dh.x = sshtype.parseMpint(dmail_address.keys[0].x)[1]
@@ -141,9 +142,10 @@ def serve_get(handler, rpath):
             retry = 0
             while True:
                 storing_nodes = yield from\
-                    handler.node.chord_engine.tasks.send_store_updateable_key(\
-                        dms.export(), private_key,\
-                        version=int(time.time()*1000), store_key=True)
+                    dispatcher.node.chord_engine.tasks\
+                        .send_store_updateable_key(\
+                            dms.export(), private_key,\
+                            version=int(time.time()*1000), store_key=True)
 
                 total_storing += storing_nodes
 
@@ -158,11 +160,11 @@ def serve_get(handler, rpath):
                 retry += 1
 
             if storing_nodes:
-                handler.send_content(\
+                dispatcher.send_content(\
                     templates.dmail_addr_settings_edit_success_content[0]\
                         .format(addr_enc, addr_enc[:32]).encode())
             else:
-                handler.send_content(\
+                dispatcher.send_content(\
                     templates.dmail_addr_settings_edit_fail_content[0]\
                         .format(addr_enc, addr_enc[:32]).encode())
 
@@ -170,7 +172,7 @@ def serve_get(handler, rpath):
             addr_enc = req[20:]
 
             dmail_address = yield from\
-                _load_dmail_address(handler, mbase32.decode(addr_enc))
+                _load_dmail_address(dispatcher, mbase32.decode(addr_enc))
 
             content = templates.dmail_addr_settings_edit_content[0].replace(\
                 b"${DIFFICULTY}",\
@@ -188,7 +190,7 @@ def serve_get(handler, rpath):
                 b"${TARGET_KEY}",\
                 base58.encode(dmail_address.keys[0].target_key).encode())
 
-            handler.send_content([content, None])
+            dispatcher.send_content([content, None])
         elif req.startswith("/addr/settings/"):
             addr_enc = req[15:]
 
@@ -196,7 +198,7 @@ def serve_get(handler, rpath):
                 b"${IFRAME_SRC}",\
                 "edit/{}".format(addr_enc).encode())
 
-            handler.send_content([content, None])
+            dispatcher.send_content([content, None])
         elif req.startswith("/addr/"):
             addr_enc = req[6:]
 
@@ -206,7 +208,7 @@ def serve_get(handler, rpath):
             content = templates.dmail_address_page_content[0].replace(\
                 b"${IFRAME_SRC}", "view/{}".format(addr_enc).encode())
 
-            handler.send_content([content, None])
+            dispatcher.send_content([content, None])
         elif req.startswith("/tag/view/list/"):
             params = req[15:]
 
@@ -227,18 +229,18 @@ def serve_get(handler, rpath):
                 b"${DMAIL_ADDRESS2}",\
                 "{}...".format(addr_enc[:32]).encode())
 
-            acharset = handler.get_accept_charset()
+            acharset = dispatcher.get_accept_charset()
 
-            handler.send_partial_content(\
+            dispatcher.send_partial_content(\
                 start,\
                 True,\
                 content_type="text/html; charset={}".format(acharset))
 
             yield from\
-                _list_dmails_for_tag(handler, mbase32.decode(addr_enc), tag)
+                _list_dmails_for_tag(dispatcher, mbase32.decode(addr_enc), tag)
 
-            handler.send_partial_content(templates.dmail_tag_view_list_end)
-            handler.end_partial_content()
+            dispatcher.send_partial_content(templates.dmail_tag_view_list_end)
+            dispatcher.end_partial_content()
 
         elif req.startswith("/tag/view/"):
             params = req[10:]
@@ -246,7 +248,7 @@ def serve_get(handler, rpath):
             content = templates.dmail_tag_view_content[0].replace(\
                 b"${IFRAME_SRC}", "../list/{}".format(params).encode())
 
-            handler.send_content(content)
+            dispatcher.send_content(content)
         elif req.startswith("/scan/list/"):
             addr_enc = req[11:]
 
@@ -259,21 +261,21 @@ def serve_get(handler, rpath):
             start = start.replace(\
                 b"${DMAIL_ADDRESS2}", "{}...".format(addr_enc[:32]).encode())
 
-            handler.send_partial_content(start, True)
+            dispatcher.send_partial_content(start, True)
 
             addr, significant_bits = mutil.decode_key(addr_enc)
 
-            yield from _scan_new_dmails(handler, addr, significant_bits)
+            yield from _scan_new_dmails(dispatcher, addr, significant_bits)
 
-            handler.send_partial_content(templates.dmail_inbox_end)
-            handler.end_partial_content()
+            dispatcher.send_partial_content(templates.dmail_inbox_end)
+            dispatcher.end_partial_content()
         elif req.startswith("/scan/"):
             addr_enc = req[6:]
 
             content = templates.dmail_address_page_content[0].replace(\
                 b"${IFRAME_SRC}", "list/{}".format(addr_enc).encode())
 
-            handler.send_content([content, None])
+            dispatcher.send_content([content, None])
         elif req.startswith("/fetch/view/"):
             keys = req[12:]
             p0 = keys.index('/')
@@ -283,19 +285,19 @@ def serve_get(handler, rpath):
             dmail_addr = mbase32.decode(dmail_addr_enc)
             dmail_key = mbase32.decode(dmail_key_enc)
 
-            dm = yield from _load_dmail(handler, dmail_key)
+            dm = yield from _load_dmail(dispatcher, dmail_key)
 
             if dm:
                 valid_sig = dm.sender_valid
             else:
                 dm, valid_sig =\
-                    yield from _fetch_dmail(handler, dmail_addr, dmail_key)
+                    yield from _fetch_dmail(dispatcher, dmail_addr, dmail_key)
 
             dmail_text = _format_dmail(dm, valid_sig)
 
-            acharset = handler.get_accept_charset()
+            acharset = dispatcher.get_accept_charset()
 
-            handler.send_content(\
+            dispatcher.send_content(\
                 dmail_text.encode(acharset),
                 content_type="text/plain; charset={}".format(acharset))
         elif req.startswith("/fetch/panel/mark_as_read/"):
@@ -309,9 +311,9 @@ def serve_get(handler, rpath):
                 dmail.read = not dmail.read
                 return True
 
-            yield from _process_dmail_message(handler, dmail_key, processor)
+            yield from _process_dmail_message(dispatcher, dmail_key, processor)
 
-            handler._send_204()
+            dispatcher._send_204()
         elif req.startswith("/fetch/panel/trash/"):
             req_data = req[20:]
 
@@ -323,16 +325,16 @@ def serve_get(handler, rpath):
                 dmail.hidden = not dmail.hidden
                 return True
 
-            yield from _process_dmail_message(handler, dmail_key, processor)
+            yield from _process_dmail_message(dispatcher, dmail_key, processor)
 
-            handler._send_204()
+            dispatcher._send_204()
         elif req.startswith("/fetch/panel/"):
             req_data = req[13:]
 
             content = templates.dmail_fetch_panel_content[0].replace(\
                 b"${DMAIL_IDS}", req_data.encode())
 
-            handler.send_content([content, None])
+            dispatcher.send_content([content, None])
         elif req.startswith("/fetch/wrapper/"):
             req_data = req[15:]
 
@@ -347,18 +349,18 @@ def serve_get(handler, rpath):
                 "../../panel/{}"\
                     .format(req_data).encode())
 
-            handler.send_content([content, None])
+            dispatcher.send_content([content, None])
         elif req.startswith("/fetch/"):
             req_data = req[7:]
 
             content = templates.dmail_address_page_content[0].replace(\
                 b"${IFRAME_SRC}", "../wrapper/{}".format(req_data).encode())
 
-            handler.send_content([content, None])
+            dispatcher.send_content([content, None])
         elif req == "/create_address":
-            handler.send_content(templates.dmail_create_address_content)
+            dispatcher.send_content(templates.dmail_create_address_content)
         elif req == "/create_address/form":
-            handler.send_content(templates.dmail_create_address_form_content)
+            dispatcher.send_content(templates.dmail_create_address_form_content)
         elif req.startswith("/create_address/make_it_so?"):
             query = req[27:]
 
@@ -369,15 +371,16 @@ def serve_get(handler, rpath):
 
             log.info("prefix=[{}].".format(prefix))
             privkey, dmail_key, dms, storing_nodes =\
-                yield from _create_dmail_address(handler, prefix, difficulty)
+                yield from\
+                    _create_dmail_address(dispatcher, prefix, difficulty)
 
             dmail_key_enc = mbase32.encode(dmail_key)
 
-            handler.send_partial_content(templates.dmail_frame_start, True)
+            dispatcher.send_partial_content(templates.dmail_frame_start, True)
             if storing_nodes:
-                handler.send_partial_content(b"SUCCESS<br/>")
+                dispatcher.send_partial_content(b"SUCCESS<br/>")
             else:
-                handler.send_partial_content(
+                dispatcher.send_partial_content(
                     "PARTIAL SUCCESS<br/>"\
                     "<p>Your Dmail site was generated successfully; however,"\
                     " it failed to be stored on the network. To remedy this,"\
@@ -387,27 +390,27 @@ def serve_get(handler, rpath):
                     " Dmail Site\" button.</p>"\
                         .format(dmail_key_enc).encode())
 
-            handler.send_partial_content(\
+            dispatcher.send_partial_content(\
                 """<p>New dmail address: <a href="../addr/{}">{}</a></p>"""\
                     .format(dmail_key_enc, dmail_key_enc).encode())
-            handler.send_partial_content(templates.dmail_frame_end)
-            handler.end_partial_content()
+            dispatcher.send_partial_content(templates.dmail_frame_end)
+            dispatcher.end_partial_content()
         else:
-            handler.send_error(errcode=400)
+            dispatcher.send_error(errcode=400)
 
 @asyncio.coroutine
-def serve_post(handler, rpath):
+def serve_post(dispatcher, rpath):
     assert rpath.startswith(s_dmail)
 
     req = rpath[len(s_dmail):]
 
     if req == "/compose/make_it_so":
-        data = handler.rfile.read(int(handler.headers["Content-Length"]))
+        data = yield from dispatcher.read_request()
 
         if log.isEnabledFor(logging.DEBUG):
             log.debug("data=[{}].".format(data))
 
-        charset = handler.headers["Content-Type"]
+        charset = dispatcher.handler.headers["Content-Type"]
         if charset:
             p0 = charset.find("charset=")
             if p0 > -1:
@@ -446,7 +449,7 @@ def serve_post(handler, rpath):
                 log.debug("sender_dmail_id=[{}].".format(sender_dmail_id))
 
             dmail_address =\
-                yield from _fetch_dmail_address(handler, sender_dmail_id)
+                yield from _fetch_dmail_address(dispatcher, sender_dmail_id)
 
             sender_asymkey = rsakey.RsaKey(\
                 privdata=dmail_address.site_privatekey)\
@@ -456,7 +459,7 @@ def serve_post(handler, rpath):
 
         dest_addr_enc = dd.get("destination")
         if not dest_addr_enc[0]:
-            handler.send_error("You must specify a destination.", 400)
+            dispatcher.send_error("You must specify a destination.", 400)
             return
 
         recipient, significant_bits =\
@@ -468,7 +471,8 @@ def serve_post(handler, rpath):
             content = content[0]
 
         de =\
-            dmail.DmailEngine(handler.node.chord_engine.tasks, handler.node.db)
+            dmail.DmailEngine(\
+                dispatcher.node.chord_engine.tasks, dispatcher.node.db)
 
         storing_nodes =\
             yield from de.send_dmail(\
@@ -479,24 +483,24 @@ def serve_post(handler, rpath):
                 content)
 
         if storing_nodes:
-            handler.send_content(\
+            dispatcher.send_content(\
                 "SUCCESS.<br/><p>Dmail successfully sent to: {}</p>"\
                     .format(dest_addr_enc[0]).encode())
         else:
-            handler.send_content(\
+            dispatcher.send_content(\
                 "FAIL.<br/><p>Dmail timed out being stored on the network;"\
                     " please try again.</p>"\
                         .format(dest_addr_enc[0]).encode())
 
     else:
-        handler.send_error(errcode=400)
+        dispatcher.send_error(errcode=400)
 
 @asyncio.coroutine
-def _fetch_dmail_address(handler, dmail_address_id):
+def _fetch_dmail_address(dispatcher, dmail_address_id):
     "Fetch from our database the parameters that are stored in a DMail site."
 
     def dbcall():
-        with handler.node.db.open_session() as sess:
+        with dispatcher.node.db.open_session() as sess:
             q = sess.query(DmailAddress)\
                 .filter(DmailAddress.id == dmail_address_id)
 
@@ -509,14 +513,14 @@ def _fetch_dmail_address(handler, dmail_address_id):
 
             return dmailaddr
 
-    dmailaddr = yield from handler.node.loop.run_in_executor(None, dbcall)
+    dmailaddr = yield from dispatcher.node.loop.run_in_executor(None, dbcall)
 
     return dmailaddr
 
 @asyncio.coroutine
-def _list_dmail_addresses(handler):
+def _list_dmail_addresses(dispatcher):
     def dbcall():
-        with handler.node.db.open_session() as sess:
+        with dispatcher.node.db.open_session() as sess:
             q = sess.query(DmailAddress)
 
             log.info("Fetching addresses...")
@@ -530,14 +534,14 @@ def _list_dmail_addresses(handler):
 
             return site_keys
 
-    site_keys = yield from handler.node.loop.run_in_executor(None, dbcall)
+    site_keys = yield from dispatcher.node.loop.run_in_executor(None, dbcall)
 
     return site_keys
 
 @asyncio.coroutine
-def _list_dmails_for_tag(handler, addr, tag):
+def _list_dmails_for_tag(dispatcher, addr, tag):
     def dbcall():
-        with handler.node.db.open_session() as sess:
+        with dispatcher.node.db.open_session() as sess:
             q = sess.query(DmailMessage)\
                 .filter(\
                     DmailMessage.address.has(DmailAddress.site_key == addr))\
@@ -551,7 +555,7 @@ def _list_dmails_for_tag(handler, addr, tag):
 
             return msgs
 
-    msgs = yield from handler.node.loop.run_in_executor(None, dbcall)
+    msgs = yield from dispatcher.node.loop.run_in_executor(None, dbcall)
 
     addr_enc = mbase32.encode(addr)
 
@@ -578,7 +582,7 @@ def _list_dmails_for_tag(handler, addr, tag):
         else:
             sender_key = "Anonymous"
 
-        handler.send_partial_content(\
+        dispatcher.send_partial_content(\
             """<span class="nowrap">{}: <a href="../../../../fetch/{}/{}" title="{}">{}</a>&nbsp;-&nbsp;{}</span><span class="right_text tag">{}</span><br/>"""\
                 .format(\
                     mutil.format_human_no_ms_datetime(msg.date),\
@@ -591,12 +595,13 @@ def _list_dmails_for_tag(handler, addr, tag):
                     is_read))
 
     if not msgs:
-        handler.send_partial_content("Mailbox is empty.")
+        dispatcher.send_partial_content("Mailbox is empty.")
 
 @asyncio.coroutine
-def _scan_new_dmails(handler, addr, significant_bits):
+def _scan_new_dmails(dispatcher, addr, significant_bits):
     de =\
-        dmail.DmailEngine(handler.node.chord_engine.tasks, handler.node.db)
+        dmail.DmailEngine(\
+            dispatcher.node.chord_engine.tasks, dispatcher.node.db)
 
     new_dmail_cnt = 0
 
@@ -604,7 +609,7 @@ def _scan_new_dmails(handler, addr, significant_bits):
     def process_key(key):
         nonlocal new_dmail_cnt
 
-        exists = yield from _check_have_dmail(handler, key)
+        exists = yield from _check_have_dmail(dispatcher, key)
 
         key_enc = mbase32.encode(key)
 
@@ -617,10 +622,10 @@ def _scan_new_dmails(handler, addr, significant_bits):
                     .format(key_enc))
             return
 
-        yield from _fetch_and_save_dmail(handler, addr, key)
+        yield from _fetch_and_save_dmail(dispatcher, addr, key)
 
         addr_enc = mbase32.encode(addr)
-        handler.send_partial_content(\
+        dispatcher.send_partial_content(\
             """<a href="../../fetch/{}/{}">{}</a><br/>"""\
                 .format(addr_enc, key_enc, key_enc))
 
@@ -629,27 +634,28 @@ def _scan_new_dmails(handler, addr, significant_bits):
     tasks = []
 
     def key_callback(key):
-        tasks.append(asyncio.async(process_key(key), loop=handler.node.loop))
+        tasks.append(\
+            asyncio.async(process_key(key), loop=dispatcher.node.loop))
 
     try:
         yield from de.scan_dmail_address(\
             addr, significant_bits, key_callback=key_callback)
     except dmail.DmailException as e:
-        handler.send_partial_content("DmailException: {}".format(e))
+        dispatcher.send_partial_content("DmailException: {}".format(e))
 
     if tasks:
-        yield from asyncio.wait(tasks, loop=handler.node.loop)
+        yield from asyncio.wait(tasks, loop=dispatcher.node.loop)
 
     if new_dmail_cnt:
-        handler.send_partial_content("Moved {} Dmails to Inbox."\
+        dispatcher.send_partial_content("Moved {} Dmails to Inbox."\
             .format(new_dmail_cnt))
     else:
-        handler.send_partial_content("No new Dmails.")
+        dispatcher.send_partial_content("No new Dmails.")
 
 @asyncio.coroutine
-def _check_have_dmail(handler, dmail_key):
+def _check_have_dmail(dispatcher, dmail_key):
     def dbcall():
-        with handler.node.db.open_session() as sess:
+        with dispatcher.node.db.open_session() as sess:
             q = sess.query(func.count("*"))\
                 .filter(DmailMessage.data_key == dmail_key)
 
@@ -657,13 +663,13 @@ def _check_have_dmail(handler, dmail_key):
                 return True
             return False
 
-    exists = yield from handler.node.loop.run_in_executor(None, dbcall)
+    exists = yield from dispatcher.node.loop.run_in_executor(None, dbcall)
     return exists
 
 @asyncio.coroutine
-def _fetch_and_save_dmail(handler, dmail_addr, dmail_key):
+def _fetch_and_save_dmail(dispatcher, dmail_addr, dmail_key):
     dmailobj, valid_sig =\
-        yield from _fetch_dmail(handler, dmail_addr, dmail_key)
+        yield from _fetch_dmail(dispatcher, dmail_addr, dmail_key)
 
     if not dmailobj:
         if log.isEnabledFor(logging.INFO):
@@ -671,8 +677,8 @@ def _fetch_and_save_dmail(handler, dmail_addr, dmail_key):
         return
 
     def dbcall():
-        with handler.node.db.open_session() as sess:
-            handler.node.db.lock_table(sess, DmailMessage)
+        with dispatcher.node.db.open_session() as sess:
+            dispatcher.node.db.lock_table(sess, DmailMessage)
 
             q = sess.query(func.count("*"))\
                 .filter(DmailMessage.data_key == dmail_key)
@@ -714,7 +720,7 @@ def _fetch_and_save_dmail(handler, dmail_addr, dmail_key):
 
             sess.commit()
 
-    yield from handler.node.loop.run_in_executor(None, dbcall)
+    yield from dispatcher.node.loop.run_in_executor(None, dbcall)
 
     if log.isEnabledFor(logging.INFO):
         log.info("Dmail saved!")
@@ -722,9 +728,9 @@ def _fetch_and_save_dmail(handler, dmail_addr, dmail_key):
     return
 
 @asyncio.coroutine
-def _load_dmail(handler, dmail_key):
+def _load_dmail(dispatcher, dmail_key):
     def dbcall():
-        with handler.node.db.open_session() as sess:
+        with dispatcher.node.db.open_session() as sess:
             q = sess.query(DmailMessage)\
                 .options(joinedload("parts"))\
                 .filter(DmailMessage.data_key == dmail_key)
@@ -735,14 +741,14 @@ def _load_dmail(handler, dmail_key):
 
             return dmail
 
-    dmail = yield from handler.node.loop.run_in_executor(None, dbcall)
+    dmail = yield from dispatcher.node.loop.run_in_executor(None, dbcall)
 
     return dmail
 
 @asyncio.coroutine
-def _process_dmail_message(handler, dmail_key, process_call):
+def _process_dmail_message(dispatcher, dmail_key, process_call):
     def dbcall():
-        with handler.node.db.open_session() as sess:
+        with dispatcher.node.db.open_session() as sess:
             q = sess.query(DmailMessage)\
                 .filter(DmailMessage.data_key == dmail_key)
 
@@ -755,14 +761,14 @@ def _process_dmail_message(handler, dmail_key, process_call):
 
             return dmail
 
-    dmail = yield from handler.node.loop.run_in_executor(None, dbcall)
+    dmail = yield from dispatcher.node.loop.run_in_executor(None, dbcall)
 
     return dmail
 
 @asyncio.coroutine
-def _load_dmail_address(handler, dmail_addr):
+def _load_dmail_address(dispatcher, dmail_addr):
     def dbcall():
-        with handler.node.db.open_session() as sess:
+        with dispatcher.node.db.open_session() as sess:
             q = sess.query(DmailAddress)\
                 .filter(DmailAddress.site_key == dmail_addr)
 
@@ -775,14 +781,14 @@ def _load_dmail_address(handler, dmail_addr):
             return dmail_address
 
     dmail_address =\
-        yield from handler.node.loop.run_in_executor(None, dbcall)
+        yield from dispatcher.node.loop.run_in_executor(None, dbcall)
 
     return dmail_address
 
 @asyncio.coroutine
-def _process_dmail_address(handler, dmail_addr, process_call):
+def _process_dmail_address(dispatcher, dmail_addr, process_call):
     def dbcall():
-        with handler.node.db.open_session() as sess:
+        with dispatcher.node.db.open_session() as sess:
             q = sess.query(DmailAddress)\
                 .filter(DmailAddress.site_key == dmail_addr)
 
@@ -798,14 +804,15 @@ def _process_dmail_address(handler, dmail_addr, process_call):
             return dmail_address
 
     dmail_address =\
-        yield from handler.node.loop.run_in_executor(None, dbcall)
+        yield from dispatcher.node.loop.run_in_executor(None, dbcall)
 
     return dmail_address
 
 @asyncio.coroutine
-def _fetch_dmail(handler, dmail_addr, dmail_key):
+def _fetch_dmail(dispatcher, dmail_addr, dmail_key):
     de =\
-        dmail.DmailEngine(handler.node.chord_engine.tasks, handler.node.db)
+        dmail.DmailEngine(\
+            dispatcher.node.chord_engine.tasks, dispatcher.node.db)
 
     if log.isEnabledFor(logging.INFO):
         dmail_key_enc = mbase32.encode(dmail_key)
@@ -813,7 +820,7 @@ def _fetch_dmail(handler, dmail_addr, dmail_key):
         log.info("Fetching dmail (key=[{}]) for address=[{}]."\
             .format(dmail_key_enc, dmail_addr_enc))
 
-    dmail_address = yield from _load_dmail_address(handler, dmail_addr)
+    dmail_address = yield from _load_dmail_address(dispatcher, dmail_addr)
 
     dmail_key_obj = dmail_address.keys[0]
 
@@ -826,7 +833,7 @@ def _fetch_dmail(handler, dmail_addr, dmail_key):
         yield from de.fetch_dmail(bytes(dmail_key), x, target_key)
 
     if not dm:
-        handler.send_partial_content(\
+        dispatcher.send_partial_content(\
             "Dmail for key [{}] was not found."\
                 .format(dmail_key_enc))
         return None, None
@@ -876,8 +883,9 @@ def _format_dmail(dm, valid_sig):
     return dmail_text
 
 @asyncio.coroutine
-def _create_dmail_address(handler, prefix, difficulty):
-    de = dmail.DmailEngine(handler.node.chord_engine.tasks, handler.node.db)
+def _create_dmail_address(dispatcher, prefix, difficulty):
+    de = dmail.DmailEngine(\
+        dispatcher.node.chord_engine.tasks, dispatcher.node.db)
     privkey, data_key, dms, storing_nodes =\
         yield from de.generate_dmail_address(prefix, difficulty)
     return privkey, data_key, dms, storing_nodes
