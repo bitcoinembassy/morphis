@@ -135,10 +135,10 @@ class MaalstroomDispatcher(object):
                 return
 
             if len(rpath) == 7: # len(".upload")
-                self._send_content(static_upload_page_content)
+                self.send_content(maalstroom.static_upload_page_content)
             else:
                 content =\
-                    upload_page_content.replace(\
+                    maalstroom.upload_page_content.replace(\
                         b"${PRIVATE_KEY}",\
                         rpath[8:].encode()) # 8 = len(".upload/")
                 content =\
