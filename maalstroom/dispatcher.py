@@ -31,6 +31,8 @@ class MaalstroomDispatcher(object):
 
         self._accept_charset = None
 
+        self.finished_request = False
+
     @property
     def connection_count(self):
         return len(self.node.chord_engine.peers)
@@ -69,9 +71,12 @@ class MaalstroomDispatcher(object):
 
     def finish_response(self):
         self.outq.put(None)
+        self.finished_request = True
 
     @asyncio.coroutine
     def do_GET(self, rpath):
+        self.finished_request = False
+
         if not rpath:
             current_version = self.node.morphis_version
 
@@ -108,6 +113,10 @@ class MaalstroomDispatcher(object):
 
         # At this point we assume it is a key URL.
         yield from self.dispatch_get_data(rpath)
+
+        if not self.finished_request:
+            log.warning("Request (rpath=[{}]) finished without calling"\
+                " finish_response()!".format(rpath))
 
     @asyncio.coroutine
     def dispatch_GET(self, rpath):
