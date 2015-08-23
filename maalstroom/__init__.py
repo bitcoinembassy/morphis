@@ -127,11 +127,13 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
             self.maalstroom_url_prefix =\
                 self.maalstroom_url_prefix_str.encode()
 
-        if self.node.web_devel:
+        if self.node.web_devel and self.headers["Cache-Control"] == "no-cache":
             global _concurrent_request_count
             with _request_lock:
                 _concurrent_request_count += 1
                 if _concurrent_request_count == 1:
+                    log.warning(\
+                        "Reloading maalstroom packages due to web_dev mode.")
                     importlib.reload(maalstroom.templates)
                     importlib.reload(maalstroom.dispatcher)
                     importlib.reload(maalstroom.dmail)
