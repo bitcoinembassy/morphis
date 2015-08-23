@@ -54,7 +54,7 @@ def serve_get(dispatcher, rpath):
             params = tag + '/' + addr_enc
 
         template = templates.dmail_page_wrapper[0]
-        template = template.format(tag=tag, addr_enc=addr_enc)
+        template = template.format(tag=tag, addr=addr_enc)
 
         dispatcher.send_content([template, req])
         return
@@ -90,7 +90,7 @@ def serve_get(dispatcher, rpath):
         tag = params[p0+1:]
 
         template = templates.dmail_msg_list[0]
-        template = template.format(tag=tag, addr_enc=addr_enc)
+        template = template.format(tag=tag, addr=addr_enc)
 
         dispatcher.send_content(template)
     elif req == "/new_mail":
