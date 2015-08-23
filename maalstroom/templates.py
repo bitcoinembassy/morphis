@@ -1,12 +1,14 @@
 # Copyright (c) 2014-2015  Sam Maloney.
 # License: GPL v2.
 
+import os
+
 ## Templates:
 home_page_content = [\
     b"""<!DOCTYPE html>
 <html><head><title>ALL TOGETHER NOW WE SING IN UNISON - MORPHiS Maalstroom UI</title>
 <link rel="icon" type="image/png" href="/.images/favicon.ico"/>
-<link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/>
+<link rel="stylesheet" type="text/css" href="morphis://.main/main.css"/>
 <style type="text/css">
     div.msection {
         border-width 2px;
@@ -389,5 +391,39 @@ if not initialized_template:
     dmail_compose_dmail_content[0] = dmail_page_wrapper
 
     dmail_tag_view_content[0] = dmail_page_wrapper
+
+def load(filepath):
+    fh = open("maalstroom/templates/" + filepath, "rb")
+    return [fh.read(), None]
+
+_resource_type_mapping = {\
+    "css": "text/css",\
+    "png": "image/png",\
+    "jpg": "image/jpeg",\
+    "jpeg": "image/jpeg",\
+    "gif": "image/gif"}
+
+def load_resource(filepath):
+    fh = open("maalstroom/resources/" + filepath, "rb")
+    ext = filepath[filepath.rindex('.')+1:]
+    return [fh.read(), None, _resource_type_mapping[ext]]
+
+imgs = {}
+
+if not initialized_template:
+    # V2 UI:
+    main_css = dmail_css_content 
+
+    dmail_css = load_resource("style.css")
+
+    dmail_page_wrapper = load("dmail/page_wrapper.html")
+    dmail_logo = load("dmail/logo.html")
+    dmail_nav = load("dmail/nav.html")
+    dmail_aside = load("dmail/aside.html")
+    dmail_msg_list = load("dmail/msg_list.html")
+    dmail_new_mail = load("dmail/new_mail.html")
+
+    for entry_name in os.listdir("maalstroom/resources/images/dmail"):
+        imgs[entry_name] = load_resource("images/dmail/" + entry_name)
 
     initialized_template = True

@@ -32,371 +32,390 @@ def serve_get(dispatcher, rpath):
     log.info("Service .dmail request.")
 
     if len(rpath) == len(s_dmail):
-        dispatcher.send_content(templates.dmail_page_content)
-    else:
-        req = rpath[len(s_dmail):]
+        dispatcher.send_content(templates.dmail_page_wrapper)
+        return
+
+    req = rpath[len(s_dmail):]
+
+    if log.isEnabledFor(logging.INFO):
         log.info("req=[{}].".format(req))
-        if req == "/css":
-            dispatcher.send_content(\
-                templates.dmail_css_content, content_type="text/css")
-        elif req == "/address_list":
-            dispatcher.send_partial_content(
-                templates.dmail_page_content__f1_start, True)
 
-            site_keys = yield from _list_dmail_addresses(dispatcher)
+    if req == "/style.css":
+        dispatcher.send_content(templates.dmail_css, content_type="text/css")
+    elif req == "/logo.html":
+        dispatcher.send_content(templates.dmail_logo)
+    elif req == "/nav.html":
+        dispatcher.send_content(templates.dmail_nav)
+    elif req == "/aside.html":
+        dispatcher.send_content(templates.dmail_aside)
+    elif req == "/msg_list.html":
+        dispatcher.send_content(templates.dmail_msg_list)
+    elif req == "/new_mail.html":
+        dispatcher.send_content(templates.dmail_new_mail)
 
-            for dbid, site_key in site_keys:
-                site_key_enc = mbase32.encode(site_key)
+    elif req.startswith("/images/"):
+        dispatcher.send_content(templates.imgs[req[8:]])
 
-                resp = """<span class="nowrap">[<a href="addr/{}">view</a>]"""\
-                    """ {}</span><br/>"""\
-                        .format(site_key_enc, site_key_enc)
+#######OLD:
 
-                dispatcher.send_partial_content(resp)
+    elif req == "/address_list":
+        dispatcher.send_partial_content(
+            templates.dmail_page_content__f1_start, True)
 
-            dispatcher.send_partial_content(\
-                templates.dmail_page_content__f1_end)
-            dispatcher.end_partial_content()
-        elif req.startswith("/compose/form"):
-            dest_addr_enc = req[14:] if len(req) > 14 else ""
+        site_keys = yield from _list_dmail_addresses(dispatcher)
 
-            dispatcher.send_partial_content(\
-                templates.dmail_compose_dmail_form_start, True)
+        for dbid, site_key in site_keys:
+            site_key_enc = mbase32.encode(site_key)
 
-            site_keys = yield from _list_dmail_addresses(dispatcher)
+            resp = """<span class="nowrap">[<a href="addr/{}">view</a>]"""\
+                """ {}</span><br/>"""\
+                    .format(site_key_enc, site_key_enc)
 
-            for dbid, site_key in site_keys:
-                site_key_enc = mbase32.encode(site_key)
-
-                sender_element = """<option value="{}">{}</option>"""\
-                    .format(dbid, site_key_enc)
-
-                dispatcher.send_partial_content(sender_element)
+            dispatcher.send_partial_content(resp)
 
-            dispatcher.send_partial_content(\
-                "<option value="">[Anonymous]</option>")
+        dispatcher.send_partial_content(\
+            templates.dmail_page_content__f1_end)
+        dispatcher.end_partial_content()
+    elif req.startswith("/compose/form"):
+        dest_addr_enc = req[14:] if len(req) > 14 else ""
 
-            dispatcher.send_partial_content(\
-                templates.dmail_compose_dmail_form_end.replace(\
-                    b"${DEST_ADDR}", dest_addr_enc.encode()))
-
-            dispatcher.end_partial_content()
-        elif req.startswith("/compose"):
-            from_addr = req[9:] if len(req) > 9 else ""
-
-            if from_addr:
-                iframe_src = "../compose/form/{}".format(from_addr).encode()
-            else:
-                iframe_src = "compose/form".encode()
-
-            content = templates.dmail_compose_dmail_content[0].replace(\
-                    b"${IFRAME_SRC}", iframe_src)
-
-            dispatcher.send_content([content, None])
-        elif req.startswith("/addr/view/"):
-            addr_enc = req[11:]
-
-            start = templates.dmail_addr_view_start.replace(\
-                b"${DMAIL_ADDRESS}", addr_enc.encode())
-            start = start.replace(\
-                b"${DMAIL_ADDRESS_SHORT}", addr_enc[:32].encode())
-
-            dispatcher.send_partial_content(start, True)
-
-            dispatcher.send_partial_content(templates.dmail_addr_view_end)
-            dispatcher.end_partial_content()
-        elif req.startswith("/addr/settings/edit/publish?"):
-            query = req[28:]
-
-            qdict = urllib.parse.parse_qs(query, keep_blank_values=True)
-
-            addr_enc = qdict["dmail_address"][0]
-            difficulty = qdict["difficulty"][0]
-
-            def processor(dmail_address):
-                if difficulty != dmail_address.keys[0].difficulty:
-                    dmail_address.keys[0].difficulty = difficulty
-                    return True
-                else:
-                    return False
-
-            dmail_address = yield from\
-                _process_dmail_address(\
-                    dispatcher, mbase32.decode(addr_enc), processor)
-
-            dh = dhgroup14.DhGroup14()
-            dh.x = sshtype.parseMpint(dmail_address.keys[0].x)[1]
-            dh.generate_e()
-
-            dms = dmail.DmailSite()
-            root = dms.root
-            root["target"] =\
-                mbase32.encode(dmail_address.keys[0].target_key)
-            root["difficulty"] = int(difficulty)
-            root["ssm"] = "mdh-v1"
-            root["sse"] = base58.encode(sshtype.encodeMpint(dh.e))
-
-            private_key = rsakey.RsaKey(privdata=dmail_address.site_privatekey)
-
-            total_storing = 0
-            retry = 0
-            while True:
-                storing_nodes = yield from\
-                    dispatcher.node.chord_engine.tasks\
-                        .send_store_updateable_key(\
-                            dms.export(), private_key,\
-                            version=int(time.time()*1000), store_key=True)
-
-                total_storing += storing_nodes
-
-                if total_storing >= 3:
-                    break
-
-                if retry > 32:
-                    break
-                elif retry > 3:
-                    yield from asyncio.sleep(1)
-
-                retry += 1
-
-            if storing_nodes:
-                dispatcher.send_content(\
-                    templates.dmail_addr_settings_edit_success_content[0]\
-                        .format(addr_enc, addr_enc[:32]).encode())
-            else:
-                dispatcher.send_content(\
-                    templates.dmail_addr_settings_edit_fail_content[0]\
-                        .format(addr_enc, addr_enc[:32]).encode())
-
-        elif req.startswith("/addr/settings/edit/"):
-            addr_enc = req[20:]
-
-            dmail_address = yield from\
-                _load_dmail_address(dispatcher, mbase32.decode(addr_enc))
-
-            content = templates.dmail_addr_settings_edit_content[0].replace(\
-                b"${DIFFICULTY}",\
-                str(dmail_address.keys[0].difficulty).encode())
-            content = content.replace(\
-                b"${DMAIL_ADDRESS_SHORT}", addr_enc[:32].encode())
-            content = content.replace(\
-                b"${DMAIL_ADDRESS}", addr_enc.encode())
-            content = content.replace(\
-                b"${PRIVATE_KEY}",\
-                base58.encode(dmail_address.site_privatekey).encode())
-            content = content.replace(\
-                b"${X}", base58.encode(dmail_address.keys[0].x).encode())
-            content = content.replace(\
-                b"${TARGET_KEY}",\
-                base58.encode(dmail_address.keys[0].target_key).encode())
-
-            dispatcher.send_content([content, None])
-        elif req.startswith("/addr/settings/"):
-            addr_enc = req[15:]
-
-            content = templates.dmail_addr_settings_content[0].replace(\
-                b"${IFRAME_SRC}",\
-                "edit/{}".format(addr_enc).encode())
-
-            dispatcher.send_content([content, None])
-        elif req.startswith("/addr/"):
-            addr_enc = req[6:]
-
-            if log.isEnabledFor(logging.INFO):
-                log.info("Viewing dmail address [{}].".format(addr_enc))
-
-            content = templates.dmail_address_page_content[0].replace(\
-                b"${IFRAME_SRC}", "view/{}".format(addr_enc).encode())
-
-            dispatcher.send_content([content, None])
-        elif req.startswith("/tag/view/list/"):
-            params = req[15:]
-
-            p0 = params.index('/')
-            tag = params[:p0]
-            addr_enc = params[p0+1:]
-
-            if log.isEnabledFor(logging.INFO):
-                log.info("Viewing dmails with tag [{}] for address [{}]."\
-                    .format(tag, addr_enc))
-
-            start = templates.dmail_tag_view_list_start.replace(\
-                b"${TAG_NAME}", tag.encode())
-            #FIXME: This is getting inefficient now, maybe time for Flask or
-            # something like it. Maybe we can use just it's template renderer.
-            start = start.replace(b"${DMAIL_ADDRESS}", addr_enc.encode())
-            start = start.replace(\
-                b"${DMAIL_ADDRESS2}",\
-                "{}...".format(addr_enc[:32]).encode())
-
-            acharset = dispatcher.get_accept_charset()
-
-            dispatcher.send_partial_content(\
-                start,\
-                True,\
-                content_type="text/html; charset={}".format(acharset))
-
-            yield from\
-                _list_dmails_for_tag(dispatcher, mbase32.decode(addr_enc), tag)
-
-            dispatcher.send_partial_content(templates.dmail_tag_view_list_end)
-            dispatcher.end_partial_content()
-
-        elif req.startswith("/tag/view/"):
-            params = req[10:]
-
-            content = templates.dmail_tag_view_content[0].replace(\
-                b"${IFRAME_SRC}", "../list/{}".format(params).encode())
-
-            dispatcher.send_content(content)
-        elif req.startswith("/scan/list/"):
-            addr_enc = req[11:]
-
-            if log.isEnabledFor(logging.INFO):
-                log.info("Viewing inbox for dmail address [{}]."\
-                    .format(addr_enc))
-
-            start = templates.dmail_inbox_start.replace(\
-                b"${DMAIL_ADDRESS}", addr_enc.encode())
-            start = start.replace(\
-                b"${DMAIL_ADDRESS2}", "{}...".format(addr_enc[:32]).encode())
-
-            dispatcher.send_partial_content(start, True)
-
-            addr, significant_bits = mutil.decode_key(addr_enc)
-
-            yield from _scan_new_dmails(dispatcher, addr, significant_bits)
-
-            dispatcher.send_partial_content(templates.dmail_inbox_end)
-            dispatcher.end_partial_content()
-        elif req.startswith("/scan/"):
-            addr_enc = req[6:]
-
-            content = templates.dmail_address_page_content[0].replace(\
-                b"${IFRAME_SRC}", "list/{}".format(addr_enc).encode())
-
-            dispatcher.send_content([content, None])
-        elif req.startswith("/fetch/view/"):
-            keys = req[12:]
-            p0 = keys.index('/')
-            dmail_addr_enc = keys[:p0]
-            dmail_key_enc = keys[p0+1:]
-
-            dmail_addr = mbase32.decode(dmail_addr_enc)
-            dmail_key = mbase32.decode(dmail_key_enc)
-
-            dm = yield from _load_dmail(dispatcher, dmail_key)
-
-            if dm:
-                valid_sig = dm.sender_valid
-            else:
-                dm, valid_sig =\
-                    yield from _fetch_dmail(dispatcher, dmail_addr, dmail_key)
-
-            dmail_text = _format_dmail(dm, valid_sig)
-
-            acharset = dispatcher.get_accept_charset()
-
-            dispatcher.send_content(\
-                dmail_text.encode(acharset),
-                content_type="text/plain; charset={}".format(acharset))
-        elif req.startswith("/fetch/panel/mark_as_read/"):
-            req_data = req[26:]
-
-            p0 = req_data.index('/')
-            dmail_key_enc = req_data[p0+1:]
-            dmail_key = mbase32.decode(dmail_key_enc)
-
-            def processor(dmail):
-                dmail.read = not dmail.read
-                return True
-
-            yield from _process_dmail_message(dispatcher, dmail_key, processor)
-
-            dispatcher._send_204()
-        elif req.startswith("/fetch/panel/trash/"):
-            req_data = req[20:]
-
-            p0 = req_data.index('/')
-            dmail_key_enc = req_data[p0+1:]
-            dmail_key = mbase32.decode(dmail_key_enc)
-
-            def processor(dmail):
-                dmail.hidden = not dmail.hidden
-                return True
-
-            yield from _process_dmail_message(dispatcher, dmail_key, processor)
-
-            dispatcher._send_204()
-        elif req.startswith("/fetch/panel/"):
-            req_data = req[13:]
-
-            content = templates.dmail_fetch_panel_content[0].replace(\
-                b"${DMAIL_IDS}", req_data.encode())
-
-            dispatcher.send_content([content, None])
-        elif req.startswith("/fetch/wrapper/"):
-            req_data = req[15:]
-
-            content = templates.dmail_fetch_wrapper[0].replace(\
-                b"${IFRAME_SRC}",\
-                "../../view/{}"\
-                    .format(req_data).encode())
-            #FIXME: This is getting inefficient now, maybe time for Flask or
-            # something like it. Maybe we can use just it's template renderer.
-            content = content.replace(\
-                b"${IFRAME2_SRC}",\
-                "../../panel/{}"\
-                    .format(req_data).encode())
-
-            dispatcher.send_content([content, None])
-        elif req.startswith("/fetch/"):
-            req_data = req[7:]
-
-            content = templates.dmail_address_page_content[0].replace(\
-                b"${IFRAME_SRC}", "../wrapper/{}".format(req_data).encode())
-
-            dispatcher.send_content([content, None])
-        elif req == "/create_address":
-            dispatcher.send_content(templates.dmail_create_address_content)
-        elif req == "/create_address/form":
-            dispatcher.send_content(templates.dmail_create_address_form_content)
-        elif req.startswith("/create_address/make_it_so?"):
-            query = req[27:]
-
-            qdict = urllib.parse.parse_qs(query, keep_blank_values=True)
-
-            prefix = qdict["prefix"][0]
-            difficulty = int(qdict["difficulty"][0])
-
-            log.info("prefix=[{}].".format(prefix))
-            privkey, dmail_key, dms, storing_nodes =\
-                yield from\
-                    _create_dmail_address(dispatcher, prefix, difficulty)
-
-            dmail_key_enc = mbase32.encode(dmail_key)
-
-            dispatcher.send_partial_content(templates.dmail_frame_start, True)
-            if storing_nodes:
-                dispatcher.send_partial_content(b"SUCCESS<br/>")
-            else:
-                dispatcher.send_partial_content(
-                    "PARTIAL SUCCESS<br/>"\
-                    "<p>Your Dmail site was generated successfully; however,"\
-                    " it failed to be stored on the network. To remedy this,"\
-                    " simply go to your Dmail address page and click the"\
-                    " [<a href=\"morphis://.dmail/addr/settings/{}\">Address"\
-                    " Settings</a>] link, and then click the \"Republish"\
-                    " Dmail Site\" button.</p>"\
-                        .format(dmail_key_enc).encode())
-
-            dispatcher.send_partial_content(\
-                """<p>New dmail address: <a href="../addr/{}">{}</a></p>"""\
-                    .format(dmail_key_enc, dmail_key_enc).encode())
-            dispatcher.send_partial_content(templates.dmail_frame_end)
-            dispatcher.end_partial_content()
+        dispatcher.send_partial_content(\
+            templates.dmail_compose_dmail_form_start, True)
+
+        site_keys = yield from _list_dmail_addresses(dispatcher)
+
+        for dbid, site_key in site_keys:
+            site_key_enc = mbase32.encode(site_key)
+
+            sender_element = """<option value="{}">{}</option>"""\
+                .format(dbid, site_key_enc)
+
+            dispatcher.send_partial_content(sender_element)
+
+        dispatcher.send_partial_content(\
+            "<option value="">[Anonymous]</option>")
+
+        dispatcher.send_partial_content(\
+            templates.dmail_compose_dmail_form_end.replace(\
+                b"${DEST_ADDR}", dest_addr_enc.encode()))
+
+        dispatcher.end_partial_content()
+    elif req.startswith("/compose"):
+        from_addr = req[9:] if len(req) > 9 else ""
+
+        if from_addr:
+            iframe_src = "../compose/form/{}".format(from_addr).encode()
         else:
-            dispatcher.send_error(errcode=400)
+            iframe_src = "compose/form".encode()
+
+        content = templates.dmail_compose_dmail_content[0].replace(\
+                b"${IFRAME_SRC}", iframe_src)
+
+        dispatcher.send_content([content, None])
+    elif req.startswith("/addr/view/"):
+        addr_enc = req[11:]
+
+        start = templates.dmail_addr_view_start.replace(\
+            b"${DMAIL_ADDRESS}", addr_enc.encode())
+        start = start.replace(\
+            b"${DMAIL_ADDRESS_SHORT}", addr_enc[:32].encode())
+
+        dispatcher.send_partial_content(start, True)
+
+        dispatcher.send_partial_content(templates.dmail_addr_view_end)
+        dispatcher.end_partial_content()
+    elif req.startswith("/addr/settings/edit/publish?"):
+        query = req[28:]
+
+        qdict = urllib.parse.parse_qs(query, keep_blank_values=True)
+
+        addr_enc = qdict["dmail_address"][0]
+        difficulty = qdict["difficulty"][0]
+
+        def processor(dmail_address):
+            if difficulty != dmail_address.keys[0].difficulty:
+                dmail_address.keys[0].difficulty = difficulty
+                return True
+            else:
+                return False
+
+        dmail_address = yield from\
+            _process_dmail_address(\
+                dispatcher, mbase32.decode(addr_enc), processor)
+
+        dh = dhgroup14.DhGroup14()
+        dh.x = sshtype.parseMpint(dmail_address.keys[0].x)[1]
+        dh.generate_e()
+
+        dms = dmail.DmailSite()
+        root = dms.root
+        root["target"] =\
+            mbase32.encode(dmail_address.keys[0].target_key)
+        root["difficulty"] = int(difficulty)
+        root["ssm"] = "mdh-v1"
+        root["sse"] = base58.encode(sshtype.encodeMpint(dh.e))
+
+        private_key = rsakey.RsaKey(privdata=dmail_address.site_privatekey)
+
+        total_storing = 0
+        retry = 0
+        while True:
+            storing_nodes = yield from\
+                dispatcher.node.chord_engine.tasks\
+                    .send_store_updateable_key(\
+                        dms.export(), private_key,\
+                        version=int(time.time()*1000), store_key=True)
+
+            total_storing += storing_nodes
+
+            if total_storing >= 3:
+                break
+
+            if retry > 32:
+                break
+            elif retry > 3:
+                yield from asyncio.sleep(1)
+
+            retry += 1
+
+        if storing_nodes:
+            dispatcher.send_content(\
+                templates.dmail_addr_settings_edit_success_content[0]\
+                    .format(addr_enc, addr_enc[:32]).encode())
+        else:
+            dispatcher.send_content(\
+                templates.dmail_addr_settings_edit_fail_content[0]\
+                    .format(addr_enc, addr_enc[:32]).encode())
+
+    elif req.startswith("/addr/settings/edit/"):
+        addr_enc = req[20:]
+
+        dmail_address = yield from\
+            _load_dmail_address(dispatcher, mbase32.decode(addr_enc))
+
+        content = templates.dmail_addr_settings_edit_content[0].replace(\
+            b"${DIFFICULTY}",\
+            str(dmail_address.keys[0].difficulty).encode())
+        content = content.replace(\
+            b"${DMAIL_ADDRESS_SHORT}", addr_enc[:32].encode())
+        content = content.replace(\
+            b"${DMAIL_ADDRESS}", addr_enc.encode())
+        content = content.replace(\
+            b"${PRIVATE_KEY}",\
+            base58.encode(dmail_address.site_privatekey).encode())
+        content = content.replace(\
+            b"${X}", base58.encode(dmail_address.keys[0].x).encode())
+        content = content.replace(\
+            b"${TARGET_KEY}",\
+            base58.encode(dmail_address.keys[0].target_key).encode())
+
+        dispatcher.send_content([content, None])
+    elif req.startswith("/addr/settings/"):
+        addr_enc = req[15:]
+
+        content = templates.dmail_addr_settings_content[0].replace(\
+            b"${IFRAME_SRC}",\
+            "edit/{}".format(addr_enc).encode())
+
+        dispatcher.send_content([content, None])
+    elif req.startswith("/addr/"):
+        addr_enc = req[6:]
+
+        if log.isEnabledFor(logging.INFO):
+            log.info("Viewing dmail address [{}].".format(addr_enc))
+
+        content = templates.dmail_address_page_content[0].replace(\
+            b"${IFRAME_SRC}", "view/{}".format(addr_enc).encode())
+
+        dispatcher.send_content([content, None])
+    elif req.startswith("/tag/view/list/"):
+        params = req[15:]
+
+        p0 = params.index('/')
+        tag = params[:p0]
+        addr_enc = params[p0+1:]
+
+        if log.isEnabledFor(logging.INFO):
+            log.info("Viewing dmails with tag [{}] for address [{}]."\
+                .format(tag, addr_enc))
+
+        start = templates.dmail_tag_view_list_start.replace(\
+            b"${TAG_NAME}", tag.encode())
+        #FIXME: This is getting inefficient now, maybe time for Flask or
+        # something like it. Maybe we can use just it's template renderer.
+        start = start.replace(b"${DMAIL_ADDRESS}", addr_enc.encode())
+        start = start.replace(\
+            b"${DMAIL_ADDRESS2}",\
+            "{}...".format(addr_enc[:32]).encode())
+
+        acharset = dispatcher.get_accept_charset()
+
+        dispatcher.send_partial_content(\
+            start,\
+            True,\
+            content_type="text/html; charset={}".format(acharset))
+
+        yield from\
+            _list_dmails_for_tag(dispatcher, mbase32.decode(addr_enc), tag)
+
+        dispatcher.send_partial_content(templates.dmail_tag_view_list_end)
+        dispatcher.end_partial_content()
+
+    elif req.startswith("/tag/view/"):
+        params = req[10:]
+
+        content = templates.dmail_tag_view_content[0].replace(\
+            b"${IFRAME_SRC}", "../list/{}".format(params).encode())
+
+        dispatcher.send_content(content)
+    elif req.startswith("/scan/list/"):
+        addr_enc = req[11:]
+
+        if log.isEnabledFor(logging.INFO):
+            log.info("Viewing inbox for dmail address [{}]."\
+                .format(addr_enc))
+
+        start = templates.dmail_inbox_start.replace(\
+            b"${DMAIL_ADDRESS}", addr_enc.encode())
+        start = start.replace(\
+            b"${DMAIL_ADDRESS2}", "{}...".format(addr_enc[:32]).encode())
+
+        dispatcher.send_partial_content(start, True)
+
+        addr, significant_bits = mutil.decode_key(addr_enc)
+
+        yield from _scan_new_dmails(dispatcher, addr, significant_bits)
+
+        dispatcher.send_partial_content(templates.dmail_inbox_end)
+        dispatcher.end_partial_content()
+    elif req.startswith("/scan/"):
+        addr_enc = req[6:]
+
+        content = templates.dmail_address_page_content[0].replace(\
+            b"${IFRAME_SRC}", "list/{}".format(addr_enc).encode())
+
+        dispatcher.send_content([content, None])
+    elif req.startswith("/fetch/view/"):
+        keys = req[12:]
+        p0 = keys.index('/')
+        dmail_addr_enc = keys[:p0]
+        dmail_key_enc = keys[p0+1:]
+
+        dmail_addr = mbase32.decode(dmail_addr_enc)
+        dmail_key = mbase32.decode(dmail_key_enc)
+
+        dm = yield from _load_dmail(dispatcher, dmail_key)
+
+        if dm:
+            valid_sig = dm.sender_valid
+        else:
+            dm, valid_sig =\
+                yield from _fetch_dmail(dispatcher, dmail_addr, dmail_key)
+
+        dmail_text = _format_dmail(dm, valid_sig)
+
+        acharset = dispatcher.get_accept_charset()
+
+        dispatcher.send_content(\
+            dmail_text.encode(acharset),
+            content_type="text/plain; charset={}".format(acharset))
+    elif req.startswith("/fetch/panel/mark_as_read/"):
+        req_data = req[26:]
+
+        p0 = req_data.index('/')
+        dmail_key_enc = req_data[p0+1:]
+        dmail_key = mbase32.decode(dmail_key_enc)
+
+        def processor(dmail):
+            dmail.read = not dmail.read
+            return True
+
+        yield from _process_dmail_message(dispatcher, dmail_key, processor)
+
+        dispatcher._send_204()
+    elif req.startswith("/fetch/panel/trash/"):
+        req_data = req[20:]
+
+        p0 = req_data.index('/')
+        dmail_key_enc = req_data[p0+1:]
+        dmail_key = mbase32.decode(dmail_key_enc)
+
+        def processor(dmail):
+            dmail.hidden = not dmail.hidden
+            return True
+
+        yield from _process_dmail_message(dispatcher, dmail_key, processor)
+
+        dispatcher._send_204()
+    elif req.startswith("/fetch/panel/"):
+        req_data = req[13:]
+
+        content = templates.dmail_fetch_panel_content[0].replace(\
+            b"${DMAIL_IDS}", req_data.encode())
+
+        dispatcher.send_content([content, None])
+    elif req.startswith("/fetch/wrapper/"):
+        req_data = req[15:]
+
+        content = templates.dmail_fetch_wrapper[0].replace(\
+            b"${IFRAME_SRC}",\
+            "../../view/{}"\
+                .format(req_data).encode())
+        #FIXME: This is getting inefficient now, maybe time for Flask or
+        # something like it. Maybe we can use just it's template renderer.
+        content = content.replace(\
+            b"${IFRAME2_SRC}",\
+            "../../panel/{}"\
+                .format(req_data).encode())
+
+        dispatcher.send_content([content, None])
+    elif req.startswith("/fetch/"):
+        req_data = req[7:]
+
+        content = templates.dmail_address_page_content[0].replace(\
+            b"${IFRAME_SRC}", "../wrapper/{}".format(req_data).encode())
+
+        dispatcher.send_content([content, None])
+    elif req == "/create_address":
+        dispatcher.send_content(templates.dmail_create_address_content)
+    elif req == "/create_address/form":
+        dispatcher.send_content(templates.dmail_create_address_form_content)
+    elif req.startswith("/create_address/make_it_so?"):
+        query = req[27:]
+
+        qdict = urllib.parse.parse_qs(query, keep_blank_values=True)
+
+        prefix = qdict["prefix"][0]
+        difficulty = int(qdict["difficulty"][0])
+
+        log.info("prefix=[{}].".format(prefix))
+        privkey, dmail_key, dms, storing_nodes =\
+            yield from\
+                _create_dmail_address(dispatcher, prefix, difficulty)
+
+        dmail_key_enc = mbase32.encode(dmail_key)
+
+        dispatcher.send_partial_content(templates.dmail_frame_start, True)
+        if storing_nodes:
+            dispatcher.send_partial_content(b"SUCCESS<br/>")
+        else:
+            dispatcher.send_partial_content(
+                "PARTIAL SUCCESS<br/>"\
+                "<p>Your Dmail site was generated successfully; however,"\
+                " it failed to be stored on the network. To remedy this,"\
+                " simply go to your Dmail address page and click the"\
+                " [<a href=\"morphis://.dmail/addr/settings/{}\">Address"\
+                " Settings</a>] link, and then click the \"Republish"\
+                " Dmail Site\" button.</p>"\
+                    .format(dmail_key_enc).encode())
+
+        dispatcher.send_partial_content(\
+            """<p>New dmail address: <a href="../addr/{}">{}</a></p>"""\
+                .format(dmail_key_enc, dmail_key_enc).encode())
+        dispatcher.send_partial_content(templates.dmail_frame_end)
+        dispatcher.end_partial_content()
+    else:
+        dispatcher.send_error(errcode=400)
 
 @asyncio.coroutine
 def serve_post(dispatcher, rpath):

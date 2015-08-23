@@ -129,6 +129,10 @@ class MaalstroomDispatcher(object):
             self.send_content(\
                 b"AIWJ - Asynchronous IFrames Without Javascript!")
             return
+        elif rpath == ".main/main.css":
+            self.send_content(\
+                templates.main_css, content_type="text/css")
+            return
         elif rpath == ".images/favicon.ico":
             self.send_content(\
                 templates.favicon_content, content_type="image/png")
@@ -564,6 +568,8 @@ class MaalstroomDispatcher(object):
         if type(content_entry) in (list, tuple):
             content = content_entry[0]
             content_id = content_entry[1]
+            if len(content_entry) == 3 and not content_type:
+                content_type = content_entry[2]
         else:
             content = content_entry
             cacheable = False
@@ -576,6 +582,7 @@ class MaalstroomDispatcher(object):
         if cacheable and not content_id:
             if callable(content):
                 content = content()
+            log.info("Generating content_id.")
             content_id = mbase32.encode(enc.generate_ID(content))
             content_entry[1] = content_id
 
