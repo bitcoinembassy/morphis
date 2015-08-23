@@ -38,7 +38,8 @@ def serve_get(dispatcher, rpath):
 
     if req == "" or req.startswith("/wrapper/"):
         if req:
-            dispatcher.handle_cache(req)
+            if dispatcher.handle_cache(req):
+                return
             params = req[9:]
             p0 = params.index('/')
             addr_enc = params[:p0]
@@ -89,13 +90,6 @@ def serve_get(dispatcher, rpath):
             fmt[top_tag + "_unread_class"] =\
                 ("active-notify" if active else "inactive-notify")\
                     if unread_count else ""
-
-        inbox_unread_count = yield from _count_unread_dmails_for_tag(\
-            dispatcher, addr, "Inbox")
-        sent_unread_count = yield from _count_unread_dmails_for_tag(\
-            dispatcher, addr, "Sent")
-        drafts_unread_count = yield from _count_unread_dmails_for_tag(\
-            dispatcher, addr, "Drafts")
 
         template = template.format(addr=addr_enc, **fmt)
 

@@ -179,15 +179,19 @@ class MaalstroomDispatcher(object):
 
     @asyncio.coroutine
     def dispatch_get_data(self, rpath):
-        if self.handler.headers["If-None-Match"] == rpath:
+        etag = self.handler.headers["If-None-Match"]
+        if etag == rpath:
             # If browser has it cached.
+            updateable_key = etag.startswith("updateablekey-")
             cache_control = self.handler.headers["Cache-Control"]
-            if cache_control != "max-age=0":
+            if not (updateable_key and cache_control == "max-age=0")\
+                    and cache_control != "no-cache":
                 self.send_response(304)
-                if cache_control:
-                    # This should only have been sent for an updateable key.
-                    self.send_header("Cache-Control", "max-age=15, public")
+                if updateable_key:
+                    self.send_header("Cache-Control", "public,max-age=15")
                 else:
+                    self.send_header(\
+                        "Cache-Control", "public,max-age=315360000")
                     self.send_header("ETag", rpath)
                 self.send_header("Content-Length", 0)
                 self.end_headers()
@@ -347,10 +351,10 @@ class MaalstroomDispatcher(object):
                 self.send_header("Content-Length", data_callback.size)
 
             if data_callback.version is not None:
-                self.send_header("Cache-Control", "max-age=15, public")
-#                self.send_header("ETag", rpath)
+                self.send_header("Cache-Control", "public,max-age=15")
+                self.send_header("ETag", "updateablekey-" + rpath)
             else:
-                self.send_header("Cache-Control", "public")
+                self.send_header("Cache-Control", "public,max-age=315360000")
                 self.send_header("ETag", rpath)
 
             self.end_headers()
@@ -566,7 +570,7 @@ class MaalstroomDispatcher(object):
 
     def handle_cache(self, content_id):
         if self.handler.headers["If-None-Match"] != content_id:
-            return
+            return False
 
         self.send_response(304)
         self.send_header("Cache-Control", "public")
@@ -574,6 +578,8 @@ class MaalstroomDispatcher(object):
         self.send_header("Content-Length", 0)
         self.end_headers()
         self.finish_response()
+
+        return True
 
     def send_content(self, content_entry, cacheable=True, content_type=None):
         if type(content_entry) in (list, tuple):
@@ -600,15 +606,20 @@ class MaalstroomDispatcher(object):
             content_id = mbase32.encode(enc.generate_ID(content))
             content_entry[1] = content_id
 
-        if cacheable and self.handler.headers["If-None-Match"] == content_id:
+        etag = self.handler.headers["If-None-Match"]
+        if cacheable and etag == content_id:
+            #TODO: Consider getting rid of this updateablekey support here
+            # because we don't send updateable keys this way ever.
+            updateable_key = etag.startswith("updateablekey-")
+
             cache_control = self.handler.headers["Cache-Control"]
-            if cache_control != "max-age=0":
+            if not (updateable_key and cache_control == "max-age=0")\
+                    and cache_control != "no-cache":
                 self.send_response(304)
-                if cache_control:
-                    # This should only have been sent for an updateable key.
-                    self.send_header("Cache-Control", "max-age=15, public")
+                if updateable_key:
+                    self.send_header("Cache-Control", "public,max-age=15")
                 else:
-                    self.send_header("Cache-Control", "public")
+                    self.send_header("Cache-Control", "public,max-age=300")
                     self.send_header("ETag", content_id)
                 self.send_header("Content-Length", 0)
                 self.end_headers()
@@ -623,7 +634,7 @@ class MaalstroomDispatcher(object):
         self.send_header("Content-Type",\
             "text/html" if content_type is None else content_type)
         if cacheable:
-            self.send_header("Cache-Control", "public")
+            self.send_header("Cache-Control", "public,max-age=300")
             self.send_header("ETag", content_id)
         else:
             self._send_no_cache()

@@ -67,6 +67,7 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
 
         if log.isEnabledFor(logging.DEBUG):
             log.debug("Handler do_GET(): path=[{}].".format(self.path))
+            req_dict.append(self)
 
         self.loop.call_soon_threadsafe(\
             asyncio.async,\
@@ -78,6 +79,11 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
             global _concurrent_request_count
             with _request_lock:
                 _concurrent_request_count -= 1
+
+        if log.isEnabledFor(logging.DEBUG):
+            req_dict.remove(self)
+            log.debug("Done do_GET(): path=[{}], reqs=[{}]."\
+                .format(self.path, len(req_dict)))
 
     def do_POST(self):
         self._prepare_for_request()
@@ -96,6 +102,9 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
             global _concurrent_request_count
             with _request_lock:
                 _concurrent_request_count -= 1
+
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("Done do_POST(): path=[{}].".format(self.path))
 
     def log_message(self, mformat, *args):
         if log.isEnabledFor(logging.INFO):
