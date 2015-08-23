@@ -53,7 +53,7 @@ def serve_get(dispatcher, rpath):
             tag = "Inbox"
             params = tag + '/' + addr_enc
 
-        template = templates.dmail_page_wrapper[0].decode()
+        template = templates.dmail_page_wrapper[0]
         template = template.format(tag=tag, addr_enc=addr_enc)
 
         dispatcher.send_content([template, req])
@@ -89,7 +89,7 @@ def serve_get(dispatcher, rpath):
         addr_enc = params[:p0]
         tag = params[p0+1:]
 
-        template = templates.dmail_msg_list[0].decode()
+        template = templates.dmail_msg_list[0]
         template = template.format(tag=tag, addr_enc=addr_enc)
 
         dispatcher.send_content(template)
@@ -656,43 +656,39 @@ def _list_dmails_for_tag(dispatcher, addr_enc, tag):
 
     msgs = yield from dispatcher.node.loop.run_in_executor(None, dbcall)
 
+    if not msgs:
+        dispatcher.send_partial_content("Mailbox is empty.")
+        return
+
+    row_template = templates.dmail_msg_list_list_row[0]
+
     for msg in msgs:
         key_enc = mbase32.encode(msg.data_key)
 
-        is_read = "" if msg.read else "(unread)"
+        unread = "" if msg.read else "new-mail"
 
         subject = msg.subject
         if not subject:
             subject = "[no subject]"
-        elif len(subject) > 80:
-            subject = subject[:80] + "..."
 
         sender_key = msg.sender_dmail_key
         if sender_key:
             sender_key_enc = mbase32.encode(sender_key)
             if msg.sender_valid:
-                sender_key = """<span class="italic" title="{}">""".format(sender_key_enc)\
-                    + sender_key_enc[:32] + "</span>..."
+                sender_key = sender_key_enc
             else:
-                sender_key = """<span class="strikethrough">"""\
-                    + sender_key_enc[:32] + "</span>..."
+                sender_key = '<span class="strikethrough">'\
+                    + sender_key_enc + "</span>"
         else:
             sender_key = "Anonymous"
 
-        dispatcher.send_partial_content(\
-            """<span class="nowrap">{}: <a href="../../../../fetch/{}/{}" title="{}">{}</a>&nbsp;-&nbsp;{}</span><span class="right_text tag">{}</span><br/>"""\
-                .format(\
-                    mutil.format_human_no_ms_datetime(msg.date),\
-                    addr_enc,\
-                    key_enc,\
-#                    key_enc[:32],\
-                    key_enc,
-                    subject,\
-                    sender_key,\
-                    is_read))
+        row = row_template.format(
+            unread=unread,\
+            subject=subject,\
+            sender=sender_key,\
+            timestamp=msg.date)
 
-    if not msgs:
-        dispatcher.send_partial_content("Mailbox is empty.")
+        dispatcher.send_partial_content(row)
 
 @asyncio.coroutine
 def _scan_new_dmails(dispatcher, addr, significant_bits):

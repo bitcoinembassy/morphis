@@ -33,6 +33,9 @@ static_upload_page_content = [None, None]
 
 update_test = False
 
+_request_lock = threading.Lock()
+_concurrent_request_count = 0
+
 req_dict = []
 
 class MaalstroomHandler(BaseHTTPRequestHandler):
@@ -71,6 +74,11 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
 
         self._write_response()
 
+        if self.node.web_devel:
+            global _concurrent_request_count
+            with _request_lock:
+                _concurrent_request_count -= 1
+
     def do_POST(self):
         self._prepare_for_request()
 
@@ -83,6 +91,11 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
 
         log.warning("Writing response.")
         self._write_response()
+
+        if self.node.web_devel:
+            global _concurrent_request_count
+            with _request_lock:
+                _concurrent_request_count -= 1
 
     def log_message(self, mformat, *args):
         if log.isEnabledFor(logging.INFO):
@@ -115,9 +128,13 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
                 self.maalstroom_url_prefix_str.encode()
 
         if self.node.web_devel:
-            importlib.reload(maalstroom.templates)
-            importlib.reload(maalstroom.dispatcher)
-            importlib.reload(maalstroom.dmail)
+            global _concurrent_request_count
+            with _request_lock:
+                _concurrent_request_count += 1
+                if _concurrent_request_count == 1:
+                    importlib.reload(maalstroom.templates)
+                    importlib.reload(maalstroom.dispatcher)
+                    importlib.reload(maalstroom.dmail)
 
             self._dispatcher = self._create_dispatcher()
 

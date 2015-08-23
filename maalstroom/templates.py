@@ -1,7 +1,13 @@
 # Copyright (c) 2014-2015  Sam Maloney.
 # License: GPL v2.
 
+import llog
+
+import logging
 import os
+import threading
+
+log = logging.getLogger(__name__)
 
 ## Templates:
 home_page_content = [\
@@ -392,9 +398,12 @@ if not initialized_template:
 
     dmail_tag_view_content[0] = dmail_page_wrapper
 
-def load(filepath):
+def load(filepath, dynamic=False):
     fh = open("maalstroom/templates/" + filepath, "rb")
-    return [fh.read(), None]
+    template = fh.read()
+    if dynamic:
+        template = template.decode()
+    return [template, None]
 
 _resource_type_mapping = {\
     "css": "text/css",\
@@ -416,16 +425,20 @@ if not initialized_template:
 
     dmail_css = load_resource("style.css")
 
-    dmail_page_wrapper = load("dmail/page_wrapper.html")
+    dmail_page_wrapper = load("dmail/page_wrapper.html", True)
     dmail_logo = load("dmail/logo.html")
     dmail_nav = load("dmail/nav.html")
     dmail_aside = load("dmail/aside.html")
-    dmail_msg_list = load("dmail/msg_list.html")
+    dmail_msg_list = load("dmail/msg_list.html", True)
     dmail_msg_list_list_start = load("dmail/msg_list_list_start.html")
+    dmail_msg_list_list_row = load("dmail/msg_list_list_row.html", True)
     dmail_msg_list_list_end = load("dmail/msg_list_list_end.html")
     dmail_new_mail = load("dmail/new_mail.html")
 
     for entry_name in os.listdir("maalstroom/resources/images/dmail"):
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("Loading resource [{}].".format(entry_name))
+
         imgs[entry_name] = load_resource("images/dmail/" + entry_name)
 
     initialized_template = True
