@@ -421,6 +421,8 @@ if not initialized_template:
     dmail_nav = load("dmail/nav.html")
     dmail_aside = load("dmail/aside.html")
     dmail_msg_list = load("dmail/msg_list.html")
+    dmail_msg_list_list_start = load("dmail/msg_list_list_start.html")
+    dmail_msg_list_list_end = load("dmail/msg_list_list_end.html")
     dmail_new_mail = load("dmail/new_mail.html")
 
     for entry_name in os.listdir("maalstroom/resources/images/dmail"):

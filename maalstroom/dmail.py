@@ -41,16 +41,16 @@ def serve_get(dispatcher, rpath):
             dispatcher.handle_cache(req)
             params = req[9:]
             p0 = params.index('/')
-            tag = params[:p0]
-            addr_enc = params[p0+1:]
+            addr_enc = params[:p0]
+            tag = params[p0+1:]
         else:
-            tag = "Inbox"
             #FIXME: YOU_ARE_HERE: Make this fetch only default one.
             site_keys = yield from _list_dmail_addresses(dispatcher)
             if site_keys:
                 addr_enc = mbase32.encode(site_keys[0][1])
             else:
                 addr_enc = ""
+            tag = "Inbox"
             params = tag + '/' + addr_enc
 
         template = templates.dmail_page_wrapper[0].decode()
@@ -67,11 +67,27 @@ def serve_get(dispatcher, rpath):
         dispatcher.send_content(templates.dmail_nav)
     elif req == "/aside":
         dispatcher.send_content(templates.dmail_aside)
+    elif req.startswith("/msg_list/list/"):
+        params = req[15:]
+        p0 = params.index('/')
+        addr_enc = params[:p0]
+        tag = params[p0+1:]
+
+        acharset = dispatcher.get_accept_charset()
+        dispatcher.send_partial_content(\
+            templates.dmail_msg_list_list_start[0],\
+            True,\
+            content_type="text/html; charset={}".format(acharset))
+        
+        yield from _list_dmails_for_tag(dispatcher, addr_enc, tag)
+
+        dispatcher.send_partial_content(templates.dmail_msg_list_list_end[0])
+        dispatcher.end_partial_content()
     elif req.startswith("/msg_list/"):
         params = req[10:]
         p0 = params.index('/')
-        tag = params[:p0]
-        addr_enc = params[p0+1:]
+        addr_enc = params[:p0]
+        tag = params[p0+1:]
 
         template = templates.dmail_msg_list[0].decode()
         template = template.format(tag=tag, addr_enc=addr_enc)
@@ -620,7 +636,9 @@ def _list_dmail_addresses(dispatcher):
     return site_keys
 
 @asyncio.coroutine
-def _list_dmails_for_tag(dispatcher, addr, tag):
+def _list_dmails_for_tag(dispatcher, addr_enc, tag):
+    addr = mbase32.decode(addr_enc)
+
     def dbcall():
         with dispatcher.node.db.open_session() as sess:
             q = sess.query(DmailMessage)\
@@ -637,8 +655,6 @@ def _list_dmails_for_tag(dispatcher, addr, tag):
             return msgs
 
     msgs = yield from dispatcher.node.loop.run_in_executor(None, dbcall)
-
-    addr_enc = mbase32.encode(addr)
 
     for msg in msgs:
         key_enc = mbase32.encode(msg.data_key)
