@@ -31,14 +31,33 @@ s_dmail = ".dmail"
 def serve_get(dispatcher, rpath):
     log.info("Service .dmail request.")
 
-    if len(rpath) == len(s_dmail):
-        dispatcher.send_content(templates.dmail_page_wrapper)
-        return
-
     req = rpath[len(s_dmail):]
 
-    if log.isEnabledFor(logging.INFO):
-        log.info("req=[{}].".format(req))
+#    if log.isEnabledFor(logging.INFO):
+#        log.info("req=[{}].".format(req))
+
+    if req == "" or req.startswith("/wrapper/"):
+        if req:
+            dispatcher.handle_cache(req)
+            params = req[9:]
+            p0 = params.index('/')
+            tag = params[:p0]
+            addr_enc = params[p0+1:]
+        else:
+            tag = "Inbox"
+            #FIXME: YOU_ARE_HERE: Make this fetch only default one.
+            site_keys = yield from _list_dmail_addresses(dispatcher)
+            if site_keys:
+                addr_enc = mbase32.encode(site_keys[0][1])
+            else:
+                addr_enc = ""
+            params = tag + '/' + addr_enc
+
+        template = templates.dmail_page_wrapper[0].decode()
+        template = template.format(tag=tag, addr_enc=addr_enc)
+
+        dispatcher.send_content([template, req])
+        return
 
     if req == "/style.css":
         dispatcher.send_content(templates.dmail_css, content_type="text/css")
@@ -48,13 +67,56 @@ def serve_get(dispatcher, rpath):
         dispatcher.send_content(templates.dmail_nav)
     elif req == "/aside":
         dispatcher.send_content(templates.dmail_aside)
-    elif req == "/msg_list":
-        dispatcher.send_content(templates.dmail_msg_list)
+    elif req.startswith("/msg_list/"):
+        params = req[10:]
+        p0 = params.index('/')
+        tag = params[:p0]
+        addr_enc = params[p0+1:]
+
+        template = templates.dmail_msg_list[0].decode()
+        template = template.format(tag=tag, addr_enc=addr_enc)
+
+        dispatcher.send_content(template)
     elif req == "/new_mail":
         dispatcher.send_content(templates.dmail_new_mail)
 
     elif req.startswith("/images/"):
         dispatcher.send_content(templates.imgs[req[8:]])
+
+
+    elif req.startswith("/tag/view/list/"):
+        params = req[15:]
+
+        p0 = params.index('/')
+        tag = params[:p0]
+        addr_enc = params[p0+1:]
+
+        if log.isEnabledFor(logging.INFO):
+            log.info("Viewing dmails with tag [{}] for address [{}]."\
+                .format(tag, addr_enc))
+
+        start = templates.dmail_tag_view_list_start.replace(\
+            b"${TAG_NAME}", tag.encode())
+        #FIXME: This is getting inefficient now, maybe time for Flask or
+        # something like it. Maybe we can use just it's template renderer.
+        start = start.replace(b"${DMAIL_ADDRESS}", addr_enc.encode())
+        start = start.replace(\
+            b"${DMAIL_ADDRESS2}",\
+            "{}...".format(addr_enc[:32]).encode())
+
+        acharset = dispatcher.get_accept_charset()
+
+        dispatcher.send_partial_content(\
+            start,\
+            True,\
+            content_type="text/html; charset={}".format(acharset))
+
+        yield from\
+            _list_dmails_for_tag(dispatcher, mbase32.decode(addr_enc), tag)
+
+        dispatcher.send_partial_content(templates.dmail_tag_view_list_end)
+        dispatcher.end_partial_content()
+
 
 #######OLD:
 

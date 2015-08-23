@@ -564,6 +564,17 @@ class MaalstroomDispatcher(object):
         self.end_headers()
         self.finish_response()
 
+    def handle_cache(self, content_id):
+        if self.handler.headers["If-None-Match"] != content_id:
+            return
+
+        self.send_response(304)
+        self.send_header("Cache-Control", "public")
+        self.send_header("ETag", content_id)
+        self.send_header("Content-Length", 0)
+        self.end_headers()
+        self.finish_response()
+
     def send_content(self, content_entry, cacheable=True, content_type=None):
         if type(content_entry) in (list, tuple):
             content = content_entry[0]
@@ -573,6 +584,9 @@ class MaalstroomDispatcher(object):
         else:
             content = content_entry
             cacheable = False
+
+        if type(content) is str:
+            content = content.encode()
 
         if not self.handler.maalstroom_plugin_used:
             content =\
