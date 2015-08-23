@@ -168,7 +168,7 @@ div.panel span {
     padding: 0;
     margin: 0;
 }
-.inbox-notify {
+.active-notify {
     float: right;
     height: 17px;
     border-radius: 10px;
@@ -185,7 +185,7 @@ div.panel span {
    color: #ffffff;
    font-weight: bold;
 }
-.drafts-notify {
+.inactive-notify {
     float: right;
     height: 17px;
     border-radius: 10px;
@@ -251,11 +251,11 @@ div.panel span {
 }
 .mailbox-list li {
 }
-#active-mailbox {
+.active-mailbox {
   background-color: #575c6f;
   color: #ffffff;
 }
-#active-mailbox a {
+.active-mailbox a {
   color: #ffffff;
 }
 .mailbox-list li:hover {

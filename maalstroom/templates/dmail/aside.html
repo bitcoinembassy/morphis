@@ -1,15 +1,17 @@
 <!DOCTYPE html>
 <html>
 <head>
-<base target="_top" /><link rel="stylesheet" type="text/css" href="style.css">
+<base target="_top" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/style.css">
 </head>
 <body class="iframe">
-    <p id="mailboxes" class="mailbox-trunc">MAILBOXES FOR samzu1ctt7kscitkrt5jft91gtw5c1i6aiujd6g5qrm13w3peph4kjusp737q5zr1cijr9rwmrcw3sgxf8143kw69zph55s71hcicqa</p>
+    <p id="mailboxes" class="mailbox-trunc">MAILBOXES FOR {addr}</p>
     <span class="mailbox-list">
 	<ul>
-	    <li class="inbox-icon" id="active-mailbox"><a href="inbox" style="display:block"><div class="mailbox-pad" >Inbox<div class="inbox-notify">125</div></div></a></li>
-	    <li class="sent-icon"><a href="sent" style="display:block"><div class="mailbox-pad">Sent<div class="sent-notify"></div></div></a></li>
-	    <li class="drafts-icon"><a href="drafts" style="display:block"><div class="mailbox-pad">Drafts<div class="drafts-notify">125</div></div></a></li>
+	    <li class="inbox-icon {Inbox_active}"><a href="morphis://.dmail/wrapper/{addr}/Inbox" style="display:block"><div class="mailbox-pad" >Inbox<div class="{Inbox_unread_class}">{Inbox_unread_count}</div></div></a></li>
+	    <li class="inbox-icon {Outbox_active}"><a href="morphis://.dmail/wrapper/{addr}/Outbox" style="display:block"><div class="mailbox-pad" >Outbox<div class="{Outbox_unread_class}">{Outbox_unread_count}</div></div></a></li>
+	    <li class="sent-icon {Sent_active}"><a href="morphis://.dmail/wrapper/{addr}/Sent" style="display:block"><div class="mailbox-pad">Sent<div class="{Sent_unread_class}">{Sent_unread_count}</div></div></a></li>
+	    <li class="drafts-icon {Drafts_active}"><a href="morphis://.dmail/wrapper/{addr}/Drafts" style="display:block"><div class="mailbox-pad">Drafts<div class="{Drafts_unread_class}">{Drafts_unread_count}</div></div></a></li>
+	    <li class="drafts-icon {Trash_active}"><a href="morphis://.dmail/wrapper/{addr}/Trash" style="display:block"><div class="mailbox-pad">Trash<div class="{Trash_unread_class}">{Trash_unread_count}</div></div></a></li>
 	</ul>
     </span>
 <div class="divider"></div>

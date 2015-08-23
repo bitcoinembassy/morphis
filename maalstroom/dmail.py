@@ -65,8 +65,41 @@ def serve_get(dispatcher, rpath):
         dispatcher.send_content(templates.dmail_logo)
     elif req == "/nav":
         dispatcher.send_content(templates.dmail_nav)
-    elif req == "/aside":
-        dispatcher.send_content(templates.dmail_aside)
+    elif req.startswith("/aside/"):
+        params = req[7:]
+        p0 = params.index('/')
+        addr_enc = params[:p0]
+        tag = params[p0+1:]
+
+        addr = mbase32.decode(addr_enc)
+
+        template = templates.dmail_aside[0]
+
+        top_tags = ["Inbox", "Outbox", "Sent", "Drafts", "Trash"]
+        fmt = {}
+
+        for top_tag in top_tags:
+            active = top_tag == tag
+            unread_count = yield from _count_unread_dmails_for_tag(\
+                dispatcher, addr, top_tag)
+
+            fmt[top_tag + "_active"] = "active-mailbox" if active else ""
+            fmt[top_tag + "_unread_count"] =\
+                unread_count if unread_count else ""
+            fmt[top_tag + "_unread_class"] =\
+                ("active-notify" if active else "inactive-notify")\
+                    if unread_count else ""
+
+        inbox_unread_count = yield from _count_unread_dmails_for_tag(\
+            dispatcher, addr, "Inbox")
+        sent_unread_count = yield from _count_unread_dmails_for_tag(\
+            dispatcher, addr, "Sent")
+        drafts_unread_count = yield from _count_unread_dmails_for_tag(\
+            dispatcher, addr, "Drafts")
+
+        template = template.format(addr=addr_enc, **fmt)
+
+        dispatcher.send_content(template)
     elif req.startswith("/msg_list/list/"):
         params = req[15:]
         p0 = params.index('/')
@@ -636,8 +669,29 @@ def _list_dmail_addresses(dispatcher):
     return site_keys
 
 @asyncio.coroutine
-def _list_dmails_for_tag(dispatcher, addr_enc, tag):
-    addr = mbase32.decode(addr_enc)
+def _count_unread_dmails_for_tag(dispatcher, addr, tag):
+    if type(addr) not in (bytes, bytearray):
+        addr = mbase32.decode(addr)
+
+    def dbcall():
+        with dispatcher.node.db.open_session() as sess:
+            q = sess.query(func.count("*"))\
+                .filter(\
+                    DmailMessage.address.has(DmailAddress.site_key == addr))\
+                .filter(DmailMessage.tags.any(DmailTag.name == tag))\
+                .filter(DmailMessage.hidden == False)\
+                .filter(DmailMessage.read == False)
+
+            return q.scalar()
+
+    cnt = yield from dispatcher.node.loop.run_in_executor(None, dbcall)
+
+    return cnt
+
+@asyncio.coroutine
+def _list_dmails_for_tag(dispatcher, addr, tag):
+    if type(addr) not in (bytes, bytearray):
+        addr = mbase32.decode(addr)
 
     def dbcall():
         with dispatcher.node.db.open_session() as sess:
@@ -657,7 +711,8 @@ def _list_dmails_for_tag(dispatcher, addr_enc, tag):
     msgs = yield from dispatcher.node.loop.run_in_executor(None, dbcall)
 
     if not msgs:
-        dispatcher.send_partial_content("Mailbox is empty.")
+        dispatcher.send_partial_content(\
+            '<tr><td colspan="6">No messages.</td><tr></table>')
         return
 
     row_template = templates.dmail_msg_list_list_row[0]

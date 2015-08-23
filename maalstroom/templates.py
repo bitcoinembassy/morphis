@@ -428,7 +428,7 @@ if not initialized_template:
     dmail_page_wrapper = load("dmail/page_wrapper.html", True)
     dmail_logo = load("dmail/logo.html")
     dmail_nav = load("dmail/nav.html")
-    dmail_aside = load("dmail/aside.html")
+    dmail_aside = load("dmail/aside.html", True)
     dmail_msg_list = load("dmail/msg_list.html", True)
     dmail_msg_list_list_start = load("dmail/msg_list_list_start.html")
     dmail_msg_list_list_row = load("dmail/msg_list_list_row.html", True)

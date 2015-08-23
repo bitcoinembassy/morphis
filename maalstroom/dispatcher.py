@@ -133,7 +133,7 @@ class MaalstroomDispatcher(object):
             self.send_content(\
                 templates.main_css, content_type="text/css")
             return
-        elif rpath == ".images/favicon.ico":
+        elif rpath == ".images/favicon.ico" or rpath == "favicon.ico":
             self.send_content(\
                 templates.favicon_content, content_type="image/png")
             return
