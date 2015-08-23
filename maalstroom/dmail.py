@@ -42,15 +42,15 @@ def serve_get(dispatcher, rpath):
 
     if req == "/style.css":
         dispatcher.send_content(templates.dmail_css, content_type="text/css")
-    elif req == "/logo.html":
+    elif req == "/logo":
         dispatcher.send_content(templates.dmail_logo)
-    elif req == "/nav.html":
+    elif req == "/nav":
         dispatcher.send_content(templates.dmail_nav)
-    elif req == "/aside.html":
+    elif req == "/aside":
         dispatcher.send_content(templates.dmail_aside)
-    elif req == "/msg_list.html":
+    elif req == "/msg_list":
         dispatcher.send_content(templates.dmail_msg_list)
-    elif req == "/new_mail.html":
+    elif req == "/new_mail":
         dispatcher.send_content(templates.dmail_new_mail)
 
     elif req.startswith("/images/"):
