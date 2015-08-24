@@ -218,7 +218,7 @@ dmail_frame_end =\
 
 dmail_page_content__f1_start =\
     b"""<!DOCTYPE html>
-<html><head><base target="_top" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/></head><body class="iframe">
+<html><head><base target="_top" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/style.css"/></head><body class="iframe">
 <h4>Your dmail addresses:</h4>
 """
 

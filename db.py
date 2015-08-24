@@ -17,6 +17,8 @@ from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.pool import Pool
 from sqlalchemy.types import LargeBinary, Boolean, DateTime
 
+import consts
+
 log = logging.getLogger(__name__)
 
 Base = declarative_base()
@@ -254,7 +256,7 @@ class Db():
 
         with self.open_session(True) as sess:
             q = sess.query(NodeState)\
-                .filter(NodeState.key == "db_version")
+                .filter(NodeState.key == consts.NSK_SCHEMA_VERSION)
 
             try:
                 r = q.first()
@@ -267,7 +269,7 @@ class Db():
 
             with self.open_session() as sess:
                 ns = NodeState()
-                ns.key = "db_version"
+                ns.key = consts.NSK_SCHEMA_VERSION
                 ns.value = "1"
                 sess.add(ns)
                 sess.commit()

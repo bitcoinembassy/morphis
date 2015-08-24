@@ -13,7 +13,9 @@ from sqlalchemy import func, not_
 from sqlalchemy.orm import joinedload
 
 import base58
-from db import DmailAddress, DmailKey, DmailMessage, DmailTag, DmailPart
+import consts
+from db import DmailAddress, DmailKey, DmailMessage, DmailTag, DmailPart,\
+    NodeState
 import dhgroup14
 import enc
 import dmail
@@ -50,9 +52,9 @@ def serve_get(dispatcher, rpath):
             addr_enc = params[:p0]
         else:
             #FIXME: YOU_ARE_HERE: Make this fetch only default one.
-            site_keys = yield from _list_dmail_addresses(dispatcher)
-            if site_keys:
-                addr_enc = mbase32.encode(site_keys[0][1])
+            dmail_address = yield from _load_default_dmail_address(dispatcher)
+            if dmail_address:
+                addr_enc = mbase32.encode(dmail_address.site_key)
             else:
                 addr_enc = ""
             tag = "Inbox"
@@ -90,7 +92,7 @@ def serve_get(dispatcher, rpath):
         if connections == 1:
             connection_str = "1 Connection"
         else:
-            connection_str = connections + " Connections"
+            connection_str = str(connections) + " Connections"
 
         template = template.format(\
             version=version_str,\
@@ -226,6 +228,23 @@ def serve_get(dispatcher, rpath):
             dispatcher.send_301(redirect)
         else:
             dispatcher.send_204()
+    elif req.startswith("/make_address_default/"):
+        params = req[22:]
+        p0 = params.find('?redirect=')
+        if p0 != -1:
+            redirect = params[p0+10:]
+        else:
+            redirect = None
+            p0 = len(params)
+
+        addr_dbid = params[:p0]
+
+        yield from _set_default_dmail_address(dispatcher, addr_dbid)
+
+        if redirect:
+            dispatcher.send_301(redirect)
+        else:
+            dispatcher.send_204()
 
 #######OLD:
 
@@ -235,14 +254,27 @@ def serve_get(dispatcher, rpath):
 
         site_keys = yield from _list_dmail_addresses(dispatcher)
 
+        default_id = yield from _load_default_dmail_address_id(dispatcher)
+
         for dbid, site_key in site_keys:
             site_key_enc = mbase32.encode(site_key)
 
+            log.info("{} {}".format(default_id, dbid))
+
+            if default_id and dbid == default_id:
+                hide = "hidden"
+            else:
+                hide = ""
+
             resp =\
                 '<div style="overflow: hidden; text-overflow: ellipsis;">'\
-                '[<a href="morphis://.dmail/wrapper/{}">view</a>]&nbsp{}'\
-                '</div>'\
-                    .format(site_key_enc, site_key_enc)
+                '[<a href="morphis://.dmail/wrapper/{addr}" class="normal">'\
+                'select</a>]&nbsp<span class="{hide}">'\
+                '[<a href="morphis://.dmail/make_address_default/{addr_dbid}'\
+                '?redirect=morphis://.dmail/address_list/"'\
+                ' class="normal">set&nbsp;default</a>]</span>'\
+                '&nbsp{addr}</div>'\
+                    .format(addr=site_key_enc, addr_dbid=dbid, hide=hide)
 
             dispatcher.send_partial_content(resp)
 
@@ -641,7 +673,7 @@ def serve_post(dispatcher, rpath):
                 log.debug("sender_dmail_id=[{}].".format(sender_dmail_id))
 
             dmail_address =\
-                yield from _fetch_dmail_address(dispatcher, sender_dmail_id)
+                yield from _load_dmail_address(dispatcher, sender_dmail_id)
 
             sender_asymkey = rsakey.RsaKey(\
                 privdata=dmail_address.site_privatekey)\
@@ -688,7 +720,7 @@ def serve_post(dispatcher, rpath):
         dispatcher.send_error(errcode=400)
 
 @asyncio.coroutine
-def _fetch_dmail_address(dispatcher, dmail_address_id):
+def _load_dmail_address(dispatcher, dmail_address_id):
     "Fetch from our database the parameters that are stored in a DMail site."
 
     def dbcall():
@@ -705,28 +737,78 @@ def _fetch_dmail_address(dispatcher, dmail_address_id):
 
             return dmailaddr
 
-    dmailaddr = yield from dispatcher.node.loop.run_in_executor(None, dbcall)
+    dmailaddr = yield from dispatcher.loop.run_in_executor(None, dbcall)
 
     return dmailaddr
 
 @asyncio.coroutine
-def _list_dmail_addresses(dispatcher):
+def _load_default_dmail_address_id(dispatcher):
     def dbcall():
         with dispatcher.node.db.open_session() as sess:
-            q = sess.query(DmailAddress)
+            q = sess.query(NodeState)\
+                .filter(NodeState.key == consts.NSK_DEFAULT_ADDRESS)
 
+            ns = q.first()
+
+            if not ns:
+                return None
+
+            return int(ns.value)
+
+    return dispatcher.loop.run_in_executor(None, dbcall)
+
+@asyncio.coroutine
+def _load_default_dmail_address(dispatcher):
+    def dbcall():
+        with dispatcher.node.db.open_session() as sess:
+            q = sess.query(NodeState)\
+                .filter(NodeState.key == consts.NSK_DEFAULT_ADDRESS)
+
+            ns = q.first()
+
+            if ns:
+                addr = sess.query(DmailAddress)\
+                    .filter(DmailAddress.id == int(ns.value))\
+                    .first()
+
+                if addr:
+                    sess.expunge(addr)
+                    return addr
+
+            addr = sess.query(DmailAddress)\
+                .order_by(DmailAddress.id)\
+                .limit(1)\
+                .first()
+
+            ns = NodeState()
+            ns.key = consts.NSK_DEFAULT_ADDRESS
+            ns.value = str(addr.id)
+            sess.add(ns)
+            sess.commit()
+
+            sess.expunge(addr)
+            return addr
+
+    addr = yield from dispatcher.loop.run_in_executor(None, dbcall)
+
+    return addr
+
+@asyncio.coroutine
+def _list_dmail_addresses(dispatcher):
+    def dbcall():
+        with dispatcher.node.db.open_session(True) as sess:
             log.info("Fetching addresses...")
+
+            q = sess.query(DmailAddress).order_by(DmailAddress.id)
 
             site_keys = []
 
-            for addr in mutil.page_query(q):
+            for addr in q.all():
                 site_keys.append((addr.id, addr.site_key))
-
-            sess.rollback()
 
             return site_keys
 
-    site_keys = yield from dispatcher.node.loop.run_in_executor(None, dbcall)
+    site_keys = yield from dispatcher.loop.run_in_executor(None, dbcall)
 
     return site_keys
 
@@ -1005,6 +1087,29 @@ def _process_dmail_message(dispatcher, dmail_key, process_call):
     dmail = yield from dispatcher.node.loop.run_in_executor(None, dbcall)
 
     return dmail
+
+@asyncio.coroutine
+def _set_default_dmail_address(dispatcher, dbid):
+    def dbcall():
+        with dispatcher.node.db.open_session() as sess:
+            q = sess.query(NodeState)\
+                .filter(NodeState.key == consts.NSK_DEFAULT_ADDRESS)
+
+            ns = q.first()
+
+            if not ns:
+                ns = NodeState()
+                ns.key = consts.NSK_DEFAULT_ADDRESS
+                sess.add(ns)
+
+            if type(dbid) is int:
+                sbid = str(dbid)
+
+            ns.value = dbid
+
+            sess.commit()
+
+    yield from dispatcher.loop.run_in_executor(None, dbcall)
 
 @asyncio.coroutine
 def _load_dmail_address(dispatcher, dmail_addr):

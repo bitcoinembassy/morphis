@@ -651,3 +651,10 @@ tr:hover, tr:hover a {
 .inline {
     display: inline-blocblock;
 }
+.hidden {
+    visibility: hidden;
+}
+a:visited.normal, a:link.normal {
+    color: blue;
+    text-color: blue;
+}
