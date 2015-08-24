@@ -75,7 +75,7 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
 
         self._write_response()
 
-        if self.node.web_devel:
+        if self.node.web_devel and self.headers["Cache-Control"] == "no-cache":
             global _concurrent_request_count
             with _request_lock:
                 _concurrent_request_count -= 1
@@ -98,7 +98,7 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
         log.warning("Writing response.")
         self._write_response()
 
-        if self.node.web_devel:
+        if self.node.web_devel and self.headers["Cache-Control"] == "no-cache":
             global _concurrent_request_count
             with _request_lock:
                 _concurrent_request_count -= 1
