@@ -101,6 +101,9 @@ div * * span {
 .nomargin {
     margin: 0;
 }
+.nopadding {
+    padding: 0;
+}
 iframe {
     margin: 0;
     padding: 0;
@@ -639,4 +642,7 @@ tr:hover, tr:hover a {
 }
 .inbox-pad {
   padding: .3em;
+}
+.inline {
+    display: inline-blocblock;
 }

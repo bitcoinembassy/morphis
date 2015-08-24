@@ -114,7 +114,7 @@ def serve_get(dispatcher, rpath):
 
         for top_tag in top_tags:
             active = top_tag == tag
-            unread_count = yield from _count_unread_dmails_for_tag(\
+            unread_count = yield from _count_unread_dmails(\
                 dispatcher, addr, top_tag)
 
             fmt[top_tag + "_active"] = "active-mailbox" if active else ""
@@ -154,7 +154,13 @@ def serve_get(dispatcher, rpath):
 
         dispatcher.send_content(template)
     elif req == "/new_mail":
-        dispatcher.send_content(templates.dmail_new_mail)
+        template = templates.dmail_new_mail[0]
+
+        unread_count = yield from _count_unread_dmails(dispatcher)
+
+        template = template.format(unread_count=unread_count)
+
+        dispatcher.send_content(template)
 
     elif req.startswith("/images/"):
         dispatcher.send_content(templates.imgs[req[8:]])
@@ -205,9 +211,10 @@ def serve_get(dispatcher, rpath):
         for dbid, site_key in site_keys:
             site_key_enc = mbase32.encode(site_key)
 
-            resp = '<span class="nowrap">'\
-                '[<a href="morphis://.dmail/wrapper/{}">view</a>]'\
-                '&nbsp{}</span><br/>'\
+            resp =\
+                '<div style="overflow: hidden; text-overflow: ellipsis;">'\
+                '[<a href="morphis://.dmail/wrapper/{}">view</a>]&nbsp{}'\
+                '</div>'\
                     .format(site_key_enc, site_key_enc)
 
             dispatcher.send_partial_content(resp)
@@ -697,17 +704,21 @@ def _list_dmail_addresses(dispatcher):
     return site_keys
 
 @asyncio.coroutine
-def _count_unread_dmails_for_tag(dispatcher, addr, tag):
-    if type(addr) not in (bytes, bytearray):
+def _count_unread_dmails(dispatcher, addr=None, tag=None):
+    if addr and type(addr) not in (bytes, bytearray):
         addr = mbase32.decode(addr)
 
     def dbcall():
         with dispatcher.node.db.open_session() as sess:
-            q = sess.query(func.count("*"))\
-                .filter(\
-                    DmailMessage.address.has(DmailAddress.site_key == addr))\
-                .filter(DmailMessage.tags.any(DmailTag.name == tag))\
-                .filter(DmailMessage.hidden == False)\
+            q = sess.query(func.count("*"))
+
+            if addr:
+                q = q.filter(\
+                    DmailMessage.address.has(DmailAddress.site_key == addr))
+            if tag:
+                q = q.filter(DmailMessage.tags.any(DmailTag.name == tag))
+
+            q = q.filter(DmailMessage.hidden == False)\
                 .filter(DmailMessage.read == False)
 
             return q.scalar()
