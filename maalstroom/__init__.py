@@ -92,10 +92,10 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
             asyncio.async,\
             self._dispatcher.do_POST(self._get_rpath()))
 
-        log.warning("Reading request.")
+        log.debug("Reading request.")
         self._read_request()
 
-        log.warning("Writing response.")
+        log.debug("Writing response.")
         self._write_response()
 
         if self.node.web_devel and self.headers["Cache-Control"] == "no-cache":
