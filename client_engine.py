@@ -40,8 +40,6 @@ class ClientEngine(object):
         if not self._dmail_engine:
             self._dmail_engine = dmail.DmailEngine(self.engine, self.db)
 
-        yield from self.engine.protocol_ready.wait()
-
         asyncio.async(self._start_version_poller(), loop=self.loop)
 
     @asyncio.coroutine
@@ -51,6 +49,8 @@ class ClientEngine(object):
 
     @asyncio.coroutine
     def _start_version_poller(self):
+        yield from self.engine.protocol_ready.wait()
+
         while self.__running:
             data_rw = multipart.BufferingDataCallback()
 

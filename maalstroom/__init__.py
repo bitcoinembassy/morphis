@@ -248,10 +248,12 @@ def get_client_engine():
 
     yield from node.ready.wait()
 
-    client_engine =\
-        cengine.ClientEngine(node.chord_engine, node.loop, update_test)
+    ce = cengine.ClientEngine(node.chord_engine, node.loop, update_test)
+    yield from ce.start()
 
-    yield from client_engine.start()
+    client_engine = ce
+
+    return client_engine
 
 def shutdown():
     if not server:
