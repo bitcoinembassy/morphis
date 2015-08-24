@@ -186,7 +186,7 @@ class ChordEngine():
                         self.node.db.lock_table(sess, Peer)
                         tlocked = True
 
-                    q = sess.query(func.count("*"))
+                    q = sess.query(func.count("*")).select_from(Peer)
 
                     if peer.pubkey:
                         assert peer.node_id is None
@@ -291,7 +291,12 @@ class ChordEngine():
 
         self._doing_stabilize = True
 
-        yield from self.tasks.perform_stabilize()
+        try:
+            yield from self.tasks.perform_stabilize()
+        except Exception as e:
+            log.exception("perform_stabilize()")
+        except KeyboardInterrupt:
+            raise
 
         self._doing_stabilize = False
 

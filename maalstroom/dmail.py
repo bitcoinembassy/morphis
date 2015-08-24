@@ -656,7 +656,7 @@ def _scan_new_dmails(dispatcher, addr, significant_bits):
 def _check_have_dmail(dispatcher, dmail_key):
     def dbcall():
         with dispatcher.node.db.open_session() as sess:
-            q = sess.query(func.count("*"))\
+            q = sess.query(func.count("*")).select_from(DmailMessage)\
                 .filter(DmailMessage.data_key == dmail_key)
 
             if q.scalar():
@@ -680,7 +680,7 @@ def _fetch_and_save_dmail(dispatcher, dmail_addr, dmail_key):
         with dispatcher.node.db.open_session() as sess:
             dispatcher.node.db.lock_table(sess, DmailMessage)
 
-            q = sess.query(func.count("*"))\
+            q = sess.query(func.count("*")).select_from(DmailMessage)\
                 .filter(DmailMessage.data_key == dmail_key)
 
             if q.scalar():

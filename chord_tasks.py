@@ -2163,8 +2163,7 @@ class ChordTasks(object):
                     else:
                         return False
                 else:
-                    q = sess.query(func.count("*"))
-
+                    q = sess.query(func.count("*")).select_from(DataBlock)
                     q = q.filter(DataBlock.data_id == data_id)
 
                     if q.scalar() > 0:
@@ -2206,7 +2205,7 @@ class ChordTasks(object):
                                 # We only want to store newer versions.
                                 return False
                     else:
-                        q = sess.query(func.count("*"))
+                        q = sess.query(func.count("*")).select_from(DataBlock)
                         q = q.filter(DataBlock.data_id == data_id)
 
                         if q.scalar() > 0:
@@ -2240,7 +2239,7 @@ class ChordTasks(object):
         def dbcall():
             with self.engine.node.db.open_session() as sess:
                 # First check if we have this block already.
-                q = sess.query(func.count("*"))
+                q = sess.query(func.count("*")).select_from(DataBlock)
                 q = q.filter(DataBlock.data_id == data_id)
 
                 if q.scalar() > 0:
@@ -2447,7 +2446,7 @@ class ChordTasks(object):
             with self.engine.node.db.open_session() as sess:
                 self.engine.node.db.lock_table(sess, DataBlock)
 
-                q = sess.query(func.count("*"))
+                q = sess.query(func.count("*")).select_from(DataBlock)
                 q = q.filter(DataBlock.data_id == data_id)
 
                 if q.scalar() > 0:
@@ -2574,7 +2573,7 @@ class ChordTasks(object):
                             # We only want to store newer versions.
                             return None, None
                 else:
-                    q = sess.query(func.count("*"))
+                    q = sess.query(func.count("*")).select_from(DataBlock)
                     q = q.filter(DataBlock.data_id == data_id)
 
                     if q.scalar() > 0:
