@@ -41,9 +41,13 @@ def serve_get(dispatcher, rpath):
             if dispatcher.handle_cache(req):
                 return
             params = req[9:]
-            p0 = params.index('/')
+            p0 = params.find('/')
+            if p0 == -1:
+                p0 = len(params)
+                tag = "Inbox"
+            else:
+                tag = params[p0+1:]
             addr_enc = params[:p0]
-            tag = params[p0+1:]
         else:
             #FIXME: YOU_ARE_HERE: Make this fetch only default one.
             site_keys = yield from _list_dmail_addresses(dispatcher)
@@ -201,8 +205,9 @@ def serve_get(dispatcher, rpath):
         for dbid, site_key in site_keys:
             site_key_enc = mbase32.encode(site_key)
 
-            resp = """<span class="nowrap">[<a href="addr/{}">view</a>]"""\
-                """ {}</span><br/>"""\
+            resp = '<span class="nowrap">'\
+                '[<a href="morphis://.dmail/wrapper/{}">view</a>]'\
+                '&nbsp{}</span><br/>'\
                     .format(site_key_enc, site_key_enc)
 
             dispatcher.send_partial_content(resp)
