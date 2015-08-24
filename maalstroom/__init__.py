@@ -239,14 +239,18 @@ def start_maalstroom_server(the_node):
 
     node.loop.run_in_executor(None, threadcall)
 
-    asyncio.async(_create_client_engine(), loop=node.loop)
-
 @asyncio.coroutine
-def _create_client_engine():
+def get_client_engine():
     global node, client_engine, update_test
+
+    if client_engine:
+        return client_engine
+
     yield from node.ready.wait()
+
     client_engine =\
         cengine.ClientEngine(node.chord_engine, node.loop, update_test)
+
     yield from client_engine.start()
 
 def shutdown():

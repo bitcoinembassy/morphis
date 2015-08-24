@@ -10,7 +10,6 @@ import time
 
 import base58
 import chord
-import client_engine as cengine
 import enc
 import maalstroom
 import maalstroom.templates as templates
@@ -31,10 +30,19 @@ class MaalstroomDispatcher(object):
         self.inq = inq
         self.outq = outq
 
+        self.client_engine = None
+
         self.finished_request = False
 
         self._abort_event = abort_event
         self._accept_charset = None
+
+    @asyncio.coroutine
+    def _ensure_client_engine(self):
+        if self.client_engine:
+            return
+
+        self.client_engine = yield from maalstroom.get_client_engine()
 
     @property
     def connection_count(self):
@@ -42,10 +50,7 @@ class MaalstroomDispatcher(object):
 
     @property
     def latest_version_number(self):
-        client_engine = maalstroom.client_engine
-        if not client_engine:
-            return None
-        return client_engine.latest_version_number
+        return self.client_engine.latest_version_number
 
     def send_response(self, code):
         # Maybe this should go through queue but then is less efficient and
@@ -79,6 +84,8 @@ class MaalstroomDispatcher(object):
     @asyncio.coroutine
     def do_GET(self, rpath):
         self.finished_request = False
+
+        yield from self._ensure_client_engine()
 
         if not rpath:
             current_version = self.node.morphis_version
@@ -391,6 +398,8 @@ class MaalstroomDispatcher(object):
     @asyncio.coroutine
     def do_POST(self, rpath):
         self.finished_request = False
+
+        yield from self._ensure_client_engine()
 
         try:
             yield from self._do_POST(rpath)
