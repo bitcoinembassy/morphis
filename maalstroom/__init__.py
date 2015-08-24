@@ -143,9 +143,14 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
                 if _concurrent_request_count == 1:
                     log.warning(\
                         "Reloading maalstroom packages due to web_dev mode.")
-                    importlib.reload(maalstroom.templates)
-                    importlib.reload(maalstroom.dispatcher)
-                    importlib.reload(maalstroom.dmail)
+                    try:
+                        importlib.reload(maalstroom.templates)
+                        importlib.reload(maalstroom.dispatcher)
+                        importlib.reload(maalstroom.dmail)
+                    except KeyboardInterrupt:
+                        raise
+                    except Exception as e:
+                        log.exception(e)
 
             self._dispatcher = self._create_dispatcher()
 
