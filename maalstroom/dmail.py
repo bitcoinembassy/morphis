@@ -63,7 +63,36 @@ def serve_get(dispatcher, rpath):
     if req == "/style.css":
         dispatcher.send_content(templates.dmail_css, content_type="text/css")
     elif req == "/logo":
-        dispatcher.send_content(templates.dmail_logo)
+        template = templates.dmail_logo[0]
+
+        current_version = dispatcher.node.morphis_version
+        latest_version_number = dispatcher.latest_version_number
+
+        if latest_version_number\
+                and current_version != latest_version_number:
+            version_str =\
+                '<span class="strikethrough nomargin">{}</span>]'\
+                '&nbsp;[<a href="{}{}">GET {}</a>'\
+                    .format(current_version,\
+                        dispatcher.handler.maalstroom_url_prefix_str,\
+                        "sp1nara3xhndtgswh7fznt414we4mi3y6kdwbkz4jmt8ocb6"\
+                            "x4w1faqjotjkcrefta11swe3h53dt6oru3r13t667pr7"\
+                            "cpe3ocxeuma/latest_version",\
+                        latest_version_number)
+        else:
+            version_str = current_version
+
+        connections = dispatcher.connection_count
+        if connections == 1:
+            connection_str = "1 Connection"
+        else:
+            connection_str = connections + " Connections"
+
+        template = template.format(\
+            version=version_str,\
+            connections=connection_str)
+
+        dispatcher.send_content(template)
     elif req == "/nav":
         dispatcher.send_content(templates.dmail_nav)
     elif req.startswith("/aside/"):

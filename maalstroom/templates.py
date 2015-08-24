@@ -426,7 +426,7 @@ if not initialized_template:
     dmail_css = load_resource("style.css")
 
     dmail_page_wrapper = load("dmail/page_wrapper.html", True)
-    dmail_logo = load("dmail/logo.html")
+    dmail_logo = load("dmail/logo.html", True)
     dmail_nav = load("dmail/nav.html")
     dmail_aside = load("dmail/aside.html", True)
     dmail_msg_list = load("dmail/msg_list.html", True)

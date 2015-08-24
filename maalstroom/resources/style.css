@@ -342,6 +342,12 @@ div.panel span {
   padding-left: 5px;
   line-height: 14px;
 }
+.version a {
+    color: red;
+    font-style: normal;
+    font-weight: bold;
+}
+
 .connections {
   font-size: 10px;
 }
