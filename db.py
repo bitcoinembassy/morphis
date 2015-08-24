@@ -10,9 +10,9 @@ from contextlib import contextmanager
 
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.schema import Index
-from sqlalchemy import create_engine, text, event, MetaData
-from sqlalchemy import Table, Column, ForeignKey, Integer, String, DateTime
-from sqlalchemy.exc import ProgrammingError
+from sqlalchemy import create_engine, text, event, MetaData, func, Table,\
+    Column, ForeignKey, Integer, String, DateTime
+from sqlalchemy.exc import ProgrammingError, OperationalError
 from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.pool import Pool
 from sqlalchemy.types import LargeBinary, Boolean, DateTime
@@ -187,8 +187,8 @@ class Db():
         self._schema_setcmd = "set search_path={}".format(self._schema)
 
     @contextmanager
-    def open_session(self):
-        if self.sqlite_lock:
+    def open_session(self, read_only=False):
+        if self.sqlite_lock and not read_only:
             self.sqlite_lock.acquire()
 
         try:
@@ -199,13 +199,13 @@ class Db():
                 try:
                     session.close()
                 except TypeError:
-                    log.error("SqlAlchemy crashed; workaround engaged;"\
+                    log.exception("SqlAlchemy crashed; workaround engaged;"\
                         " Session leaked! Upgrade to 1.0.8 to prevent this!")
         except:
             log.exception("Db session contextmanager.")
             raise
         finally:
-            if self.sqlite_lock:
+            if self.sqlite_lock and not read_only:
                 self.sqlite_lock.release()
 
     def lock_table(self, sess, tableobj):
@@ -244,11 +244,51 @@ class Db():
         conn.commit()
 
     @asyncio.coroutine
-    def create_all(self):
-        yield from self.loop.run_in_executor(None, self._create_all)
+    def ensure_schema(self):
+        yield from self.loop.run_in_executor(None, self._ensure_schema)
 
-    def _create_all(self):
-        log.info("Checking/creating schema.")
+    def _ensure_schema(self):
+        log.info("Checking schema.")
+
+        new_db = False
+
+        with self.open_session(True) as sess:
+            q = sess.query(NodeState)\
+                .filter(NodeState.key == "db_version")
+
+            try:
+                r = q.first()
+            except OperationalError:
+                new_db = True
+
+        if new_db:
+            log.info("Database schema is missing, creating.")
+            self._create_schema()
+
+            with self.open_session() as sess:
+                ns = NodeState()
+                ns.key = "db_version"
+                ns.value = "1"
+                sess.add(ns)
+                sess.commit()
+                return
+
+        if r:
+            version = int(r.value)
+        else:
+            # This is the schema before we started tracking version in db.
+            version = 1
+
+        if log.isEnabledFor(logging.INFO):
+            log.info("Existing schema detected (version=[{}]).".format(version))
+
+#        if version == 1:
+#            log.info("Upgrading database schema from version 1 to 2.")
+#            _upgrade_1_to_2(self)
+
+    def _create_schema(self):
+        log.info("Creating schema.")
+
         if self._schema:
             tmp_Base = declarative_base()
             d = _init_daos(tmp_Base, DObject())
@@ -283,3 +323,6 @@ if Peer is None:
     DmailMessage = d.DmailMessage
     DmailPart = d.DmailPart
     DmailTag = d.DmailTag
+
+def _upgrade_1_to_2(db):
+    pass

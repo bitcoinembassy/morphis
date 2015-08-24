@@ -85,6 +85,7 @@ class Node():
         global nodes
         return nodes
 
+    @asyncio.coroutine
     def init_db(self):
         if self._db_initialized:
             log.debug("The database is already initialized.")
@@ -95,6 +96,9 @@ class Node():
             os.makedirs("data")
 
         self.db.init_engine()
+
+        yield from self.db.ensure_schema()
+
         self._db_initialized = True
 
     @asyncio.coroutine
@@ -172,13 +176,9 @@ class Node():
         assert type(self.chord_engine.furthest_data_block) is bytes
 
     @asyncio.coroutine
-    def create_schema(self):
-        yield from self.db.create_all()
-
-    @asyncio.coroutine
     def start(self):
         if not self._db_initialized:
-            self.init_db()
+            yield from self.init_db()
 
         self.chord_engine.bind_address = self.bind_address
 
@@ -418,8 +418,7 @@ def __main():
                     maalstroom.update_test = True
                 yield from maalstroom.start_maalstroom_server(node)
 
-            node.init_db()
-            yield from node.create_schema()
+            yield from node.init_db()
 
             if bindaddr:
                 node.bind_address = bindaddr
