@@ -1,6 +1,6 @@
 -=-=   MORPHiS (c) 2014-2015  Sam Maloney (sam2015@morph.is)   =-=-
 
-Version: 0.8.0 - Developer Preview Release
+Version: 0.8.16 - Developer Preview Release
 
 License: GPL v2 for everything except for some files LGPL, and some public domain. See the LICENSE file for complete details.
 
@@ -24,6 +24,8 @@ INSTRUCTIONS
 Dependencies:
     Python >= 2.4.1, PyCrypto (2.6 tested), sqlalchemy (0.9.8 tested).
 
+NOTE: SqlAlchemy 0.9.8 does have a bug and thus you should use the latest, 1.0.8 if you can.
+
 To run, execute the following:
 
 > ./run.sh
@@ -42,7 +44,58 @@ WARNING: If you are running on a shared host, you really should run with the she
 
 NOTE: That will prevent the mcc.py commandline tool from working as well. I will fix that later by having it ssh key based authentication for shell connections.
 
-Then simply point your web browser to localhost:4251, or use the mcc command line client, or ssh to localhost:4250. I recommend using the MORPHiS firefox plugin that will be listed on the front page when you hit localhost:4251. (ANY DEVS THAT CAN HELP WITH THIS DEAD SIMPLE PLUGIN WILL BE SUPER APPRECIATED!)
+WEB UI:
+-------
+
+Then simply point your web browser to http://localhost:4251.
+
+I recommend using the MORPHiS firefox plugin that will be listed on the front page when you hit localhost:4251. (ANY DEVS THAT CAN HELP WITH THIS DEAD SIMPLE PLUGIN WILL BE SUPER APPRECIATED!)
+
+You can also use curl or wget:
+
+Download: curl http://localhost:4251/<whatever_key>
+Example: curl http://localhost:4251/sp1nara3xhndtgswh7fznt414we4mi3y
+
+Upload: curl --data-binary @somefile.ext http://localhost:4251/.upload/upload
+
+SSH CONSOLE UI:
+---------------
+
+Simply type:
+
+ssh 127.0.0.1 -p 4250
+
+And you will get the interactive console.
+
+Or you can pass the command through the ssh command:
+
+ssh 127.0.0.1 -p 4250 ?
+
+NOTE: You must type 127.0.0.1. Usually localhost resolves to ::1 which I will add later but right now MORPHiS ONLY allows shell connection from 127.0.0.1.
+
+NOTE: You will need to have an RSA key setup for your ssh. It doesn't mater what the key is for now (later it will support key pinning). To generate a key, type: ssh-keygen -b 4096
+
+MCC COMMAND LINE UI:
+--------------------
+
+Just type:
+
+python3 mcc.py --stat
+
+NOTE: This client is not up to speed. The WEB UI is the most mature by far as I did it last and most people will be using it so it made sense to have it the one ready for this first release. I will bring the other 2 interfaces up to speed and they will always be fully supported as up to speed, all 3.
+
+Tor
+---
+
+MORPHiS was designed from the beginning to not leak information and to be used over Tor!
+
+I still have to add SOCKS support, but I recently found a good library for that so it will come very soon.
+
+However, until then, you can use proxychains to run MORPHiS over Tor!
+
+proxychains python3 node.py
+
+It has been tested and it works great. It also works over torsocks if you --dm (disables the web UI). There is a bug in torsocks that causes torsocks to segfault on startup if you do not disable Maalstroom (--dm). I debugged it and will be able to submit a patch to the Tor project so they can fix it.
 
 -------------------------------------------------------------------------------
 
