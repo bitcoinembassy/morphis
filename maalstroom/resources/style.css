@@ -574,6 +574,11 @@ table {
    height: 12px;
    width: 12px;
 }
+.mail-icon {
+   background: url("images/read.png") no-repeat center center;
+   height: 12px;
+   width: 12px;
+}
 .reply-icon {
    background: url("images/reply_icon.png") no-repeat center center;
    height: 13px;

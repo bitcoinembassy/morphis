@@ -111,7 +111,12 @@ class MaalstroomDispatcher(object):
             log.debug("rpath=[{}].".format(rpath))
 
         if rpath[0] == '.':
-            yield from self.dispatch_GET(rpath)
+            try:
+                yield from self.dispatch_GET(rpath)
+            except Exception as e:
+                log.exception(e)
+                self.send_exception(e)
+
             return
 
         # At this point we assume it is a key URL.
@@ -212,7 +217,7 @@ class MaalstroomDispatcher(object):
 
         try:
             data_key, significant_bits = mutil.decode_key(rpath)
-        except IndexError as e:
+        except (ValueError, IndexError) as e:
             self.send_error("Invalid encoded key: [{}].".format(rpath), 400)
             return
 
@@ -252,14 +257,7 @@ class MaalstroomDispatcher(object):
                 "</head><body><a href=\"{}\">{}</a>\n{}</body></html>"\
                     .format(url, url, key_enc).encode()
 
-            self.send_response(301)
-            self.send_header("Location", url)
-            self.send_header("Content-Type", "text/html")
-            self.send_header("Content-Length", len(message))
-            self.end_headers()
-
-            self.write(message)
-            self.finish_response()
+            self.send_301(url, message)
             return
 
         if log.isEnabledFor(logging.DEBUG):
@@ -562,10 +560,25 @@ class MaalstroomDispatcher(object):
         self._accept_charset = acharset
         return acharset
 
-    def _send_204(self):
+    def send_204(self):
         self.send_response(204)
         self.send_header("Content-Length", 0)
         self.end_headers()
+        self.finish_response()
+
+    def send_301(self, url, message=None):
+        self.send_response(301)
+        self.send_header("Location", url)
+
+        if message:
+            self.send_header("Content-Type", "text/html")
+            self.send_header("Content-Length", len(message))
+            self.end_headers()
+            self.write(message)
+        else:
+            self.send_header("Content-Length", 0)
+            self.end_headers()
+
         self.finish_response()
 
     def handle_cache(self, content_id):

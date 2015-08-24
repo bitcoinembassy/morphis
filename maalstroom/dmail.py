@@ -200,6 +200,33 @@ def serve_get(dispatcher, rpath):
         dispatcher.end_partial_content()
 
 
+    # Actions.
+
+    elif req.startswith("/mark_as_read/"):
+        params = req[14:]
+        p0 = params.find('?redirect=')
+        if p0 != -1:
+            redirect = params[p0+10:]
+        else:
+            redirect = None
+            p0 = len(params)
+
+        dmail_key_enc = params[:p0]
+        dmail_key = mbase32.decode(dmail_key_enc)
+
+        log.info("MARK AS READ:[{}] [{}].".format(dmail_key_enc, redirect))
+
+        def processor(dmail):
+            dmail.read = not dmail.read
+            return True
+
+        yield from _process_dmail_message(dispatcher, dmail_key, processor)
+
+        if redirect:
+            dispatcher.send_301(redirect)
+        else:
+            dispatcher.send_204()
+
 #######OLD:
 
     elif req == "/address_list":
@@ -478,7 +505,7 @@ def serve_get(dispatcher, rpath):
 
         yield from _process_dmail_message(dispatcher, dmail_key, processor)
 
-        dispatcher._send_204()
+        dispatcher.send_204()
     elif req.startswith("/fetch/panel/trash/"):
         req_data = req[20:]
 
@@ -492,7 +519,7 @@ def serve_get(dispatcher, rpath):
 
         yield from _process_dmail_message(dispatcher, dmail_key, processor)
 
-        dispatcher._send_204()
+        dispatcher.send_204()
     elif req.startswith("/fetch/panel/"):
         req_data = req[13:]
 
@@ -728,7 +755,7 @@ def _count_unread_dmails(dispatcher, addr=None, tag=None):
     return cnt
 
 @asyncio.coroutine
-def _list_dmails_for_tag(dispatcher, addr, tag):
+def _load_dmails_for_tag(dispatcher, addr, tag):
     if type(addr) not in (bytes, bytearray):
         addr = mbase32.decode(addr)
 
@@ -749,6 +776,17 @@ def _list_dmails_for_tag(dispatcher, addr, tag):
 
     msgs = yield from dispatcher.node.loop.run_in_executor(None, dbcall)
 
+    return msgs
+
+@asyncio.coroutine
+def _list_dmails_for_tag(dispatcher, addr, tag):
+    msgs = yield from _load_dmails_for_tag(dispatcher, addr, tag)
+
+    if type(addr) is str:
+        addr_enc = addr
+    else:
+        addr_enc = mbase32.decode(addr)
+
     if not msgs:
         dispatcher.send_partial_content(\
             '<tr><td colspan="6">No messages.</td><tr></table>')
@@ -760,6 +798,8 @@ def _list_dmails_for_tag(dispatcher, addr, tag):
         key_enc = mbase32.encode(msg.data_key)
 
         unread = "" if msg.read else "new-mail"
+
+        mail_icon = "new-mail-icon" if unread else "mail-icon"
 
         subject = msg.subject
         if not subject:
@@ -777,7 +817,11 @@ def _list_dmails_for_tag(dispatcher, addr, tag):
             sender_key = "Anonymous"
 
         row = row_template.format(
+            mail_icon=mail_icon,\
+            tag=tag,\
             unread=unread,\
+            addr=addr_enc,\
+            msg_id=key_enc,\
             subject=subject,\
             sender=sender_key,\
             timestamp=msg.date)
