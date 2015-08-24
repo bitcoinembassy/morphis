@@ -739,14 +739,19 @@ def _count_unread_dmails(dispatcher, addr=None, tag=None):
         with dispatcher.node.db.open_session() as sess:
             q = sess.query(func.count("*"))
 
+            q = q.filter(DmailMessage.read == False)
+
             if addr:
                 q = q.filter(\
                     DmailMessage.address.has(DmailAddress.site_key == addr))
+
+            if tag == "Trash":
+                q = q.filter(DmailMessage.hidden == True)
+                return q.scalar()
+
             if tag:
                 q = q.filter(DmailMessage.tags.any(DmailTag.name == tag))
-
-            q = q.filter(DmailMessage.hidden == False)\
-                .filter(DmailMessage.read == False)
+            q = q.filter(DmailMessage.hidden == False)
 
             return q.scalar()
 
@@ -763,10 +768,15 @@ def _load_dmails_for_tag(dispatcher, addr, tag):
         with dispatcher.node.db.open_session() as sess:
             q = sess.query(DmailMessage)\
                 .filter(\
-                    DmailMessage.address.has(DmailAddress.site_key == addr))\
-                .filter(DmailMessage.tags.any(DmailTag.name == tag))\
-                .filter(DmailMessage.hidden == False)\
-                .order_by(DmailMessage.read, DmailMessage.date.desc())
+                    DmailMessage.address.has(DmailAddress.site_key == addr))
+
+            if tag == "Trash":
+                q = q.filter(DmailMessage.hidden == True)
+            else:
+                q = q.filter(DmailMessage.tags.any(DmailTag.name == tag))\
+                    .filter(DmailMessage.hidden == False)
+
+            q = q.order_by(DmailMessage.read, DmailMessage.date.desc())
 
             msgs = q.all()
 
