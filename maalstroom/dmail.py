@@ -38,27 +38,18 @@ def serve_get(dispatcher, rpath):
 #    if log.isEnabledFor(logging.INFO):
 #        log.info("req=[{}].".format(req))
 
-    if req == "" or req.startswith("/wrapper/"):
-        if req:
-            if dispatcher.handle_cache(req):
-                return
-            params = req[9:]
-            p0 = params.find('/')
-            if p0 == -1:
-                p0 = len(params)
-                tag = "Inbox"
-            else:
-                tag = params[p0+1:]
-            addr_enc = params[:p0]
-        else:
-            #FIXME: YOU_ARE_HERE: Make this fetch only default one.
-            dmail_address = yield from _load_default_dmail_address(dispatcher)
-            if dmail_address:
-                addr_enc = mbase32.encode(dmail_address.site_key)
-            else:
-                addr_enc = ""
+    if req == "" or req == "/" or req.startswith("/wrapper/"):
+        if dispatcher.handle_cache(req):
+            return
+
+        params = req[9:]
+        p0 = params.find('/')
+        if p0 == -1:
+            p0 = len(params)
             tag = "Inbox"
-            params = tag + '/' + addr_enc
+        else:
+            tag = params[p0+1:]
+        addr_enc = params[:p0]
 
         template = templates.dmail_page_wrapper[0]
         template = template.format(tag=tag, addr=addr_enc)
@@ -107,6 +98,11 @@ def serve_get(dispatcher, rpath):
         addr_enc = params[:p0]
         tag = params[p0+1:]
 
+        if not addr_enc:
+            dmail_address = yield from _load_default_dmail_address(dispatcher)
+            if dmail_address:
+                addr_enc = mbase32.encode(dmail_address.site_key)
+
         addr = mbase32.decode(addr_enc)
 
         template = templates.dmail_aside[0]
@@ -151,10 +147,23 @@ def serve_get(dispatcher, rpath):
         addr_enc = params[:p0]
         tag = params[p0+1:]
 
+        if not addr_enc:
+            dmail_address = yield from _load_default_dmail_address(dispatcher)
+            if dmail_address:
+                addr_enc = mbase32.encode(dmail_address.site_key)
+            cacheable = False
+        else:
+            if dispatcher.handle_cache(req):
+                return
+            cacheable = True
+
         template = templates.dmail_msg_list[0]
         template = template.format(tag=tag, addr=addr_enc)
 
-        dispatcher.send_content(template)
+        if cacheable:
+            dispatcher.send_content(template, req)
+        else:
+            dispatcher.send_content(template)
     elif req == "/new_mail":
         template = templates.dmail_new_mail[0]
 
@@ -270,9 +279,9 @@ def serve_get(dispatcher, rpath):
                 '<div style="overflow: hidden; text-overflow: ellipsis;">'\
                 '[<a href="morphis://.dmail/wrapper/{addr}" class="normal">'\
                 'select</a>]&nbsp<span class="{hide}">'\
-                '[<a href="morphis://.dmail/make_address_default/{addr_dbid}'\
-                '?redirect=morphis://.dmail/address_list/"'\
-                ' class="normal">set&nbsp;default</a>]</span>'\
+                '[<a target="_self" href="morphis://.dmail/'\
+                'make_address_default/{addr_dbid}?redirect=morphis://.dmail/'\
+                'address_list" class="normal">set&nbsp;default</a>]</span>'\
                 '&nbsp{addr}</div>'\
                     .format(addr=site_key_enc, addr_dbid=dbid, hide=hide)
 
@@ -753,7 +762,10 @@ def _load_default_dmail_address_id(dispatcher):
             if not ns:
                 return None
 
-            return int(ns.value)
+            try:
+                return int(ns.value)
+            except ValueError:
+                return None
 
     return dispatcher.loop.run_in_executor(None, dbcall)
 

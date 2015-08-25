@@ -157,8 +157,8 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
     def _get_rpath(self):
         rpath = self.path[1:]
 
-        if rpath and rpath[-1] == '/':
-            rpath = rpath[:-1]
+        if self.maalstroom_plugin_used and len(rpath) == 1 and rpath[0] == '/':
+            rpath = ""
 
         return rpath
 
