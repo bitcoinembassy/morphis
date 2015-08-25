@@ -5,6 +5,7 @@ import llog
 
 import asyncio
 import logging
+import textwrap
 import threading
 import time
 import urllib.parse
@@ -1285,7 +1286,46 @@ def _format_dmail_content(dm):
 
     dmail_text = ''.join(dmail_text)
 
+    dmail_text = wrap(dmail_text)
+
     return dmail_text
+
+
+def wrap_long_lines(text, limit=79):
+    len_text = len(text)
+    out = ""
+    p0 = 0
+    while p0 < len_text:
+        p1 = text.find('\n', p0)
+        if p1 == -1:
+            log.info("NO ENDING")
+            p1 = len_text
+
+        if (p1 - p0) <= limit:
+            log.info("GOOD LINE [{}]".format(text[p0:p1+1]))
+            out += text[p0:p1+1]
+            p0 = p1 + 1
+            continue
+
+        include_break_chr = False
+        ps = text.rfind('-', p0, p0+limit)
+        if ps == -1:
+            ps = text.rfind(' ', p0, p0+limit)
+            include_break_chr = True
+
+        if ps == -1:
+            out += text[p0:p0+limit]
+            out += '\n'
+            p0 += limit
+            continue
+
+        out += text[p0:ps]
+        out += '\n'
+        p0 = ps
+        if not include_break_chr:
+            p0 += 1
+
+    return out
 
 def _format_dmail(dm, valid_sig):
     from_db = type(dm) is DmailMessage
