@@ -222,14 +222,28 @@ class MaalstroomDispatcher(object):
         else:
             path = None
 
+        if not rpath:
+            msg = "Empty key was specified."
+            log.warning(msg)
+            self.send_error(msg, 400)
+
         try:
             data_key, significant_bits = mutil.decode_key(rpath)
         except (ValueError, IndexError) as e:
+            log.exception("mutil.decode_key(..)")
             self.send_error("Invalid encoded key: [{}].".format(rpath), 400)
             return
 
         if significant_bits:
             # Resolve key via send_find_key.
+            if significant_bits < 32:
+                log.warning("Request supplied key with too few bits [{}]."\
+                    .format(significant_bits))
+
+                self.send_error(\
+                    "Key must have at least 32 bits or 7 characters,"\
+                    " len(key)=[{}].".format(len(rpath)), 400)
+                return
 
             try:
                 data_rw =\
@@ -240,8 +254,11 @@ class MaalstroomDispatcher(object):
                         loop=self.loop)
                 data_key = data_rw.data_key
             except asyncio.TimeoutError:
+                data_key = None
+
+            if not data_key:
                 self.send_error(b"Key Not Found", errcode=404)
-                pass
+                return
 
             if log.isEnabledFor(logging.INFO):
                 log.info("Found key=[{}].".format(mbase32.encode(data_key)))
@@ -277,13 +294,22 @@ class MaalstroomDispatcher(object):
         try:
             data_callback = Downloader(self, queue)
 
-            asyncio.async(\
-                multipart.get_data(\
-                    self.node.chord_engine, data_key, data_callback, path=path,
-                    ordered=True),
-                loop=self.loop)
-        except:
+            @asyncio.coroutine
+            def call_wrapper():
+                try:
+                    yield from multipart.get_data(\
+                        self.node.chord_engine, data_key, data_callback,\
+                        path=path, ordered=True)
+                except Exception as e:
+                    log.exception("multipart.get_data(..)")
+                    data_callback.exception = e
+                    data_callback.notify_finished(False)
+
+            asyncio.async(call_wrapper(), loop=self.loop)
+        except Exception as e:
             log.exception("send_get_data(..)")
+            self.send_exception(e)
+            return
 
         log.debug("Waiting for first data.")
 
@@ -298,6 +324,9 @@ class MaalstroomDispatcher(object):
         data = yield from queue.get()
 
         if data:
+            if data is Error:
+                self.send_exception(data_callback.exception)
+
             self.send_response(200)
 
             rewrite_urls = False
@@ -791,6 +820,8 @@ class Downloader(multipart.DataCallback):
         self.mime_type = None
 
         self.abort = False
+
+        self.exception = None
 
     def notify_version(self, version):
         self.version = version
