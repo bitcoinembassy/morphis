@@ -437,8 +437,7 @@ class MaalstroomDispatcher(object):
                 == "application/x-www-form-urlencoded":
             log.debug("Content-Type=[application/x-www-form-urlencoded].")
 
-#FIXME: YOU_ARE_HERE
-            data = self.rfile.read(int(self.handler.headers["Content-Length"]))
+            data = yield from self.read_request()
             privatekey = None
         else:
             if log.isEnabledFor(logging.DEBUG):
