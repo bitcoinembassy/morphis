@@ -794,9 +794,10 @@ button.submit:active {
 }
 .staticWidth {
     position: absolute;
-    right: 1.5em;
+    right: 1em;
     width: 30px;
-    top: 10.8em; /*centers the content of this div in middle of height*/
+    top: 6.7em;
+/*    top: 10.8em; /*centers the content of this div in middle of height*/
 }
 .address-trunc {
     overflow: hidden;
