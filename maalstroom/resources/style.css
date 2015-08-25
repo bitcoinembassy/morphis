@@ -11,7 +11,7 @@ html, body {
   letter-spacing: .06em;
 }
 body.iframe {
-    height: 0%;
+    height: 100%;
 }
 a {
   text-decoration: none;
@@ -104,6 +104,24 @@ div * * span {
 .nopadding {
     padding: 0;
 }
+.valign_top {
+    vertical-align: top;
+}
+.valign_middle {
+    vertical-align: middle;
+}
+
+.valid_sender {
+    color: green;
+}
+.invalid_sender:before {
+    content: "FAKED:";
+}
+.invalid_sender {
+    color: red;
+    text-decoration: line-through;
+}
+
 iframe {
     margin: 0;
     padding: 0;
@@ -653,7 +671,222 @@ tr:hover, tr:hover a {
 .hidden {
     visibility: hidden;
 }
-a:visited.normal, a:link.normal {
+a.normal:visited, a.normal:link {
     color: blue;
     text-color: blue;
+}
+
+/*NEW STYLES*/
+
+/*Styles for Compose*/
+
+.compose-bkg {
+    background: #ffffff;
+    height: calc(100% - 8em);
+}
+.from-address {
+    width: 80%;
+    overflow: hidden;
+    text-overflow: ellipsis;  // IE 6+, FF 7+, Op 11+, Saf 1.3+, Chr 1+
+    -o-text-overflow: ellipsis;  // for Opera 9 & 10
+    white-space: nowrap;
+    padding: 0;
+    margin: 0;
+}
+.message label {
+    float: left;
+    text-align: left;
+    width: 6em;
+    padding-top: .3em;
+    margin-left: 2em;
+    font-size: .9em;
+    letter-spacing: 0;
+    color: #666666;
+}
+.message input {
+    height:2em;
+    width: 70%;
+    min-width: 20em;
+}
+.message textarea {
+    padding:8px;
+    width: 100%;
+    height: 100%;
+    margin-top: 1em;
+    border: 0px none;
+    border-radius: 0px;
+    padding: 8px 0px 8px 8px;
+    resize: none;
+    font-family: monospace;
+    font-size: 1.2em;
+    outline: medium none;
+    box-shadow: 0px 0px 2px 1px rgba(0, 0, 0, 0.2) inset;
+}
+input[type="text"]:focus, textarea:focus {
+    outline: medium none;
+    border-color: #39a3af;
+    box-shadow: 0px 0px 5px 2px rgba(56, 163, 175, 0.9);
+}
+.message input {
+    border: 1px solid #b2b2b2;
+    box-shadow: 0px 0px 2px 1px rgba(0, 0, 0, 0.1) inset;
+    border-radius: 4px;
+    font-size: .85em;
+}
+.message li {
+    padding-top: 1em;
+    white-space: nowrap;
+}
+button.submit {
+    margin-left: 2em;
+    margin-top: 1.5em;
+    background-color: #b025be;
+    background: -webkit-gradient(linear, left top, left bottom, from(#b025be), to(#7e1d81));
+    background: -webkit-linear-gradient(top, #b025be, #7e1d81);
+    background: -moz-linear-gradient(top, #b025be, #7e1d81);
+    background: -ms-linear-gradient(top, #b025be, #7e1d81);
+    background: -o-linear-gradient(top, #b025be, #7e1d81);
+    background: linear-gradient(top, #b025be, #7e1d81);
+    border: 1px solid #b025be;
+    border-bottom: 1px solid #b025be;
+    border-radius: .5em;
+    -webkit-border-radius: .5em;
+    -moz-border-radius: .5em;
+    -ms-border-radius: .5em;
+    -o-border-radius: .5em;
+    box-shadow: inset 0 1px 0 0 #7e1d81;
+    -webkit-box-shadow: 0 1px 0 0 #7e1d81 inset ;
+    -moz-box-shadow: 0 1px 0 0 #7e1d81 inset;
+    -ms-box-shadow: 0 1px 0 0 #7e1d81 inset;
+    -o-box-shadow: 0 1px 0 0 #7e1d81 inset;
+    color: white;
+    padding: 6px 20px;
+    text-align: center;
+    text-shadow: 0 -1px 0 background-color:;
+}
+button.submit:hover {
+    background: #7e1d81;
+    cursor: pointer;
+}
+button.submit:active {
+    border: 1px solid #7e1d81;
+    box-shadow: 0 0 10px 5px #6f1772 inset;
+    -webkit-box-shadow:0 0 10px 5px #6f1772 inset ;
+    -moz-box-shadow: 0 0 10px 5px #6f1772 inset;
+    -ms-box-shadow: 0 0 10px 5px #6f1772 inset;
+    -o-box-shadow: 0 0 10px 5px #6f1772 inset;
+}
+ button.addressbook-icon {
+    background: url("images/addressbook_grey.png") no-repeat left center;
+    cursor: pointer;
+    height: 19px;
+    width: 19px;
+    border: 0;
+    float: left;
+    position: absolute;
+    display: inline-block;
+}
+ button.addressbook-icon:hover {
+    background: url("images/addressbook_blue.png") no-repeat left center;
+}
+.dynamicWidth {
+    margin-right: 2em;
+}
+.staticWidth {
+    position: absolute;
+    right: 1.5em;
+    width: 30px;
+    top: 10.8em; /*centers the content of this div in middle of height*/
+}
+.address-trunc {
+    overflow: hidden;
+    text-overflow: ellipsis;  // IE 6+, FF 7+, Op 11+, Saf 1.3+, Chr 1+
+    -o-text-overflow: ellipsis;  // for Opera 9 & 10
+    white-space: nowrap;
+    padding: 0;
+    margin: 0;
+}
+.nav-save-icon {
+    background: url("images/save_dk.png") no-repeat left center;
+}
+.nav-save-icon:hover {
+    background: url("images/save.png") no-repeat left center;
+}
+.nav-send-icon {
+    background: url("images/send_purp.png") no-repeat left center;
+    color: #b025be;
+}
+.nav-send-icon:hover {
+    background: url("images/send_blue.png") no-repeat left center;
+    color: #38a3af;
+}
+.nav-reply-icon {
+    background: url("images/reply_dk.png") no-repeat left center;
+    color: #141c30;
+}
+.nav-reply-icon:hover {
+    background: url("images/reply_blue.png") no-repeat left center;
+    color: #38a3af;
+}
+.nav-delete-icon {
+    background: url("images/trash_dk.png") no-repeat left center;
+    color: #141c30;
+}
+.nav-delete-icon:hover {
+    background: url("images/trash_blue.png") no-repeat left center;
+    color: #38a3af;
+}
+.read-wrapper {
+    height: 100%;
+    padding-top: 1.5em;
+    padding-bottom: 1.5em;
+    padding-left: 1.5em;
+    padding-right: 1.5em;
+}
+h1 {
+    font: 2em "Open Sans Light", sans-serif;
+    margin-top: 0;
+    margin-bottom: .4em;
+}
+.blue-text {
+    color: #38a3af;
+    white-space: nowrap;
+}
+.right-icons-inner {
+    color: #ffffff;
+    width: 100%;
+    display: inline;
+}
+.right-icons-inner li {
+    display: inline;
+    padding: 1.8em;
+    margin: 0;
+}
+.right-icons-inner ul {
+    padding-top: .7em;
+    position: absolute;
+    top: 0;
+    right: 0;
+    float: right;
+}
+.read-msg {
+    font-family: monospace;
+    font-size: 1.2em;
+    padding-top: 1em;
+}
+.trash-icon {
+    background: url("images/trash.png") no-repeat center left;
+    background-position: 30px;
+}
+.trash-icon:hover {
+    background: url("images/trash_white_in.png") no-repeat center left;
+    background-position: 30px;
+}
+.outbox-icon {
+    background: url("images/outbox.png") no-repeat center left;
+    background-position: 30px;
+}
+.outbox-icon:hover {
+    background: url("images/outbox_white.png") no-repeat center left;
+    background-position: 30px;
 }

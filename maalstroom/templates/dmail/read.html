@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+<base target="_top" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/style.css">
+</head>
+<body class="iframe">
+<span class="inbox-head nowrap">View Message</span>
+<div class="right-icons-inner">
+    <ul>
+	<a href="morphis://.dmail/compose"><div style="display:inline"><li class="nav-send-icon">SEND</li></div></a>
+	<a href="morphis://.dmail/reply"><div style="display:inline"><li class="nav-reply-icon">REPLY</li></div></a>
+	<a href="morphis://.dmail/delete"><div style="display:inline"><li class="nav-delete-icon">DELETE</li></div></a>
+    </ul>
+</div><br/><br/>
+<div class="compose-bkg" style="border: 1px dashed;">
+    <div class="read-wrapper">
+        <div class="dynamicWidth">
+            <div class="address-trunc nowrap">From: <span class="{sender_class}">{sender}</span></div>
+        </div>
+        <div class="staticWidth"><button class="addressbook-icon" type="submit"></button></div>
+        <table style="margin-left: -0.5px;" width="100%"><tr><td class="nopadding nomargin">Subject:</td><td width="100%"><iframe style="display: inline; height: 1.8em; max-height: 1.8em; width: 100%;" src="morphis://.dmail/read/subject/{msg_id}"></iframe></td></tr></table>
+        <span>Date: {date}</span>
+        <iframe src="morphis://.dmail/read/content/{msg_id}" style="height: calc(100% - 5em); width: 100%;"></iframe>
+    </div>
+</div>
+</body></html>

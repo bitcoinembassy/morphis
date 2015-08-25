@@ -176,7 +176,6 @@ def serve_get(dispatcher, rpath):
     elif req.startswith("/images/"):
         dispatcher.send_content(templates.imgs[req[8:]])
 
-
     elif req.startswith("/tag/view/list/"):
         params = req[15:]
 
@@ -210,6 +209,53 @@ def serve_get(dispatcher, rpath):
         dispatcher.send_partial_content(templates.dmail_tag_view_list_end)
         dispatcher.end_partial_content()
 
+    elif req.startswith("/read/content/"):
+        params = req[14:]
+
+        msg_dbid = params
+
+        dm = yield from _load_dmail(dispatcher, msg_dbid)
+
+        dmail_text = _format_dmail_content(dm)
+
+        acharset = dispatcher.get_accept_charset()
+
+        dispatcher.send_content(\
+            dmail_text.encode(acharset),
+            content_type="text/plain; charset={}".format(acharset))
+
+    elif req.startswith("/read/subject/"):
+        params = req[14:]
+
+        msg_dbid = params
+
+        dm = yield from _load_dmail(dispatcher, msg_dbid)
+
+        acharset = dispatcher.get_accept_charset()
+
+        dispatcher.send_content(\
+            dm.subject.encode(acharset),
+            content_type="text/plain; charset={}".format(acharset))
+
+    elif req.startswith("/read/"):
+        params = req[6:]
+
+        msg_dbid = params
+
+        dm = yield from _load_dmail(dispatcher, msg_dbid)
+
+        sender_addr = mbase32.encode(dm.sender_dmail_key)
+        sender_class =\
+            "valid_sender" if dm.sender_valid else "invalid_sender"
+
+        template = templates.dmail_read[0]
+        template = template.format(\
+            msg_id=msg_dbid,\
+            sender_class=sender_class,\
+            sender=sender_addr,\
+            date=dm.date)
+
+        dispatcher.send_content(template)
 
     # Actions.
 
@@ -222,16 +268,13 @@ def serve_get(dispatcher, rpath):
             redirect = None
             p0 = len(params)
 
-        dmail_key_enc = params[:p0]
-        dmail_key = mbase32.decode(dmail_key_enc)
-
-        log.info("MARK AS READ:[{}] [{}].".format(dmail_key_enc, redirect))
+        msg_dbid = params[:p0]
 
         def processor(dmail):
             dmail.read = not dmail.read
             return True
 
-        yield from _process_dmail_message(dispatcher, dmail_key, processor)
+        yield from _process_dmail_message(dispatcher, msg_dbid, processor)
 
         if redirect:
             dispatcher.send_301(redirect)
@@ -784,6 +827,7 @@ def _load_default_dmail_address(dispatcher):
                     .first()
 
                 if addr:
+                    key = addr.site_key # Fix for SqlAlchemy fail.
                     sess.expunge(addr)
                     return addr
 
@@ -791,6 +835,8 @@ def _load_default_dmail_address(dispatcher):
                 .order_by(DmailAddress.id)\
                 .limit(1)\
                 .first()
+
+            key = addr.site_key # Fix for SqlAlchemy fail.
 
             ns = NodeState()
             ns.key = consts.NSK_DEFAULT_ADDRESS
@@ -899,8 +945,6 @@ def _list_dmails_for_tag(dispatcher, addr, tag):
     row_template = templates.dmail_msg_list_list_row[0]
 
     for msg in msgs:
-        key_enc = mbase32.encode(msg.data_key)
-
         unread = "" if msg.read else "new-mail"
 
         mail_icon = "new-mail-icon" if unread else "mail-icon"
@@ -925,7 +969,7 @@ def _list_dmails_for_tag(dispatcher, addr, tag):
             tag=tag,\
             unread=unread,\
             addr=addr_enc,\
-            msg_id=key_enc,\
+            msg_id=msg.id,\
             subject=subject,\
             sender=sender_key,\
             timestamp=msg.date)
@@ -1063,12 +1107,12 @@ def _fetch_and_save_dmail(dispatcher, dmail_addr, dmail_key):
     return
 
 @asyncio.coroutine
-def _load_dmail(dispatcher, dmail_key):
+def _load_dmail(dispatcher, dmail_dbid):
     def dbcall():
         with dispatcher.node.db.open_session() as sess:
             q = sess.query(DmailMessage)\
                 .options(joinedload("parts"))\
-                .filter(DmailMessage.data_key == dmail_key)
+                .filter(DmailMessage.id == dmail_dbid)
 
             dmail = q.first()
 
@@ -1081,11 +1125,11 @@ def _load_dmail(dispatcher, dmail_key):
     return dmail
 
 @asyncio.coroutine
-def _process_dmail_message(dispatcher, dmail_key, process_call):
+def _process_dmail_message(dispatcher, msg_dbid, process_call):
     def dbcall():
         with dispatcher.node.db.open_session() as sess:
             q = sess.query(DmailMessage)\
-                .filter(DmailMessage.data_key == dmail_key)
+                .filter(DmailMessage.id == msg_dbid)
 
             dmail = q.first()
 
@@ -1197,6 +1241,24 @@ def _fetch_dmail(dispatcher, dmail_addr, dmail_key):
         return None, None
 
     return dm, valid_sig
+
+def _format_dmail_content(dm):
+    assert type(dm) is DmailMessage
+
+    dmail_text = []
+
+    i = 0
+    for part in dm.parts:
+        dmail_text += part.data.decode()
+        dmail_text += '\n'
+
+        if len(dm.parts) > 1:
+            dmail_text += "----- ^ dmail part #{} ^ -----\n\n".format(i)
+            i += 1
+
+    dmail_text = ''.join(dmail_text)
+
+    return dmail_text
 
 def _format_dmail(dm, valid_sig):
     from_db = type(dm) is DmailMessage
