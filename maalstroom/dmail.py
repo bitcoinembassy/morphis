@@ -244,12 +244,18 @@ def serve_get(dispatcher, rpath):
 
         dm = yield from _load_dmail(dispatcher, msg_dbid)
 
+        if dm.hidden:
+            trash_msg = "REMOVE FROM TRASH"
+        else:
+            trash_msg = "MOVE TO TRASH"
+
         sender_addr = mbase32.encode(dm.sender_dmail_key)
         sender_class =\
             "valid_sender" if dm.sender_valid else "invalid_sender"
 
         template = templates.dmail_read[0]
         template = template.format(\
+            trash_msg=trash_msg,\
             msg_id=msg_dbid,\
             sender_class=sender_class,\
             sender=sender_addr,\
@@ -272,6 +278,27 @@ def serve_get(dispatcher, rpath):
 
         def processor(dmail):
             dmail.read = not dmail.read
+            return True
+
+        yield from _process_dmail_message(dispatcher, msg_dbid, processor)
+
+        if redirect:
+            dispatcher.send_301(redirect)
+        else:
+            dispatcher.send_204()
+    elif req.startswith("/toggle_trashed/"):
+        params = req[16:]
+        p0 = params.find('?redirect=')
+        if p0 != -1:
+            redirect = params[p0+10:]
+        else:
+            redirect = None
+            p0 = len(params)
+
+        msg_dbid = params[:p0]
+
+        def processor(dmail):
+            dmail.hidden = not dmail.hidden
             return True
 
         yield from _process_dmail_message(dispatcher, msg_dbid, processor)
