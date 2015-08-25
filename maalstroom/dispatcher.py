@@ -162,7 +162,7 @@ class MaalstroomDispatcher(object):
                 self.finish_response()
                 return
 
-            if len(rpath) == 7: # len(".upload")
+            if rpath == ".upload" or rpath == ".upload/":
                 self.send_content(maalstroom.static_upload_page_content)
             else:
                 content =\
