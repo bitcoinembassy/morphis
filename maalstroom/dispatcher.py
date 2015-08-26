@@ -385,6 +385,9 @@ class MaalstroomDispatcher(object):
                 self.send_header("Content-Length", data_callback.size)
 
             if data_callback.version is not None:
+                self.send_header(\
+                    "X-Maalstroom-UpdateableKey-Version",\
+                    data_callback.version)
                 self.send_header("Cache-Control", "public,max-age=15")
                 self.send_header("ETag", "updateablekey-" + rpath)
             else:
