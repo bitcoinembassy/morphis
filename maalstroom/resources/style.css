@@ -742,8 +742,8 @@ input[type="text"]:focus, textarea:focus {
     white-space: nowrap;
 }
 button.submit {
-    margin-left: 2em;
-    margin-top: 1.5em;
+    margin-left: 1em;
+    margin-top: 0.5em;
     background-color: #b025be;
     background: -webkit-gradient(linear, left top, left bottom, from(#b025be), to(#7e1d81));
     background: -webkit-linear-gradient(top, #b025be, #7e1d81);
@@ -764,7 +764,7 @@ button.submit {
     -ms-box-shadow: 0 1px 0 0 #7e1d81 inset;
     -o-box-shadow: 0 1px 0 0 #7e1d81 inset;
     color: white;
-    padding: 6px 20px;
+    padding: 4px 20px;
     text-align: center;
     text-shadow: 0 -1px 0 background-color:;
 }
