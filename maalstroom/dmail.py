@@ -284,8 +284,8 @@ def serve_get(dispatcher, rpath):
         tag = params[p0+1:p1]
         msg_dbid = params[p1+1:]
 
-        def processor(dmail):
-            dmail.read = True
+        def processor(sess, dm):
+            dm.read = True
             return True
 
         dm = yield from _process_dmail_message(\
@@ -296,7 +296,9 @@ def serve_get(dispatcher, rpath):
         else:
             trash_msg = "MOVE TO TRASH"
 
-        safe_reply_subject = quote_plus("Re: " + dm.subject)
+        reply_subject = dm.subject if dm.subject.startswith("Re: ")
+            else "Re: " + dm.subject
+        safe_reply_subject = quote_plus(reply_subject)
         sender_addr = mbase32.encode(dm.sender_dmail_key)
         sender_class =\
             "valid_sender" if dm.sender_valid else "invalid_sender"
@@ -416,8 +418,8 @@ def serve_get(dispatcher, rpath):
 
         msg_dbid = params[:p0]
 
-        def processor(dmail):
-            dmail.read = not dmail.read
+        def processor(sess, dm):
+            dm.read = not dm.read
             return True
 
         yield from _process_dmail_message(dispatcher, msg_dbid, processor)
@@ -437,8 +439,8 @@ def serve_get(dispatcher, rpath):
 
         msg_dbid = params[:p0]
 
-        def processor(dmail):
-            dmail.hidden = not dmail.hidden
+        def processor(sess, dm):
+            dm.hidden = not dm.hidden
             return True
 
         yield from _process_dmail_message(dispatcher, msg_dbid, processor)
@@ -751,8 +753,8 @@ def serve_get(dispatcher, rpath):
         dmail_key_enc = req_data[p0+1:]
         dmail_key = mbase32.decode(dmail_key_enc)
 
-        def processor(dmail):
-            dmail.read = not dmail.read
+        def processor(sess, dm):
+            dm.read = not dm.read
             return True
 
         yield from _process_dmail_message(dispatcher, dmail_key, processor)
@@ -765,8 +767,8 @@ def serve_get(dispatcher, rpath):
         dmail_key_enc = req_data[p0+1:]
         dmail_key = mbase32.decode(dmail_key_enc)
 
-        def processor(dmail):
-            dmail.hidden = not dmail.hidden
+        def processor(sess, dm):
+            dm.hidden = not dm.hidden
             return True
 
         yield from _process_dmail_message(dispatcher, dmail_key, processor)
@@ -854,90 +856,150 @@ def serve_post(dispatcher, rpath):
         if log.isEnabledFor(logging.DEBUG):
             log.debug("data=[{}].".format(data))
 
-        charset = dispatcher.handler.headers["Content-Type"]
-        if charset:
-            p0 = charset.find("charset=")
-            if p0 > -1:
-                p0 += 8
-                p1 = charset.find(' ', p0+8)
-                if p1 == -1:
-                    p1 = charset.find(';', p0+8)
-                if p1 > -1:
-                    charset = charset[p0:p1].strip()
-                else:
-                    charset = charset[p0:].strip()
-
-                if log.isEnabledFor(logging.DEBUG):
-                    log.debug("Form charset=[{}].".format(charset))
-            else:
-                charset = "UTF-8"
-
-        qs = data.decode(charset)
-        dd = urllib.parse.parse_qs(qs, keep_blank_values=True)
-
-        if log.isEnabledFor(logging.DEBUG):
-            log.debug("dd=[{}].".format(dd))
-
-        subject = dd.get("subject")
-        if subject:
-            subject = subject[0]
-        else:
-            subject = ""
-
-        sender_dmail_id = dd.get("sender")
-
-        if sender_dmail_id[0]:
-            sender_dmail_id = int(sender_dmail_id[0])
-
-            if log.isEnabledFor(logging.DEBUG):
-                log.debug("sender_dmail_id=[{}].".format(sender_dmail_id))
-
-            dmail_address =\
-                yield from _load_dmail_address(dispatcher, sender_dmail_id)
-
-            sender_asymkey = rsakey.RsaKey(\
-                privdata=dmail_address.site_privatekey)\
-                    if dmail_address else None
-        else:
-            sender_asymkey = None
-
-        dest_addr_enc = dd.get("destination")
-        if not dest_addr_enc[0]:
-            dispatcher.send_error("You must specify a destination.", 400)
-            return
-
-        recipient, significant_bits =\
-            mutil.decode_key(dest_addr_enc[0])
-        recipients = [(dest_addr_enc, bytes(recipient), significant_bits)]
-
-        content = dd.get("content")
-        if content:
-            content = content[0]
+        dm = yield from self._read_dmail_post(dispatcher)
 
         de =\
             dmail.DmailEngine(\
                 dispatcher.node.chord_engine.tasks, dispatcher.node.db)
 
+        dm = yield from self._save_outgoing_dmail(dispatcher, dm, "Outbox")
+
+        sender_asymkey = rsakey.RsaKey(privdata=dm.address.site_privatekey)
+
         storing_nodes =\
             yield from de.send_dmail(\
                 sender_asymkey,\
-                recipients,\
-                subject,\
-                None,\
-                content)
+                (dm.destination_dmail_key, dm.destination_significant_bits),\
+                dm.subject,\
+                dm.date,\
+                dm.parts[0].data)
 
-        if storing_nodes:
-            dispatcher.send_content(\
-                "SUCCESS.<br/><p>Dmail successfully sent to: {}</p>"\
-                    .format(dest_addr_enc[0]).encode())
-        else:
+        if not storing_nodes:
             dispatcher.send_content(\
                 "FAIL.<br/><p>Dmail timed out being stored on the network;"\
-                    " please try again.</p>"\
+                    " message remains in outbox.</p>"\
                         .format(dest_addr_enc[0]).encode())
 
+        dispatcher.send_content(\
+            "SUCCESS.<br/><p>Dmail successfully sent to: {}</p>"\
+                .format(dest_addr_enc[0]).encode())
+
+        def processor(sess, dm):
+            log.info("Moving sent Dmail from Outbox to Sent.")
+            dm.tags.remove("Outbox")
+            dmail.attach_dmail_tag(sess, dm, "Sent")
+            return True
+
+        yield from _process_dmail_message(dispatcher, dm.id, processor)
     else:
         dispatcher.send_error(errcode=400)
+
+@asyncio.coroutine
+def _read_dmail_post(dispatcher):
+    charset = dispatcher.handler.headers["Content-Type"]
+    if charset:
+        p0 = charset.find("charset=")
+        if p0 > -1:
+            p0 += 8
+            p1 = charset.find(' ', p0+8)
+            if p1 == -1:
+                p1 = charset.find(';', p0+8)
+            if p1 > -1:
+                charset = charset[p0:p1].strip()
+            else:
+                charset = charset[p0:].strip()
+
+            if log.isEnabledFor(logging.DEBUG):
+                log.debug("Form charset=[{}].".format(charset))
+        else:
+            charset = "UTF-8"
+
+    qs = data.decode(charset)
+    dd = urllib.parse.parse_qs(qs, keep_blank_values=True)
+
+    if log.isEnabledFor(logging.DEBUG):
+        log.debug("dd=[{}].".format(dd))
+
+    dm = DmailMessage()
+
+    subject = dd.get("subject")
+    if subject:
+        dm.subject = subject[0]
+    else:
+        dmsubject = ""
+
+    sender_dmail_id = dd.get("sender")
+
+    if sender_dmail_id:
+        sender_dmail_id = int(sender_dmail_id[0])
+
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("sender_dmail_id=[{}].".format(sender_dmail_id))
+
+        dmail_address =\
+            yield from _load_dmail_address(dispatcher, sender_dmail_id)
+
+        dm.address = dmail_address
+        dm.sender_valid = True
+
+#        sender_asymkey = rsakey.RsaKey(\
+#            privdata=dmail_address.site_privatekey)\
+#                if dmail_address else None
+#    else:
+#        sender_asymkey = None
+
+    dest_addr_enc = dd.get("destination")
+    if dest_addr_enc:
+        dm.destination_dmail_key, dm.destination_significant_bits =\
+            mbase32.decode(dest_addr_enc[0])
+
+#   dispatcher.send_error("You must specify a destination.", 400)
+
+    content = dd.get("content")
+    if content:
+        dp = DmailPart()
+        dp.mime_type = "text/plain"
+        dp.data = content[0]
+        dm.parts.append(dp)
+
+    msg.date = datetime.today()
+
+    msg.hidden = False
+    msg.read = True
+
+    return dm
+
+@asyncio.coroutine
+def _save_outgoing_dmail(dispatcher, dm, tag_name):
+    def dbcall():
+        with dispatcher.node.db.open_session() as sess:
+            dispatcher.node.db.lock_table(sess, DmailMessage)
+
+            if dm.data_key:
+                q = sess.query(func.count("*")).select_from(DmailMessage)\
+                    .filter(DmailMessage.data_key == dm.data_key)
+
+                if q.scalar():
+                    log.warning(\
+                        "Not saving dmail we already have saved,"\
+                        " data_key=[{}]."\
+                            .format(dmail_key))
+                    return None
+            else:
+                # Local only message, as we haven't sent it yet.
+                dm.data_key = b""
+
+            dm.attach_dmail_tag(sess, dm, tag_name)
+
+            sess.expire_on_commit = False
+            sess.commit()
+
+            return dm
+
+    dm = yield from dispatcher.node.loop.run_in_executor(None, dbcall)
+
+    if log.isEnabledFor(logging.INFO):
+        log.info("Dmail (id=[{}]) saved with tag [{}]!".format(dm, tag))
 
 @asyncio.coroutine
 def _load_dmail_address(dispatcher, dmail_address_id):
@@ -1276,15 +1338,15 @@ def _load_dmail(dispatcher, dmail_dbid):
                 .options(joinedload("parts"))\
                 .filter(DmailMessage.id == dmail_dbid)
 
-            dmail = q.first()
+            dm = q.first()
 
             sess.expunge_all()
 
-            return dmail
+            return dm
 
-    dmail = yield from dispatcher.node.loop.run_in_executor(None, dbcall)
+    dm = yield from dispatcher.node.loop.run_in_executor(None, dbcall)
 
-    return dmail
+    return dm
 
 @asyncio.coroutine
 def _process_dmail_message(dispatcher, msg_dbid, process_call,\
@@ -1298,18 +1360,18 @@ def _process_dmail_message(dispatcher, msg_dbid, process_call,\
                 q = q.options(joinedload("parts"))
             q = q.filter(DmailMessage.id == msg_dbid)
 
-            dmail = q.first()
+            dm = q.first()
 
-            if process_call(dmail):
+            if process_call(sess, dm):
                 sess.commit()
 
             sess.expunge_all()
 
-            return dmail
+            return dm
 
-    dmail = yield from dispatcher.node.loop.run_in_executor(None, dbcall)
+    dm = yield from dispatcher.node.loop.run_in_executor(None, dbcall)
 
-    return dmail
+    return dm
 
 @asyncio.coroutine
 def _set_default_dmail_address(dispatcher, dbid):

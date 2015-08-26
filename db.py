@@ -152,6 +152,7 @@ def _init_daos(Base, d):
         sender_dmail_key = Column(LargeBinary, nullable=True)
         sender_valid = Column(Boolean, nullable=True)
         destination_dmail_key = Column(LargeBinary, nullable=True)
+        destination_significant_bits = Column(Integer, nullable=True)
         subject = Column(String, nullable=False)
         date = Column(DateTime, nullable=False)
         read = Column(Boolean, nullable=False)
@@ -354,6 +355,15 @@ def _upgrade_1_to_2(db):
         else:
             st = "ALTER TABLE dmailmessage ADD COLUMN destination_dmail_key"\
                 " bytea"
+
+        sess.execute(st)
+
+        if db.is_sqlite:
+            st = "ALTER TABLE dmailmessage ADD COLUMN"\
+                " destination_significant_bits INTEGER"
+        else:
+            st = "ALTER TABLE dmailmessage ADD COLUMN"\
+                " destination_significant_bits integer"
 
         sess.execute(st)
 

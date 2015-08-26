@@ -576,6 +576,12 @@ class DmailEngine(object):
         robjs = []
 
         for entry in recipients:
+            if type(entry) is str:
+                recipient, significant_bits =\
+                    mutil.decode_key(entry)
+                recipient =\
+                    (entry, bytes(recipient), significant_bits)
+
             if type(entry) in (tuple, list):
                 recipient_enc, recipient, significant_bits = entry
 
@@ -608,3 +614,18 @@ class DmailEngine(object):
             robjs.append(DmailSite(site_data))
 
         return robjs
+
+def attach_dmail_tag(sess, dm, tag_name):
+    "Make sure to call this in a separate thread than event loop."
+    # Attach requested DmailTag to Dmail.
+    q = sess.query(DmailTag)\
+        .filter(DmailTag.name == tag_name)
+    tag = q.first()
+
+    if not tag:
+        tag = DmailTag()
+        tag.name = tag_name
+
+    dm.tags.append(tag)
+
+    sess.add(dm)
