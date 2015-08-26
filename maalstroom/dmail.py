@@ -352,7 +352,7 @@ def serve_get(dispatcher, rpath):
 
         for addr in addrs:
             if sender_addr:
-                selected = addr.site_key == sender_addr
+                selected = addr.site_key.startswith(sender_addr)
             elif default_id:
                 selected = addr.id == default_id
             else:
