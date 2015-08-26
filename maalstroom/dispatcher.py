@@ -191,7 +191,7 @@ class MaalstroomDispatcher(object):
 
     @asyncio.coroutine
     def dispatch_get_data(self, rpath):
-        etag = self.handler.headers["If-None-Match"]
+        orig_etag = etag = self.handler.headers["If-None-Match"]
         if etag:
             updateable_key = etag.startswith("updateablekey-")
             if updateable_key:
@@ -216,11 +216,12 @@ class MaalstroomDispatcher(object):
                         self.send_header(\
                             "X-Maalstroom-UpdateableKey-Version",\
                             version_from_etag)
-#                    self.send_header("Cache-Control", "public,max-age=15")
-#                else:
-#                    self.send_header(\
-#                        "Cache-Control", "public,max-age=315360000")
-#                    self.send_header("ETag", rpath)
+                    self.send_header("Cache-Control", "public,max-age=15")
+                    self.send_header("ETag", orig_etag)
+                else:
+                    self.send_header(\
+                        "Cache-Control", "public,max-age=315360000")
+                    self.send_header("ETag", rpath)
                 self.send_header("Content-Length", 0)
                 self.end_headers()
                 self.finish_response()
@@ -698,8 +699,8 @@ class MaalstroomDispatcher(object):
 #                        version)
 #                    self.send_header("Cache-Control", "public,max-age=15")
 #                else:
-#                    self.send_header("Cache-Control", "public,max-age=300")
-#                    self.send_header("ETag", content_id)
+                self.send_header("Cache-Control", "public,max-age=300")
+                self.send_header("ETag", content_id)
                 self.send_header("Content-Length", 0)
                 self.end_headers()
                 self.finish_response()
