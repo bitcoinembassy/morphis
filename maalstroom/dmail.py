@@ -243,7 +243,12 @@ def serve_get(dispatcher, rpath):
 
         msg_dbid = params
 
-        dm = yield from _load_dmail(dispatcher, msg_dbid)
+        def processor(dmail):
+            dmail.read = True
+            return True
+
+        dm = yield from _process_dmail_message(\
+            dispatcher, msg_dbid, processor, fetch_parts=True)
 
         if dm.hidden:
             trash_msg = "REMOVE FROM TRASH"
@@ -858,7 +863,6 @@ def _load_default_dmail_address(dispatcher):
                     .first()
 
                 if addr:
-                    key = addr.site_key # Fix for SqlAlchemy fail.
                     sess.expunge(addr)
                     return addr
 
@@ -867,7 +871,7 @@ def _load_default_dmail_address(dispatcher):
                 .limit(1)\
                 .first()
 
-            key = addr.site_key # Fix for SqlAlchemy fail.
+            sess.expire_on_commit = False
 
             ns = NodeState()
             ns.key = consts.NSK_DEFAULT_ADDRESS
@@ -1140,7 +1144,7 @@ def _fetch_and_save_dmail(dispatcher, dmail_addr, dmail_key):
 @asyncio.coroutine
 def _load_dmail(dispatcher, dmail_dbid):
     def dbcall():
-        with dispatcher.node.db.open_session() as sess:
+        with dispatcher.node.db.open_session(True) as sess:
             q = sess.query(DmailMessage)\
                 .options(joinedload("parts"))\
                 .filter(DmailMessage.id == dmail_dbid)
@@ -1156,11 +1160,16 @@ def _load_dmail(dispatcher, dmail_dbid):
     return dmail
 
 @asyncio.coroutine
-def _process_dmail_message(dispatcher, msg_dbid, process_call):
+def _process_dmail_message(dispatcher, msg_dbid, process_call,\
+        fetch_parts=False):
     def dbcall():
         with dispatcher.node.db.open_session() as sess:
-            q = sess.query(DmailMessage)\
-                .filter(DmailMessage.id == msg_dbid)
+            sess.expire_on_commit = False
+
+            q = sess.query(DmailMessage)
+            if fetch_parts:
+                q = q.options(joinedload("parts"))
+            q = q.filter(DmailMessage.id == msg_dbid)
 
             dmail = q.first()
 
@@ -1222,6 +1231,8 @@ def _load_dmail_address(dispatcher, dmail_addr):
 def _process_dmail_address(dispatcher, dmail_addr, process_call):
     def dbcall():
         with dispatcher.node.db.open_session() as sess:
+            sess.expire_on_commit = False
+
             q = sess.query(DmailAddress)\
                 .filter(DmailAddress.site_key == dmail_addr)
 
@@ -1289,7 +1300,7 @@ def _format_dmail_content(dm):
 
     dmail_text = ''.join(dmail_text)
 
-    dmail_text = wrap(dmail_text)
+    dmail_text = wrap_long_lines(dmail_text)
 
     return dmail_text
 
