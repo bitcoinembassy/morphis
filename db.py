@@ -151,6 +151,7 @@ def _init_daos(Base, d):
         data_key = Column(LargeBinary, nullable=False)
         sender_dmail_key = Column(LargeBinary, nullable=True)
         sender_valid = Column(Boolean, nullable=True)
+        destination_dmail_key = Column(LargeBinary, nullable=True)
         subject = Column(String, nullable=False)
         date = Column(DateTime, nullable=False)
         read = Column(Boolean, nullable=False)
@@ -175,6 +176,7 @@ class Db():
 
         self.schema = schema
 
+        self.is_sqlite = False
         self.sqlite_lock = None
 
         self.pool_size = 10
@@ -190,6 +192,8 @@ class Db():
 
     @contextmanager
     def open_session(self, read_only=False):
+        read_only = False; #FIXME: Need to implement a read-write lock.
+
         if self.sqlite_lock and not read_only:
             self.sqlite_lock.acquire()
 
@@ -219,10 +223,10 @@ class Db():
         sess.execute(st)
 
     def init_engine(self):
-        is_sqlite = self.url.startswith("sqlite:")
+        self.is_sqlite = self.url.startswith("sqlite:")
 
         log.info("Creating engine.")
-        if is_sqlite:
+        if self.is_sqlite:
             self.engine = create_engine(self.url, echo=False)
         else:
             self.engine = create_engine(\
@@ -230,8 +234,23 @@ class Db():
                 pool_size=self.pool_size, max_overflow=0)
 
         log.info("Configuring engine...")
-        if is_sqlite:
+        if self.is_sqlite:
             self.sqlite_lock = threading.Lock()
+
+            # The following KLUDGE is from SqlAlchemy docs. SqlAlchemy says the
+            # pysqlite drivers is broken and decides to 'help' by not honoring
+            # your transaction begin statement and to also auto commit even
+            # though you told it not to.
+            @event.listens_for(self.engine, "connect")
+            def do_connect(dbapi_connection, connection_record):
+                # Disable pysqlite's emitting of the BEGIN statement entirely.
+                # Also stops it from emitting COMMIT before any DDL.
+                dbapi_connection.isolation_level = None
+
+            @event.listens_for(self.engine, "begin")
+            def do_begin(conn):
+                # Emit our own BEGIN.
+                conn.execute("BEGIN")
         else:
             if self.schema:
                 event.listen(\
@@ -284,9 +303,8 @@ class Db():
         if log.isEnabledFor(logging.INFO):
             log.info("Existing schema detected (version=[{}]).".format(version))
 
-#        if version == 1:
-#            log.info("Upgrading database schema from version 1 to 2.")
-#            _upgrade_1_to_2(self)
+        if version == 1:
+            _upgrade_1_to_2(self)
 
     def _create_schema(self):
         log.info("Creating schema.")
@@ -327,4 +345,30 @@ if Peer is None:
     DmailTag = d.DmailTag
 
 def _upgrade_1_to_2(db):
-    pass
+    log.warning("NOTE: Upgrading database schema from version 1 to 2.")
+
+    with db.open_session() as sess:
+        if db.is_sqlite:
+            st = "ALTER TABLE dmailmessage ADD COLUMN destination_dmail_key"\
+                " BLOB"
+        else:
+            st = "ALTER TABLE dmailmessage ADD COLUMN destination_dmail_key"\
+                " bytea"
+
+        sess.execute(st)
+
+        q = sess.query(NodeState)\
+            .filter(NodeState.key == consts.NSK_SCHEMA_VERSION)
+
+        ns = q.first()
+
+        if not ns:
+            ns = NodeState()
+            ns.key = consts.NSK_SCHEMA_VERSION
+            sess.add(ns)
+
+        ns.value = "2"
+
+        sess.commit()
+
+    log.warning("NOTE: Database schema upgraded.")
