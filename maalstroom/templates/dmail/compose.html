@@ -18,19 +18,17 @@
     <label for="from">From</label> 
     <select class="from-address">
       {from_addr_options}
-      <option value="mpowb5dze7qaypnpakrqxa7xu8sct5awb59o6ngr4eidr8adcaxmze4qweh7nicndmdjm841hhgr4xhg8pio5oitye3mncjdmgsijq1">mpowb5dze7qaypnpakrqxa7xu8sct5awb59o6ngr4eidr8adcaxmze4qweh7nicndmdjm841hhgr4xhg8pio5oitye3mncjdmgsijq1</option>
-      <option value="w4h6pozqudcixctxahfxb5gdsb1taesbziwe5xidy3qs49wxp1wiqn1fgqhchfktpjgo58s85a9ihjfb4t689q9mr6jo1zgxwm1kts1">w4h6pozqudcixctxahfxb5gdsb1taesbziwe5xidy3qs49wxp1wiqn1fgqhchfktpjgo58s85a9ihjfb4t689q9mr6jo1zgxwm1kts1</option>
     </select>
     <li>
         <label class="to" for="to">To</label>
-        <input type="text" name="to">&nbsp;&nbsp;<button class="addressbook-icon" type="submit"></button>
+        <input type="text" name="to" value="{dest_addr}"/>&nbsp;&nbsp;<button class="addressbook-icon" type="submit"></button>
     </li>
     <li>
 	<label for="subject">Subject</label>
-	<input type="text" name="subject">
+	<input type="text" name="subject" value="{subject}">
     </li>
      <li style="height:100%">
-	<textarea id="TITLE"></textarea>
+	<textarea id="TITLE">{message_text}</textarea>
     </li>
     <li>
 	<button class="submit" type="submit">SEND</button>

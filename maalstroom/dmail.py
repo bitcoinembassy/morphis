@@ -301,7 +301,8 @@ def serve_get(dispatcher, rpath):
             date=dm.date)
 
         dispatcher.send_content(template)
-    elif req.startswith("/compose"):
+    elif req.startswith("/compose/"):
+        log.info("COMPOSE!!")
         if len(req) > 8 and req[8] == '/':
             params = req[9:]
         else:
@@ -314,18 +315,66 @@ def serve_get(dispatcher, rpath):
             subject = eparams.get("subject")
             if subject:
                 subject = subject[0]
+            else:
+                subject = ""
 
             sender_addr_enc = eparams.get("sender")
             if sender_addr_enc:
                 sender_addr_enc = sender_addr_enc[0]
+            else:
+                sender_addr_enc = ""
+
+            message_text = eparams.get("message")
+            if message_text:
+                message_text = message_text[0]
+            else:
+                message_text = ""
         else:
-            subject = None
-            sender_addr_enc = None
+            subject = ""
+            sender_addr_enc = ""
+            message_text = ""
             p0 = len(params)
 
         dest_addr_enc = params[:p0]
 
+        addrs = yield from _list_dmail_addresses(dispatcher)
+
+        if sender_addr_enc:
+            sender_addr = mbase32.decode(sender_addr_enc)
+            default_id = None
+        else:
+            sender_addr = None
+            default_id = yield from _load_default_dmail_address_id(dispatcher)
+
+        from_addr_options = []
+
+        for addr in addrs:
+            if sender_addr:
+                selected = addr.site_key == sender_addr
+            elif default_id:
+                selected = addr.id == default_id
+            else:
+                selected = False
+
+            if selected:
+                option = '<option value="{}" selected>{}</option>'
+            else:
+                option = '<option value="{}">{}</option>'
+
+            addr_enc = mbase32.encode(addr.site_key)
+
+            from_addr_options.append(option.format(addr.id, addr_enc))
+
+        from_addr_options = ''.join(from_addr_options)
+
         template = templates.dmail_compose[0]
+
+        template = template.format(\
+            delete_class="",\
+            from_addr_options=from_addr_options,\
+            dest_addr=dest_addr_enc,\
+            subject=subject,\
+            message_text=message_text)
 
         dispatcher.send_content(template)
 
@@ -397,16 +446,14 @@ def serve_get(dispatcher, rpath):
         dispatcher.send_partial_content(
             templates.dmail_page_content__f1_start, True)
 
-        site_keys = yield from _list_dmail_addresses(dispatcher)
+        addrs = yield from _list_dmail_addresses(dispatcher)
 
         default_id = yield from _load_default_dmail_address_id(dispatcher)
 
-        for dbid, site_key in site_keys:
-            site_key_enc = mbase32.encode(site_key)
+        for addr in addrs:
+            site_key_enc = mbase32.encode(addr.site_key)
 
-            log.info("{} {}".format(default_id, dbid))
-
-            if default_id and dbid == default_id:
+            if default_id and addr.id == default_id:
                 hide = "hidden"
             else:
                 hide = ""
@@ -419,7 +466,7 @@ def serve_get(dispatcher, rpath):
                 'make_address_default/{addr_dbid}?redirect=morphis://.dmail/'\
                 'address_list" class="normal">set&nbsp;default</a>]</span>'\
                 '&nbsp{addr}</div>'\
-                    .format(addr=site_key_enc, addr_dbid=dbid, hide=hide)
+                    .format(addr=site_key_enc, addr_dbid=addr.id, hide=hide)
 
             dispatcher.send_partial_content(resp)
 
@@ -435,13 +482,13 @@ def serve_get(dispatcher, rpath):
         dispatcher.send_partial_content(\
             templates.dmail_compose_dmail_form_start, True)
 
-        site_keys = yield from _list_dmail_addresses(dispatcher)
+        addrs = yield from _list_dmail_addresses(dispatcher)
 
-        for dbid, site_key in site_keys:
-            site_key_enc = mbase32.encode(site_key)
+        for addr in addrs:
+            site_key_enc = mbase32.encode(addr.site_key)
 
             sender_element = """<option value="{}">{}</option>"""\
-                .format(dbid, site_key_enc)
+                .format(addr.id, site_key_enc)
 
             dispatcher.send_partial_content(sender_element)
 
@@ -954,16 +1001,11 @@ def _list_dmail_addresses(dispatcher):
 
             q = sess.query(DmailAddress).order_by(DmailAddress.id)
 
-            site_keys = []
+            return q.all()
 
-            for addr in q.all():
-                site_keys.append((addr.id, addr.site_key))
+    addrs = yield from dispatcher.loop.run_in_executor(None, dbcall)
 
-            return site_keys
-
-    site_keys = yield from dispatcher.loop.run_in_executor(None, dbcall)
-
-    return site_keys
+    return addrs
 
 @asyncio.coroutine
 def _count_unread_dmails(dispatcher, addr=None, tag=None):
