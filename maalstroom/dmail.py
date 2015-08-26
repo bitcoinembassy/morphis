@@ -266,8 +266,8 @@ def serve_get(dispatcher, rpath):
 
     # Actions.
 
-    elif req.startswith("/mark_as_read/"):
-        params = req[14:]
+    elif req.startswith("/toggle_read/"):
+        params = req[13:]
         p0 = params.find('?redirect=')
         if p0 != -1:
             redirect = params[p0+10:]
@@ -361,6 +361,9 @@ def serve_get(dispatcher, rpath):
         dispatcher.send_partial_content(\
             templates.dmail_page_content__f1_end)
         dispatcher.end_partial_content()
+
+#######OLD UNUSED (DELETE):
+
     elif req.startswith("/compose/form"):
         dest_addr_enc = req[14:] if len(req) > 14 else ""
 
