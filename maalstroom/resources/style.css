@@ -671,6 +671,9 @@ tr:hover, tr:hover a {
 .hidden {
     visibility: hidden;
 }
+.display_none {
+    display: none;
+}
 a.normal:visited, a.normal:link {
     color: blue;
     text-color: blue;

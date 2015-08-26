@@ -302,7 +302,6 @@ def serve_get(dispatcher, rpath):
 
         dispatcher.send_content(template)
     elif req.startswith("/compose/"):
-        log.info("COMPOSE!!")
         if len(req) > 8 and req[8] == '/':
             params = req[9:]
         else:
@@ -370,7 +369,7 @@ def serve_get(dispatcher, rpath):
         template = templates.dmail_compose[0]
 
         template = template.format(\
-            delete_class="",\
+            delete_class="display_none",\
             from_addr_options=from_addr_options,\
             dest_addr=dest_addr_enc,\
             subject=subject,\
@@ -1414,11 +1413,9 @@ def wrap_long_lines(text, limit=79):
     while p0 < len_text:
         p1 = text.find('\n', p0)
         if p1 == -1:
-            log.info("NO ENDING")
             p1 = len_text
 
         if (p1 - p0) <= limit:
-            log.info("GOOD LINE [{}]".format(text[p0:p1+1]))
             out += text[p0:p1+1]
             p0 = p1 + 1
             continue
