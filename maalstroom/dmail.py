@@ -278,9 +278,11 @@ def serve_get(dispatcher, rpath):
         params = req[6:]
 
         p0 = params.index('/')
+        p1 = params.index('/', p0+1)
 
         addr_enc = params[:p0]
-        msg_dbid = params[p0+1:]
+        tag = params[p0+1:p1]
+        msg_dbid = params[p1+1:]
 
         def processor(dmail):
             dmail.read = True
@@ -302,6 +304,7 @@ def serve_get(dispatcher, rpath):
         template = templates.dmail_read[0]
         template = template.format(\
             addr=addr_enc,\
+            tag=tag,\
             safe_reply_subject=safe_reply_subject,\
             trash_msg=trash_msg,\
             msg_id=msg_dbid,\
@@ -345,6 +348,17 @@ def serve_get(dispatcher, rpath):
 
         dest_addr_enc = params[:p0]
 
+        autofocus_fields = {\
+            "dest_addr_autofocus": "",\
+            "subject_autofocus": "",\
+            "message_text_autofocus": ""}
+        if not dest_addr_enc:
+            autofocus_fields["dest_addr_autofocus"] = " autofocus"
+        elif not subject:
+            autofocus_fields["subject_autofocus"] = " autofocus"
+        elif not message_text:
+            autofocus_fields["message_text_autofocus"] = " autofocus"
+
         addrs = yield from _list_dmail_addresses(dispatcher)
 
         if sender_addr_enc:
@@ -382,7 +396,8 @@ def serve_get(dispatcher, rpath):
             from_addr_options=from_addr_options,\
             dest_addr=dest_addr_enc,\
             subject=subject,\
-            message_text=message_text)
+            message_text=message_text,\
+            **autofocus_fields)
 
         acharset = dispatcher.get_accept_charset()
         dispatcher.send_content(template,\

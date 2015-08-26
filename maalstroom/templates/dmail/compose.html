@@ -21,14 +21,14 @@
     </select>
     <li>
         <label class="to" for="to">To</label>
-        <input type="text" name="to" value="{dest_addr}" required/>&nbsp;&nbsp;<button class="addressbook-icon" type="submit"></button>
+        <input type="text" name="to" value="{dest_addr}" required{dest_addr_autofocus}/>&nbsp;&nbsp;<button class="addressbook-icon" type="submit"></button>
     </li>
     <li>
 	<label for="subject">Subject</label>
-	<input type="text" name="subject" value="{subject}">
+	<input type="text" name="subject" value="{subject}"{subject_autofocus}>
     </li>
      <li style="height:100%">
-	<textarea id="TITLE">{message_text}</textarea>
+	<textarea id="TITLE"{message_text_autofocus}>{message_text}</textarea>
     </li>
     <li>
 	<button class="submit" type="submit">SEND</button>
