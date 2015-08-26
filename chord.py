@@ -749,7 +749,7 @@ class ChordEngine():
 
         existing = self.peers.setdefault(address, peer)
         if existing is not peer:
-            log.error("Somehow we are trying to connect to an address [{}] already connected!".format(address))
+            log.warning("Somehow we are trying to connect to an address [{}] already connected!".format(address))
             return False
         self.peer_buckets[peer.distance - 1][address] = peer
 
