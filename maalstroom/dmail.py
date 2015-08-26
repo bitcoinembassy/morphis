@@ -119,11 +119,14 @@ def serve_get(dispatcher, rpath):
     elif req.startswith("/nav/"):
         params = req[5:]
 
-        addr_enc = params
+        p0 = params.index('/')
+
+        addr_enc = params[:p0]
+        tag = params[p0+1:]
 
         template = templates.dmail_nav[0]
 
-        template = template.format(addr=addr_enc)
+        template = template.format(addr=addr_enc, tag=tag)
 
         dispatcher.send_content(template)
     elif req.startswith("/aside/"):
