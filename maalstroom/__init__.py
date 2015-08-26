@@ -190,11 +190,20 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
             resp = outq.get()
 
             if not resp:
+                # Python bug as far as I can tell. Randomly outq has a None
+                # in it in front of what we really added. What we really added
+                # is still there, just has a spurious None in front; so we
+                # ignore it.
+                log.debug("Got spurious None from queue; ignoring.")
+                continue
+            elif resp is Done:
+                log.debug("Got Done from queue; finished.")
                 break
             elif resp is Flush:
                 self.wfile.flush()
                 continue
             elif resp is Close:
+                log.debug("Got Close from queue; closing connection.")
                 self.close_connection = True
                 break
 
@@ -203,6 +212,8 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
             except ConnectionError as e:
                 log.warning("Browser broke connection: {}".format(e))
                 self._abort_event.set()
+                # Replace _outq, as dispatcher may still write to it.
+                self._outq = queue.Queue()
                 break
 
 class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
@@ -212,6 +223,9 @@ class Flush(object):
     pass
 
 class Close(object):
+    pass
+
+class Done(object):
     pass
 
 @asyncio.coroutine

@@ -78,12 +78,14 @@ class MaalstroomDispatcher(object):
         self.outq.put(maalstroom.Flush)
 
     def finish_response(self):
-        self.outq.put(None)
+        self.outq.put(maalstroom.Done)
         self.finished_request = True
 
     @asyncio.coroutine
     def do_GET(self, rpath):
         self.finished_request = False
+
+        assert self.outq.empty()
 
         yield from self._ensure_client_engine()
 
@@ -646,8 +648,8 @@ class MaalstroomDispatcher(object):
             return False
 
         self.send_response(304)
-#        self.send_header("Cache-Control", "public")
-#        self.send_header("ETag", content_id)
+        self.send_header("Cache-Control", "public,max-age=300")
+        self.send_header("ETag", content_id)
         self.send_header("Content-Length", 0)
         self.end_headers()
         self.finish_response()
@@ -726,6 +728,8 @@ class MaalstroomDispatcher(object):
 
     def send_partial_content(self, content, start=False, content_type=None,\
             cacheable=False):
+        assert content is not None
+
         if type(content) is str:
             content = content.encode()
 
