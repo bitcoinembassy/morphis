@@ -427,7 +427,7 @@ if not initialized_template:
 
     dmail_page_wrapper = load("dmail/page_wrapper.html", True)
     dmail_logo = load("dmail/logo.html", True)
-    dmail_nav = load("dmail/nav.html")
+    dmail_nav = load("dmail/nav.html", True)
     dmail_aside = load("dmail/aside.html", True)
     dmail_msg_list = load("dmail/msg_list.html", True)
     dmail_msg_list_list_start = load("dmail/msg_list_list_start.html")
@@ -435,6 +435,7 @@ if not initialized_template:
     dmail_msg_list_list_end = load("dmail/msg_list_list_end.html")
     dmail_new_mail = load("dmail/new_mail.html", True)
     dmail_read = load("dmail/read.html", True)
+    dmail_compose = load("dmail/compose.html", True)
 
     for entry_name in os.listdir("maalstroom/resources/images/dmail"):
         if log.isEnabledFor(logging.DEBUG):

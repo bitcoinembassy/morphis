@@ -8,7 +8,7 @@ import logging
 import textwrap
 import threading
 import time
-import urllib.parse
+from urllib.parse import parse_qs
 
 from sqlalchemy import func, not_
 from sqlalchemy.orm import joinedload
@@ -43,17 +43,42 @@ def serve_get(dispatcher, rpath):
         if dispatcher.handle_cache(req):
             return
 
-        params = req[9:]
-        p0 = params.find('/')
-        if p0 == -1:
-            p0 = len(params)
-            tag = "Inbox"
+        if req.startswith("/wrapper/"):
+            params = req[9:]
+
+            pq = params.find('?')
+
+            if pq != -1:
+                qline = params[pq+1:]
+                params = params[:pq]
+            else:
+                qline = None
+
+            p0 = params.find('/')
+            if p0 == -1:
+                p0 = len(params)
+                tag = "Inbox"
+            else:
+                tag = params[p0+1:]
+            addr_enc = params[:p0]
         else:
-            tag = params[p0+1:]
-        addr_enc = params[:p0]
+            tag = "Inbox"
+            addr_enc = ""
+            qline = None
+
+        msg_list = None
+        if qline:
+            eparams = parse_qs(qline)
+            msg_list = eparams.get("msg_list")
+            if msg_list:
+                msg_list = msg_list[0]
+
+        if not msg_list:
+            msg_list = "morphis://.dmail/msg_list/" + addr_enc + '/' + tag
 
         template = templates.dmail_page_wrapper[0]
-        template = template.format(tag=tag, addr=addr_enc)
+        template = template.format(\
+            tag=tag, addr=addr_enc, msg_list_iframe_url=msg_list)
 
         dispatcher.send_content([template, req])
         return
@@ -268,6 +293,33 @@ def serve_get(dispatcher, rpath):
             date=dm.date)
 
         dispatcher.send_content(template)
+    elif req.startswith("/compose"):
+        if len(req) > 8 and req[8] == '/':
+            params = req[9:]
+        else:
+            params = req[8:]
+
+        p0 = params.find('?')
+        if p0 != -1:
+            eparams = parse_qs(params[p0+1:])
+
+            subject = eparams.get("subject")
+            if subject:
+                subject = subject[0]
+
+            sender_addr_enc = eparams.get("sender")
+            if sender_addr_enc:
+                sender_addr_enc = sender_addr_enc[0]
+        else:
+            subject = None
+            sender_addr_enc = None
+            p0 = len(params)
+
+        dest_addr_enc = params[:p0]
+
+        template = templates.dmail_compose[0]
+
+        dispatcher.send_content(template)
 
     # Actions.
 
@@ -420,7 +472,7 @@ def serve_get(dispatcher, rpath):
     elif req.startswith("/addr/settings/edit/publish?"):
         query = req[28:]
 
-        qdict = urllib.parse.parse_qs(query, keep_blank_values=True)
+        qdict = parse_qs(query, keep_blank_values=True)
 
         addr_enc = qdict["dmail_address"][0]
         difficulty = qdict["difficulty"][0]
@@ -676,7 +728,7 @@ def serve_get(dispatcher, rpath):
     elif req.startswith("/create_address/make_it_so?"):
         query = req[27:]
 
-        qdict = urllib.parse.parse_qs(query, keep_blank_values=True)
+        qdict = parse_qs(query, keep_blank_values=True)
 
         prefix = qdict["prefix"][0]
         difficulty = int(qdict["difficulty"][0])

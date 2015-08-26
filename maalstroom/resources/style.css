@@ -683,6 +683,7 @@ a.normal:visited, a.normal:link {
 .compose-bkg {
     background: #ffffff;
     height: calc(100% - 8em);
+    border: 1px dashed;
 }
 .from-address {
     width: 80%;
