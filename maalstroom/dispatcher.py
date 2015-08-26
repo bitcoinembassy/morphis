@@ -192,19 +192,35 @@ class MaalstroomDispatcher(object):
     @asyncio.coroutine
     def dispatch_get_data(self, rpath):
         etag = self.handler.headers["If-None-Match"]
+        if etag:
+            updateable_key = etag.startswith("updateablekey-")
+            if updateable_key:
+                p0 = etag.index('-') + 1
+                p1 = etag.find('-', p0)
+                if p1 != -1:
+                    version_from_etag = etag[p0:p1]
+                    etag = etag[p1+1:]
+                else:
+                    version_from_etag = None
+                    etag = etag[p0:]
+        else:
+            updateable_key = False
         if etag == rpath:
             # If browser has it cached.
-            updateable_key = etag.startswith("updateablekey-")
             cache_control = self.handler.headers["Cache-Control"]
             if not (updateable_key and cache_control == "max-age=0")\
                     and cache_control != "no-cache":
                 self.send_response(304)
                 if updateable_key:
-                    self.send_header("Cache-Control", "public,max-age=15")
-                else:
-                    self.send_header(\
-                        "Cache-Control", "public,max-age=315360000")
-                    self.send_header("ETag", rpath)
+                    if version_from_etag:
+                        self.send_header(\
+                            "X-Maalstroom-UpdateableKey-Version",\
+                            version_from_etag)
+#                    self.send_header("Cache-Control", "public,max-age=15")
+#                else:
+#                    self.send_header(\
+#                        "Cache-Control", "public,max-age=315360000")
+#                    self.send_header("ETag", rpath)
                 self.send_header("Content-Length", 0)
                 self.end_headers()
                 self.finish_response()
@@ -389,7 +405,10 @@ class MaalstroomDispatcher(object):
                     "X-Maalstroom-UpdateableKey-Version",\
                     data_callback.version)
                 self.send_header("Cache-Control", "public,max-age=15")
-                self.send_header("ETag", "updateablekey-" + rpath)
+                self.send_header(\
+                    "ETag",\
+                    "updateablekey-" + str(data_callback.version) + '-'\
+                        + rpath)
             else:
                 self.send_header("Cache-Control", "public,max-age=315360000")
                 self.send_header("ETag", rpath)
@@ -626,8 +645,8 @@ class MaalstroomDispatcher(object):
             return False
 
         self.send_response(304)
-        self.send_header("Cache-Control", "public")
-        self.send_header("ETag", content_id)
+#        self.send_header("Cache-Control", "public")
+#        self.send_header("ETag", content_id)
         self.send_header("Content-Length", 0)
         self.end_headers()
         self.finish_response()
@@ -661,19 +680,26 @@ class MaalstroomDispatcher(object):
 
         etag = self.handler.headers["If-None-Match"]
         if cacheable and etag == content_id:
-            #TODO: Consider getting rid of this updateablekey support here
-            # because we don't send updateable keys this way ever.
-            updateable_key = etag.startswith("updateablekey-")
+#            #TODO: Consider getting rid of this updateablekey support here
+#            # because we don't send updateable keys this way ever.
+#            updateable_key = etag.startswith("updateablekey-")
 
             cache_control = self.handler.headers["Cache-Control"]
-            if not (updateable_key and cache_control == "max-age=0")\
-                    and cache_control != "no-cache":
+#            if not (updateable_key and cache_control == "max-age=0")\
+#                    and cache_control != "no-cache":
+            if cache_control != "no-cache":
                 self.send_response(304)
-                if updateable_key:
-                    self.send_header("Cache-Control", "public,max-age=15")
-                else:
-                    self.send_header("Cache-Control", "public,max-age=300")
-                    self.send_header("ETag", content_id)
+#                if updateable_key:
+#                    p0 = etag.index('-')
+#                    p1 = etag.index('-', p0 + 1)
+#                    version = etag[p0:p1]
+#                    self.send_header(\
+#                        "X-Maalstroom-UpdateableKey-Version",\
+#                        version)
+#                    self.send_header("Cache-Control", "public,max-age=15")
+#                else:
+#                    self.send_header("Cache-Control", "public,max-age=300")
+#                    self.send_header("ETag", content_id)
                 self.send_header("Content-Length", 0)
                 self.end_headers()
                 self.finish_response()
