@@ -8,7 +8,7 @@ import logging
 import textwrap
 import threading
 import time
-from urllib.parse import parse_qs
+from urllib.parse import parse_qs, quote_plus
 
 from sqlalchemy import func, not_
 from sqlalchemy.orm import joinedload
@@ -277,7 +277,10 @@ def serve_get(dispatcher, rpath):
     elif req.startswith("/read/"):
         params = req[6:]
 
-        msg_dbid = params
+        p0 = params.index('/')
+
+        addr_enc = params[:p0]
+        msg_dbid = params[p0+1:]
 
         def processor(dmail):
             dmail.read = True
@@ -291,12 +294,15 @@ def serve_get(dispatcher, rpath):
         else:
             trash_msg = "MOVE TO TRASH"
 
+        safe_reply_subject = quote_plus("Re: " + dm.subject)
         sender_addr = mbase32.encode(dm.sender_dmail_key)
         sender_class =\
             "valid_sender" if dm.sender_valid else "invalid_sender"
 
         template = templates.dmail_read[0]
         template = template.format(\
+            addr=addr_enc,\
+            safe_reply_subject=safe_reply_subject,\
             trash_msg=trash_msg,\
             msg_id=msg_dbid,\
             sender_class=sender_class,\
