@@ -378,7 +378,9 @@ def serve_get(dispatcher, rpath):
             subject=subject,\
             message_text=message_text)
 
-        dispatcher.send_content(template)
+        acharset = dispatcher.get_accept_charset()
+        dispatcher.send_content(template,\
+            content_type="text/html; charset={}".format(acharset))
 
     # Actions.
 
