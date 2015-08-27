@@ -297,9 +297,8 @@ def serve_get(dispatcher, rpath):
         else:
             trash_msg = "MOVE TO TRASH"
 
-        reply_subject = dm.subject if dm.subject.startswith("Re: ")\
-            else "Re: " + dm.subject
-        safe_reply_subject = quote_plus(reply_subject)
+        safe_reply_subject = generate_safe_reply_subject(dm)
+
         if dm.sender_dmail_key:
             sender_addr = mbase32.encode(dm.sender_dmail_key)
         else:
@@ -1221,6 +1220,8 @@ def _list_dmails_for_tag(dispatcher, addr, tag):
         if not subject:
             subject = "[no subject]"
 
+        safe_reply_subject = generate_safe_reply_subject(msg)
+
         sender_key = msg.sender_dmail_key
         if sender_key:
             sender_key_enc = mbase32.encode(sender_key)
@@ -1239,6 +1240,7 @@ def _list_dmails_for_tag(dispatcher, addr, tag):
             addr=addr_enc,\
             msg_id=msg.id,\
             subject=subject,\
+            safe_reply_subject=safe_reply_subject,\
             sender=sender_key,\
             timestamp=msg.date)
 
@@ -1622,3 +1624,8 @@ def _create_dmail_address(dispatcher, prefix, difficulty):
     privkey, data_key, dms, storing_nodes =\
         yield from de.generate_dmail_address(prefix, difficulty)
     return privkey, data_key, dms, storing_nodes
+
+def generate_safe_reply_subject(dm):
+    reply_subject = dm.subject if dm.subject.startswith("Re: ")\
+        else "Re: " + dm.subject
+    return quote_plus(reply_subject)
