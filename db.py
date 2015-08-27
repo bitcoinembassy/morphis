@@ -111,6 +111,7 @@ def _init_daos(Base, d):
         id = Column(Integer, primary_key=True)
         site_key = Column(LargeBinary, nullable=False)
         site_privatekey = Column(LargeBinary, nullable=True)
+        scan_interval = Column(Integer, nullable=True)
         keys = relationship(DmailKey)
 
     Index("dmailaddress__site_key", DmailAddress.site_key)
@@ -306,6 +307,10 @@ class Db():
 
         if version == 1:
             _upgrade_1_to_2(self)
+            version = 2
+        if version == 2:
+            _upgrade_2_to_3(self)
+            version = 3
 
     def _create_schema(self):
         log.info("Creating schema.")
@@ -345,39 +350,55 @@ if Peer is None:
     DmailPart = d.DmailPart
     DmailTag = d.DmailTag
 
+def _update_node_state(sess, version):
+    q = sess.query(NodeState)\
+        .filter(NodeState.key == consts.NSK_SCHEMA_VERSION)
+
+    ns = q.first()
+
+    if not ns:
+        ns = NodeState()
+        ns.key = consts.NSK_SCHEMA_VERSION
+        sess.add(ns)
+
+    ns.value = str(version)
+
 def _upgrade_1_to_2(db):
     log.warning("NOTE: Upgrading database schema from version 1 to 2.")
 
+    t_bytea = "BLOB" if db.is_sqlite else "bytea"
+    t_integer = "INTEGER" if db.is_sqlite else "integer"
+
     with db.open_session() as sess:
-        if db.is_sqlite:
-            st = "ALTER TABLE dmailmessage ADD COLUMN destination_dmail_key"\
-                " BLOB"
-        else:
-            st = "ALTER TABLE dmailmessage ADD COLUMN destination_dmail_key"\
-                " bytea"
+        st = "ALTER TABLE dmailmessage ADD COLUMN destination_dmail_key "\
+                + t_bytea
 
         sess.execute(st)
 
-        if db.is_sqlite:
-            st = "ALTER TABLE dmailmessage ADD COLUMN"\
-                " destination_significant_bits INTEGER"
-        else:
-            st = "ALTER TABLE dmailmessage ADD COLUMN"\
-                " destination_significant_bits integer"
+        st = "ALTER TABLE dmailmessage ADD COLUMN"\
+            "destination_significant_bits "\
+                + t_integer
 
         sess.execute(st)
 
-        q = sess.query(NodeState)\
-            .filter(NodeState.key == consts.NSK_SCHEMA_VERSION)
+        _update_node_state(sess, 2)
 
-        ns = q.first()
+        sess.commit()
 
-        if not ns:
-            ns = NodeState()
-            ns.key = consts.NSK_SCHEMA_VERSION
-            sess.add(ns)
+    log.warning("NOTE: Database schema upgraded.")
 
-        ns.value = "2"
+def _upgrade_2_to_3(db):
+    log.warning("NOTE: Upgrading database schema from version 2 to 3.")
+
+    t_integer = "INTEGER" if db.is_sqlite else "integer"
+
+    with db.open_session() as sess:
+        st = "ALTER TABLE dmailaddress ADD COLUMN scan_interval "\
+            + t_integer
+
+        sess.execute(st)
+
+        _update_node_state(sess, 3)
 
         sess.commit()
 

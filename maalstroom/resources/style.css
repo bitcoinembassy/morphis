@@ -19,6 +19,15 @@ a {
 a:visited, a:link  {
   color: #141c30;
 }
+a.reactive_link {
+  text-decoration: none;
+}
+a.reactive_link:hover {
+  text-decoration: underline;
+}
+a.reactive_link:visited, a.reactive_link:link  {
+  color: #141c30;
+}
 ul {
   list-style: none;
   padding: 0;
@@ -701,7 +710,7 @@ a.normal:visited, a.normal:link {
 
 .compose-bkg {
     background: #ffffff;
-    height: calc(100% - 8em);
+    height: calc(100% - 7em);
     border: 1px dashed;
 }
 .from-address {

@@ -446,12 +446,23 @@ def serve_get(dispatcher, rpath):
             site_key_enc = mbase32.encode(addr.site_key)
 
             if default_id and addr.id == default_id:
-                hide = "hidden"
+                set_default_class = "hidden"
             else:
-                hide = ""
+                set_default_class = ""
+
+            if addr.scan_interval:
+                autoscan_link_text = "disable autoscan"
+                autoscan_interval = 0
+            else:
+                autoscan_link_text = "enable autoscan"
+                autoscan_interval = 60
 
             resp = row_template.format(\
-                addr=site_key_enc, addr_dbid=addr.id, hide=hide)
+                addr=site_key_enc,\
+                addr_dbid=addr.id,\
+                set_default_class=set_default_class,\
+                autoscan_link_text=autoscan_link_text,\
+                autoscan_interval=autoscan_interval)
 
             rows.append(resp)
 
@@ -501,6 +512,30 @@ def serve_get(dispatcher, rpath):
             return True
 
         yield from _process_dmail_message(dispatcher, msg_dbid, processor)
+
+        if redirect:
+            dispatcher.send_301(redirect)
+        else:
+            dispatcher.send_204()
+    elif req.startswith("/set_autoscan/"):
+        params = req[14:]
+        pq = params.find("?redirect=")
+        if pq != -1:
+            redirect = params[pq+10:]
+        else:
+            redirect = None
+            pq = len(params)
+
+        p0 = params.index('/', 0, pq)
+
+        addr_id = int(params[:p0])
+        interval = int(params[p0+1:pq])
+
+        def processor(sess, addr):
+            addr.scan_interval = interval
+            return True
+
+        yield from _process_dmail_address(dispatcher, addr_id, processor)
 
         if redirect:
             dispatcher.send_301(redirect)
@@ -639,13 +674,14 @@ def serve_get(dispatcher, rpath):
         addr_enc = qdict["dmail_address"][0]
         difficulty = qdict["difficulty"][0]
 
-        def processor(dmail_address):
+        def processor(sess, dmail_address):
             if difficulty != dmail_address.keys[0].difficulty:
                 dmail_address.keys[0].difficulty = difficulty
                 return True
             else:
                 return False
 
+        #FIXME: This uses id now instead of address.
         dmail_address = yield from\
             _process_dmail_address(\
                 dispatcher, mbase32.decode(addr_enc), processor)
@@ -1463,8 +1499,6 @@ def _process_dmail_message(dispatcher, msg_dbid, process_call,\
         fetch_parts=False):
     def dbcall():
         with dispatcher.node.db.open_session() as sess:
-            sess.expire_on_commit = False
-
             q = sess.query(DmailMessage)
             if fetch_parts:
                 q = q.options(joinedload("parts"))
@@ -1473,6 +1507,7 @@ def _process_dmail_message(dispatcher, msg_dbid, process_call,\
             dm = q.first()
 
             if process_call(sess, dm):
+                sess.expire_on_commit = False
                 sess.commit()
 
             sess.expunge_all()
@@ -1540,20 +1575,20 @@ def _empty_trash(dispatcher, addr_enc):
     yield from dispatcher.node.loop.run_in_executor(None, dbcall)
 
 @asyncio.coroutine
-def _process_dmail_address(dispatcher, dmail_addr, process_call):
+def _process_dmail_address(dispatcher, addr_id, process_call,\
+        fetch_keys=False):
     def dbcall():
         with dispatcher.node.db.open_session() as sess:
-            sess.expire_on_commit = False
-
-            q = sess.query(DmailAddress)\
-                .filter(DmailAddress.site_key == dmail_addr)
+            q = sess.query(DmailAddress)
+            if fetch_keys:
+                q = q.options(joinedload("keys"))
+            q = q.filter(DmailAddress.id == addr_id)
 
             dmail_address = q.first()
 
-            if process_call(dmail_address):
+            if process_call(sess, dmail_address):
+                sess.expire_on_commit = False
                 sess.commit()
-
-            keys = dmail_address.keys
 
             sess.expunge_all()
 
