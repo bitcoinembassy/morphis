@@ -566,10 +566,47 @@ a:hover.tooltips span {
 
 /*Styles for Message list*/
 
-table {
+table.field {
+    margin: 0;
+    padding: 0;
+    border-spacing: 0;
+}
+table.field tr {
+    margin: 0;
+    padding: 0;
+}
+table.field td {
+    margin: 0;
+    padding: 0;
+}
+
+table.msg_list {
     border-collapse: collapse;
     background-color: #ffffff;
     border-spacing: 0;
+}
+table.msg_list td {
+    max-width: 10em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    border-bottom: 1px solid #e5e5e5;
+}
+table.msg_list tr {
+  border-spacing: 0;
+}
+table.msg_list tr:hover, table.msg_list tr:hover a {
+  background-color: #38a3af;
+  color: #ffffff;
+}
+table.msg_list tr.table-head {
+  border-spacing: 0;
+   background-color: #d2d4d9;
+   font-size: .8em;
+}
+table.msg_list tr.table-head:hover {
+   background-color: #d2d4d9;
+   color: #000000;
 }
 .subject {
   overflow: hidden;
@@ -577,14 +614,6 @@ table {
   -o-text-overflow: ellipsis;  // for Opera 9 & 10
   display: block;
   white-space: nowrap;
-}
-.table-head {
-   background-color: #d2d4d9;
-   font-size: .8em;
-}
-.table-head:hover {
-   background-color: #d2d4d9;
-   color: #000000;
 }
 .new-mail-icon {
    background: url("images/unread.png") no-repeat center center;
@@ -645,20 +674,6 @@ table {
    -webkit-box-shadow: inset 1px 1px 1px #aaabaf;
    box-shadow: inset 1px 1px 1px #aaabaf;
    border: 1px solid #999999;
-}
-td {
-    max-width: 10em;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    border-bottom: 1px solid #e5e5e5;
-}
-tr {
-  border-spacing: 0;
-}
-tr:hover, tr:hover a {
-  background-color: #38a3af;
-  color: #ffffff;
 }
 .inbox-head {
   font: 3em "Open Sans Light", sans-serif;
@@ -801,7 +816,7 @@ button.submit:active {
     position: absolute;
     right: 0.5em;
     width: 30px;
-    top: 9.25em;
+    top: 8.75em;
 /*    top: 10.8em; /*centers the content of this div in middle of height*/
 }
 .address-trunc {
@@ -852,7 +867,7 @@ button.submit:active {
 .reader_field {
     display: inline-block;
     width: 3em;
-    margin: 0;
+    margin: 0.05em 0 0.05em 0;
 }
 h1 {
     font: 2em "Open Sans Light", sans-serif;
