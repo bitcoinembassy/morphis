@@ -383,6 +383,7 @@ def serve_get(dispatcher, rpath):
 
             if selected:
                 option = '<option value="{}" selected>{}</option>'
+                owner_if_anon = addr
             else:
                 option = '<option value="{}">{}</option>'
 
@@ -390,12 +391,15 @@ def serve_get(dispatcher, rpath):
 
             from_addr_options.append(option.format(addr.id, addr_enc))
 
+        from_addr_options.append("<option value="">[Anonymous]</option>")
+
         from_addr_options = ''.join(from_addr_options)
 
         template = templates.dmail_compose[0]
 
         template = template.format(\
             delete_class="display_none",\
+            owner_if_anon=owner_if_anon.id,\
             from_addr_options=from_addr_options,\
             dest_addr=dest_addr_enc,\
             subject=subject,\
@@ -866,7 +870,9 @@ def serve_post(dispatcher, rpath):
 
         dm = yield from _save_outgoing_dmail(dispatcher, dm, "Outbox")
 
-        sender_asymkey = rsakey.RsaKey(privdata=dm.address.site_privatekey)
+        sender_asymkey =\
+            rsakey.RsaKey(privdata=dm.address.site_privatekey) if dm.address\
+                else None
 
         dest_addr_enc = mbase32.encode(dm.destination_dmail_key)
         destinations = [
@@ -942,18 +948,34 @@ def _read_dmail_post(dispatcher, data):
         dmsubject = ""
 
     sender_dmail_id = dd.get("sender")
-
     if sender_dmail_id:
-        sender_dmail_id = int(sender_dmail_id[0])
+        sender_dmail_id = sender_dmail_id[0]
 
         if log.isEnabledFor(logging.DEBUG):
             log.debug("sender_dmail_id=[{}].".format(sender_dmail_id))
 
-        dmail_address =\
-            yield from _load_dmail_address(dispatcher, sender_dmail_id)
+        if sender_dmail_id and sender_dmail_id != "":
+            sender_dmail_id = int(sender_dmail_id)
 
-        dm.address = dmail_address
-        dm.sender_valid = True
+            dmail_address =\
+                yield from _load_dmail_address(dispatcher, sender_dmail_id)
+
+            dm.address = dmail_address
+            dm.sender_valid = True
+
+            dm.sender_dmail_key = dm.address.site_key
+
+    if not dm.address:
+        owner_if_anon = dd.get("owner_if_anon")
+        if owner_if_anon:
+            dmail_address =\
+                yield from _load_dmail_address(dispatcher, owner_if_anon[0])
+            dm.address = dmail_address
+
+        if dm.address:
+            dm.sender_valid = True
+        else:
+            dm.sender_valid = False
 
 #        sender_asymkey = rsakey.RsaKey(\
 #            privdata=dmail_address.site_privatekey)\
@@ -1205,7 +1227,7 @@ def _list_dmails_for_tag(dispatcher, addr, tag):
                 sender_key = '<span class="strikethrough">'\
                     + sender_key_enc + "</span>"
         else:
-            sender_key = "Anonymous"
+            sender_key = "[Anonymous]"
 
         row = row_template.format(
             mail_icon=mail_icon,\

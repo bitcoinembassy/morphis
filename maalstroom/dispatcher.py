@@ -469,15 +469,15 @@ class MaalstroomDispatcher(object):
 
     @asyncio.coroutine
     def _do_POST(self, rpath):
-        if not self.connection_count:
-            self.send_error("No connected nodes; cannot upload to the"\
-                " network.")
-            return
-
         log.info("POST; rpath=[{}].".format(rpath))
 
         if rpath != ".upload/upload":
             yield from maalstroom.dmail.serve_post(self, rpath)
+            return
+
+        if not self.connection_count:
+            self.send_error("No connected nodes; cannot upload to the"\
+                " network.")
             return
 
         if log.isEnabledFor(logging.DEBUG):
