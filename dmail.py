@@ -618,14 +618,14 @@ class DmailEngine(object):
 def attach_dmail_tag(sess, dm, tag_name):
     "Make sure to call this in a separate thread than event loop."
     # Attach requested DmailTag to Dmail.
-    q = sess.query(DmailTag)\
-        .filter(DmailTag.name == tag_name)
+    q = sess.query(db.DmailTag)\
+        .filter(db.DmailTag.name == tag_name)
     tag = q.first()
 
     if not tag:
-        tag = DmailTag()
+        tag = db.DmailTag()
         tag.name = tag_name
+        sess.add(tag)
 
     dm.tags.append(tag)
 
-    sess.add(dm)

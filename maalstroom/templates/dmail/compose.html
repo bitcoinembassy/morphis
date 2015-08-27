@@ -7,30 +7,31 @@
 <span class="inbox-head nowrap">New Message</span>
 <div class="right-icons-inner">
     <ul>
-	<a href="morphis://.dmail/compose"><div style="display:inline"><li class="nav-send-icon">SEND</li></div></a>
+	<!--a href="morphis://.dmail/compose"><div style="display:inline"><li class="nav-send-icon">SEND</li></div></a>
+    <a href="morphis://.dmail/save"><div style="display:inline"><li class="nav-save-icon">SAVE</li></div></a--><!-- These need to be in the form. -->
 	<a href="morphis://.dmail/delete" class="{delete_class}"><div style="display:inline"><li class="nav-delete-icon">DELETE</li></div></a>
     </ul>
 </div><br/><br/>
 <div class="compose-bkg">
-<form class="message nowrap" action="" method="post" name="message" style="height: calc(100% - 1.1em);" accept-charset="UTF-8 ISO-8859-1">
+<form class="message nowrap" style="height: calc(100% - 1.1em);" action="morphis://.dmail/compose/make_it_so" method="post" accept-charset="UTF-8 ISO-8859-1">
 <ul style="height: calc(100% - 11em);">
-    <label for="from">From</label> 
-    <select class="from-address">
+    <label for="sender">From</label> 
+    <select name="sender" class="from-address">
       {from_addr_options}
     </select>
     <li>
-        <label class="to" for="to">To</label>
-        <input type="text" name="to" value="{dest_addr}" required{dest_addr_autofocus}/>&nbsp;&nbsp;<button class="addressbook-icon" type="submit"></button>
+        <label class="to" for="destination">To</label> <!-- Please rename classes to match names. -->
+        <input type="text" name="destination" value="{dest_addr}" required{dest_addr_autofocus}/>&nbsp;&nbsp;<button class="addressbook-icon" type="submit"></button>
     </li>
     <li>
 	<label for="subject">Subject</label>
 	<input type="text" name="subject" value="{subject}"{subject_autofocus}>
     </li>
      <li style="height:100%">
-	<textarea id="TITLE"{message_text_autofocus}>{message_text}</textarea>
+	<textarea name="content"{message_text_autofocus}>{message_text}</textarea>
     </li>
     <li>
-	<button class="submit" type="submit">SEND</button>
+	<button class="submit" type="submit" formtarget="_self" id="send" value="Send">SEND</button>
 	<button class="submit" type="submit">SAVE AS DRAFT</button>
     </li>
 </ul>
