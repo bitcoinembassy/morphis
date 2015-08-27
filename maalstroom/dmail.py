@@ -300,7 +300,10 @@ def serve_get(dispatcher, rpath):
         reply_subject = dm.subject if dm.subject.startswith("Re: ")\
             else "Re: " + dm.subject
         safe_reply_subject = quote_plus(reply_subject)
-        sender_addr = mbase32.encode(dm.sender_dmail_key)
+        if dm.sender_dmail_key:
+            sender_addr = mbase32.encode(dm.sender_dmail_key)
+        else:
+            sender_addr = "[Anonymous]"
         sender_class =\
             "valid_sender" if dm.sender_valid else "invalid_sender"
 
