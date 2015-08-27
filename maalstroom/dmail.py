@@ -314,6 +314,13 @@ def serve_get(dispatcher, rpath):
         sender_class =\
             "valid_sender" if dm.sender_valid else "invalid_sender"
 
+        if dm.destination_dmail_key:
+            dest_addr_enc = mbase32.encode(dm.destination_dmail_key)
+            dest_class = ""
+        else:
+            dest_addr_enc = ""
+            dest_class = " display_none"
+
         template = templates.dmail_read[0]
         template = template.format(\
             addr=addr_enc,\
@@ -323,6 +330,8 @@ def serve_get(dispatcher, rpath):
             msg_id=msg_dbid,\
             sender_class=sender_class,\
             sender=sender_addr,\
+            dest_class=dest_class,\
+            dest_addr=dest_addr_enc,\
             date=dm.date)
 
         dispatcher.send_content(template)

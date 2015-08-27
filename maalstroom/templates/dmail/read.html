@@ -13,14 +13,16 @@
 </div><br/><br/>
 <div class="compose-bkg">
     <div class="read-wrapper">
+        <table style="margin-left: -0.5px;" width="100%"><tr><td class="nopadding nomargin">Subject:</td><td width="100%"><iframe style="display: inline; height: 1.7em; max-height: 1.7em; width: 100%;" src="morphis://.dmail/read/subject/{msg_id}"></iframe></td></tr></table>
         <div class="dynamicWidth">
-            <div class="address-trunc nowrap">From: <span class="{sender_class}">{sender}</span>
+            <div class="address-trunc nowrap"><span class="reader_field">From: </span><span class="{sender_class}">{sender}</span></div>
+            <div class="staticWidth"><button class="addressbook-icon" type="submit"></button></div>
         </div>
-        <div class="staticWidth"><button class="addressbook-icon" type="submit"></button></div>
+        <div class="dynamicWidth{dest_class}">
+            <div class="address-trunc nowrap"><span class="reader_field">To: </span><span class="valid_sender">{dest_addr}</span></div>
         </div>
-        <table style="margin-left: -0.5px;" width="100%"><tr><td class="nopadding nomargin">Subject:</td><td width="100%"><iframe style="display: inline; height: 1.8em; max-height: 1.8em; width: 100%;" src="morphis://.dmail/read/subject/{msg_id}"></iframe></td></tr></table>
-        <span>Date: {date}</span>
-        <iframe src="morphis://.dmail/read/content/{msg_id}" style="height: calc(100% - 5em); width: 100%;"></iframe>
+        <div><span class="reader_field">Date: </span><span>{date}</span></div>
+        <iframe src="morphis://.dmail/read/content/{msg_id}" style="height: calc(100% - 5em); width: 100%; margin-top: 0.5em; border-top: 1px dotted;"></iframe>
     </div>
 </div>
 </body></html>

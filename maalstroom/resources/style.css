@@ -666,8 +666,8 @@ tr:hover, tr:hover a {
 .inbox-pad {
   padding: .3em;
 }
-.inline {
-    display: inline-blocblock;
+.inline_block {
+    display: inline-block;
 }
 .hidden {
     visibility: hidden;
@@ -799,9 +799,9 @@ button.submit:active {
 }
 .staticWidth {
     position: absolute;
-    right: 1em;
+    right: 0.5em;
     width: 30px;
-    top: 6.7em;
+    top: 9.25em;
 /*    top: 10.8em; /*centers the content of this div in middle of height*/
 }
 .address-trunc {
@@ -848,6 +848,11 @@ button.submit:active {
     padding-bottom: 1.5em;
     padding-left: 1.5em;
     padding-right: 1.5em;
+}
+.reader_field {
+    display: inline-block;
+    width: 3em;
+    margin: 0;
 }
 h1 {
     font: 2em "Open Sans Light", sans-serif;
