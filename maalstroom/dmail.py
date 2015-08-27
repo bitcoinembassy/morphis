@@ -195,8 +195,16 @@ def serve_get(dispatcher, rpath):
                 return
             cacheable = True
 
+        if tag == "Trash":
+            empty_trash_button_class = "link-button"
+        else:
+            empty_trash_button_class = "display_none"
+
         template = templates.dmail_msg_list[0]
-        template = template.format(tag=tag, addr=addr_enc)
+        template = template.format(\
+            tag=tag,\
+            addr=addr_enc,\
+            empty_trash_button_class=empty_trash_button_class)
 
         if cacheable:
             dispatcher.send_content(template, req)
@@ -416,7 +424,7 @@ def serve_get(dispatcher, rpath):
 
     elif req.startswith("/toggle_read/"):
         params = req[13:]
-        p0 = params.find('?redirect=')
+        p0 = params.find("?redirect=")
         if p0 != -1:
             redirect = params[p0+10:]
         else:
@@ -437,7 +445,7 @@ def serve_get(dispatcher, rpath):
             dispatcher.send_204()
     elif req.startswith("/toggle_trashed/"):
         params = req[16:]
-        p0 = params.find('?redirect=')
+        p0 = params.find("?redirect=")
         if p0 != -1:
             redirect = params[p0+10:]
         else:
@@ -456,9 +464,26 @@ def serve_get(dispatcher, rpath):
             dispatcher.send_301(redirect)
         else:
             dispatcher.send_204()
+    elif req.startswith("/empty_trash/"):
+        params = req[13:]
+        p0 = params.find("?redirect=")
+        if p0 != -1:
+            redirect = params[p0+10:]
+        else:
+            redirect = None
+            p0 = len(params)
+
+        addr_enc = params[:p0]
+
+        yield from _empty_trash(dispatcher, addr_enc)
+
+        if redirect:
+            dispatcher.send_301(redirect)
+        else:
+            dispatcher.send_204()
     elif req.startswith("/make_address_default/"):
         params = req[22:]
-        p0 = params.find('?redirect=')
+        p0 = params.find("?redirect=")
         if p0 != -1:
             redirect = params[p0+10:]
         else:
@@ -1461,6 +1486,19 @@ def _set_default_dmail_address(dispatcher, dbid):
 #        yield from dispatcher.node.loop.run_in_executor(None, dbcall)
 #
 #    return dmail_address
+
+@asyncio.coroutine
+def _empty_trash(dispatcher, addr_enc):
+    def dbcall():
+        with dispatcher.node.db.open_session() as sess:
+            q = sess.query(DmailMessage)\
+                .filter(DmailMessage.hidden == True)
+
+            q.delete(synchronize_session=False)
+
+            sess.commit()
+
+    yield from dispatcher.node.loop.run_in_executor(None, dbcall)
 
 @asyncio.coroutine
 def _process_dmail_address(dispatcher, dmail_addr, process_call):

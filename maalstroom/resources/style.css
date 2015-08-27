@@ -622,9 +622,10 @@ table {
    font-weight: bold;
    color: #141c30;
 }
-.change-address-button {
+.link-button {
    height: 31px;
    background: url("images/gradient.jpg") top left repeat-x;
+   margin-left: 0.5em;
    float: right;
    line-height: 31px;
    text-align: center;
@@ -638,7 +639,7 @@ table {
    border: 1px solid #bcbec2;
    white-space: nowrap;
 }
-.change-address-button:hover {
+.link-button:hover {
    background: #bcbec3;
    -moz-box-shadow: inset 1px 1px 1px #aaabaf;
    -webkit-box-shadow: inset 1px 1px 1px #aaabaf;
