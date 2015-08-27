@@ -434,6 +434,33 @@ def serve_get(dispatcher, rpath):
         acharset = dispatcher.get_accept_charset()
         dispatcher.send_content(template,\
             content_type="text/html; charset={}".format(acharset))
+    elif req == "/address_list":
+        addrs = yield from _list_dmail_addresses(dispatcher)
+        default_id = yield from _load_default_dmail_address_id(dispatcher)
+
+        row_template = templates.dmail_address_list_row[0]
+
+        rows = []
+
+        for addr in addrs:
+            site_key_enc = mbase32.encode(addr.site_key)
+
+            if default_id and addr.id == default_id:
+                hide = "hidden"
+            else:
+                hide = ""
+
+            resp = row_template.format(\
+                addr=site_key_enc, addr_dbid=addr.id, hide=hide)
+
+            rows.append(resp)
+
+        rows_content = ''.join(rows)
+
+        template = templates.dmail_address_list[0]
+        template = template.format(address_list=rows_content)
+
+        dispatcher.send_content(template)
 
     # Actions.
 
@@ -515,38 +542,6 @@ def serve_get(dispatcher, rpath):
             dispatcher.send_204()
 
 #######OLD:
-
-    elif req == "/address_list":
-        dispatcher.send_partial_content(
-            templates.dmail_page_content__f1_start, True)
-
-        addrs = yield from _list_dmail_addresses(dispatcher)
-
-        default_id = yield from _load_default_dmail_address_id(dispatcher)
-
-        for addr in addrs:
-            site_key_enc = mbase32.encode(addr.site_key)
-
-            if default_id and addr.id == default_id:
-                hide = "hidden"
-            else:
-                hide = ""
-
-            resp =\
-                '<div style="overflow: hidden; text-overflow: ellipsis;">'\
-                '[<a href="morphis://.dmail/wrapper/{addr}" class="normal">'\
-                'select</a>]&nbsp<span class="{hide}">'\
-                '[<a target="_self" href="morphis://.dmail/'\
-                'make_address_default/{addr_dbid}?redirect=morphis://.dmail/'\
-                'address_list" class="normal">set&nbsp;default</a>]</span>'\
-                '&nbsp{addr}</div>'\
-                    .format(addr=site_key_enc, addr_dbid=addr.id, hide=hide)
-
-            dispatcher.send_partial_content(resp)
-
-        dispatcher.send_partial_content(\
-            templates.dmail_page_content__f1_end)
-        dispatcher.end_partial_content()
 
     elif req == "/create_address":
         dispatcher.send_content(templates.dmail_create_address_form_content)

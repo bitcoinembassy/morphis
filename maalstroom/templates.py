@@ -436,6 +436,8 @@ if not initialized_template:
     dmail_new_mail = load("dmail/new_mail.html", True)
     dmail_read = load("dmail/read.html", True)
     dmail_compose = load("dmail/compose.html", True)
+    dmail_address_list = load("dmail/address_list.html", True)
+    dmail_address_list_row = load("dmail/address_list_row.html", True)
 
     for entry_name in os.listdir("maalstroom/resources/images/dmail"):
         if log.isEnabledFor(logging.DEBUG):
