@@ -262,7 +262,7 @@ def get_client_engine():
 
     yield from node.ready.wait()
 
-    ce = cengine.ClientEngine(node.chord_engine, node.loop, update_test)
+    ce = cengine.ClientEngine(node.chord_engine, node.db, update_test)
     yield from ce.start()
 
     client_engine = ce

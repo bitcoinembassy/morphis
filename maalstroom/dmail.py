@@ -535,7 +535,10 @@ def serve_get(dispatcher, rpath):
             addr.scan_interval = interval
             return True
 
-        yield from _process_dmail_address(dispatcher, addr_id, processor)
+        addr =\
+            yield from _process_dmail_address(dispatcher, addr_id, processor)
+
+        dispatcher.client_engine.update_dmail_autoscan(addr)
 
         if redirect:
             dispatcher.send_301(redirect)
@@ -1345,136 +1348,6 @@ def _list_dmails_for_tag(dispatcher, addr, tag):
             timestamp=msg.date)
 
         dispatcher.send_partial_content(row)
-
-@asyncio.coroutine
-def _scan_new_dmails(dispatcher, addr, significant_bits):
-    de =\
-        dmail.DmailEngine(\
-            dispatcher.node.chord_engine.tasks, dispatcher.node.db)
-
-    new_dmail_cnt = 0
-
-    @asyncio.coroutine
-    def process_key(key):
-        nonlocal new_dmail_cnt
-
-        exists = yield from _check_have_dmail(dispatcher, key)
-
-        key_enc = mbase32.encode(key)
-
-        if log.isEnabledFor(logging.DEBUG):
-            log.debug("Processing Dmail (key=[{}]).".format(key_enc))
-
-        if exists:
-            if log.isEnabledFor(logging.DEBUG):
-                log.debug("Ignoring dmail (key=[{}]) we already have."\
-                    .format(key_enc))
-            return
-
-        yield from _fetch_and_save_dmail(dispatcher, addr, key)
-
-        addr_enc = mbase32.encode(addr)
-        dispatcher.send_partial_content(\
-            """<a href="../../fetch/{}/{}">{}</a><br/>"""\
-                .format(addr_enc, key_enc, key_enc))
-
-        new_dmail_cnt += 1
-
-    tasks = []
-
-    def key_callback(key):
-        tasks.append(\
-            asyncio.async(process_key(key), loop=dispatcher.node.loop))
-
-    try:
-        yield from de.scan_dmail_address(\
-            addr, significant_bits, key_callback=key_callback)
-    except dmail.DmailException as e:
-        dispatcher.send_partial_content("DmailException: {}".format(e))
-
-    if tasks:
-        yield from asyncio.wait(tasks, loop=dispatcher.node.loop)
-
-    if new_dmail_cnt:
-        dispatcher.send_partial_content("Moved {} Dmails to Inbox."\
-            .format(new_dmail_cnt))
-    else:
-        dispatcher.send_partial_content("No new Dmails.")
-
-@asyncio.coroutine
-def _check_have_dmail(dispatcher, dmail_key):
-    def dbcall():
-        with dispatcher.node.db.open_session() as sess:
-            q = sess.query(func.count("*")).select_from(DmailMessage)\
-                .filter(DmailMessage.data_key == dmail_key)
-
-            if q.scalar():
-                return True
-            return False
-
-    exists = yield from dispatcher.node.loop.run_in_executor(None, dbcall)
-    return exists
-
-@asyncio.coroutine
-def _fetch_and_save_dmail(dispatcher, dmail_addr, dmail_key):
-    dmailobj, valid_sig =\
-        yield from _fetch_dmail(dispatcher, dmail_addr, dmail_key)
-
-    if not dmailobj:
-        if log.isEnabledFor(logging.INFO):
-            log.info("Dmail was not found on the network.")
-        return
-
-    def dbcall():
-        with dispatcher.node.db.open_session() as sess:
-            dispatcher.node.db.lock_table(sess, DmailMessage)
-
-            q = sess.query(func.count("*")).select_from(DmailMessage)\
-                .filter(DmailMessage.data_key == dmail_key)
-
-            if q.scalar():
-                return False
-
-            q = sess.query(DmailAddress.id)\
-                .filter(DmailAddress.site_key == dmail_addr)
-
-            dmail_address = q.first()
-
-            msg = DmailMessage()
-            msg.dmail_address_id = dmail_address.id
-            msg.data_key = dmail_key
-            msg.sender_dmail_key =\
-                enc.generate_ID(dmailobj.sender_pubkey)\
-                    if dmailobj.sender_pubkey else None
-            msg.sender_valid = valid_sig
-            msg.subject = dmailobj.subject
-            msg.date = mutil.parse_iso_datetime(dmailobj.date)
-
-            msg.hidden = False
-            msg.read = False
-
-            tag = DmailTag()
-            tag.name = "Inbox"
-            msg.tags = [tag]
-
-            msg.parts = []
-
-            for part in dmailobj.parts:
-                dbpart = DmailPart()
-                dbpart.mime_type = part.mime_type
-                dbpart.data = part.data
-                msg.parts.append(dbpart)
-
-            sess.add(msg)
-
-            sess.commit()
-
-    yield from dispatcher.node.loop.run_in_executor(None, dbcall)
-
-    if log.isEnabledFor(logging.INFO):
-        log.info("Dmail saved!")
-
-    return
 
 @asyncio.coroutine
 def _load_dmail(dispatcher, dmail_dbid):

@@ -11,6 +11,8 @@ import os
 import struct
 import time
 
+from sqlalchemy import func
+
 import base58
 import brute
 import chord
@@ -393,6 +395,9 @@ class DmailEngine(object):
 
     @asyncio.coroutine
     def fetch_dmail(self, key, x=None, target_key=None):
+        "Fetch the Dmail referred to by key from the network."\
+        " Returns a Dmail object, not a db.DmailMessage object."
+
         data_rw = yield from self.task_engine.send_get_targeted_data(key)
 
         data = data_rw.data
@@ -615,6 +620,139 @@ class DmailEngine(object):
 
         return robjs
 
+    @asyncio.coroutine
+    def scan_and_save_new_dmails(self, dmail_address):
+        new_dmail_cnt = 0
+        old_dmail_cnt = 0
+        err_dmail_cnt = 0
+
+        address_key = dmail_address.keys[0]
+
+        target = address_key.target_key
+        significant_bits = address_key.difficulty
+
+        start = target
+
+        def check_have_dmail_dbcall():
+            with self.db.open_session() as sess:
+                q = sess.query(func.count("*")).select_from(db.DmailMessage)\
+                    .filter(db.DmailMessage.data_key == dmail_key)
+
+                if q.scalar():
+                    return True
+                return False
+
+        while True:
+            data_rw = yield from self.task_engine.send_find_key(\
+                start, target_key=target, significant_bits=significant_bits,\
+                retry_factor=100)
+
+            start = dmail_key = data_rw.data_key
+
+            if not dmail_key:
+                if log.isEnabledFor(logging.INFO):
+                    log.info("No more Dmails found for address (id=[{}])."\
+                        .format(dmail_address.id))
+                break
+
+            if log.isEnabledFor(logging.INFO):
+                key_enc = mbase32.encode(dmail_key)
+                log.info("Found dmail key: [{}].".format(key_enc))
+
+            exists =\
+                yield from self.loop.run_in_executor(\
+                    None, check_have_dmail_dbcall)
+
+            if exists:
+                if log.isEnabledFor(logging.DEBUG):
+                    log.debug("Ignoring dmail (key=[{}]) we already have."\
+                        .format(key_enc))
+                    old_dmail_cnt += 1
+                continue
+
+            try:
+                yield from self._fetch_and_save_dmail(\
+                    dmail_key, dmail_address, address_key)
+                new_dmail_cnt += 1
+            except Exception as e:
+                log.exception("Trying to fetch and save Dmail for key [{}]"\
+                    " caused exception: {}"\
+                        .format(mbase32.encode(dmail_key), e))
+                err_dmail_cnt += 1
+
+        if log.isEnabledFor(logging.INFO):
+            if new_dmail_cnt:
+                log.info("Moved [{}] Dmails to Inbox.".format(new_dmail_cnt))
+            else:
+                log.info("No new Dmails.")
+
+        return new_dmail_cnt, old_dmail_cnt, err_dmail_cnt
+
+    @asyncio.coroutine
+    def _fetch_and_save_dmail(self, dmail_message_key, dmail_address,\
+            address_key):
+        key_type = type(dmail_message_key)
+        if key_type is not bytes:
+            assert key_type is bytearray
+            dmail_message_key = bytes(dmail_message_key)
+
+        # Fetch the Dmail data from the network.
+        l, x_mpint = sshtype.parseMpint(address_key.x)
+        dmobj, valid_sig =\
+            yield from self.fetch_dmail(\
+                dmail_message_key, x_mpint, address_key.target_key)
+
+        if not dmobj:
+            if log.isEnabledFor(logging.INFO):
+                log.info("Dmail was not found on the network.")
+            return False
+
+        def dbcall():
+            with self.db.open_session() as sess:
+                self.db.lock_table(sess, db.DmailMessage)
+
+                q = sess.query(func.count("*")).select_from(db.DmailMessage)\
+                    .filter(db.DmailMessage.data_key == dmail_message_key)
+
+                if q.scalar():
+                    return False
+
+                msg = db.DmailMessage()
+                msg.dmail_address_id = dmail_address.id
+                msg.data_key = dmail_message_key
+                msg.sender_dmail_key =\
+                    enc.generate_ID(dmobj.sender_pubkey)\
+                        if dmobj.sender_pubkey else None
+                msg.sender_valid = valid_sig
+                msg.subject = dmobj.subject
+                msg.date = mutil.parse_iso_datetime(dmobj.date)
+
+                msg.hidden = False
+                msg.read = False
+
+                tag = db.DmailTag()
+                tag.name = "Inbox"
+                msg.tags = [tag]
+
+                msg.parts = []
+
+                for part in dmobj.parts:
+                    dbpart = db.DmailPart()
+                    dbpart.mime_type = part.mime_type
+                    dbpart.data = part.data
+                    msg.parts.append(dbpart)
+
+                sess.add(msg)
+
+                sess.commit()
+
+        yield from self.loop.run_in_executor(None, dbcall)
+
+        if log.isEnabledFor(logging.INFO):
+            log.info("Dmail saved!")
+
+        return True
+
 def attach_dmail_tag(sess, dm, tag_name):
     "Make sure to call this in a separate thread than event loop."
     # Attach requested DmailTag to Dmail.
@@ -628,4 +766,3 @@ def attach_dmail_tag(sess, dm, tag_name):
         sess.add(tag)
 
     dm.tags.append(tag)
-

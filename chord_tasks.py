@@ -336,7 +336,7 @@ class ChordTasks(object):
             log.info("Performing wildcard (key) search (prefix=[{}],"\
                 " significant_bits=[{}], target_key=[{}])."\
                     .format(mbase32.encode(data_key_prefix), significant_bits,\
-                        target_key))
+                        mbase32.encode(target_key)))
 
         ldiff = chord.NODE_ID_BYTES - len(data_key_prefix)
         if ldiff > 0:
