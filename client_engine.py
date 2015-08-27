@@ -114,9 +114,8 @@ class ClientEngine(object):
         assert not self._dmail_autoscan_processes
 
         for addr in addrs:
-            yield from self.update_dmail_autoscan(addr)
+            self.update_dmail_autoscan(addr)
 
-    @asyncio.coroutine
     def update_dmail_autoscan(self, addr):
         if log.isEnabledFor(logging.INFO):
             log.info(\
@@ -190,6 +189,9 @@ class DmailAutoscanProcess(object):
                 log.info("Finished scanning Dmails for address [{}];"\
                     " new_cnt=[{}], old_cnt=[{}], err_cnt=[{}]."\
                         .format(addr_enc, new_cnt, old_cnt, err_cnt))
+
+            if not self._running:
+                break
 
             time_left = self.scan_interval
             start = time.time()

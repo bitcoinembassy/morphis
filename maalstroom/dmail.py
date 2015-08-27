@@ -536,7 +536,8 @@ def serve_get(dispatcher, rpath):
             return True
 
         addr =\
-            yield from _process_dmail_address(dispatcher, addr_id, processor)
+            yield from _process_dmail_address(\
+                dispatcher, addr_id, processor, fetch_keys=True)
 
         dispatcher.client_engine.update_dmail_autoscan(addr)
 
