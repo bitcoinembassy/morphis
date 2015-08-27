@@ -889,13 +889,30 @@ def serve_post(dispatcher, rpath):
         if log.isEnabledFor(logging.DEBUG):
             log.debug("data=[{}].".format(data))
 
-        dm = yield from _read_dmail_post(dispatcher, data)
+        dm, submit = yield from _read_dmail_post(dispatcher, data)
+
+        if submit:
+            if submit == "send":
+                tag = "Outbox"
+            else:
+                assert submit == "draft"
+                tag = "Drafts"
+        else:
+            tag = "Drafts"
+
+        dm = yield from _save_outgoing_dmail(dispatcher, dm, tag)
+
+        if tag == "Drafts":
+            log.info("Storing Dmail in Drafts tag.")
+            dispatcher.send_content(\
+                "SAVED.<br/><p>Dmail successfully saved to Drafts.</p>")
+            return
+
+        log.info("Sending submitted Dmail.")
 
         de =\
             dmail.DmailEngine(\
                 dispatcher.node.chord_engine.tasks, dispatcher.node.db)
-
-        dm = yield from _save_outgoing_dmail(dispatcher, dm, "Outbox")
 
         sender_asymkey =\
             rsakey.RsaKey(privdata=dm.address.site_privatekey) if dm.address\
@@ -1030,7 +1047,11 @@ def _read_dmail_post(dispatcher, data):
     dm.hidden = False
     dm.read = True
 
-    return dm
+    submit = dd.get("submit")
+    if submit:
+        return dm, submit[0]
+    else:
+        return dm, None
 
 @asyncio.coroutine
 def _save_outgoing_dmail(dispatcher, dm, tag_name):
