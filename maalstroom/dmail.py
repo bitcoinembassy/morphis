@@ -548,6 +548,44 @@ def serve_get(dispatcher, rpath):
             templates.dmail_page_content__f1_end)
         dispatcher.end_partial_content()
 
+    elif req == "/create_address":
+        dispatcher.send_content(templates.dmail_create_address_form_content)
+    elif req.startswith("/create_address/make_it_so?"):
+        query = req[27:]
+
+        qdict = parse_qs(query, keep_blank_values=True)
+
+        prefix = qdict["prefix"][0]
+        difficulty = int(qdict["difficulty"][0])
+
+        log.info("prefix=[{}].".format(prefix))
+        privkey, dmail_key, dms, storing_nodes =\
+            yield from\
+                _create_dmail_address(dispatcher, prefix, difficulty)
+
+        dmail_key_enc = mbase32.encode(dmail_key)
+
+        dispatcher.send_partial_content(templates.dmail_frame_start, True)
+        if storing_nodes:
+            dispatcher.send_partial_content(b"SUCCESS<br/>")
+        else:
+            dispatcher.send_partial_content(
+                "PARTIAL SUCCESS<br/>"\
+                "<p>Your Dmail site was generated successfully; however,"\
+                " it failed to be stored on the network. To remedy this,"\
+                " simply go to your Dmail address page and click the"\
+                " [<a href=\"morphis://.dmail/addr/settings/{}\">Address"\
+                " Settings</a>] link, and then click the \"Republish"\
+                " Dmail Site\" button.</p>"\
+                    .format(dmail_key_enc).encode())
+
+        dispatcher.send_partial_content(\
+            '<p>New dmail address: <a href="morphis://.dmail/wrapper/'\
+            '{addr_enc}">{addr_enc}</a></p>'\
+                .format(addr_enc=dmail_key_enc).encode())
+        dispatcher.send_partial_content(templates.dmail_frame_end)
+        dispatcher.end_partial_content()
+
 #######OLD UNUSED (DELETE):
 
     elif req.startswith("/compose/form"):
@@ -851,44 +889,6 @@ def serve_get(dispatcher, rpath):
             b"${IFRAME_SRC}", "../wrapper/{}".format(req_data).encode())
 
         dispatcher.send_content([content, None])
-    elif req == "/create_address":
-        dispatcher.send_content(templates.dmail_create_address_content)
-    elif req == "/create_address/form":
-        dispatcher.send_content(templates.dmail_create_address_form_content)
-    elif req.startswith("/create_address/make_it_so?"):
-        query = req[27:]
-
-        qdict = parse_qs(query, keep_blank_values=True)
-
-        prefix = qdict["prefix"][0]
-        difficulty = int(qdict["difficulty"][0])
-
-        log.info("prefix=[{}].".format(prefix))
-        privkey, dmail_key, dms, storing_nodes =\
-            yield from\
-                _create_dmail_address(dispatcher, prefix, difficulty)
-
-        dmail_key_enc = mbase32.encode(dmail_key)
-
-        dispatcher.send_partial_content(templates.dmail_frame_start, True)
-        if storing_nodes:
-            dispatcher.send_partial_content(b"SUCCESS<br/>")
-        else:
-            dispatcher.send_partial_content(
-                "PARTIAL SUCCESS<br/>"\
-                "<p>Your Dmail site was generated successfully; however,"\
-                " it failed to be stored on the network. To remedy this,"\
-                " simply go to your Dmail address page and click the"\
-                " [<a href=\"morphis://.dmail/addr/settings/{}\">Address"\
-                " Settings</a>] link, and then click the \"Republish"\
-                " Dmail Site\" button.</p>"\
-                    .format(dmail_key_enc).encode())
-
-        dispatcher.send_partial_content(\
-            """<p>New dmail address: <a href="../addr/{}">{}</a></p>"""\
-                .format(dmail_key_enc, dmail_key_enc).encode())
-        dispatcher.send_partial_content(templates.dmail_frame_end)
-        dispatcher.end_partial_content()
     else:
         dispatcher.send_error(errcode=400)
 
