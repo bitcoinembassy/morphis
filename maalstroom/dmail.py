@@ -169,9 +169,15 @@ def serve_get(dispatcher, rpath):
         addr_enc = params[:p0]
         tag = params[p0+1:]
 
+        template = templates.dmail_msg_list_list_start[0]
+
+        addr_heading = "TO" if tag in ("Outbox", "Sent", "Drafts") else "FROM"
+
+        template = template.format(addr_heading=addr_heading)
+
         acharset = dispatcher.get_accept_charset()
         dispatcher.send_partial_content(\
-            templates.dmail_msg_list_list_start[0],\
+            template,\
             True,\
             content_type="text/html; charset={}".format(acharset))
         
@@ -1266,6 +1272,8 @@ def _list_dmails_for_tag(dispatcher, addr, tag):
 
     row_template = templates.dmail_msg_list_list_row[0]
 
+    show_sender = tag not in ("Outbox", "Sent", "Drafts")
+
     for msg in msgs:
         unread = "" if msg.read else "new-mail"
 
@@ -1277,15 +1285,21 @@ def _list_dmails_for_tag(dispatcher, addr, tag):
 
         safe_reply_subject = generate_safe_reply_subject(msg)
 
-        sender_key = msg.sender_dmail_key
-        if sender_key:
-            sender_key_enc = mbase32.encode(sender_key)
-            if msg.sender_valid:
-                sender_key = sender_key_enc
-            else:
-                sender_key = '<span class="strikethrough">'\
-                    + sender_key_enc + "</span>"
+        if show_sender:
+            sender_key = msg.sender_dmail_key
+            if sender_key:
+                sender_key_enc = mbase32.encode(sender_key)
+                if msg.sender_valid:
+                    sender_key = sender_key_enc
+                else:
+                    sender_key = '<span class="strikethrough">'\
+                        + sender_key_enc + "</span>"
         else:
+            dest_key = msg.destination_dmail_key
+            if dest_key:
+                sender_key = mbase32.encode(dest_key)
+
+        if not sender_key:
             sender_key = "[Anonymous]"
 
         row = row_template.format(

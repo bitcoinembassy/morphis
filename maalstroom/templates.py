@@ -430,7 +430,7 @@ if not initialized_template:
     dmail_nav = load("dmail/nav.html", True)
     dmail_aside = load("dmail/aside.html", True)
     dmail_msg_list = load("dmail/msg_list.html", True)
-    dmail_msg_list_list_start = load("dmail/msg_list_list_start.html")
+    dmail_msg_list_list_start = load("dmail/msg_list_list_start.html", True)
     dmail_msg_list_list_row = load("dmail/msg_list_list_row.html", True)
     dmail_msg_list_list_end = load("dmail/msg_list_list_end.html")
     dmail_new_mail = load("dmail/new_mail.html", True)
