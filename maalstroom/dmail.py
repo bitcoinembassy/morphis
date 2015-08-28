@@ -618,10 +618,40 @@ def serve_get(dispatcher, rpath):
         else:
             dispatcher.send_204()
 
-#######OLD:
+##### OLD:
 
     elif req == "/create_address":
         dispatcher.send_content(templates.dmail_create_address_form_content)
+    elif req.startswith("/address_config/"):
+        params = req[16:]
+
+        addr_enc = params
+
+        dmail_address = yield from\
+            _load_dmail_address(\
+                dispatcher, dmail_site_key=mbase32.decode(addr_enc),\
+                fetch_keys=True)
+
+        content = templates.dmail_address_config[0]
+
+        content = content.replace(\
+            "${DIFFICULTY}",\
+            str(dmail_address.keys[0].difficulty))
+        content = content.replace(\
+            "${DMAIL_ADDRESS_SHORT}", addr_enc[:32])
+        content = content.replace(\
+            "${DMAIL_ADDRESS}", addr_enc)
+        content = content.replace(\
+            "${PRIVATE_KEY}",\
+            base58.encode(dmail_address.site_privatekey))
+        content = content.replace(\
+            "${X}", base58.encode(dmail_address.keys[0].x))
+        content = content.replace(\
+            "${TARGET_KEY}",\
+            base58.encode(dmail_address.keys[0].target_key))
+
+        dispatcher.send_content([content, None])
+##### OLD ACTIONS:
     elif req.startswith("/create_address/make_it_so?"):
         query = req[27:]
 
@@ -658,6 +688,7 @@ def serve_get(dispatcher, rpath):
         dispatcher.send_partial_content(templates.dmail_frame_end)
         dispatcher.end_partial_content()
 
+########################################
 #######OLD UNUSED (DELETE):
 
     elif req.startswith("/compose/form"):
@@ -772,30 +803,6 @@ def serve_get(dispatcher, rpath):
                 templates.dmail_addr_settings_edit_fail_content[0]\
                     .format(addr_enc, addr_enc[:32]).encode())
 
-    elif req.startswith("/addr/settings/edit/"):
-        addr_enc = req[20:]
-
-        #FIXME: YOU_ARE_HERE: This uses id now, not addr_enc.
-        dmail_address = yield from\
-            _load_dmail_address(dispatcher, mbase32.decode(addr_enc))
-
-        content = templates.dmail_addr_settings_edit_content[0].replace(\
-            b"${DIFFICULTY}",\
-            str(dmail_address.keys[0].difficulty).encode())
-        content = content.replace(\
-            b"${DMAIL_ADDRESS_SHORT}", addr_enc[:32].encode())
-        content = content.replace(\
-            b"${DMAIL_ADDRESS}", addr_enc.encode())
-        content = content.replace(\
-            b"${PRIVATE_KEY}",\
-            base58.encode(dmail_address.site_privatekey).encode())
-        content = content.replace(\
-            b"${X}", base58.encode(dmail_address.keys[0].x).encode())
-        content = content.replace(\
-            b"${TARGET_KEY}",\
-            base58.encode(dmail_address.keys[0].target_key).encode())
-
-        dispatcher.send_content([content, None])
     elif req.startswith("/addr/settings/"):
         addr_enc = req[15:]
 
