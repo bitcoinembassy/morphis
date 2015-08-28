@@ -53,8 +53,6 @@ def serve_get(dispatcher, rpath):
                 log.info("NO NEW")
                 addr_enc = ""
             qline = None
-        elif dispatcher.handle_cache(req):
-            return
         elif req.startswith("/wrapper/"):
             params = req[9:]
 
@@ -72,14 +70,22 @@ def serve_get(dispatcher, rpath):
                 tag = "Inbox"
             else:
                 tag = params[p0+1:]
+
             addr_enc = params[:p0]
 
             if addr_enc:
                 cacheable = True
+                if dispatcher.handle_cache(req):
+                    return
         else:
             tag = "Inbox"
             addr_enc = ""
             qline = None
+
+        if not addr_enc:
+            dmail_address = yield from _load_default_dmail_address(dispatcher)
+            if dmail_address:
+                addr_enc = mbase32.encode(dmail_address.site_key)
 
         msg_list = None
         if qline:
@@ -153,11 +159,6 @@ def serve_get(dispatcher, rpath):
         addr_enc = params[:p0]
         tag = params[p0+1:]
 
-        if not addr_enc:
-            dmail_address = yield from _load_default_dmail_address(dispatcher)
-            if dmail_address:
-                addr_enc = mbase32.encode(dmail_address.site_key)
-
         addr = mbase32.decode(addr_enc)
 
         template = templates.dmail_aside[0]
@@ -217,15 +218,8 @@ def serve_get(dispatcher, rpath):
         addr_enc = params[:p0]
         tag = params[p0+1:]
 
-        if not addr_enc:
-            dmail_address = yield from _load_default_dmail_address(dispatcher)
-            if dmail_address:
-                addr_enc = mbase32.encode(dmail_address.site_key)
-            cacheable = False
-        else:
-            if dispatcher.handle_cache(req):
-                return
-            cacheable = True
+        if dispatcher.handle_cache(req):
+            return
 
         if tag == "Trash":
             empty_trash_button_class = "link-button"
@@ -238,10 +232,7 @@ def serve_get(dispatcher, rpath):
             addr=addr_enc,\
             empty_trash_button_class=empty_trash_button_class)
 
-        if cacheable:
-            dispatcher.send_content([template, req])
-        else:
-            dispatcher.send_content(template)
+        dispatcher.send_content([template, req])
     elif req == "/new_mail":
         template = templates.dmail_new_mail[0]
 
