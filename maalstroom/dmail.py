@@ -1096,6 +1096,7 @@ def _read_dmail_post(dispatcher, data):
 
     dm.hidden = False
     dm.read = True
+    dm.deleted = False
 
     submit = dd.get("submit")
     if submit:
@@ -1249,7 +1250,8 @@ def _count_unread_dmails(dispatcher, addr=None, tag=None):
                     DmailMessage.address.has(DmailAddress.site_key == addr))
 
             if tag == "Trash":
-                q = q.filter(DmailMessage.hidden == True)
+                q = q.filter(DmailMessage.hidden == True)\
+                    .filter(DmailMessage.deleted == False)
                 return q.scalar()
 
             if tag:
@@ -1274,7 +1276,8 @@ def _load_dmails_for_tag(dispatcher, addr, tag):
                     DmailMessage.address.has(DmailAddress.site_key == addr))
 
             if tag == "Trash":
-                q = q.filter(DmailMessage.hidden == True)
+                q = q.filter(DmailMessage.hidden == True)\
+                    .filter(DmailMessage.deleted == False)
             else:
                 q = q.filter(DmailMessage.tags.any(DmailTag.name == tag))\
                     .filter(DmailMessage.hidden == False)
@@ -1321,21 +1324,25 @@ def _list_dmails_for_tag(dispatcher, addr, tag):
         safe_reply_subject = generate_safe_reply_subject(msg)
 
         if show_sender:
-            sender_key = msg.sender_dmail_key
-            if sender_key:
-                sender_key_enc = mbase32.encode(sender_key)
+            addr_key = msg.sender_dmail_key
+            if addr_key:
+                addr_key_enc = mbase32.encode(addr_key)
                 if msg.sender_valid:
-                    sender_key = sender_key_enc
+                    addr_value = addr_key_enc
                 else:
-                    sender_key = '<span class="strikethrough">'\
-                        + sender_key_enc + "</span>"
+                    addr_value = '<span class="strikethrough">'\
+                        + addr_key_enc + "</span>"
+            else:
+                addr_value = None
         else:
-            dest_key = msg.destination_dmail_key
-            if dest_key:
-                sender_key = mbase32.encode(dest_key)
+            addr_key = msg.destination_dmail_key
+            if addr_key:
+                addr_value = mbase32.encode(addr_key)
+            else:
+                addr_value = None
 
-        if not sender_key:
-            sender_key = "[Anonymous]"
+        if not addr_value:
+            addr_value = "[Anonymous]"
 
         row = row_template.format(
             mail_icon=mail_icon,\
@@ -1345,7 +1352,7 @@ def _list_dmails_for_tag(dispatcher, addr, tag):
             msg_id=msg.id,\
             subject=subject,\
             safe_reply_subject=safe_reply_subject,\
-            sender=sender_key,\
+            sender=addr_value,\
             timestamp=msg.date)
 
         dispatcher.send_partial_content(row)
@@ -1437,12 +1444,42 @@ def _set_default_dmail_address(dispatcher, dbid):
 
 @asyncio.coroutine
 def _empty_trash(dispatcher, addr_enc):
+    addr_site_key = mbase32.decode(addr_enc)
+
     def dbcall():
         with dispatcher.node.db.open_session() as sess:
+            # Immediately delete messages that we sent.
             q = sess.query(DmailMessage)\
-                .filter(DmailMessage.hidden == True)
+                .filter(\
+                    DmailMessage.address.has(\
+                        DmailAddress.site_key == addr_site_key))\
+                .filter(DmailMessage.hidden == True)\
+                .filter(DmailMessage.destination_dmail_key != None)
 
             q.delete(synchronize_session=False)
+
+            # Mark messages that we received for deletion later. We can't
+            # actually delete them until we no longer check the target_id they
+            # came from, else we will pick them up again.
+            q = sess.query(DmailMessage)\
+                .filter(\
+                    DmailMessage.address.has(\
+                        DmailAddress.site_key == addr_site_key))\
+                .filter(DmailMessage.hidden == True)
+
+            msgs = q.all()
+
+            for msg in msgs:
+                msg.tags.clear()
+                msg.sender_dmail_key = None
+                msg.destination_dmail_key = None
+                msg.destination_significant_bits = None
+                msg.subject = ""
+                msg.date = datetime.today()
+                msg.parts.clear()
+                msg.read = False
+                msg.hidden = True
+                msg.deleted = True
 
             sess.commit()
 

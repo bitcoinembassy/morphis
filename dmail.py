@@ -719,6 +719,7 @@ class DmailEngine(object):
 
                 msg = db.DmailMessage()
                 msg.dmail_address_id = dmail_address.id
+                msg.dmail_key_id = address_key.id
                 msg.data_key = dmail_message_key
                 msg.sender_dmail_key =\
                     enc.generate_ID(dmobj.sender_pubkey)\
@@ -729,6 +730,7 @@ class DmailEngine(object):
 
                 msg.hidden = False
                 msg.read = False
+                msg.deleted = False
 
                 tag = db.DmailTag()
                 tag.name = "Inbox"

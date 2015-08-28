@@ -149,6 +149,7 @@ def _init_daos(Base, d):
 
         id = Column(Integer, primary_key=True)
         dmail_address_id = Column(Integer, ForeignKey("dmailaddress.id"))
+        dmail_key_id = Column(Integer, nullable=True)
         data_key = Column(LargeBinary, nullable=False)
         sender_dmail_key = Column(LargeBinary, nullable=True)
         sender_valid = Column(Boolean, nullable=True)
@@ -158,9 +159,10 @@ def _init_daos(Base, d):
         date = Column(DateTime, nullable=False)
         read = Column(Boolean, nullable=False)
         hidden = Column(Boolean, nullable=False)
+        deleted = Column(Boolean, nullable=False)
         tags = relationship(DmailTag, secondary=dmail_message__dmail_tag)
         address = relationship(DmailAddress)
-        parts = relationship(DmailPart)
+        parts = relationship(DmailPart, cascade="all, delete-orphan")
 
     Index("dmailmessage__data_key", DmailMessage.data_key)
 
@@ -305,12 +307,18 @@ class Db():
         if log.isEnabledFor(logging.INFO):
             log.info("Existing schema detected (version=[{}]).".format(version))
 
+        # Perform necessary upgrades.
         if version == 1:
             _upgrade_1_to_2(self)
             version = 2
+
         if version == 2:
             _upgrade_2_to_3(self)
             version = 3
+
+        if version == 3:
+            _upgrade_3_to_4(self)
+            version = 4
 
     def _create_schema(self):
         log.info("Creating schema.")
@@ -399,6 +407,30 @@ def _upgrade_2_to_3(db):
         sess.execute(st)
 
         _update_node_state(sess, 3)
+
+        sess.commit()
+
+    log.warning("NOTE: Database schema upgraded.")
+
+def _upgrade_3_to_4(db):
+    log.warning("NOTE: Upgrading database schema from version 3 to 4.")
+
+    t_integer = "INTEGER" if db.is_sqlite else "integer"
+
+    with db.open_session() as sess:
+        st = "ALTER TABLE dmailmessage ADD COLUMN dmail_key_id "\
+            + t_integer
+
+        sess.execute(st)
+
+        default = "0" if db.is_sqlite else "false"
+
+        st = "ALTER TABLE dmailmessage ADD COLUMN deleted BOOLEAN not null"\
+            + " default " + default
+
+        sess.execute(st)
+
+        _update_node_state(sess, 4)
 
         sess.commit()
 
