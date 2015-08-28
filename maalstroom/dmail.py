@@ -167,8 +167,8 @@ def serve_get(dispatcher, rpath):
 
         for top_tag in top_tags:
             active = top_tag == tag
-            unread_count = yield from _count_unread_dmails(\
-                dispatcher, addr, top_tag)
+            unread_count =\
+                yield from _count_unread_dmails(dispatcher, addr, top_tag)
 
             fmt[top_tag + "_active"] = "active-mailbox" if active else ""
             fmt[top_tag + "_unread_count"] =\
@@ -204,6 +204,7 @@ def serve_get(dispatcher, rpath):
         dispatcher.end_partial_content()
     elif req.startswith("/msg_list/"):
         params = req[10:]
+
         p0 = params.index('/')
         addr_enc = params[:p0]
         tag = params[p0+1:]
@@ -230,7 +231,7 @@ def serve_get(dispatcher, rpath):
             empty_trash_button_class=empty_trash_button_class)
 
         if cacheable:
-            dispatcher.send_content(template, req)
+            dispatcher.send_content([template, req])
         else:
             dispatcher.send_content(template)
     elif req == "/new_mail":

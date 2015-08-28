@@ -623,6 +623,7 @@ class MaalstroomDispatcher(object):
         return acharset
 
     def send_204(self):
+        "No content."
         self.send_response(204)
         self.send_header("Content-Length", 0)
         self.end_headers()
@@ -643,16 +644,19 @@ class MaalstroomDispatcher(object):
 
         self.finish_response()
 
-    def handle_cache(self, content_id):
-        if self.handler.headers["If-None-Match"] != content_id:
-            return False
-
+    def send_304(self, content_id, max_age=300):
         self.send_response(304)
-        self.send_header("Cache-Control", "public,max-age=300")
+        self.send_header("Cache-Control", "public,max-age={}".format(max_age))
         self.send_header("ETag", content_id)
         self.send_header("Content-Length", 0)
         self.end_headers()
         self.finish_response()
+
+    def handle_cache(self, content_id, max_age=300):
+        if self.handler.headers["If-None-Match"] != content_id:
+            return False
+
+        self.send_304(content_id, max_age)
 
         return True
 
