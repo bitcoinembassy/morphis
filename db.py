@@ -384,7 +384,7 @@ def _upgrade_1_to_2(db):
         sess.execute(st)
 
         st = "ALTER TABLE dmailmessage ADD COLUMN"\
-            "destination_significant_bits "\
+            " destination_significant_bits "\
                 + t_integer
 
         sess.execute(st)
