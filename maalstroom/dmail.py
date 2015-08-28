@@ -501,6 +501,18 @@ def serve_get(dispatcher, rpath):
 
     # Actions.
 
+    elif req.startswith("/refresh/"):
+        params = req[9:]
+
+        addr_enc = params
+
+        dmail_address = yield from _load_dmail_address(\
+            dispatcher, dmail_site_key=mbase32.decode(addr_enc),\
+            fetch_keys=True)
+
+        dispatcher.client_engine.trigger_dmail_scan(dmail_address)
+
+        dispatcher.send_204()
     elif req.startswith("/toggle_read/"):
         params = req[13:]
         p0 = params.find("?redirect=")
@@ -1167,14 +1179,24 @@ def _save_outgoing_dmail(dispatcher, dm, tag_name):
     return dm
 
 @asyncio.coroutine
-def _load_dmail_address(dispatcher, dmail_address_id):
+def _load_dmail_address(dispatcher, dmail_address_id=None,\
+        dmail_site_key=None, fetch_keys=False):
     "Fetch from our database the parameters that are stored in a DMail site."
 
     def dbcall():
         with dispatcher.node.db.open_session() as sess:
-            q = sess.query(DmailAddress)\
-                .options(joinedload("keys"))\
-                .filter(DmailAddress.id == dmail_address_id)
+            q = sess.query(DmailAddress)
+
+            if fetch_keys:
+                q = q.options(joinedload("keys"))
+
+            if dmail_address_id:
+                q = q.filter(DmailAddress.id == dmail_address_id)
+            elif dmail_site_key:
+                q = q.filter(DmailAddress.site_key == dmail_site_key)
+            else:
+                raise Exception("Either dmail_address_id or dmail_site_key"\
+                    " must be specified.")
 
             dmailaddr = q.first()
 

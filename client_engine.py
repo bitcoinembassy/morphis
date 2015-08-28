@@ -111,8 +111,6 @@ class ClientEngine(object):
 
         addrs = yield from self.loop.run_in_executor(None, dbcall)
 
-        assert not self._dmail_autoscan_processes
-
         for addr in addrs:
             self.update_dmail_autoscan(addr)
 
@@ -139,6 +137,20 @@ class ClientEngine(object):
             asyncio.async(process.run(), loop=self.loop)
             self._dmail_autoscan_processes[addr.id] = process
 
+    def trigger_dmail_scan(self, addr):
+        if log.isEnabledFor(logging.INFO):
+            log.info("Ensuring scan of DmailAddress (id=[{}]) now."\
+                .format(addr.id))
+
+        process = self._dmail_autoscan_processes.get(addr.id)
+
+        if process:
+            process.scan_now()
+        else:
+            process = DmailAutoscanProcess(self, addr, 0)
+            asyncio.async(process.run(), loop=self.loop)
+            self._dmail_autoscan_processes[addr.id] = process
+
 class DmailAutoscanProcess(object):
     def __init__(self, client_engine, addr, interval):
         self.client_engine = client_engine
@@ -148,6 +160,17 @@ class DmailAutoscanProcess(object):
 
         self._running = False
         self._task = None
+        self._scan_now = False
+
+    def scan_now(self):
+        if self._task:
+            self._scan_now = True
+            self._task.cancel()
+        else:
+            if self._running:
+                log.info("Already scanning.")
+                return
+            asyncio.async(self.run(), loop=self.loop)
 
     def update_scan_interval(self, interval):
         if not interval:
@@ -190,6 +213,9 @@ class DmailAutoscanProcess(object):
                     " new_cnt=[{}], old_cnt=[{}], err_cnt=[{}]."\
                         .format(addr_enc, new_cnt, old_cnt, err_cnt))
 
+            if not self.scan_interval:
+                self._running = False
+
             if not self._running:
                 break
 
@@ -207,11 +233,15 @@ class DmailAutoscanProcess(object):
                     yield from self._task
                     self._task = None
                     break
-                except asyncio.TimeoutError:
+                except asyncio.CancelledError:
+                    self._task = None
                     if log.isEnabledFor(logging.INFO):
                         log.info("Woken from sleep for address [{}]."\
                             .format(\
                                 mbase32.encode(self.dmail_address.site_key)))
+                    if self._scan_now:
+                        self._scan_now = False
+                        break
                     time_left = self.scan_interval - (time.time() - start)
 
     def stop(self):
