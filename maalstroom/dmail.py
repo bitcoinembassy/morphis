@@ -1609,55 +1609,35 @@ def _format_dmail_content(dm):
 
 
 def wrap_long_lines(text, limit=79):
+    out = []
     len_text = len(text)
-    out = ""
     p0 = 0
     while p0 < len_text:
-        p1 = text.find('\n', p0)
-        if p1 == -1:
-            p1 = len_text
+        max_next = p0 + limit
 
-        if (p1 - p0) <= limit:
-            out += text[p0:p1+1]
+        p1 = text.find('\n', p0, max_next)
+        if p1 != -1:
+            out.append(text[p0:p1])
             p0 = p1 + 1
             continue
 
-# Remarked out code will maintain space at the beginning.
-#        limited = False
-#        p1 = p0 + 1
-#        while text[p1] in ('-', ' '):
-#            p1 += 1
-#            if (p1 - p0) == limit:
-#                limited = True
-#                break
-#
-#        if limited:
-#            out += text[p0:p1]
-#            continue
+        pd = text.rfind('-', p0, max_next)
+        ps = text.rfind(' ', p0, max_next)
+        p1 = max(pd, ps)
 
-#        ps = text.rfind('-', p1, p0+limit)
-        ps = text.rfind('-', p0, p0+limit)
-        if ps == -1:
-#            ps = text.rfind(' ', p1, p0+limit)
-            ps = text.rfind(' ', p0, p0+limit)
-#            include_break_chr = True
-#        else:
-#            include_break_chr = False
-        include_break_chr = False
-
-        if ps == -1:
-            out += text[p0:p0+limit]
-            out += '\n'
+        if p1 == -1:
+            out.append(text[p0:max_next])
             p0 += limit
             continue
 
-        out += text[p0:ps]
-        out += '\n'
-        p0 = ps
-        if not include_break_chr:
+        out.append(text[p0:p1])
+
+        p0 = p1
+        if p1 == ps:
+            # Skip the space we broke the line at.
             p0 += 1
 
-    return out
+    return '\n'.join(out)
 
 def _format_dmail(dm, valid_sig):
     from_db = type(dm) is DmailMessage
