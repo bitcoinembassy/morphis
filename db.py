@@ -212,7 +212,7 @@ class Db():
                 except TypeError:
                     log.exception("SqlAlchemy crashed; workaround engaged;"\
                         " Session leaked! Upgrade to 1.0.8 to prevent this!")
-        except:
+        except Exception:
             log.exception("Db session contextmanager.")
             raise
         finally:

@@ -837,7 +837,7 @@ def _send_store_data(data, data_rw, privatekey=None, path=None, version=None,\
             version=version, key_callback=key_callback, mime_type=mime_type)
     except asyncio.TimeoutError:
         data_rw.timed_out = True
-    except:
+    except Exception:
         log.exception("send_store_data(..)")
         data_rw.exception = True
 

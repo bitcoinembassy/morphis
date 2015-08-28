@@ -718,7 +718,7 @@ class SshProtocol(asyncio.Protocol):
     def data_received(self, data):
         try:
             self._data_received(data)
-        except:
+        except Exception:
             log.exception("_data_received() threw:")
 
     def error_received(self, exc):
@@ -951,7 +951,7 @@ class SshProtocol(asyncio.Protocol):
     def process_buffer(self):
         try:
             self._process_buffer()
-        except:
+        except Exception:
             log.exception("_process_buffer() threw:")
             self.close()
             return

@@ -1063,7 +1063,7 @@ def check_address(address):
         host, port = address.split(':')
         ipaddress.ip_address(host)
         return True
-    except:
+    except Exception:
         if log.isEnabledFor(logging.DEBUG):
             log.debug("Address [{}] is not acceptable.".format(address))
         return False

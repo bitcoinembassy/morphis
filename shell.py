@@ -196,7 +196,7 @@ class Shell(cmd.Cmd):
 
                 try:
                     line = buf[:i].decode()
-                except:
+                except Exception:
                     i += 1
                     continue
 
@@ -234,7 +234,7 @@ class Shell(cmd.Cmd):
     def write(self, val):
         try:
             self._write(val)
-        except:
+        except Exception:
             self._write(str(val))
 
     def write_raw(self, val):
@@ -613,8 +613,10 @@ class Shell(cmd.Cmd):
                 self.writeln("Task [{}]:".format(task))
                 task.print_stack(file=self)
                 cnt += 1
-        except:
-            log.exception("Task")
+        except Exception:
+            errmsg = "Exception printing tasks."
+            log.exception(errmsg)
+            self.writeln(errmsg)
 
         self.writeln("Count: {}.".format(cnt))
 
@@ -627,8 +629,10 @@ class Shell(cmd.Cmd):
                 self.writeln("Task [{}]:".format(task))
                 task.print_stack(file=self)
                 cnt += 1
-        except:
-            log.exception("Task")
+        except Exception:
+            errmsg = "Exception printing tasks."
+            log.exception(errmsg)
+            self.writeln(errmsg)
 
         self.writeln("Count: {}.".format(cnt))
 

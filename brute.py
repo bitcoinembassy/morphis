@@ -54,8 +54,8 @@ def generate_targeted_block(prefix, nbits, data, noonce_offset, noonce_size):
 
         ready = mp.connection.wait(pipes)
         block = ready[0].recv()
-    except:
-        log.exception("")
+    except Exception:
+        log.exception("Exception generating targeted block.")
 
     pool.terminate()
 
@@ -89,8 +89,8 @@ def generate_key(prefix):
         ready = mp.connection.wait(pipes)
         privdata = ready[0].recv()
         key = rsakey.RsaKey(privdata=privdata)
-    except:
-        log.exception("")
+    except Exception:
+        log.exception("Exception generating key.")
 
     pool.terminate()
 
@@ -99,7 +99,7 @@ def generate_key(prefix):
 def _find_noonce(rp):
     try:
         __find_noonce(rp)
-    except:
+    except Exception:
         log.exception("__find_noonce(..)")
 
 def __find_noonce(rp):
@@ -145,7 +145,7 @@ def __find_noonce(rp):
 def _find_key(rp):
     try:
         __find_key(rp)
-    except:
+    except Exception:
         log.exception("__find_key(..)")
 
 def __find_key(rp):
