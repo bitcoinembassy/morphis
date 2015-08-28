@@ -11,7 +11,7 @@ import threading
 import time
 from urllib.parse import parse_qs, quote_plus
 
-from sqlalchemy import func, not_
+from sqlalchemy import func, not_, and_
 from sqlalchemy.orm import joinedload
 
 import base58
@@ -40,11 +40,22 @@ def serve_get(dispatcher, rpath):
 #    if log.isEnabledFor(logging.INFO):
 #        log.info("req=[{}].".format(req))
 
-    if req == "" or req == "/" or req.startswith("/wrapper/"):
-        if dispatcher.handle_cache(req):
+    if req == "" or req == "/" or req == "/goto_new_mail"\
+            or req.startswith("/wrapper/"):
+        cacheable = False
+        if req == "/goto_new_mail":
+            tag = "Inbox"
+            addr = yield from _load_first_address_with_new_mail(dispatcher)
+            if addr:
+                log.info("NEW")
+                addr_enc = mbase32.encode(addr.site_key)
+            else:
+                log.info("NO NEW")
+                addr_enc = ""
+            qline = None
+        elif dispatcher.handle_cache(req):
             return
-
-        if req.startswith("/wrapper/"):
+        elif req.startswith("/wrapper/"):
             params = req[9:]
 
             pq = params.find('?')
@@ -62,6 +73,9 @@ def serve_get(dispatcher, rpath):
             else:
                 tag = params[p0+1:]
             addr_enc = params[:p0]
+
+            if addr_enc:
+                cacheable = True
         else:
             tag = "Inbox"
             addr_enc = ""
@@ -81,7 +95,10 @@ def serve_get(dispatcher, rpath):
         template = template.format(\
             tag=tag, addr=addr_enc, msg_list_iframe_url=msg_list)
 
-        dispatcher.send_content([template, req])
+        if cacheable:
+            dispatcher.send_content([template, req])
+        else:
+            dispatcher.send_content(template)
         return
 
     if req == "/style.css":
@@ -1398,6 +1415,24 @@ def _process_dmail_message(dispatcher, msg_dbid, process_call,\
     dm = yield from dispatcher.node.loop.run_in_executor(None, dbcall)
 
     return dm
+
+@asyncio.coroutine
+def _load_first_address_with_new_mail(dispatcher):
+    def dbcall():
+        with dispatcher.node.db.open_session() as sess:
+            q = sess.query(DmailAddress)\
+                .filter(\
+                    DmailAddress.messages.any(\
+                        and_(\
+                            DmailMessage.read == False,\
+                            DmailMessage.hidden == False,\
+                            DmailMessage.tags.any(DmailTag.name == "Inbox"))))
+
+            return q.first()
+
+    dmail_address = yield from dispatcher.loop.run_in_executor(None, dbcall)
+
+    return dmail_address
 
 @asyncio.coroutine
 def _set_default_dmail_address(dispatcher, dbid):

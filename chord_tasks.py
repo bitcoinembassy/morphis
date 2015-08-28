@@ -1354,7 +1354,7 @@ class ChordTasks(object):
                 return
         except asyncio.CancelledError:
             raise
-        except:
+        except Exception:
             log.exception("__process_find_node_relay(..)")
 
         if tun_meta.jobs:

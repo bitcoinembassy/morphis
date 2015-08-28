@@ -113,6 +113,7 @@ def _init_daos(Base, d):
         site_privatekey = Column(LargeBinary, nullable=True)
         scan_interval = Column(Integer, nullable=True)
         keys = relationship(DmailKey)
+        messages = relationship("DmailMessage")
 
     Index("dmailaddress__site_key", DmailAddress.site_key)
 
