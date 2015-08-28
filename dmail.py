@@ -226,6 +226,7 @@ class DmailEngine(object):
                 dmailaddress = db.DmailAddress()
                 dmailaddress.site_key = data_key
                 dmailaddress.site_privatekey = privkey._encode_key()
+                dmailaddress.scan_interval = 60
 
                 dmailkey = db.DmailKey()
                 dmailkey.x = sshtype.encodeMpint(dms.dh.x)
