@@ -1576,18 +1576,38 @@ def wrap_long_lines(text, limit=79):
         if (p1 - p0) <= limit:
             out += text[p0:p1+1]
             p0 = p1 + 1
+            print("c1")
             continue
 
-        include_break_chr = False
+# Remarked out code will maintain space at the beginning.
+#        limited = False
+#        p1 = p0 + 1
+#        while text[p1] in ('-', ' '):
+#            p1 += 1
+#            if (p1 - p0) == limit:
+#                limited = True
+#                break
+#
+#        if limited:
+#            out += text[p0:p1]
+#            continue
+
+#        ps = text.rfind('-', p1, p0+limit)
         ps = text.rfind('-', p0, p0+limit)
         if ps == -1:
+#            ps = text.rfind(' ', p1, p0+limit)
             ps = text.rfind(' ', p0, p0+limit)
-            include_break_chr = True
+#            include_break_chr = True
+            print("c2")
+#        else:
+#            include_break_chr = False
+        include_break_chr = False
 
         if ps == -1:
             out += text[p0:p0+limit]
             out += '\n'
             p0 += limit
+            print("c3")
             continue
 
         out += text[p0:ps]
@@ -1595,6 +1615,9 @@ def wrap_long_lines(text, limit=79):
         p0 = ps
         if not include_break_chr:
             p0 += 1
+            print("c4")
+
+        print("p0: " + str(p0))
 
     return out
 
