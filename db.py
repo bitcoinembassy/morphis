@@ -197,7 +197,7 @@ class Db():
 
     @contextmanager
     def open_session(self, read_only=False):
-        read_only = False; #FIXME: Need to implement a read-write lock.
+        read_only = False; #TODO: Need to implement a read-write lock.
 
         if self.sqlite_lock and not read_only:
             self.sqlite_lock.acquire()
