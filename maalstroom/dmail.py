@@ -190,7 +190,15 @@ def serve_get(dispatcher, rpath):
 
         addr_heading = "TO" if tag in ("Outbox", "Sent", "Drafts") else "FROM"
 
-        template = template.format(addr_heading=addr_heading)
+        if tag == "Inbox" or tag == "":
+            unread_check =\
+                '<meta target="self" http-equiv="refresh" content="60"/>'
+        else:
+            unread_check = ""
+
+        template = template.format(\
+            unread_check=unread_check,\
+            addr_heading=addr_heading)
 
         acharset = dispatcher.get_accept_charset()
         dispatcher.send_partial_content(\
