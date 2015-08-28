@@ -57,6 +57,8 @@ def generate_targeted_block(prefix, nbits, data, noonce_offset, noonce_size):
     except Exception:
         log.exception("Exception generating targeted block.")
 
+    log.info("Found TargetedBlock noonce; terminating workers.")
+
     pool.terminate()
 
     return block
