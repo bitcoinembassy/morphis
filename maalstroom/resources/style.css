@@ -990,4 +990,11 @@ input.subject-field {
     -o-text-overflow: ellipsis;  // for Opera 9 & 10
     white-space: nowrap;
     display: block;
+    color: #141c30;
+    padding: .3em;
+}
+input.subject-field:focus {
+    border: 0;
+    outline: 0;
+    box-shadow: none;
 }
