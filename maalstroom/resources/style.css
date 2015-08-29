@@ -972,4 +972,13 @@ button.tag-footer-btn:active {
 .aside-wrapper {
     height: calc(100% - 1em);
 }
-
+iframe.subject-txt {
+    display: inline;
+    height: 1.9em;
+    max-height: 1.9em;
+    vertical-align: top;
+    width: 100%;
+}
+@media screen and (-ms-high-contrast: active), (-ms-high-contrast: none) {
+   iframe.subject-txt { height: 3.2em; max-height: 3.2em; }
+}
