@@ -232,7 +232,7 @@ div.panel span {
   padding-left: 4.8em;
   padding-bottom: .5em;
   padding-top: .5em;
-  padding-right: 1.2em;
+  padding-right: .5em;
 }
 .inbox-icon-active {
   background: url("images/inbox_white.png") no-repeat center left;
@@ -300,25 +300,11 @@ div.panel span {
   background: url("images/divider.gif") no-repeat top left;
   width: 163px;
   height: 5px;
-  padding-bottom: 1em;
   margin-left: 2.5em;
 }
-.add-tag {
-  display: inline;
-  position: relative;
-  float: right;
-  font-size: 2em;
-  line-height: .5em;
-  margin-right: .6em;
-}
-/*.tag-head {
-  display: inline;
-  position: relative;
-  float: left;
-}*/
 .tag-head li {
-  padding-top: .5em;
-  padding-bottom: .5em;
+  padding-bottom: .4em;
+  padding-top: .1em;
   padding-right: .6em;
 }
 .tag-head li:hover {
@@ -709,7 +695,7 @@ a.normal:visited, a.normal:link {
 
 .compose-bkg {
     background: #ffffff;
-    height: calc(100% - 7em);
+    height: calc(100% - 9em);
     border: 1px dashed;
 }
 .from-address {
@@ -928,3 +914,56 @@ h1 {
     background: url("images/outbox_white.png") no-repeat center left;
     background-position: 30px;
 }
+input.tag-text {
+    width: 10em;
+    padding: 0;
+    
+}
+input.tag-text:focus {
+    border: 1px solid #39a3af;
+    outline: medium none;
+}
+.tag-text-pad {
+    padding-left: 4.8em;
+    padding-right: 1.2em;
+}
+button.add-tag {
+    padding: 0;
+    font-size: 1.5em;
+    border: 0;
+    background-color: transparent;
+    cursor: pointer;
+}
+button.add-tag:hover {
+    color: #ffffff;
+}
+.tag-footer {
+    margin-top: 1em;
+    margin-bottom: 1em;
+    letter-spacing: 0;
+    float: right;
+}
+button.tag-footer-btn {
+    margin-right: 1.5em;
+    margin-left: .3em;
+    background: -webkit-gradient(linear, left top, left bottom, from(#d7d8dd), to(#bcbdc2));
+    background: -webkit-linear-gradient(top, #d7d8dd, #bcbdc2);
+    background: -moz-linear-gradient(top, #d7d8dd, #bcbdc2);
+    background: -ms-linear-gradient(top, #d7d8dd, #bcbdc2);
+    background: -o-linear-gradient(top, #d7d8dd, #bcbdc2);
+    background: linear-gradient(top, #d7d8dd, #bcbdc2);
+    border: 1px solid #9d9d9d;
+    border-radius: .5em;
+    text-align: center;
+    color: #454545;
+    font-size: .85em;
+}
+button.tag-footer-btn:hover {
+    background: #9d9d9d;
+    color: #ffffff;
+    border: 1px solid #707070;
+    cursor: pointer; 
+}
+button.tag-footer-btn:active {
+    border: 1px solid #454545;
+    background: #747474;

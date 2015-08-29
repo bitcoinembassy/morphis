@@ -24,5 +24,17 @@
         <div><span class="reader_field">Date:&nbsp;</span><span>{date}</span></div>
         <iframe src="morphis://.dmail/read/content/{msg_id}" style="height: calc(100% - 5em); width: 100%; margin-top: 0.5em; border-top: 1px dotted; border-color: lightgray;"></iframe>
     </div>
+        <form class="tag-footer">
+           <select name="remove-tag">
+               <option selected="" value"1">Family members</option>
+               <option value="2">Sam</option>
+           </select>
+               <button class="tag-footer-btn" type="submit" formtarget="_self" name="reader-remove-tag" value="send">REMOVE TAG</button>
+           <select name="add-tag">
+              <option selected="" value="1">Family members</option>
+              <option value="2">Sam</option>
+           </select>
+           <button class="tag-footer-btn" type="submit" formtarget="_self" name="reader-add-tag" value="send">ADD TAG</button>
+        </form>
 </div>
 </body></html>
