@@ -143,9 +143,15 @@ class MaalstroomDispatcher(object):
             self.send_content(\
                 b"AIWJ - Asynchronous IFrames Without Javascript!")
             return
-        elif rpath == ".main/main.css":
-            self.send_content(\
-                templates.main_css, content_type="text/css")
+        elif rpath.startswith(".main/"):
+            rpath = rpath[6:]
+            if rpath == "style.css":
+                self.send_content(\
+                    templates.main_css, content_type="text/css")
+            elif rpath == "csrf_token":
+                self.send_content(self.client_engine.csrf_token)
+            else:
+                self.send_error(errcode=400)
             return
         elif rpath == ".images/favicon.ico" or rpath == "favicon.ico":
             self.send_content(\
@@ -190,6 +196,8 @@ class MaalstroomDispatcher(object):
         elif rpath.startswith(".dmail"):
             yield from maalstroom.dmail.serve_get(self, rpath)
             return
+        else:
+            self.send_error(errcode=400)
 
     @asyncio.coroutine
     def dispatch_get_data(self, rpath):
@@ -795,6 +803,8 @@ class MaalstroomDispatcher(object):
             errcode=errcode)
 
     def send_error(self, msg=None, errcode=500):
+        assert type(errcode) is int
+
         if errcode == 400:
             errmsg = b"400 Bad Request."
             self.send_response(400)

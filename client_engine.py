@@ -2,10 +2,12 @@ import llog
 
 import asyncio
 import logging
+import os
 import time
 
 from sqlalchemy.orm import joinedload
 
+import base58
 from db import DmailAddress
 import dmail
 import mbase32
@@ -21,6 +23,8 @@ class ClientEngine(object):
 
         self.latest_version_number = None
         self.latest_version_data = None
+
+        self.csrf_token = base58.encode(os.urandom(64))
 
         self._dmail_engine = None
 
