@@ -375,7 +375,7 @@ def serve_get(dispatcher, rpath):
 
             subject = eparams.get("subject")
             if subject:
-                subject = subject[0]
+                subject = subject[0].replace('"', "&quot;")
             else:
                 subject = ""
 
