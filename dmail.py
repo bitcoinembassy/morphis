@@ -745,9 +745,7 @@ class DmailEngine(object):
                 msg.read = False
                 msg.deleted = False
 
-                tag = db.DmailTag()
-                tag.name = "Inbox"
-                msg.tags = [tag]
+                attach_dmail_tag(sess, msg, "Inbox")
 
                 msg.parts = []
 
