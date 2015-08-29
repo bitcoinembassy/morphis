@@ -1,12 +1,20 @@
 # Copyright (c) 2014-2015  Sam Maloney.
 # License: GPL v2.
 
+import llog
+
+import logging
+import os
+import threading
+
+log = logging.getLogger(__name__)
+
 ## Templates:
 home_page_content = [\
     b"""<!DOCTYPE html>
 <html><head><title>ALL TOGETHER NOW WE SING IN UNISON - MORPHiS Maalstroom UI</title>
 <link rel="icon" type="image/png" href="/.images/favicon.ico"/>
-<link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/>
+<link rel="stylesheet" type="text/css" href="morphis://.main/style.css"/>
 <style type="text/css">
     div.msection {
         border-width 2px;
@@ -210,7 +218,7 @@ dmail_frame_end =\
 
 dmail_page_content__f1_start =\
     b"""<!DOCTYPE html>
-<html><head><base target="_top" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/></head><body class="iframe">
+<html><head><base target="_top" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/style.css"/></head><body class="iframe">
 <h4>Your dmail addresses:</h4>
 """
 
@@ -252,41 +260,11 @@ dmail_iframe_body_start =\
     b"""<!DOCTYPE html>
 <html><head><base target="_top" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/></head><body class="iframe">"""
 
-dmail_addr_settings_edit_content = [dmail_iframe_body_start\
-    + b"""<h4>Dmail Address [<a href="../../${DMAIL_ADDRESS}">${DMAIL_ADDRESS_SHORT}...</a>].</h4>
-<p>NOTE: Difficulty is the anti-spam setting that determines how much work it is to send you a Dmail. Its effect is exponential (work=2^difficulty). Do not set it too low -- I would recommend no lower than 20. If 2^difficulty is lower than the amount of nodes in the network, then the network will likely have trouble finding your Dmails.</p>
-<p><b>NOTE</b>: At difficulty=20, sending you a Dmail will take ~30 seconds. A setting of 21 will take 1 minute. At 22, it is 2 minutes, 23 = 4 minutes, 24 = 8 minutes, 25 = 16 minutes, 26 = 32 minutes, 27 = 64 minutes, 28 = 128 minutes, 29 = 256 minutes, and 30 = 512 minutes, Etc. <b>Every 10 that you increase it is 1024x more cpu work for the sender.</b> The maximum value of difficulty=512 will take more time than the lifespan of the universe. If you want to receive Dmails anytime soon, don't increase this value much. Also, there is no point in increasing it unless you are going to publish your address and thus expect to be the target of spam. The times here are a rough guide and depend on the processing capability of the sending computer.</p>
-<p><b>NOTE</b>: If you turn this up, you will no longer see any new Dmails that were sent to you while you had the lower setting. This is because they won't include enough work to be found. Dmails stored locally already (Inbox) won't be affected. In a future version of Maalstroom this will be solved. For now it is not, because it will take a bunch more UI to allow you to manage properly, and I want to release ASAP :).</p>
-<form action="morphis://.dmail/addr/settings/edit/publish" method="get">
-    <input type="hidden" name="dmail_address" id="dmail_address" value="${DMAIL_ADDRESS}"/>
-    <p>
-        <label for="difficulty">Difficulty</label>
-        <input type="textfield" name="difficulty" id="difficulty" value="${DIFFICULTY}"/>
-    </p>
-    <input type="submit" formtarget="_self" id="publish" value="Republish Dmail Site"/>
-</form>
-<p>NOTE: Do not give out these values! The site private key controls your Dmail address. The DH secret is the key to decrypting your Dmail.</p>
-<form action="save" method="post">
-    <p>
-        <label for="privatekey">Dmail Site Private Key</label>
-        <textarea name="privatekey" id="privatekey" rows="26" cols="80" readonly>${PRIVATE_KEY}</textarea>
-    </p>
-    <p>
-        <label for="x">Private Encryption DH Secret</label>
-        <textarea name="x" id="x" rows="4" cols="80" readonly>${X}</textarea>
-    </p>
-    <p>
-        <label for="target_key">Dmail Target Key</label>
-        <input type="textfield" name="target_key" id="target_key" size="80" readonly value="${TARGET_KEY}"/>
-    </p>
-</form>
-</body></html>""", None]
-
 dmail_addr_settings_edit_success_content = [dmail_iframe_body_start.decode()\
-    + """<h4>Dmail Address [<a target="_top" href="../../{}">{}</a>].</h4><p>SUCCESS.</p></body></html>""", None]
+    + """<h4>Dmail Address [<a target="_top" href="morphis://.dmail/wrapper/{}">{}...</a>].</h4><p>SUCCESS.</p></body></html>""", None]
 
 dmail_addr_settings_edit_fail_content = [dmail_iframe_body_start.decode()\
-    + """<h4>Dmail Address [<a target="_top" href="../../{}">{}</a>].</h4><p>FAIL.</p><p>Try again in a bit.</p></body></html>""", None]
+    + """<h4>Dmail Address [<a target="_top" href="morphis://.dmail/wrapper/{}">{}...</a>].</h4><p>FAIL.</p><p>Try again in a bit.</p></body></html>""", None]
 
 dmail_tag_view_content = [None, None]
 
@@ -319,26 +297,6 @@ dmail_fetch_panel_content = [\
 </body></html>""", None]
 
 dmail_create_address_content = [None, None]
-
-dmail_create_address_form_content = [\
-    b"""<!DOCTYPE html>
-<html><head><base target="_top" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/></head><body class="iframe">
-<form action="morphis://.dmail/create_address/make_it_so" method="get">
-    <h4>Dmail Address Generation</h4>
-    <p>To create yourself a new Dmail Address, simply click the Create button below. Changing these values from their defaults is not needed at all.</p>
-    <p>
-        <label for="difficulty">Difficulty</label>
-        <input type="textfield" name="difficulty" id="difficulty" value="20"/>
-    </p>
-    <p>NOTE: Difficulty is the anti-spam setting that determines how much work it is to send you a Dmail. Its effect is exponential (work=2^difficulty). Do not set it too low -- I would recommend no lower than 20. If 2^difficulty is lower than the amount of nodes in the network, then the network will likely have trouble finding your Dmails.</p>
-    <p>
-        <label for="prefix">Dmail Prefix</label>
-        <input type="textfield" name="prefix" id="prefix"/>&nbsp;<span class="italic">(Optional)</span>
-    </p>
-    <p>NOTE: Each letter in the prefix will make the address take 32x longer to generate. Three letters takes almost an hour on my test machine.</p>
-    <input type="submit" formtarget="_self" id="create" value="Create"/>
-</form>
-</body></html>""", None]
 
 dmail_compose_dmail_content = [None, None]
 
@@ -389,5 +347,57 @@ if not initialized_template:
     dmail_compose_dmail_content[0] = dmail_page_wrapper
 
     dmail_tag_view_content[0] = dmail_page_wrapper
+
+def load(filepath, dynamic=False):
+    fh = open("maalstroom/templates/" + filepath, "rb")
+    template = fh.read()
+    if dynamic:
+        template = template.decode()
+    return [template, None]
+
+_resource_type_mapping = {\
+    "css": "text/css",\
+    "png": "image/png",\
+    "jpg": "image/jpeg",\
+    "jpeg": "image/jpeg",\
+    "gif": "image/gif"}
+
+def load_resource(filepath):
+    fh = open("maalstroom/resources/" + filepath, "rb")
+    ext = filepath[filepath.rindex('.')+1:]
+    return [fh.read(), None, _resource_type_mapping[ext]]
+
+imgs = {}
+
+if not initialized_template:
+    # V2 UI:
+    main_css = dmail_css_content 
+
+    main_combined_upload = load("main/combined_upload.html", True)
+
+    dmail_css = load_resource("style.css")
+
+    dmail_page_wrapper = load("dmail/page_wrapper.html", True)
+    dmail_logo = load("dmail/logo.html", True)
+    dmail_nav = load("dmail/nav.html", True)
+    dmail_aside = load("dmail/aside.html", True)
+    dmail_msg_list = load("dmail/msg_list.html", True)
+    dmail_msg_list_list_start = load("dmail/msg_list_list_start.html", True)
+    dmail_msg_list_list_row = load("dmail/msg_list_list_row.html", True)
+    dmail_msg_list_list_end = load("dmail/msg_list_list_end.html")
+    dmail_new_mail = load("dmail/new_mail.html", True)
+    dmail_read = load("dmail/read.html", True)
+    dmail_compose = load("dmail/compose.html", True)
+    dmail_address_list = load("dmail/address_list.html", True)
+    dmail_address_list_row = load("dmail/address_list_row.html", True)
+
+    dmail_create_address = load("dmail/create_address.html", True)
+    dmail_address_config = load("dmail/address_config.html", True)
+
+    for entry_name in os.listdir("maalstroom/resources/images/dmail"):
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("Loading resource [{}].".format(entry_name))
+
+        imgs[entry_name] = load_resource("images/dmail/" + entry_name)
 
     initialized_template = True

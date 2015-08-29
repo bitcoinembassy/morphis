@@ -10,7 +10,6 @@ import time
 
 import base58
 import chord
-import client_engine as cengine
 import enc
 import maalstroom
 import maalstroom.templates as templates
@@ -31,10 +30,19 @@ class MaalstroomDispatcher(object):
         self.inq = inq
         self.outq = outq
 
+        self.client_engine = None
+
         self.finished_request = False
 
         self._abort_event = abort_event
         self._accept_charset = None
+
+    @asyncio.coroutine
+    def _ensure_client_engine(self):
+        if self.client_engine:
+            return
+
+        self.client_engine = yield from maalstroom.get_client_engine()
 
     @property
     def connection_count(self):
@@ -42,10 +50,7 @@ class MaalstroomDispatcher(object):
 
     @property
     def latest_version_number(self):
-        client_engine = maalstroom.client_engine
-        if not client_engine:
-            return None
-        return client_engine.latest_version_number
+        return self.client_engine.latest_version_number
 
     def send_response(self, code):
         # Maybe this should go through queue but then is less efficient and
@@ -73,12 +78,16 @@ class MaalstroomDispatcher(object):
         self.outq.put(maalstroom.Flush)
 
     def finish_response(self):
-        self.outq.put(None)
+        self.outq.put(maalstroom.Done)
         self.finished_request = True
 
     @asyncio.coroutine
     def do_GET(self, rpath):
         self.finished_request = False
+
+        assert self.outq.empty()
+
+        yield from self._ensure_client_engine()
 
         if not rpath:
             current_version = self.node.morphis_version
@@ -111,7 +120,12 @@ class MaalstroomDispatcher(object):
             log.debug("rpath=[{}].".format(rpath))
 
         if rpath[0] == '.':
-            yield from self.dispatch_GET(rpath)
+            try:
+                yield from self.dispatch_GET(rpath)
+            except Exception as e:
+                log.exception(e)
+                self.send_exception(e)
+
             return
 
         # At this point we assume it is a key URL.
@@ -129,7 +143,17 @@ class MaalstroomDispatcher(object):
             self.send_content(\
                 b"AIWJ - Asynchronous IFrames Without Javascript!")
             return
-        elif rpath == ".images/favicon.ico":
+        elif rpath.startswith(".main/"):
+            rpath = rpath[6:]
+            if rpath == "style.css":
+                self.send_content(\
+                    templates.main_css, content_type="text/css")
+            elif rpath == "csrf_token":
+                self.send_content(self.client_engine.csrf_token)
+            else:
+                self.send_error(errcode=400)
+            return
+        elif rpath == ".images/favicon.ico" or rpath == "favicon.ico":
             self.send_content(\
                 templates.favicon_content, content_type="image/png")
             return
@@ -146,44 +170,72 @@ class MaalstroomDispatcher(object):
                 self.finish_response()
                 return
 
-            if len(rpath) == 7: # len(".upload")
-                self.send_content(maalstroom.static_upload_page_content)
-            else:
-                content =\
-                    maalstroom.upload_page_content.replace(\
-                        b"${PRIVATE_KEY}",\
-                        rpath[8:].encode()) # 8 = len(".upload/")
-                content =\
-                    content.replace(\
-                        b"${VERSION}",\
-                        str(int(time.time()*1000)).encode())
-                content =\
-                    content.replace(\
-                        b"${UPDATEABLE_KEY_MODE_DISPLAY}",\
-                        b"")
-                content =\
-                    content.replace(\
-                        b"${STATIC_MODE_DISPLAY}",\
-                        b"display: none")
+            if rpath == ".upload" or rpath == ".upload/":
+                if (self.handle_cache(rpath)):
+                    return
 
-                self.send_content(content)
+                template = templates.main_combined_upload[0]
+
+                template = template.format(\
+                    csrf_token=self.client_engine.csrf_token,\
+                    private_key="",\
+                    version="",\
+                    updateable_key_mode_display="display: none;",\
+                    static_mode_display="")
+
+                self.send_content(template)
+            else:
+                template = templates.main_combined_upload[0]
+
+                # 8 = len(".upload/").
+                template = template.format(\
+                    csrf_token=self.client_engine.csrf_token,\
+                    private_key=rpath[8:],\
+                    version=str(int(time.time()*1000)),\
+                    updateable_key_mode_display="",\
+                    static_mode_display="display: none;")
+
+                self.send_content(template)
 
             return
         elif rpath.startswith(".dmail"):
             yield from maalstroom.dmail.serve_get(self, rpath)
             return
+        else:
+            self.send_error(errcode=400)
 
     @asyncio.coroutine
     def dispatch_get_data(self, rpath):
-        if self.handler.headers["If-None-Match"] == rpath:
+        orig_etag = etag = self.handler.headers["If-None-Match"]
+        if etag:
+            updateable_key = etag.startswith("updateablekey-")
+            if updateable_key:
+                p0 = etag.index('-') + 1
+                p1 = etag.find('-', p0)
+                if p1 != -1:
+                    version_from_etag = etag[p0:p1]
+                    etag = etag[p1+1:]
+                else:
+                    version_from_etag = None
+                    etag = etag[p0:]
+        else:
+            updateable_key = False
+        if etag == rpath:
             # If browser has it cached.
             cache_control = self.handler.headers["Cache-Control"]
-            if cache_control != "max-age=0":
+            if not (updateable_key and cache_control == "max-age=0")\
+                    and cache_control != "no-cache":
                 self.send_response(304)
-                if cache_control:
-                    # This should only have been sent for an updateable key.
-                    self.send_header("Cache-Control", "max-age=15, public")
+                if updateable_key:
+                    if version_from_etag:
+                        self.send_header(\
+                            "X-Maalstroom-UpdateableKey-Version",\
+                            version_from_etag)
+                    self.send_header("Cache-Control", "public,max-age=15")
+                    self.send_header("ETag", orig_etag)
                 else:
+                    self.send_header(\
+                        "Cache-Control", "public,max-age=315360000")
                     self.send_header("ETag", rpath)
                 self.send_header("Content-Length", 0)
                 self.end_headers()
@@ -202,14 +254,29 @@ class MaalstroomDispatcher(object):
         else:
             path = None
 
+        if not rpath:
+            msg = "Empty key was specified."
+            log.warning(msg)
+            self.send_error(msg, 400)
+            return
+
         try:
             data_key, significant_bits = mutil.decode_key(rpath)
-        except IndexError as e:
+        except (ValueError, IndexError) as e:
+            log.exception("mutil.decode_key(..)")
             self.send_error("Invalid encoded key: [{}].".format(rpath), 400)
             return
 
         if significant_bits:
             # Resolve key via send_find_key.
+            if significant_bits < 32:
+                log.warning("Request supplied key with too few bits [{}]."\
+                    .format(significant_bits))
+
+                self.send_error(\
+                    "Key must have at least 32 bits or 7 characters,"\
+                    " len(key)=[{}].".format(len(rpath)), 400)
+                return
 
             try:
                 data_rw =\
@@ -220,8 +287,11 @@ class MaalstroomDispatcher(object):
                         loop=self.loop)
                 data_key = data_rw.data_key
             except asyncio.TimeoutError:
+                data_key = None
+
+            if not data_key:
                 self.send_error(b"Key Not Found", errcode=404)
-                pass
+                return
 
             if log.isEnabledFor(logging.INFO):
                 log.info("Found key=[{}].".format(mbase32.encode(data_key)))
@@ -244,14 +314,7 @@ class MaalstroomDispatcher(object):
                 "</head><body><a href=\"{}\">{}</a>\n{}</body></html>"\
                     .format(url, url, key_enc).encode()
 
-            self.send_response(301)
-            self.send_header("Location", url)
-            self.send_header("Content-Type", "text/html")
-            self.send_header("Content-Length", len(message))
-            self.end_headers()
-
-            self.write(message)
-            self.finish_response()
+            self.send_301(url, message)
             return
 
         if log.isEnabledFor(logging.DEBUG):
@@ -264,13 +327,22 @@ class MaalstroomDispatcher(object):
         try:
             data_callback = Downloader(self, queue)
 
-            asyncio.async(\
-                multipart.get_data(\
-                    self.node.chord_engine, data_key, data_callback, path=path,
-                    ordered=True),
-                loop=self.loop)
-        except:
+            @asyncio.coroutine
+            def call_wrapper():
+                try:
+                    yield from multipart.get_data(\
+                        self.node.chord_engine, data_key, data_callback,\
+                        path=path, ordered=True)
+                except Exception as e:
+                    log.exception("multipart.get_data(..)")
+                    data_callback.exception = e
+                    data_callback.notify_finished(False)
+
+            asyncio.async(call_wrapper(), loop=self.loop)
+        except Exception as e:
             log.exception("send_get_data(..)")
+            self.send_exception(e)
+            return
 
         log.debug("Waiting for first data.")
 
@@ -285,6 +357,9 @@ class MaalstroomDispatcher(object):
         data = yield from queue.get()
 
         if data:
+            if data is Error:
+                self.send_exception(data_callback.exception)
+
             self.send_response(200)
 
             rewrite_urls = False
@@ -343,10 +418,16 @@ class MaalstroomDispatcher(object):
                 self.send_header("Content-Length", data_callback.size)
 
             if data_callback.version is not None:
-                self.send_header("Cache-Control", "max-age=15, public")
-#                self.send_header("ETag", rpath)
+                self.send_header(\
+                    "X-Maalstroom-UpdateableKey-Version",\
+                    data_callback.version)
+                self.send_header("Cache-Control", "public,max-age=15")
+                self.send_header(\
+                    "ETag",\
+                    "updateablekey-" + str(data_callback.version) + '-'\
+                        + rpath)
             else:
-                self.send_header("Cache-Control", "public")
+                self.send_header("Cache-Control", "public,max-age=315360000")
                 self.send_header("ETag", rpath)
 
             self.end_headers()
@@ -386,6 +467,8 @@ class MaalstroomDispatcher(object):
     def do_POST(self, rpath):
         self.finished_request = False
 
+        yield from self._ensure_client_engine()
+
         try:
             yield from self._do_POST(rpath)
         except KeyboardInterrupt:
@@ -400,15 +483,15 @@ class MaalstroomDispatcher(object):
 
     @asyncio.coroutine
     def _do_POST(self, rpath):
-        if not self.connection_count:
-            self.send_error("No connected nodes; cannot upload to the"\
-                " network.")
-            return
-
         log.info("POST; rpath=[{}].".format(rpath))
 
         if rpath != ".upload/upload":
             yield from maalstroom.dmail.serve_post(self, rpath)
+            return
+
+        if not self.connection_count:
+            self.send_error("No connected nodes; cannot upload to the"\
+                " network.")
             return
 
         if log.isEnabledFor(logging.DEBUG):
@@ -422,8 +505,7 @@ class MaalstroomDispatcher(object):
                 == "application/x-www-form-urlencoded":
             log.debug("Content-Type=[application/x-www-form-urlencoded].")
 
-#FIXME: YOU_ARE_HERE
-            data = self.rfile.read(int(self.handler.headers["Content-Length"]))
+            data = yield from self.read_request()
             privatekey = None
         else:
             if log.isEnabledFor(logging.DEBUG):
@@ -554,19 +636,64 @@ class MaalstroomDispatcher(object):
         self._accept_charset = acharset
         return acharset
 
-    def _send_204(self):
+    def send_204(self):
+        "No content."
         self.send_response(204)
         self.send_header("Content-Length", 0)
         self.end_headers()
         self.finish_response()
 
+    def send_301(self, url, message=None):
+        self.send_response(301)
+        self.send_header("Location", url)
+
+        if message:
+            self.send_header("Content-Type", "text/html")
+            self.send_header("Content-Length", len(message))
+            self.end_headers()
+            self.write(message)
+        else:
+            self.send_header("Content-Length", 0)
+            self.end_headers()
+
+        self.finish_response()
+
+    def send_304(self, content_id, max_age=300):
+        self.send_response(304)
+        self.send_header("Cache-Control", "public,max-age={}".format(max_age))
+        self.send_header("ETag", content_id)
+        self.send_header("Content-Length", 0)
+        self.end_headers()
+        self.finish_response()
+
+    def check_csrf_token(self, req_token):
+        if self.client_engine.csrf_token == req_token:
+            return True
+
+        self.send_error("Invalid csrf_token.", 400)
+
+        return False
+
+    def handle_cache(self, content_id, max_age=300):
+        if self.handler.headers["If-None-Match"] != content_id:
+            return False
+
+        self.send_304(content_id, max_age)
+
+        return True
+
     def send_content(self, content_entry, cacheable=True, content_type=None):
         if type(content_entry) in (list, tuple):
             content = content_entry[0]
             content_id = content_entry[1]
+            if len(content_entry) == 3 and not content_type:
+                content_type = content_entry[2]
         else:
             content = content_entry
             cacheable = False
+
+        if type(content) is str:
+            content = content.encode()
 
         if not self.handler.maalstroom_plugin_used:
             content =\
@@ -576,19 +703,32 @@ class MaalstroomDispatcher(object):
         if cacheable and not content_id:
             if callable(content):
                 content = content()
+            log.info("Generating content_id.")
             content_id = mbase32.encode(enc.generate_ID(content))
             content_entry[1] = content_id
 
-        if cacheable and self.handler.headers["If-None-Match"] == content_id:
+        etag = self.handler.headers["If-None-Match"]
+        if cacheable and etag == content_id:
+#            #TODO: Consider getting rid of this updateablekey support here
+#            # because we don't send updateable keys this way ever.
+#            updateable_key = etag.startswith("updateablekey-")
+
             cache_control = self.handler.headers["Cache-Control"]
-            if cache_control != "max-age=0":
+#            if not (updateable_key and cache_control == "max-age=0")\
+#                    and cache_control != "no-cache":
+            if cache_control != "no-cache":
                 self.send_response(304)
-                if cache_control:
-                    # This should only have been sent for an updateable key.
-                    self.send_header("Cache-Control", "max-age=15, public")
-                else:
-                    self.send_header("Cache-Control", "public")
-                    self.send_header("ETag", content_id)
+#                if updateable_key:
+#                    p0 = etag.index('-')
+#                    p1 = etag.index('-', p0 + 1)
+#                    version = etag[p0:p1]
+#                    self.send_header(\
+#                        "X-Maalstroom-UpdateableKey-Version",\
+#                        version)
+#                    self.send_header("Cache-Control", "public,max-age=15")
+#                else:
+                self.send_header("Cache-Control", "public,max-age=300")
+                self.send_header("ETag", content_id)
                 self.send_header("Content-Length", 0)
                 self.end_headers()
                 self.finish_response()
@@ -602,7 +742,7 @@ class MaalstroomDispatcher(object):
         self.send_header("Content-Type",\
             "text/html" if content_type is None else content_type)
         if cacheable:
-            self.send_header("Cache-Control", "public")
+            self.send_header("Cache-Control", "public,max-age=300")
             self.send_header("ETag", content_id)
         else:
             self._send_no_cache()
@@ -614,6 +754,8 @@ class MaalstroomDispatcher(object):
 
     def send_partial_content(self, content, start=False, content_type=None,\
             cacheable=False):
+        assert content is not None
+
         if type(content) is str:
             content = content.encode()
 
@@ -674,6 +816,8 @@ class MaalstroomDispatcher(object):
             errcode=errcode)
 
     def send_error(self, msg=None, errcode=500):
+        assert type(errcode) is int
+
         if errcode == 400:
             errmsg = b"400 Bad Request."
             self.send_response(400)
@@ -721,7 +865,7 @@ def _send_store_data(data, data_rw, privatekey=None, path=None, version=None,\
             version=version, key_callback=key_callback, mime_type=mime_type)
     except asyncio.TimeoutError:
         data_rw.timed_out = True
-    except:
+    except Exception:
         log.exception("send_store_data(..)")
         data_rw.exception = True
 
@@ -738,6 +882,8 @@ class Downloader(multipart.DataCallback):
         self.mime_type = None
 
         self.abort = False
+
+        self.exception = None
 
     def notify_version(self, version):
         self.version = version

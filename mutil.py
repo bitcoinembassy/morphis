@@ -4,8 +4,9 @@
 import llog
 
 from bisect import bisect_left
-from datetime import datetime
+from datetime import datetime, tzinfo, timedelta
 import logging
+import time
 
 import consts
 import mbase32
@@ -166,12 +167,44 @@ def calc_log_distance(nid, pid):
 
     return dist, direction
 
-iso_fmt = "%Y-%m-%dT%H:%M:%S.%f"
+ZERO_TIMEDELTA = timedelta(0)
+class UtcTzInfo(tzinfo):
+    def utcoffset(self, dt):
+        return ZERO_TIMEDELTA
+
+    def tzname(self, dt):
+        return "UTC"
+
+    def dst(self, dt):
+        return ZERO_TIMEDELTA
+
+UTC_TZINFO = UtcTzInfo()
+
+def utc_datetime():
+    return datetime.now(UTC_TZINFO)
+
+ISO_FMT_UTC = "%Y-%m-%dT%H:%M:%S.%fZ"
+ISO_FMT = "%Y-%m-%dT%H:%M:%S.%f"
 
 def parse_iso_datetime(date_str):
-    return datetime.strptime(date_str, iso_fmt)
+    if date_str.endswith('Z'):
+        return datetime.strptime(date_str, ISO_FMT_UTC)\
+            .replace(tzinfo=UTC_TZINFO)
+    else:
+        return datetime.strptime(date_str, ISO_FMT)
+
+def format_iso_datetime(adatetime):
+    if adatetime.tzinfo is UTC_TZINFO:
+        return adatetime.strftime(ISO_FMT_UTC)
+    else:
+        return adatetime.strftime(ISO_FMT)
 
 iso_fmt_human_no_ms = "%Y-%m-%d %H:%M:%S"
 
-def format_human_no_ms_datetime(datetime):
+def get_utc_offset_seconds():
+    return time.altzone if time.daylight else time.timezone
+
+def format_human_no_ms_datetime(datetime, convert_local=True, assume_gmt=False):
+    if convert_local and (assume_gmt or datetime.tzinfo is UTC_TZINFO):
+        datetime = datetime - timedelta(seconds=get_utc_offset_seconds())
     return datetime.strftime(iso_fmt_human_no_ms)

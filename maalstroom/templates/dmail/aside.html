@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+<base target="_top" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/style.css">
+</head>
+<body class="aside-wrapper">
+    <p id="mailboxes">MAILBOXES FOR <span class="mailbox-trunc">{addr}</span></p>
+    <span class="mailbox-list">
+	<ul>
+	    <li class="inbox-icon {Inbox_active}"><a href="morphis://.dmail/wrapper/{addr}/Inbox" style="display:block"><div class="mailbox-pad" >Inbox<div class="{Inbox_unread_class}">{Inbox_unread_count}</div></div></a></li>
+	    <li class="inbox-icon {Outbox_active}"><a href="morphis://.dmail/wrapper/{addr}/Outbox" style="display:block"><div class="mailbox-pad" >Outbox<div class="{Outbox_unread_class}">{Outbox_unread_count}</div></div></a></li>
+	    <li class="sent-icon {Sent_active}"><a href="morphis://.dmail/wrapper/{addr}/Sent" style="display:block"><div class="mailbox-pad">Sent<div class="{Sent_unread_class}">{Sent_unread_count}</div></div></a></li>
+	    <li class="drafts-icon {Drafts_active}"><a href="morphis://.dmail/wrapper/{addr}/Drafts" style="display:block"><div class="mailbox-pad">Drafts<div class="{Drafts_unread_class}">{Drafts_unread_count}</div></div></a></li>
+	    <li class="drafts-icon {Trash_active}"><a href="morphis://.dmail/wrapper/{addr}/Trash" style="display:block"><div class="mailbox-pad">Trash<div class="{Trash_unread_class}">{Trash_unread_count}</div></div></a></li>
+	</ul>
+    </span>
+<div class="divider"></div>
+    <ul><form target="_self" action="morphis://.dmail/create_tag" method="get" accept-charset="UTF-8 ISO-8859-1">
+    <input type="hidden" name="csrf_token" value="{csrf_token}"/>
+    <input type="hidden" name="redirect" value="morphis://.dmail/aside/{addr}/{tag}"/>
+	<span class="tag-head"><li class="tag-icon"><span class="tag-text-pad"><input class="tag-text" type="text" name="tag_name" placeholder="ADD TAG"/><button class="add-tag" value="send" name="add-tag" type="submit">+</button></span></li>
+    </span></form>
+    <span class="tag-list">
+        {tag_rows}
+	</span></ul>
+</body>
+</html>

@@ -336,7 +336,7 @@ class ChordTasks(object):
             log.info("Performing wildcard (key) search (prefix=[{}],"\
                 " significant_bits=[{}], target_key=[{}])."\
                     .format(mbase32.encode(data_key_prefix), significant_bits,\
-                        target_key))
+                        mbase32.encode(target_key)))
 
         ldiff = chord.NODE_ID_BYTES - len(data_key_prefix)
         if ldiff > 0:
@@ -1354,7 +1354,7 @@ class ChordTasks(object):
                 return
         except asyncio.CancelledError:
             raise
-        except:
+        except Exception:
             log.exception("__process_find_node_relay(..)")
 
         if tun_meta.jobs:
@@ -2457,7 +2457,7 @@ class ChordTasks(object):
                 data_block.data_id = data_id
                 data_block.distance = distance
                 data_block.original_size = 0
-                data_block.insert_timestamp = datetime.today()
+                data_block.insert_timestamp = mutil.utc_datetime()
 
                 if dmsg.targeted:
                     data_block.target_key = tb.target_key
@@ -2638,7 +2638,7 @@ class ChordTasks(object):
                     data_block.target_key = tb.target_key
 
                 data_block.original_size = original_size
-                data_block.insert_timestamp = datetime.today()
+                data_block.insert_timestamp = mutil.utc_datetime()
 
                 if not old_entry:
                     sess.add(data_block)

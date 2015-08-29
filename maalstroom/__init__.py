@@ -21,17 +21,15 @@ import maalstroom.dmail
 
 log = logging.getLogger(__name__)
 
-host = "localhost"
+host = ""
 port = 4251
 
 node = None
 server = None
 client_engine = None
 
-upload_page_content = None
-static_upload_page_content = [None, None]
-
-update_test = False
+_request_lock = threading.Lock()
+_concurrent_request_count = 0
 
 req_dict = []
 
@@ -64,12 +62,23 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
 
         if log.isEnabledFor(logging.DEBUG):
             log.debug("Handler do_GET(): path=[{}].".format(self.path))
+            req_dict.append(self)
 
         self.loop.call_soon_threadsafe(\
             asyncio.async,\
             self._dispatcher.do_GET(self._get_rpath()))
 
         self._write_response()
+
+        if self.node.web_devel and self.headers["Cache-Control"] == "no-cache":
+            global _concurrent_request_count
+            with _request_lock:
+                _concurrent_request_count -= 1
+
+        if log.isEnabledFor(logging.DEBUG):
+            req_dict.remove(self)
+            log.debug("Done do_GET(): path=[{}], reqs=[{}]."\
+                .format(self.path, len(req_dict)))
 
     def do_POST(self):
         self._prepare_for_request()
@@ -78,11 +87,19 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
             asyncio.async,\
             self._dispatcher.do_POST(self._get_rpath()))
 
-        log.warning("Reading request.")
+        log.debug("Reading request.")
         self._read_request()
 
-        log.warning("Writing response.")
+        log.debug("Writing response.")
         self._write_response()
+
+        if self.node.web_devel and self.headers["Cache-Control"] == "no-cache":
+            global _concurrent_request_count
+            with _request_lock:
+                _concurrent_request_count -= 1
+
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("Done do_POST(): path=[{}].".format(self.path))
 
     def log_message(self, mformat, *args):
         if log.isEnabledFor(logging.INFO):
@@ -114,18 +131,29 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
             self.maalstroom_url_prefix =\
                 self.maalstroom_url_prefix_str.encode()
 
-        if self.node.web_devel:
-            importlib.reload(maalstroom.templates)
-            importlib.reload(maalstroom.dispatcher)
-            importlib.reload(maalstroom.dmail)
+        if self.node.web_devel and self.headers["Cache-Control"] == "no-cache":
+            global _concurrent_request_count
+            with _request_lock:
+                _concurrent_request_count += 1
+                if _concurrent_request_count == 1:
+                    log.warning(\
+                        "Reloading maalstroom packages due to web_dev mode.")
+                    try:
+                        importlib.reload(maalstroom.templates)
+                        importlib.reload(maalstroom.dispatcher)
+                        importlib.reload(maalstroom.dmail)
+                    except KeyboardInterrupt:
+                        raise
+                    except Exception as e:
+                        log.exception(e)
 
             self._dispatcher = self._create_dispatcher()
 
     def _get_rpath(self):
         rpath = self.path[1:]
 
-        if rpath and rpath[-1] == '/':
-            rpath = rpath[:-1]
+        if self.maalstroom_plugin_used and len(rpath) == 1 and rpath[0] == '/':
+            rpath = ""
 
         return rpath
 
@@ -157,11 +185,20 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
             resp = outq.get()
 
             if not resp:
+                # Python bug as far as I can tell. Randomly outq has a None
+                # in it in front of what we really added. What we really added
+                # is still there, just has a spurious None in front; so we
+                # ignore it.
+                log.debug("Got spurious None from queue; ignoring.")
+                continue
+            elif resp is Done:
+                log.debug("Got Done from queue; finished.")
                 break
             elif resp is Flush:
                 self.wfile.flush()
                 continue
             elif resp is Close:
+                log.debug("Got Close from queue; closing connection.")
                 self.close_connection = True
                 break
 
@@ -170,6 +207,8 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
             except ConnectionError as e:
                 log.warning("Browser broke connection: {}".format(e))
                 self._abort_event.set()
+                # Replace _outq, as dispatcher may still write to it.
+                self._outq = queue.Queue()
                 break
 
 class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
@@ -179,6 +218,9 @@ class Flush(object):
     pass
 
 class Close(object):
+    pass
+
+class Done(object):
     pass
 
 @asyncio.coroutine
@@ -206,15 +248,25 @@ def start_maalstroom_server(the_node):
 
     node.loop.run_in_executor(None, threadcall)
 
-    asyncio.async(_create_client_engine(), loop=node.loop)
+def set_client_engine(ce):
+    global _client_engine
+
+    _client_engine = ce
 
 @asyncio.coroutine
-def _create_client_engine():
-    global node, client_engine, update_test
+def get_client_engine():
+    global node, client_engine, _client_engine
+
+    if client_engine:
+        return client_engine
+
     yield from node.ready.wait()
-    client_engine =\
-        cengine.ClientEngine(node.chord_engine, node.loop, update_test)
-    yield from client_engine.start()
+
+    yield from _client_engine.start()
+
+    client_engine = _client_engine
+
+    return client_engine
 
 def shutdown():
     if not server:
@@ -223,27 +275,3 @@ def shutdown():
     log.info("Shutting down Maalstroom server instance.")
     server.server_close()
     log.info("Maalstroom server instance stopped.")
-
-def set_upload_page(filepath):
-    global upload_page_content
-
-    with open(filepath, "rb") as upf:
-        _set_upload_page(upf.read())
-
-def _set_upload_page(content):
-    global static_upload_page_content, upload_page_content
-
-    upload_page_content = content
-
-    content = content.replace(\
-        b"${UPDATEABLE_KEY_MODE_DISPLAY}",\
-        b"display: none")
-    content = content.replace(\
-        b"${STATIC_MODE_DISPLAY}",\
-        b"")
-
-    static_upload_page_content[0] = content
-    static_upload_page_content[1] =\
-        mbase32.encode(enc.generate_ID(static_upload_page_content[0]))
-
-_set_upload_page(b'<html><head><title>MORPHiS Maalstroom Upload</title></head><body><h4 style="${UPDATEABLE_KEY_MODE_DISPLAY}">NOTE: Bookmark this page to save your private key in the bookmark!</h4>Select the file to upload below:</p><form action="upload" method="post" enctype="multipart/form-data"><input type="file" name="fileToUpload" id="fileToUpload"/><div style="${UPDATEABLE_KEY_MODE_DISPLAY}"><br/><br/><label for="privateKey">Private Key</label><textarea name="privateKey" id="privateKey" rows="5" cols="80">${PRIVATE_KEY}</textarea><br/><label for="path">Path</label><input type="textfield" name="path" id="path"/><br/><label for="version">Version</label><input type="textfield" name="version" id="version" value="${VERSION}"/><br/><label for="mime_type">Mime Type</label><input type="textfield" name="mime_type" id="mime_type"/><br/></div><input type="submit" value="Upload File" name="submit"/></form><p style="${STATIC_MODE_DISPLAY}"><a href="morphis://.upload/generate">switch to updateable key mode</a></p><p style="${UPDATEABLE_KEY_MODE_DISPLAY}"><a href="morphis://.upload/">switch to static key mode</a></p><h5><- <a href="morphis://">MORPHiS UI</a></h5></body></html>')

@@ -109,7 +109,7 @@ class BitTrie(object):
                     node = next_node
                     continue
 
-                assert type(next_node) is list
+                assert type(next_node) is list, type(next_node)
                 node = next_node
 
     def _del(self, key):
@@ -141,7 +141,7 @@ class BitTrie(object):
 
                     return next_node.value
 
-                assert type(next_node) is list
+                assert type(next_node) is list, type(next_node)
 
                 prev_node = node
                 prev_node_bit = bit
@@ -165,7 +165,7 @@ class BitTrie(object):
                     else:
                         return None
 
-                assert type(next_node) is list
+                assert type(next_node) is list, type(next_node)
 
                 node = next_node
 
@@ -228,7 +228,7 @@ class BitTrie(object):
 
                     return None
 
-                assert type(next_node) is list
+                assert type(next_node) is list, type(next_node)
 
                 node = next_node
                 j = j - 4
@@ -246,7 +246,7 @@ class BitTrie(object):
                 yield node.value
                 continue
 
-            assert type(node) is list
+            assert type(node) is list, type(node)
 
             branches.extend(reversed([x for x in node if x]))
 
@@ -261,7 +261,7 @@ class BitTrie(object):
                 yield node.value
                 continue
 
-            assert type(node) is list
+            assert type(node) is list, type(node)
 
             branches.extend([x for x in node if x])
 

@@ -33,8 +33,8 @@ def main():
         loop.run_forever()
     except KeyboardInterrupt:
         log.info("Got KeyboardInterrupt; shutting down.")
-    except:
-        log.exception("loop.run_forever() threw:")
+    except Exception:
+        log.exception("loop.run_forever()")
 
     log.info("Shutdown.")
 
