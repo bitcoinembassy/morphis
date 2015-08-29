@@ -1066,7 +1066,7 @@ def _read_dmail_post(dispatcher, data):
     if subject:
         dm.subject = subject[0]
     else:
-        dmsubject = ""
+        dm.subject = ""
 
     sender_dmail_id = dd.get("sender")
     if sender_dmail_id:
