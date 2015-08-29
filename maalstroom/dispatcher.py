@@ -245,6 +245,7 @@ class MaalstroomDispatcher(object):
             msg = "Empty key was specified."
             log.warning(msg)
             self.send_error(msg, 400)
+            return
 
         try:
             data_key, significant_bits = mutil.decode_key(rpath)
