@@ -37,6 +37,9 @@ class DataCallback(object):
         # returns: True to continue, False to abort download.
         pass
 
+    def notify_finished(self, success):
+        pass
+
 class BufferingDataCallback(DataCallback):
     def __init__(self):
         self.version = None
@@ -537,6 +540,7 @@ def get_data(engine, data_key, data_callback, path=None, ordered=False,\
         if not data.startswith(MorphisBlock.UUID):
             data_callback.notify_size(len(data))
             data_callback.notify_data(0, data)
+            data_callback.notify_finished(True)
             return True
 
         block_type = MorphisBlock.parse_block_type(data)
@@ -572,6 +576,7 @@ def get_data(engine, data_key, data_callback, path=None, ordered=False,\
         if block_type != BlockType.hash_tree.value:
             data_callback.notify_size(len(data))
             data_callback.notify_data(0, data)
+            data_callback.notify_finished(True)
             return True
 
         fetch = HashTreeFetch(\
@@ -579,6 +584,8 @@ def get_data(engine, data_key, data_callback, path=None, ordered=False,\
                 concurrency)
 
         r = yield from fetch.fetch(HashTreeBlock(data))
+
+        data_callback.notify_finished(r)
 
         return r
 
@@ -744,11 +751,16 @@ def _store_block(engine, i, block_data, key_callback, task_semaphore,\
         if not tries:
             snodes = yield from\
                 engine.tasks.send_store_data(\
-                    block_data, key_callback=key_callback)
+                    block_data, store_key=store_key, key_callback=key_callback)
         else:
+            if store_key:
+                if tries > 1:
+                    store_key = False
+
             snodes = yield from\
                 engine.tasks.send_store_data(\
-                    block_data, key_callback=key_callback,\
+                    block_data, store_key=store_key,\
+                    key_callback=key_callback,\
                     retry_factor=tries * 10)
 
         task_semaphore.release()

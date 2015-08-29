@@ -80,9 +80,12 @@ class ConnectionHandler():
             log.info("connection_made(): Peer (dbid=[{}], address=[{}],"\
                 " protocol.address=[{}])."\
                 .format(self.peer.dbid, self.peer.address, protocol.address))
-        self.peer.address = "{}:{}".format(\
-            self.peer.protocol.address[0],\
-            self.peer.protocol.address[1])
+
+        if not self.peer.engine.node.tormode:
+            self.peer.address = "{}:{}".format(\
+                self.peer.protocol.address[0],\
+                self.peer.protocol.address[1])
+
         self.peer.engine.connection_made(self.peer)
 
     def error_recieved(self, protocol, exc):

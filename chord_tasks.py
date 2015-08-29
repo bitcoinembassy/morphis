@@ -336,7 +336,7 @@ class ChordTasks(object):
             log.info("Performing wildcard (key) search (prefix=[{}],"\
                 " significant_bits=[{}], target_key=[{}])."\
                     .format(mbase32.encode(data_key_prefix), significant_bits,\
-                        target_key))
+                        mbase32.encode(target_key)))
 
         ldiff = chord.NODE_ID_BYTES - len(data_key_prefix)
         if ldiff > 0:
@@ -1211,9 +1211,28 @@ class ChordTasks(object):
 
         peer = vpeer.peer
 
-        local_cid, queue =\
-            yield from peer.protocol.open_channel("mpeer", True)
+        try:
+            local_cid, queue =\
+                yield from asyncio.wait_for(\
+                    peer.protocol.open_channel("mpeer", True),\
+                    timeout=60,\
+                    loop=self.loop)
+        except asyncio.TimeoutError:
+            if log.isEnabledFor(logging.INFO):
+                log.info("Timeout opening channel to Peer (dbid=[{}])."\
+                    .format(peer.dbid))
+            peer.protocol.close()
+            queue = None
+
         if not queue:
+            if self.engine.node.tormode:
+                if not peer.protocol.closed():
+                    if log.isEnabledFor(logging.INFO):
+                        log.info("Closing stalled connection to Peer"\
+                            " (dbid=[{}])."\
+                                .format(peer.dbid))
+                    peer.protocol.close()
+
             if query_cntr:
                 query_cntr.value -= 1
                 done_one.set()
@@ -1335,7 +1354,7 @@ class ChordTasks(object):
                 return
         except asyncio.CancelledError:
             raise
-        except:
+        except Exception:
             log.exception("__process_find_node_relay(..)")
 
         if tun_meta.jobs:
@@ -2144,8 +2163,7 @@ class ChordTasks(object):
                     else:
                         return False
                 else:
-                    q = sess.query(func.count("*"))
-
+                    q = sess.query(func.count("*")).select_from(DataBlock)
                     q = q.filter(DataBlock.data_id == data_id)
 
                     if q.scalar() > 0:
@@ -2187,7 +2205,7 @@ class ChordTasks(object):
                                 # We only want to store newer versions.
                                 return False
                     else:
-                        q = sess.query(func.count("*"))
+                        q = sess.query(func.count("*")).select_from(DataBlock)
                         q = q.filter(DataBlock.data_id == data_id)
 
                         if q.scalar() > 0:
@@ -2221,7 +2239,7 @@ class ChordTasks(object):
         def dbcall():
             with self.engine.node.db.open_session() as sess:
                 # First check if we have this block already.
-                q = sess.query(func.count("*"))
+                q = sess.query(func.count("*")).select_from(DataBlock)
                 q = q.filter(DataBlock.data_id == data_id)
 
                 if q.scalar() > 0:
@@ -2428,7 +2446,7 @@ class ChordTasks(object):
             with self.engine.node.db.open_session() as sess:
                 self.engine.node.db.lock_table(sess, DataBlock)
 
-                q = sess.query(func.count("*"))
+                q = sess.query(func.count("*")).select_from(DataBlock)
                 q = q.filter(DataBlock.data_id == data_id)
 
                 if q.scalar() > 0:
@@ -2439,7 +2457,7 @@ class ChordTasks(object):
                 data_block.data_id = data_id
                 data_block.distance = distance
                 data_block.original_size = 0
-                data_block.insert_timestamp = datetime.today()
+                data_block.insert_timestamp = mutil.utc_datetime()
 
                 if dmsg.targeted:
                     data_block.target_key = tb.target_key
@@ -2555,7 +2573,7 @@ class ChordTasks(object):
                             # We only want to store newer versions.
                             return None, None
                 else:
-                    q = sess.query(func.count("*"))
+                    q = sess.query(func.count("*")).select_from(DataBlock)
                     q = q.filter(DataBlock.data_id == data_id)
 
                     if q.scalar() > 0:
@@ -2620,7 +2638,7 @@ class ChordTasks(object):
                     data_block.target_key = tb.target_key
 
                 data_block.original_size = original_size
-                data_block.insert_timestamp = datetime.today()
+                data_block.insert_timestamp = mutil.utc_datetime()
 
                 if not old_entry:
                     sess.add(data_block)

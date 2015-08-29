@@ -10,12 +10,15 @@ from contextlib import contextmanager
 
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.schema import Index
-from sqlalchemy import create_engine, text, event, MetaData
-from sqlalchemy import Table, Column, ForeignKey, Integer, String, DateTime
-from sqlalchemy.exc import ProgrammingError
+from sqlalchemy import create_engine, text, event, MetaData, func, Table,\
+    Column, ForeignKey, Integer, String, DateTime, TypeDecorator
+from sqlalchemy.exc import ProgrammingError, OperationalError
 from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.pool import Pool
 from sqlalchemy.types import LargeBinary, Boolean, DateTime
+
+import consts
+import mutil
 
 log = logging.getLogger(__name__)
 
@@ -29,6 +32,13 @@ DmailKey = None
 DmailMessage = None
 DmailPart = None
 DmailTag = None
+
+class UtcDateTime(TypeDecorator):
+    impl = DateTime
+
+    def process_result_value(self, value, dialect):
+        return\
+            None if value is None else value.replace(tzinfo=mutil.UTC_TZINFO)
 
 def _init_daos(Base, d):
     # If I recall correctly, this abomination is purely for PostgreSQL mode,
@@ -54,7 +64,7 @@ def _init_daos(Base, d):
 
         connected = Column(Boolean, nullable=False)
 
-        last_connect_attempt = Column(DateTime, nullable=True)
+        last_connect_attempt = Column(UtcDateTime, nullable=True)
 
     Index("node_id", Peer.node_id)
     Index("distance", Peer.distance)
@@ -71,8 +81,8 @@ def _init_daos(Base, d):
         data_id = Column(LargeBinary, nullable=False)
         distance = Column(LargeBinary, nullable=False)
         original_size = Column(Integer, nullable=False)
-        insert_timestamp = Column(DateTime, nullable=False)
-        last_access = Column(DateTime, nullable=True)
+        insert_timestamp = Column(UtcDateTime, nullable=False)
+        last_access = Column(UtcDateTime, nullable=True)
         version = Column(String, nullable=True) # str for sqlite bigint :(.
         signature = Column(LargeBinary, nullable=True)
         epubkey = Column(LargeBinary, nullable=True)
@@ -109,7 +119,9 @@ def _init_daos(Base, d):
         id = Column(Integer, primary_key=True)
         site_key = Column(LargeBinary, nullable=False)
         site_privatekey = Column(LargeBinary, nullable=True)
+        scan_interval = Column(Integer, nullable=True)
         keys = relationship(DmailKey)
+        messages = relationship("DmailMessage")
 
     Index("dmailaddress__site_key", DmailAddress.site_key)
 
@@ -146,16 +158,20 @@ def _init_daos(Base, d):
 
         id = Column(Integer, primary_key=True)
         dmail_address_id = Column(Integer, ForeignKey("dmailaddress.id"))
+        dmail_key_id = Column(Integer, nullable=True)
         data_key = Column(LargeBinary, nullable=False)
         sender_dmail_key = Column(LargeBinary, nullable=True)
         sender_valid = Column(Boolean, nullable=True)
+        destination_dmail_key = Column(LargeBinary, nullable=True)
+        destination_significant_bits = Column(Integer, nullable=True)
         subject = Column(String, nullable=False)
-        date = Column(DateTime, nullable=False)
+        date = Column(UtcDateTime, nullable=False)
         read = Column(Boolean, nullable=False)
         hidden = Column(Boolean, nullable=False)
+        deleted = Column(Boolean, nullable=False)
         tags = relationship(DmailTag, secondary=dmail_message__dmail_tag)
         address = relationship(DmailAddress)
-        parts = relationship(DmailPart)
+        parts = relationship(DmailPart, cascade="all, delete-orphan")
 
     Index("dmailmessage__data_key", DmailMessage.data_key)
 
@@ -173,6 +189,7 @@ class Db():
 
         self.schema = schema
 
+        self.is_sqlite = False
         self.sqlite_lock = None
 
         self.pool_size = 10
@@ -187,41 +204,42 @@ class Db():
         self._schema_setcmd = "set search_path={}".format(self._schema)
 
     @contextmanager
-    def open_session(self):
-        if self.sqlite_lock:
+    def open_session(self, read_only=False):
+        read_only = False; #TODO: Need to implement a read-write lock.
+
+        if self.sqlite_lock and not read_only:
             self.sqlite_lock.acquire()
 
         try:
             session = self.Session()
             try:
                 yield session
-                session.rollback()
-            except:
-                try:
-                    session.rollback()
-                except:
-                    pass
-
-                raise
             finally:
-                session.close()
+                try:
+                    session.close()
+                except TypeError:
+                    log.exception("SqlAlchemy crashed; workaround engaged;"\
+                        " Session leaked! Upgrade to 1.0.8 to prevent this!")
+        except Exception:
+            log.exception("Db session contextmanager.")
+            raise
         finally:
-            if self.sqlite_lock:
+            if self.sqlite_lock and not read_only:
                 self.sqlite_lock.release()
 
     def lock_table(self, sess, tableobj):
         if self.sqlite_lock:
             return
 
-        t = text("LOCK \"{}\" IN SHARE ROW EXCLUSIVE MODE"\
-            .format(tableobj.__table__.name))
-        sess.connection().execute(t)
+        st = "LOCK \"{}\" IN SHARE ROW EXCLUSIVE MODE"\
+            .format(tableobj.__table__.name)
+        sess.execute(st)
 
     def init_engine(self):
-        is_sqlite = self.url.startswith("sqlite:")
+        self.is_sqlite = self.url.startswith("sqlite:")
 
         log.info("Creating engine.")
-        if is_sqlite:
+        if self.is_sqlite:
             self.engine = create_engine(self.url, echo=False)
         else:
             self.engine = create_engine(\
@@ -229,8 +247,23 @@ class Db():
                 pool_size=self.pool_size, max_overflow=0)
 
         log.info("Configuring engine...")
-        if is_sqlite:
+        if self.is_sqlite:
             self.sqlite_lock = threading.Lock()
+
+            # The following KLUDGE is from SqlAlchemy docs. SqlAlchemy says the
+            # pysqlite drivers is broken and decides to 'help' by not honoring
+            # your transaction begin statement and to also auto commit even
+            # though you told it not to.
+            @event.listens_for(self.engine, "connect")
+            def do_connect(dbapi_connection, connection_record):
+                # Disable pysqlite's emitting of the BEGIN statement entirely.
+                # Also stops it from emitting COMMIT before any DDL.
+                dbapi_connection.isolation_level = None
+
+            @event.listens_for(self.engine, "begin")
+            def do_begin(conn):
+                # Emit our own BEGIN.
+                conn.execute("BEGIN")
         else:
             if self.schema:
                 event.listen(\
@@ -245,11 +278,60 @@ class Db():
         conn.commit()
 
     @asyncio.coroutine
-    def create_all(self):
-        yield from self.loop.run_in_executor(None, self._create_all)
+    def ensure_schema(self):
+        yield from self.loop.run_in_executor(None, self._ensure_schema)
 
-    def _create_all(self):
-        log.info("Checking/creating schema.")
+    def _ensure_schema(self):
+        log.info("Checking schema.")
+
+        new_db = False
+
+        with self.open_session(True) as sess:
+            q = sess.query(NodeState)\
+                .filter(NodeState.key == consts.NSK_SCHEMA_VERSION)
+
+            try:
+                r = q.first()
+            except OperationalError:
+                new_db = True
+
+        if new_db:
+            log.info("Database schema is missing, creating.")
+            self._create_schema()
+
+            with self.open_session() as sess:
+                ns = NodeState()
+                ns.key = consts.NSK_SCHEMA_VERSION
+                ns.value = "1"
+                sess.add(ns)
+                sess.commit()
+                return
+
+        if r:
+            version = int(r.value)
+        else:
+            # This is the schema before we started tracking version in db.
+            version = 1
+
+        if log.isEnabledFor(logging.INFO):
+            log.info("Existing schema detected (version=[{}]).".format(version))
+
+        # Perform necessary upgrades.
+        if version == 1:
+            _upgrade_1_to_2(self)
+            version = 2
+
+        if version == 2:
+            _upgrade_2_to_3(self)
+            version = 3
+
+        if version == 3:
+            _upgrade_3_to_4(self)
+            version = 4
+
+    def _create_schema(self):
+        log.info("Creating schema.")
+
         if self._schema:
             tmp_Base = declarative_base()
             d = _init_daos(tmp_Base, DObject())
@@ -260,8 +342,8 @@ class Db():
                 tmp_Base.metadata.create_all(self.engine)
             except ProgrammingError:
                 with self.open_session() as sess:
-                    t = text("CREATE SCHEMA {}".format(self.schema))
-                    sess.connection().execute(t)
+                    st = "CREATE SCHEMA {}".format(self.schema)
+                    sess.execute(st)
                     sess.commit()
 
                 tmp_Base.metadata.create_all(self.engine)
@@ -284,3 +366,81 @@ if Peer is None:
     DmailMessage = d.DmailMessage
     DmailPart = d.DmailPart
     DmailTag = d.DmailTag
+
+def _update_node_state(sess, version):
+    q = sess.query(NodeState)\
+        .filter(NodeState.key == consts.NSK_SCHEMA_VERSION)
+
+    ns = q.first()
+
+    if not ns:
+        ns = NodeState()
+        ns.key = consts.NSK_SCHEMA_VERSION
+        sess.add(ns)
+
+    ns.value = str(version)
+
+def _upgrade_1_to_2(db):
+    log.warning("NOTE: Upgrading database schema from version 1 to 2.")
+
+    t_bytea = "BLOB" if db.is_sqlite else "bytea"
+    t_integer = "INTEGER" if db.is_sqlite else "integer"
+
+    with db.open_session() as sess:
+        st = "ALTER TABLE dmailmessage ADD COLUMN destination_dmail_key "\
+                + t_bytea
+
+        sess.execute(st)
+
+        st = "ALTER TABLE dmailmessage ADD COLUMN"\
+            " destination_significant_bits "\
+                + t_integer
+
+        sess.execute(st)
+
+        _update_node_state(sess, 2)
+
+        sess.commit()
+
+    log.warning("NOTE: Database schema upgraded.")
+
+def _upgrade_2_to_3(db):
+    log.warning("NOTE: Upgrading database schema from version 2 to 3.")
+
+    t_integer = "INTEGER" if db.is_sqlite else "integer"
+
+    with db.open_session() as sess:
+        st = "ALTER TABLE dmailaddress ADD COLUMN scan_interval "\
+            + t_integer
+
+        sess.execute(st)
+
+        _update_node_state(sess, 3)
+
+        sess.commit()
+
+    log.warning("NOTE: Database schema upgraded.")
+
+def _upgrade_3_to_4(db):
+    log.warning("NOTE: Upgrading database schema from version 3 to 4.")
+
+    t_integer = "INTEGER" if db.is_sqlite else "integer"
+
+    with db.open_session() as sess:
+        st = "ALTER TABLE dmailmessage ADD COLUMN dmail_key_id "\
+            + t_integer
+
+        sess.execute(st)
+
+        default = "0" if db.is_sqlite else "false"
+
+        st = "ALTER TABLE dmailmessage ADD COLUMN deleted BOOLEAN not null"\
+            + " default " + default
+
+        sess.execute(st)
+
+        _update_node_state(sess, 4)
+
+        sess.commit()
+
+    log.warning("NOTE: Database schema upgraded.")

@@ -11,6 +11,8 @@ import os
 import struct
 import time
 
+from sqlalchemy import func
+
 import base58
 import brute
 import chord
@@ -198,32 +200,15 @@ class DmailEngine(object):
 
         log.info("Uploading dmail site.")
 
-        total_storing = 0
-        retry = 0
-        while True:
-            storing_nodes = yield from\
-                self.task_engine.send_store_updateable_key(\
-                    dms.export(), privkey, version=int(time.time()*1000),\
-                    store_key=True, key_callback=key_callback,\
-                    retry_factor=retry * 20)
-
-            total_storing += storing_nodes
-
-            if total_storing >= 3:
-                break
-
-            if retry > 32:
-                break
-            elif retry > 3:
-                yield from asyncio.sleep(1)
-
-            retry += 1
+        total_storing = yield from self.publish_dmail_site(\
+                privkey, dms, key_callback=key_callback)
 
         def dbcall():
             with self.db.open_session() as sess:
                 dmailaddress = db.DmailAddress()
                 dmailaddress.site_key = data_key
                 dmailaddress.site_privatekey = privkey._encode_key()
+                dmailaddress.scan_interval = 60
 
                 dmailkey = db.DmailKey()
                 dmailkey.x = sshtype.encodeMpint(dms.dh.x)
@@ -240,6 +225,33 @@ class DmailEngine(object):
         yield from self.loop.run_in_executor(None, dbcall)
 
         return privkey, data_key, dms, total_storing
+
+    @asyncio.coroutine
+    def publish_dmail_site(self, privkey, dmail_site, key_callback=None):
+        dms_data = dmail_site.export()
+
+        total_storing = 0
+        retry = 0
+        while True:
+            storing_nodes = yield from\
+                self.task_engine.send_store_updateable_key(\
+                    dms_data, privkey, version=int(time.time()*1000),\
+                    store_key=True, key_callback=key_callback,\
+                    retry_factor=retry * 20)
+
+            total_storing += storing_nodes
+
+            if total_storing >= 3:
+                break
+
+            if retry > 32:
+                break
+            elif retry > 3:
+                yield from asyncio.sleep(1)
+
+            retry += 1
+
+        return total_storing
 
     @asyncio.coroutine
     def send_dmail_text(self, subject, message_text):
@@ -260,7 +272,7 @@ class DmailEngine(object):
             m_dest_ids.append((m_dest_enc, m_dest_id, sig_bits))
             p0 = p1 + 1
 
-        date = datetime.today()
+        date = mutil.utc_datetime()
 
         if message_text[p0] == '\n':
             p0 += 1
@@ -283,12 +295,12 @@ class DmailEngine(object):
             message_text = message_text.encode()
 
         if not date:
-            date = datetime.today()
+            date = mutil.utc_datetime()
 
         dmail = Dmail()
         dmail.sender_pubkey = from_asymkey.asbytes() if from_asymkey else b""
         dmail.subject = subject
-        dmail.date = date.isoformat()
+        dmail.date = mutil.format_iso_datetime(date)
 
         if message_text:
             part = DmailPart()
@@ -314,6 +326,9 @@ class DmailEngine(object):
         dmail_bytes = dmail.encode()
 
         recipients = yield from self.fetch_recipient_dmail_sites(recipients)
+
+        if not recipients:
+            return False
 
         storing_nodes = 0
 
@@ -393,6 +408,9 @@ class DmailEngine(object):
 
     @asyncio.coroutine
     def fetch_dmail(self, key, x=None, target_key=None):
+        "Fetch the Dmail referred to by key from the network."\
+        " Returns a Dmail object, not a db.DmailMessage object."
+
         data_rw = yield from self.task_engine.send_get_targeted_data(key)
 
         data = data_rw.data
@@ -576,6 +594,12 @@ class DmailEngine(object):
         robjs = []
 
         for entry in recipients:
+            if type(entry) is str:
+                recipient, significant_bits =\
+                    mutil.decode_key(entry)
+                recipient =\
+                    (entry, bytes(recipient), significant_bits)
+
             if type(entry) in (tuple, list):
                 recipient_enc, recipient, significant_bits = entry
 
@@ -608,3 +632,150 @@ class DmailEngine(object):
             robjs.append(DmailSite(site_data))
 
         return robjs
+
+    @asyncio.coroutine
+    def scan_and_save_new_dmails(self, dmail_address):
+        new_dmail_cnt = 0
+        old_dmail_cnt = 0
+        err_dmail_cnt = 0
+
+        address_key = dmail_address.keys[0]
+
+        target = address_key.target_key
+        significant_bits = address_key.difficulty
+
+        start = target
+
+        def check_have_dmail_dbcall():
+            with self.db.open_session() as sess:
+                q = sess.query(func.count("*")).select_from(db.DmailMessage)\
+                    .filter(db.DmailMessage.data_key == dmail_key)
+
+                if q.scalar():
+                    return True
+                return False
+
+        while True:
+            data_rw = yield from self.task_engine.send_find_key(\
+                start, target_key=target, significant_bits=significant_bits,\
+                retry_factor=100)
+
+            start = dmail_key = data_rw.data_key
+
+            if not dmail_key:
+                if log.isEnabledFor(logging.INFO):
+                    log.info("No more Dmails found for address (id=[{}])."\
+                        .format(dmail_address.id))
+                break
+
+            if log.isEnabledFor(logging.INFO):
+                key_enc = mbase32.encode(dmail_key)
+                log.info("Found dmail key: [{}].".format(key_enc))
+
+            exists =\
+                yield from self.loop.run_in_executor(\
+                    None, check_have_dmail_dbcall)
+
+            if exists:
+                if log.isEnabledFor(logging.DEBUG):
+                    log.debug("Ignoring dmail (key=[{}]) we already have."\
+                        .format(key_enc))
+                    old_dmail_cnt += 1
+                continue
+
+            try:
+                yield from self._fetch_and_save_dmail(\
+                    dmail_key, dmail_address, address_key)
+                new_dmail_cnt += 1
+            except Exception as e:
+                log.exception("Trying to fetch and save Dmail for key [{}]"\
+                    " caused exception: {}"\
+                        .format(mbase32.encode(dmail_key), e))
+                err_dmail_cnt += 1
+
+        if log.isEnabledFor(logging.INFO):
+            if new_dmail_cnt:
+                log.info("Moved [{}] Dmails to Inbox.".format(new_dmail_cnt))
+            else:
+                log.info("No new Dmails.")
+
+        return new_dmail_cnt, old_dmail_cnt, err_dmail_cnt
+
+    @asyncio.coroutine
+    def _fetch_and_save_dmail(self, dmail_message_key, dmail_address,\
+            address_key):
+        key_type = type(dmail_message_key)
+        if key_type is not bytes:
+            assert key_type is bytearray
+            dmail_message_key = bytes(dmail_message_key)
+
+        # Fetch the Dmail data from the network.
+        l, x_mpint = sshtype.parseMpint(address_key.x)
+        dmobj, valid_sig =\
+            yield from self.fetch_dmail(\
+                dmail_message_key, x_mpint, address_key.target_key)
+
+        if not dmobj:
+            if log.isEnabledFor(logging.INFO):
+                log.info("Dmail was not found on the network.")
+            return False
+
+        def dbcall():
+            with self.db.open_session() as sess:
+                self.db.lock_table(sess, db.DmailMessage)
+
+                q = sess.query(func.count("*")).select_from(db.DmailMessage)\
+                    .filter(db.DmailMessage.data_key == dmail_message_key)
+
+                if q.scalar():
+                    return False
+
+                msg = db.DmailMessage()
+                msg.dmail_address_id = dmail_address.id
+                msg.dmail_key_id = address_key.id
+                msg.data_key = dmail_message_key
+                msg.sender_dmail_key =\
+                    enc.generate_ID(dmobj.sender_pubkey)\
+                        if dmobj.sender_pubkey else None
+                msg.sender_valid = valid_sig
+                msg.subject = dmobj.subject
+                msg.date = mutil.parse_iso_datetime(dmobj.date)
+
+                msg.hidden = False
+                msg.read = False
+                msg.deleted = False
+
+                attach_dmail_tag(sess, msg, "Inbox")
+
+                msg.parts = []
+
+                for part in dmobj.parts:
+                    dbpart = db.DmailPart()
+                    dbpart.mime_type = part.mime_type
+                    dbpart.data = part.data
+                    msg.parts.append(dbpart)
+
+                sess.add(msg)
+
+                sess.commit()
+
+        yield from self.loop.run_in_executor(None, dbcall)
+
+        if log.isEnabledFor(logging.INFO):
+            log.info("Dmail saved!")
+
+        return True
+
+def attach_dmail_tag(sess, dm, tag_name):
+    "Make sure to call this in a separate thread than event loop."
+    # Attach requested DmailTag to Dmail.
+    q = sess.query(db.DmailTag)\
+        .filter(db.DmailTag.name == tag_name)
+    tag = q.first()
+
+    if not tag:
+        tag = db.DmailTag()
+        tag.name = tag_name
+        sess.add(tag)
+
+    dm.tags.append(tag)

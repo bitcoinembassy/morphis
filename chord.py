@@ -23,6 +23,7 @@ import chord_tasks as ct
 import packet as mnetpacket
 import rsakey
 import mn1
+import mutil
 import peer as mnpeer
 import shell
 import enc
@@ -186,7 +187,7 @@ class ChordEngine():
                         self.node.db.lock_table(sess, Peer)
                         tlocked = True
 
-                    q = sess.query(func.count("*"))
+                    q = sess.query(func.count("*")).select_from(Peer)
 
                     if peer.pubkey:
                         assert peer.node_id is None
@@ -242,6 +243,10 @@ class ChordEngine():
     def start(self):
         self.running = True
 
+        if self.node.offline_mode:
+            log.info("Offline mode is enabled; not binding or connecting.")
+            return
+
         host, port = self._bind_address.split(':')
         self.server = self.loop.create_server(\
             self._create_server_protocol, host, port)
@@ -287,7 +292,12 @@ class ChordEngine():
 
         self._doing_stabilize = True
 
-        yield from self.tasks.perform_stabilize()
+        try:
+            yield from self.tasks.perform_stabilize()
+        except Exception as e:
+            log.exception("perform_stabilize()")
+        except KeyboardInterrupt:
+            raise
 
         self._doing_stabilize = False
 
@@ -375,7 +385,7 @@ class ChordEngine():
 
             def dbcall():
                 with self.node.db.open_session() as sess:
-                    grace = datetime.today() - timedelta(minutes=5)
+                    grace = mutil.utc_datetime() - timedelta(minutes=5)
 
                     q = sess.query(Peer)\
                         .filter(Peer.distance == distance,\
@@ -434,6 +444,9 @@ class ChordEngine():
 
         peer = mnpeer.Peer(self, dbpeer)
 
+        if self.node.tormode:
+            peer.address = dbpeer.address
+
         client = self.loop.create_connection(\
             partial(self._create_client_protocol, peer),\
             host, port)
@@ -450,7 +463,7 @@ class ChordEngine():
                     return False
 
                 dbpeer.connected = True
-                dbpeer.last_connect_attempt = datetime.today()
+                dbpeer.last_connect_attempt = mutil.utc_datetime()
                 sess.commit()
                 return True
 
@@ -729,12 +742,15 @@ class ChordEngine():
         return True, add_to_peers
 
     def add_to_peers(self, peer):
-        address = "{}:{}".format(\
-            peer.protocol.address[0], peer.protocol.address[1])
+        if self.node.tormode:
+            address = peer.address
+        else:
+            address = "{}:{}".format(\
+                peer.protocol.address[0], peer.protocol.address[1])
 
         existing = self.peers.setdefault(address, peer)
         if existing is not peer:
-            log.error("Somehow we are trying to connect to an address [{}] already connected!".format(address))
+            log.warning("Somehow we are trying to connect to an address [{}] already connected!".format(address))
             return False
         self.peer_buckets[peer.distance - 1][address] = peer
 
@@ -1048,7 +1064,7 @@ def check_address(address):
         host, port = address.split(':')
         ipaddress.ip_address(host)
         return True
-    except:
+    except Exception:
         if log.isEnabledFor(logging.DEBUG):
             log.debug("Address [{}] is not acceptable.".format(address))
         return False

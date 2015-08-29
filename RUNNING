@@ -9,17 +9,19 @@ and of course:
 
 Python >= 3.4.1 (tested with 3.4.1 :)
 
-No installation is neccesary.
+NOTE: SqlAlchemy 0.9.8 does have a bug and thus you should use the latest, 1.0.8 if you can.
+
+No installation of MORPHiS is neccesary.
 
 Although there is a Makefile which will compile some of the python files with Cython to give a big speed boost, it is not at all neccesary and already very fast without compliation. So just ignore the Makefile/Cython unless you are already familiar with Cython. You can try typing make, if it works, it works, if not, don't worry about it.
 
 To run, simply type this:
 
-python3 node.py --bind *:4250
+python3 node.py
 
 You may choose a different port than 4250 for yourself with the bind parameter, it does not mater at all.
 
-On Windows you may have to put your external IP instead of * as Windows does not seem to understand *. None of that will be neccesary with the official release, it will be a double click affair.
+python3 node.py --bind :<PORT>
 
 Then, simply point your web browser to:
 

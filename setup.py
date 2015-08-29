@@ -16,7 +16,6 @@ modules = [\
     "mutil",
     "putil",
     "packet",
-    "pages",
     "rsakey",
     "sshtype"\
 ]

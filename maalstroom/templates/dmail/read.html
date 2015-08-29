@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+<base target="_top" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/style.css">
+</head>
+<body class="iframe">
+<span class="inbox-head nowrap">View Message</span>
+<div class="right-icons-inner">
+    <ul>
+	<a target="_top" href="morphis://.dmail/wrapper/{addr}/{tag}?msg_list=morphis://.dmail/compose/{sender}%3fsender={addr}%26subject={safe_reply_subject}"><div style="display:inline"><li class="nav-reply-icon">REPLY</li></div></a>
+	<a target="_self" href="morphis://.dmail/toggle_trashed/{csrf_token}/{msg_id}?redirect=morphis://.dmail/msg_list/{addr}/{tag}"><div style="display:inline"><li class="nav-delete-icon">{trash_msg}</li></div></a>
+    </ul>
+</div><br/><br/>
+<div class="compose-bkg">
+    <div class="read-wrapper">
+        <table class="field" style="margin-left: -0.5px; margin-bottom: -0.25em;" width="100%"><tr><td class="nopadding nomargin">Subject:</td><td width="100%"><iframe class="subject-txt" src="morphis://.dmail/read/subject/{msg_id}"></iframe></td></tr></table>
+        <div class="dynamicWidth">
+            <div class="address-trunc nowrap"><span class="reader_field">From:&nbsp;</span><span class="{sender_class}">{sender}</span></div>
+            <div class="staticWidth"><button class="addressbook-icon" type="submit"></button></div>
+        </div>
+        <div class="dynamicWidth{dest_class}">
+            <div class="address-trunc nowrap"><span class="reader_field">To:&nbsp;</span><span class="valid_sender">{dest_addr}</span></div>
+        </div>
+        <div><span class="reader_field">Date:&nbsp;</span><span>{date}</span></div>
+        <iframe src="morphis://.dmail/read/content/{msg_id}" style="height: calc(100% - 5em); width: 100%; margin-top: 0.5em; border-top: 1px dotted; border-color: lightgray;"></iframe>
+    </div>
+    <form class="tag-footer" target="_self" action="morphis://.dmail/modify_message_tag" method="get" accept-charset="UTF-8 ISO-8859-1">
+        <input type="hidden" name="csrf_token" value="{csrf_token}"/>
+        <input type="hidden" name="redirect" value="morphis://.dmail/read/{addr}/{tag}/{msg_id}"/>
+        <input type="hidden" name="msg_id" value="{msg_id}"/>
+        <span class="{remove_tag_class}">
+            <select name="remove_tag">
+                {existing_tags}
+            </select>
+            <button class="tag-footer-btn" type="submit" name="submit" value="remove_tag">REMOVE TAG</button>
+        </span>
+        <select name="add_tag">
+            {available_tags}
+        </select>
+        <button class="tag-footer-btn" style="margin-right:0;" type="submit" name="submit" value="add_tag">ADD TAG</button>
+        <button class="tag-footer-btn" style="margin-right:0;" type="submit" title="Add tag and remove all others." name="submit" value="move_to_tag">MOVE TO TAG</button>
+    </form>
+</div>
+</body></html>

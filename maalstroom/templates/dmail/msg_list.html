@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<html>
+<head>
+<base target="_top"/><link rel="stylesheet" type="text/css" href="morphis://.dmail/style.css">
+</head>
+<body class="iframe" style="height: calc(100% - 8em)">
+<span class="inbox-head">{tag}</span>&nbsp; for
+<div class="link-button"><a target="_self" href="morphis://.dmail/address_list">change to another address</a></div>
+<div class="{empty_trash_button_class}"><a target="_self" href="morphis://.dmail/empty_trash/{csrf_token}/{addr}?redirect=morphis://.dmail/msg_list/{addr}/{tag}">empty trash</a></div>
+<p class="mailbox-trunc">{addr}</p><br/>
+<iframe src="morphis://.dmail/msg_list/list/{addr}/{tag}" width="100%" height="100%"></iframe>
+</body></html>

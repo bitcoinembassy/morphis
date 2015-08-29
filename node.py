@@ -12,7 +12,6 @@ from sqlalchemy import update, func
 
 import packet as mnetpacket
 import rsakey
-import maalstroom_server as maalstroom
 import mn1
 from mutil import hex_dump, hex_string
 import chord
@@ -78,11 +77,15 @@ class Node():
 
         self.ready = asyncio.Event(loop=loop)
 
+        self.tormode = False
+        self.offline_mode = False
+
     @property
     def all_nodes(self):
         global nodes
         return nodes
 
+    @asyncio.coroutine
     def init_db(self):
         if self._db_initialized:
             log.debug("The database is already initialized.")
@@ -93,6 +96,9 @@ class Node():
             os.makedirs("data")
 
         self.db.init_engine()
+
+        yield from self.db.ensure_schema()
+
         self._db_initialized = True
 
     @asyncio.coroutine
@@ -170,13 +176,9 @@ class Node():
         assert type(self.chord_engine.furthest_data_block) is bytes
 
     @asyncio.coroutine
-    def create_schema(self):
-        yield from self.db.create_all()
-
-    @asyncio.coroutine
     def start(self):
         if not self._db_initialized:
-            self.init_db()
+            yield from self.init_db()
 
         self.chord_engine.bind_address = self.bind_address
 
@@ -203,7 +205,10 @@ class Node():
         if not self.chord_engine.last_db_peer_count\
                 and not self.chord_engine.connect_peers\
                 and self.seed_node_enabled:
-            self.chord_engine.connect_peers = ["162.252.242.77:4250"]
+            self.chord_engine.connect_peers = [\
+                "162.252.242.77:4250",\
+                "45.79.172.110:4252",\
+                "139.162.130.68:4252"]
 
             if log.isEnabledFor(logging.INFO):
                 log.info("No PeerS in our database nor specified as a"\
@@ -215,7 +220,8 @@ class Node():
         self.ready.set()
 
     def stop(self):
-        self.chord_engine.stop()
+        if self.chord_engine:
+            self.chord_engine.stop()
 
     def load_key(self):
         self.node_key = self._load_key()
@@ -248,20 +254,21 @@ def main():
     except KeyboardInterrupt:
         log.warning("Got KeyboardInterrupt; shutting down.")
         if dumptasksonexit or log.isEnabledFor(logging.DEBUG):
-#            try:
-            for task in asyncio.Task.all_tasks(loop=loop):
-                print("Task [{}]:".format(task))
-                task.print_stack()
-#            except:
-#                log.exception("Task")
-#    except:
-#        log.exception("loop.run_forever() threw:")
+            try:
+                for task in asyncio.Task.all_tasks(loop=loop):
+                    print("Task [{}]:".format(task))
+                    task.print_stack()
+            except Exception:
+                log.exception("Exception printing tasks.")
+    except Exception:
+        log.exception("loop.run_forever() threw:")
 
     for node in nodes:
         node.stop()
     loop.close()
 
     if maalstroom_enabled:
+        import maalstroom
         maalstroom.shutdown()
 
     log.info("Shutdown.")
@@ -299,7 +306,9 @@ def __main():
         help="Specify the database url to use.")
     parser.add_argument("--dm", action="store_true",\
         help="Disable Maalstroom server.")
-    parser.add_argument("--disableshell", action="store_true",
+    parser.add_argument("--disableautopublish", action="store_true",\
+        help="Disable Dmail auto-publish check/publish mechanism.")
+    parser.add_argument("--disableshell", action="store_true",\
         help="Disable MORPHiS from allowing ssh shell connections from"\
             " localhost.")
     parser.add_argument("--dontuseseed", action="store_true",\
@@ -322,15 +331,20 @@ def __main():
             " FIRST PARAMETER!].")
     parser.add_argument("--maxconn", type=int,\
         help="Specify the maximum connections to seek.")
-    parser.add_argument("--maaluppage",\
-        help="Override Maalstroom upload page with the specified file.")
     parser.add_argument("--nodecount", type=int,\
         help="Specify amount of nodes to start.")
+    parser.add_argument("--offline", action="store_true",\
+        help="Enable offline mode. Only Maalstroom will be enabled.")
     parser.add_argument("--parallellaunch", action="store_true",\
         help="Enable parallel launch of the nodecount nodes.")
     parser.add_argument("--reinitds", action="store_true",\
         help="Allow reinitialization of the Datastore. This will only happen"\
             " if the Datastore directory has already been manually deleted.")
+    parser.add_argument("--tormode", action="store_true",\
+        help="Enable torify mode. This makes MORPHiS work better over torify"\
+            " or proxychains. Currently it fixes the remote address check so"\
+            " that more than one connection can work at a time. You still"\
+            " have to wrap MORPHiS with torify or proxychains yourself.")
     parser.add_argument("--updatetest", action="store_true",\
         help="Enable update test mode; for development purposes.")
     parser.add_argument("--webdevel", action="store_true",\
@@ -362,7 +376,6 @@ def __main():
         port = int(port) + instanceoffset
         bindaddr = "{}:{}".format(host, port)
     maalstroom_enabled = False if args.dm else True
-    maaluppage = args.maaluppage
     nodecount = args.nodecount
     if nodecount == None:
         nodecount = 1
@@ -385,6 +398,10 @@ def __main():
                 node.web_devel = True
             if args.dontuseseed:
                 node.seed_node_enabled = False
+            if args.tormode:
+                node.tormode = True
+            if args.offline:
+                node.offline_mode = True
 
             nodes.append(node)
 
@@ -392,14 +409,11 @@ def __main():
                 node.db.pool_size = db_pool_size
 
             if maalstroom_enabled:
-                if maaluppage:
-                    maalstroom.set_upload_page(maaluppage)
-                if args.updatetest:
-                    maalstroom.update_test = True
+                import maalstroom
+
                 yield from maalstroom.start_maalstroom_server(node)
 
-            node.init_db()
-            yield from node.create_schema()
+            yield from node.init_db()
 
             if bindaddr:
                 node.bind_address = bindaddr
@@ -420,6 +434,18 @@ def __main():
 
             if addpeer != None:
                 node.chord_engine.connect_peers = addpeer
+
+            if maalstroom_enabled:
+                import client_engine as cengine
+
+                ce = cengine.ClientEngine(node.chord_engine, node.db)
+
+                if args.updatetest:
+                    ce.update_test = True
+                if args.disableautopublish:
+                    ce.auto_publish_enabled = False
+
+                maalstroom.set_client_engine(ce)
 
             yield from node.start()
 

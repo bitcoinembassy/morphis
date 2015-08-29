@@ -1,0 +1,39 @@
+<html><head><title>MORPHiS Maalstroom Upload</title>
+<style type="text/css">
+label {{
+    width: 7em;
+    display: inline-block;
+    text-align: right;
+    margin-top: 0.25em
+}}
+label:after {{
+        content: ": ";
+}}
+</style>
+</head>
+<body>
+<h4 style="{updateable_key_mode_display}">NOTE: Bookmark this page to save your private key in the bookmark!</h4>
+<p>Select the file to upload below:</p>
+<form action="upload" method="post" enctype="multipart/form-data">
+    <input type="hidden" name="csrf_token" id="csrf_token" value="{csrf_token}"/>
+    <input type="file" name="fileToUpload" id="fileToUpload"/>
+    <input type="submit" value="Upload File" name="submit"/>
+    <div style="{updateable_key_mode_display}"><br/>
+        <label style="vertical-align: top;" for="privateKey">Private Key</label>
+        <textarea name="privateKey" id="privateKey" rows="5" cols="80">{private_key}</textarea><br/>
+        <label for="path">Path</label>
+        <input type="text" size="60" name="path" id="path"/><br/>
+        <!--label for="version">Version</label-->
+        <input type="hidden" name="version" id="version" value="{version}"/>
+        <label for="mime_type">Mime Type</label>
+        <input type="text" name="mime_type" id="mime_type"/><br/>
+    </div>
+</form>
+<p style="{static_mode_display}">
+    <a href="morphis://.upload/generate">switch to updateable key mode</a>
+</p>
+<p style="{updateable_key_mode_display}">
+    <a href="morphis://.upload/">switch to static key mode</a>
+</p>
+<h5>&lt;- <a href="morphis://">MORPHiS UI</a></h5>
+</body></html>
