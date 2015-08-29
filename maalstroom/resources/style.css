@@ -980,5 +980,5 @@ iframe.subject-txt {
     width: 100%;
 }
 @media screen and (-ms-high-contrast: active), (-ms-high-contrast: none) {
-   iframe.subject-txt { height: 3.2em; max-height: 3.2em; }
+   iframe.subject-txt { height: 3.2em; max-height: 3.2em;}
 }
