@@ -193,7 +193,9 @@ def serve_get(dispatcher, rpath):
             tag_rows.append(row)
 
         template = template.format(\
+            csrf_token=dispatcher.client_engine.csrf_token,\
             addr=addr_enc,\
+            tag=tag,\
             tag_rows=''.join(tag_rows),\
             **fmt)
 
@@ -515,6 +517,29 @@ def serve_get(dispatcher, rpath):
 
     # Actions.
 
+    elif req.startswith("/create_tag?"):
+        query = req[12:]
+
+        qdict = parse_qs(query, keep_blank_values=True)
+
+        csrf_token = qdict["csrf_token"][0]
+
+        if not dispatcher.check_csrf_token(csrf_token):
+            return
+
+        tag_name = qdict["tag_name"][0]
+
+        if not tag_name:
+            dispatcher.send_204()
+            return
+
+        r = yield from _create_tag(dispatcher, tag_name)
+
+        redirect = qdict.get("redirect")
+        if r and redirect:
+            dispatcher.send_301(redirect[0])
+        else:
+            dispatcher.send_204()
     elif req.startswith("/refresh/"):
         params = req[9:]
 
@@ -1115,6 +1140,29 @@ def serve_post(dispatcher, rpath):
         yield from _process_dmail_message(dispatcher, dm.id, processor)
     else:
         dispatcher.send_error(errcode=400)
+
+@asyncio.coroutine
+def _create_tag(dispatcher, tag_name):
+    def dbcall():
+        with dispatcher.node.db.open_session() as sess:
+            q = sess.query(func.count("*")).select_from(DmailTag)\
+                .filter(DmailTag.name == tag_name)
+
+            if q.scalar():
+                return False
+
+            tag = DmailTag()
+            tag.name = tag_name
+
+            sess.add(tag)
+
+            sess.commit()
+
+            return True
+
+    r = yield from dispatcher.loop.run_in_executor(None, dbcall)
+
+    return r
 
 @asyncio.coroutine
 def _read_dmail_post(dispatcher, data):
