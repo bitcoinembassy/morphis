@@ -187,7 +187,7 @@ div.panel span {
 #mailboxes {
   padding-left: 2.5em;
   padding-right: 2em;
-  padding-top: 1.5em;
+  padding-top: .5em;
 }
 .mailbox-trunc {
     overflow: hidden;
@@ -196,6 +196,7 @@ div.panel span {
     white-space: nowrap;
     padding: 0;
     margin: 0;
+    display: block;
 }
 .active-notify {
     float: right;
@@ -925,7 +926,6 @@ input.tag-text:focus {
 }
 .tag-text-pad {
     padding-left: 4.8em;
-    padding-right: 1.2em;
 }
 button.add-tag {
     padding: 0;
