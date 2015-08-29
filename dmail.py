@@ -200,28 +200,8 @@ class DmailEngine(object):
 
         log.info("Uploading dmail site.")
 
-        dms_data = dms.export()
-
-        total_storing = 0
-        retry = 0
-        while True:
-            storing_nodes = yield from\
-                self.task_engine.send_store_updateable_key(\
-                    dms_data, privkey, version=int(time.time()*1000),\
-                    store_key=True, key_callback=key_callback,\
-                    retry_factor=retry * 20)
-
-            total_storing += storing_nodes
-
-            if total_storing >= 3:
-                break
-
-            if retry > 32:
-                break
-            elif retry > 3:
-                yield from asyncio.sleep(1)
-
-            retry += 1
+        total_storing = yield from self.publish_dmail_site(\
+                privkey, dms, key_callback=key_callback)
 
         def dbcall():
             with self.db.open_session() as sess:
@@ -245,6 +225,33 @@ class DmailEngine(object):
         yield from self.loop.run_in_executor(None, dbcall)
 
         return privkey, data_key, dms, total_storing
+
+    @asyncio.coroutine
+    def publish_dmail_site(self, privkey, dmail_site, key_callback=None):
+        dms_data = dmail_site.export()
+
+        total_storing = 0
+        retry = 0
+        while True:
+            storing_nodes = yield from\
+                self.task_engine.send_store_updateable_key(\
+                    dms_data, privkey, version=int(time.time()*1000),\
+                    store_key=True, key_callback=key_callback,\
+                    retry_factor=retry * 20)
+
+            total_storing += storing_nodes
+
+            if total_storing >= 3:
+                break
+
+            if retry > 32:
+                break
+            elif retry > 3:
+                yield from asyncio.sleep(1)
+
+            retry += 1
+
+        return total_storing
 
     @asyncio.coroutine
     def send_dmail_text(self, subject, message_text):

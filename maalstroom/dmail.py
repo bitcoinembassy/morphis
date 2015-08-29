@@ -776,29 +776,11 @@ def serve_get(dispatcher, rpath):
         root["difficulty"] = int(difficulty)
 
         private_key = rsakey.RsaKey(privdata=dmail_address.site_privatekey)
-        dms_data = dms.export()
 
-        total_storing = 0
-        retry = 0
-        while True:
-            storing_nodes = yield from\
-                dispatcher.node.chord_engine.tasks\
-                    .send_store_updateable_key(\
-                        dms_data, private_key,
-                        version=int(time.time()*1000), store_key=True,\
-                        retry_factor=retry * 20)
+        de = dmail.DmailEngine(\
+            dispatcher.node.chord_engine.tasks, dispatcher.node.db)
 
-            total_storing += storing_nodes
-
-            if total_storing >= 3:
-                break
-
-            if retry > 32:
-                break
-            elif retry > 3:
-                yield from asyncio.sleep(1)
-
-            retry += 1
+        storing_nodes = yield from de.publish_dmail_site(private_key, dms)
 
         if storing_nodes:
             dispatcher.send_content(\

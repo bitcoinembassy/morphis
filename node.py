@@ -306,7 +306,9 @@ def __main():
         help="Specify the database url to use.")
     parser.add_argument("--dm", action="store_true",\
         help="Disable Maalstroom server.")
-    parser.add_argument("--disableshell", action="store_true",
+    parser.add_argument("--disableautopublish", action="store_true",\
+        help="Disable Dmail auto-publish check/publish mechanism.")
+    parser.add_argument("--disableshell", action="store_true",\
         help="Disable MORPHiS from allowing ssh shell connections from"\
             " localhost.")
     parser.add_argument("--dontuseseed", action="store_true",\
@@ -409,9 +411,6 @@ def __main():
             if maalstroom_enabled:
                 import maalstroom
 
-                if args.updatetest:
-                    maalstroom.update_test = True
-
                 yield from maalstroom.start_maalstroom_server(node)
 
             yield from node.init_db()
@@ -435,6 +434,18 @@ def __main():
 
             if addpeer != None:
                 node.chord_engine.connect_peers = addpeer
+
+            if maalstroom_enabled:
+                import client_engine as cengine
+
+                ce = cengine.ClientEngine(node.chord_engine, node.db)
+
+                if args.updatetest:
+                    ce.update_test = True
+                if args.disableautopublish:
+                    ce.auto_publish_enabled = False
+
+                maalstroom.set_client_engine(ce)
 
             yield from node.start()
 

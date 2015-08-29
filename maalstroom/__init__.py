@@ -28,8 +28,6 @@ node = None
 server = None
 client_engine = None
 
-update_test = False
-
 _request_lock = threading.Lock()
 _concurrent_request_count = 0
 
@@ -250,19 +248,23 @@ def start_maalstroom_server(the_node):
 
     node.loop.run_in_executor(None, threadcall)
 
+def set_client_engine(ce):
+    global _client_engine
+
+    _client_engine = ce
+
 @asyncio.coroutine
 def get_client_engine():
-    global node, client_engine, update_test
+    global node, client_engine, _client_engine
 
     if client_engine:
         return client_engine
 
     yield from node.ready.wait()
 
-    ce = cengine.ClientEngine(node.chord_engine, node.db, update_test)
-    yield from ce.start()
+    yield from _client_engine.start()
 
-    client_engine = ce
+    client_engine = _client_engine
 
     return client_engine
 
