@@ -68,7 +68,7 @@ aside {
     text-align: left;
     width: 18em;
     background-color: #ffffff;
-    height: calc(100% - 5em); 
+    height: calc(100% - 5.9em); 
 }
 .wrapper { 
     background: url("images/stripe.png") repeat top left;
@@ -967,3 +967,8 @@ button.tag-footer-btn:hover {
 button.tag-footer-btn:active {
     border: 1px solid #454545;
     background: #747474;
+}
+.aside-wrapper {
+    height: calc(100% - 1em);
+}
+
