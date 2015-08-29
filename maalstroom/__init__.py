@@ -21,7 +21,7 @@ import maalstroom.dmail
 
 log = logging.getLogger(__name__)
 
-host = "localhost"
+host = ""
 port = 4251
 
 node = None

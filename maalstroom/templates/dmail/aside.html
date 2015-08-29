@@ -3,8 +3,8 @@
 <head>
 <base target="_top" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/style.css">
 </head>
-<body class="iframe">
-    <p id="mailboxes" class="mailbox-trunc">MAILBOXES FOR {addr}</p>
+<body class="aside-wrapper">
+    <p id="mailboxes">MAILBOXES FOR <span class="mailbox-trunc">{addr}</span></p>
     <span class="mailbox-list">
 	<ul>
 	    <li class="inbox-icon {Inbox_active}"><a href="morphis://.dmail/wrapper/{addr}/Inbox" style="display:block"><div class="mailbox-pad" >Inbox<div class="{Inbox_unread_class}">{Inbox_unread_count}</div></div></a></li>
@@ -15,11 +15,10 @@
 	</ul>
     </span>
 <div class="divider"></div>
-    <ul>
-	<span class="tag-head">
-	<li class="tag-icon"><span class="mailbox-pad"><a class="tags" href="">TAGS<div class="add-tag">+</div></a></span></li>
-	</span>
-	<span class="tag-list">
+    <ul><form accept-charset="UTF-8 ISO-8859-1" method="post">
+	<span class="tag-head"><li class="tag-icon"><span class="tag-text-pad"><input class="tag-text" type="text" name="tag" placeholder="ADD TAG"/><button class="add-tag" value="send" name="add-tag" formtarget="_self" type="submit">+</button></span></li>
+        </span></form>
+        <span class="tag-list">
 	<li class="bullet"><span class="mailbox-pad"><a href="">Tag</a></span></li>
 	<li class="bullet"><span class="mailbox-pad"><a href="">Another Tag</a></span></li>
 	<li class="bullet"><span class="mailbox-pad"><a href="">Another Tag</a></span></li>
