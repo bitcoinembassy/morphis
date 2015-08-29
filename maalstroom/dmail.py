@@ -445,6 +445,7 @@ def serve_get(dispatcher, rpath):
         template = templates.dmail_compose[0]
 
         template = template.format(\
+            csrf_token=dispatcher.client_engine.csrf_token,\
             delete_class="display_none",\
             owner_if_anon=owner_if_anon.id,\
             from_addr_options=from_addr_options,\
@@ -1042,6 +1043,10 @@ def serve_post(dispatcher, rpath):
 
         dm, submit = yield from _read_dmail_post(dispatcher, data)
 
+        if not dm:
+            # Invalid csrf_token.
+            return
+
         if submit:
             if submit == "send":
                 tag = "Outbox"
@@ -1140,6 +1145,9 @@ def _read_dmail_post(dispatcher, data):
 
     if log.isEnabledFor(logging.DEBUG):
         log.debug("dd=[{}].".format(dd))
+
+    if not dispatcher.check_csrf_token(dd["csrf_token"][0]):
+        return None, None
 
     dm = DmailMessage()
 

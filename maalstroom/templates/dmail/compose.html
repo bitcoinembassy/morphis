@@ -15,6 +15,7 @@
 <div class="compose-bkg">
 <form class="message nowrap" style="height: calc(100% - 2em);" action="morphis://.dmail/compose/make_it_so" method="post" accept-charset="UTF-8 ISO-8859-1">
 <ul style="height: calc(100% - 10em);">
+    <input type="hidden" name="csrf_token" id="csrf_token" value="{csrf_token}"/>
     <input type="hidden" name="owner_if_anon" value="{owner_if_anon}"/>
     <label for="sender">From</label> 
     <select name="sender" class="from-address">
