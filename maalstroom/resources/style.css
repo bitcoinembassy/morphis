@@ -698,6 +698,7 @@ a.normal:visited, a.normal:link {
     background: #ffffff;
     height: calc(100% - 9em);
     border: 1px dashed;
+    min-height: 15em;
 }
 .from-address {
     width: calc(100% - 10em);
