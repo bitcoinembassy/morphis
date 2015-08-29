@@ -200,12 +200,14 @@ class DmailEngine(object):
 
         log.info("Uploading dmail site.")
 
+        dms_data = dms.export()
+
         total_storing = 0
         retry = 0
         while True:
             storing_nodes = yield from\
                 self.task_engine.send_store_updateable_key(\
-                    dms.export(), privkey, version=int(time.time()*1000),\
+                    dms_data, privkey, version=int(time.time()*1000),\
                     store_key=True, key_callback=key_callback,\
                     retry_factor=retry * 20)
 

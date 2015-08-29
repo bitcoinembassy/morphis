@@ -261,10 +261,10 @@ dmail_iframe_body_start =\
 <html><head><base target="_top" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/></head><body class="iframe">"""
 
 dmail_addr_settings_edit_success_content = [dmail_iframe_body_start.decode()\
-    + """<h4>Dmail Address [<a target="_top" href="../../{}">{}</a>].</h4><p>SUCCESS.</p></body></html>""", None]
+    + """<h4>Dmail Address [<a target="_top" href="morphis://.dmail/wrapper/{}">{}...</a>].</h4><p>SUCCESS.</p></body></html>""", None]
 
 dmail_addr_settings_edit_fail_content = [dmail_iframe_body_start.decode()\
-    + """<h4>Dmail Address [<a target="_top" href="../../{}">{}</a>].</h4><p>FAIL.</p><p>Try again in a bit.</p></body></html>""", None]
+    + """<h4>Dmail Address [<a target="_top" href="morphis://.dmail/wrapper/{}">{}...</a>].</h4><p>FAIL.</p><p>Try again in a bit.</p></body></html>""", None]
 
 dmail_tag_view_content = [None, None]
 

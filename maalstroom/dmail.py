@@ -498,8 +498,7 @@ def serve_get(dispatcher, rpath):
         addr_enc = params
 
         dmail_address = yield from _load_dmail_address(\
-            dispatcher, dmail_site_key=mbase32.decode(addr_enc),\
-            fetch_keys=True)
+            dispatcher, site_key=mbase32.decode(addr_enc), fetch_keys=True)
 
         dispatcher.client_engine.trigger_dmail_scan(dmail_address)
 
@@ -566,7 +565,7 @@ def serve_get(dispatcher, rpath):
 
         addr =\
             yield from _process_dmail_address(\
-                dispatcher, addr_id, processor, fetch_keys=True)
+                dispatcher, processor, addr_id, fetch_keys=True)
 
         dispatcher.client_engine.update_dmail_autoscan(addr)
 
@@ -620,8 +619,7 @@ def serve_get(dispatcher, rpath):
 
         dmail_address = yield from\
             _load_dmail_address(\
-                dispatcher, dmail_site_key=mbase32.decode(addr_enc),\
-                fetch_keys=True)
+                dispatcher, site_key=mbase32.decode(addr_enc), fetch_keys=True)
 
         content = templates.dmail_address_config[0]
 
@@ -678,6 +676,71 @@ def serve_get(dispatcher, rpath):
                 .format(addr_enc=dmail_key_enc).encode())
         dispatcher.send_partial_content(templates.dmail_frame_end)
         dispatcher.end_partial_content()
+    elif req.startswith("/save_address_config/publish?"):
+        query = req[29:]
+
+        qdict = parse_qs(query, keep_blank_values=True)
+
+        addr_enc = qdict["dmail_address"][0]
+        difficulty = qdict["difficulty"][0]
+
+        def processor(sess, dmail_address):
+            if difficulty != dmail_address.keys[0].difficulty:
+                dmail_address.keys[0].difficulty = difficulty
+                return True
+            else:
+                return False
+
+        dmail_address = yield from\
+            _process_dmail_address(\
+                dispatcher, processor, site_key=mbase32.decode(addr_enc),\
+                fetch_keys=True)
+
+        dh = dhgroup14.DhGroup14()
+        dh.x = sshtype.parseMpint(dmail_address.keys[0].x)[1]
+        dh.generate_e()
+
+        dms = dmail.DmailSite()
+        root = dms.root
+        root["ssm"] = "mdh-v1"
+        root["sse"] = base58.encode(sshtype.encodeMpint(dh.e))
+        root["target"] =\
+            mbase32.encode(dmail_address.keys[0].target_key)
+        root["difficulty"] = int(difficulty)
+
+        private_key = rsakey.RsaKey(privdata=dmail_address.site_privatekey)
+        dms_data = dms.export()
+
+        total_storing = 0
+        retry = 0
+        while True:
+            storing_nodes = yield from\
+                dispatcher.node.chord_engine.tasks\
+                    .send_store_updateable_key(\
+                        dms_data, private_key,
+                        version=int(time.time()*1000), store_key=True,\
+                        retry_factor=retry * 20)
+
+            total_storing += storing_nodes
+
+            if total_storing >= 3:
+                break
+
+            if retry > 32:
+                break
+            elif retry > 3:
+                yield from asyncio.sleep(1)
+
+            retry += 1
+
+        if storing_nodes:
+            dispatcher.send_content(\
+                templates.dmail_addr_settings_edit_success_content[0]\
+                    .format(addr_enc, addr_enc[:32]).encode())
+        else:
+            dispatcher.send_content(\
+                templates.dmail_addr_settings_edit_fail_content[0]\
+                    .format(addr_enc, addr_enc[:32]).encode())
 
 ########################################
 #######OLD UNUSED (DELETE):
@@ -730,70 +793,6 @@ def serve_get(dispatcher, rpath):
 
         dispatcher.send_partial_content(templates.dmail_addr_view_end)
         dispatcher.end_partial_content()
-    elif req.startswith("/addr/settings/edit/publish?"):
-        query = req[28:]
-
-        qdict = parse_qs(query, keep_blank_values=True)
-
-        addr_enc = qdict["dmail_address"][0]
-        difficulty = qdict["difficulty"][0]
-
-        def processor(sess, dmail_address):
-            if difficulty != dmail_address.keys[0].difficulty:
-                dmail_address.keys[0].difficulty = difficulty
-                return True
-            else:
-                return False
-
-        #FIXME: This uses id now instead of address.
-        dmail_address = yield from\
-            _process_dmail_address(\
-                dispatcher, mbase32.decode(addr_enc), processor)
-
-        dh = dhgroup14.DhGroup14()
-        dh.x = sshtype.parseMpint(dmail_address.keys[0].x)[1]
-        dh.generate_e()
-
-        dms = dmail.DmailSite()
-        root = dms.root
-        root["target"] =\
-            mbase32.encode(dmail_address.keys[0].target_key)
-        root["difficulty"] = int(difficulty)
-        root["ssm"] = "mdh-v1"
-        root["sse"] = base58.encode(sshtype.encodeMpint(dh.e))
-
-        private_key = rsakey.RsaKey(privdata=dmail_address.site_privatekey)
-
-        total_storing = 0
-        retry = 0
-        while True:
-            storing_nodes = yield from\
-                dispatcher.node.chord_engine.tasks\
-                    .send_store_updateable_key(\
-                        dms.export(), private_key,\
-                        version=int(time.time()*1000), store_key=True)
-
-            total_storing += storing_nodes
-
-            if total_storing >= 3:
-                break
-
-            if retry > 32:
-                break
-            elif retry > 3:
-                yield from asyncio.sleep(1)
-
-            retry += 1
-
-        if storing_nodes:
-            dispatcher.send_content(\
-                templates.dmail_addr_settings_edit_success_content[0]\
-                    .format(addr_enc, addr_enc[:32]).encode())
-        else:
-            dispatcher.send_content(\
-                templates.dmail_addr_settings_edit_fail_content[0]\
-                    .format(addr_enc, addr_enc[:32]).encode())
-
     elif req.startswith("/addr/settings/"):
         addr_enc = req[15:]
 
@@ -1177,8 +1176,8 @@ def _save_outgoing_dmail(dispatcher, dm, tag_name):
     return dm
 
 @asyncio.coroutine
-def _load_dmail_address(dispatcher, dmail_address_id=None,\
-        dmail_site_key=None, fetch_keys=False):
+def _load_dmail_address(dispatcher, dbid=None, site_key=None,\
+        fetch_keys=False):
     "Fetch from our database the parameters that are stored in a DMail site."
 
     def dbcall():
@@ -1188,13 +1187,12 @@ def _load_dmail_address(dispatcher, dmail_address_id=None,\
             if fetch_keys:
                 q = q.options(joinedload("keys"))
 
-            if dmail_address_id:
-                q = q.filter(DmailAddress.id == dmail_address_id)
-            elif dmail_site_key:
-                q = q.filter(DmailAddress.site_key == dmail_site_key)
+            if dbid:
+                q = q.filter(DmailAddress.id == dbid)
+            elif site_key:
+                q = q.filter(DmailAddress.site_key == site_key)
             else:
-                raise Exception("Either dmail_address_id or dmail_site_key"\
-                    " must be specified.")
+                raise Exception("Either dbid or site_key must be specified.")
 
             dmailaddr = q.first()
 
@@ -1550,14 +1548,21 @@ def _empty_trash(dispatcher, addr_enc):
     yield from dispatcher.node.loop.run_in_executor(None, dbcall)
 
 @asyncio.coroutine
-def _process_dmail_address(dispatcher, addr_id, process_call,\
-        fetch_keys=False):
+def _process_dmail_address(dispatcher, process_call, dbid=None, site_key=None,\
+    fetch_keys=False):
     def dbcall():
         with dispatcher.node.db.open_session() as sess:
             q = sess.query(DmailAddress)
+
             if fetch_keys:
                 q = q.options(joinedload("keys"))
-            q = q.filter(DmailAddress.id == addr_id)
+
+            if dbid:
+                q = q.filter(DmailAddress.id == dbid)
+            elif site_key:
+                q = q.filter(DmailAddress.site_key == site_key)
+            else:
+                raise Exception("Either dbid or site_key must be specified.")
 
             dmail_address = q.first()
 
@@ -1586,8 +1591,8 @@ def _fetch_dmail(dispatcher, dmail_addr, dmail_key):
         log.info("Fetching dmail (key=[{}]) for address=[{}]."\
             .format(dmail_key_enc, dmail_addr_enc))
 
-    #FIXME: YOU_ARE_HERE: This uses id now, not addr_enc.
-    dmail_address = yield from _load_dmail_address(dispatcher, dmail_addr)
+    dmail_address =\
+        yield from _load_dmail_address(dispatcher, site_key=dmail_addr)
 
     dmail_key_obj = dmail_address.keys[0]
 
