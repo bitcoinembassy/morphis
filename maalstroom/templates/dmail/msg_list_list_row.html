@@ -1,7 +1,7 @@
 <tr class="{unread}">
   <td width="12px"><div class="inbox-pad"><a target="_self" href="morphis://.dmail/toggle_read/{csrf_token}/{msg_id}?redirect=morphis://.dmail/msg_list/list/{addr}/{tag}"><div class="{mail_icon}"></div></a></div></td>
   <td><a target="_parent" href="morphis://.dmail/read/{addr}/{tag}/{msg_id}"><div class="inbox-pad"><span class="mailbox-trunc" style="display:block">{subject}</div></a></td>
-  <td><a target="_parent" href="morphis://.dmail/read/{addr}/{tag}/{msg_id}"><div class="inbox-pad"><span class="mailbox-trunc" style="display:block" title="{sender}">{sender}</span></div></a></td>
+  <td><a target="_top" href="morphis://.dmail/wrapper/{addr}/{tag}?msg_list=morphis://.dmail/compose/{sender}%3fsender={addr}"><div class="inbox-pad"><span class="mailbox-trunc" style="display:block" title="{sender}">{sender}</span></div></a></td>
   <td><div class="inbox-pad"><span class="mailbox-trunc" style="display:block">{timestamp}</span></div></td>
   <td width="15px"><div class="inbox-pad"><a style="display:block" target="_parent" href="morphis://.dmail/compose/{sender}?sender={addr}&subject={safe_reply_subject}"><div class="reply-icon-new"></div></a></div></td>
   <td width="15px"><div class="inbox-pad"><a style="display:block" target="_self" href="morphis://.dmail/toggle_trashed/{csrf_token}/{msg_id}?redirect=morphis://.dmail/msg_list/list/{addr}/{tag}"><div class="trash-icon-new"></div></a></div></td>
