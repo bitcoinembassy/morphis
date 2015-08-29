@@ -686,7 +686,8 @@ class MaalstroomDispatcher(object):
 
         return True
 
-    def send_content(self, content_entry, cacheable=True, content_type=None):
+    def send_content(self, content_entry, cacheable=True, content_type=None,\
+            charset=None):
         if type(content_entry) in (list, tuple):
             content = content_entry[0]
             content_id = content_entry[1]
@@ -696,8 +697,16 @@ class MaalstroomDispatcher(object):
             content = content_entry
             cacheable = False
 
+        if not content_type:
+            if not charset:
+                charset = self.get_accept_charset()
+            content_type = "text/html; charset={}".format(charset)
+
         if type(content) is str:
-            content = content.encode()
+            if charset:
+                content = content.encode(charset)
+            else:
+                content = content.encode()
 
         if not self.handler.maalstroom_plugin_used:
             content =\
@@ -743,8 +752,7 @@ class MaalstroomDispatcher(object):
 
         self.send_response(200)
         self.send_header("Content-Length", len(content))
-        self.send_header("Content-Type",\
-            "text/html" if content_type is None else content_type)
+        self.send_header("Content-Type", content_type)
         if cacheable:
             self.send_header("Cache-Control", "public,max-age=300")
             self.send_header("ETag", content_id)

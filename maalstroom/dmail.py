@@ -187,11 +187,21 @@ def serve_get(dispatcher, rpath):
 
         tag_rows = []
 
+        unquoted_tag = unquote(tag)
+
         for tag in tags:
-            row = '<li class="bullet"><span class="mailbox-pad">'\
+            if unquoted_tag == tag.name:
+                active = " active_tag"
+            else:
+                active = ""
+
+            row = '<li class="bullet{active}"><span class="mailbox-pad">'\
                 '<a href="morphis://.dmail/wrapper/{addr}/{tag}">{tag}</a>'\
                 '</span></li>'\
-                    .format(addr=addr_enc, tag=tag.name)
+                    .format(\
+                        active=active,\
+                        addr=addr_enc,\
+                        tag=tag.name)
             tag_rows.append(row)
 
         template = template.format(\
@@ -200,6 +210,8 @@ def serve_get(dispatcher, rpath):
             tag=tag,\
             tag_rows=''.join(tag_rows),\
             **fmt)
+
+        acharset = dispatcher.get_accept_charset()
 
         dispatcher.send_content(template)
     elif req.startswith("/msg_list/list/"):
@@ -228,7 +240,7 @@ def serve_get(dispatcher, rpath):
             True,\
             content_type="text/html; charset={}".format(acharset))
         
-        yield from _list_dmails_for_tag(dispatcher, addr_enc, tag)
+        yield from _list_dmails_for_tag(dispatcher, addr_enc, unquote(tag))
 
         dispatcher.send_partial_content(templates.dmail_msg_list_list_end[0])
         dispatcher.end_partial_content()
