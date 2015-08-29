@@ -24,18 +24,21 @@
         <div><span class="reader_field">Date:&nbsp;</span><span>{date}</span></div>
         <iframe src="morphis://.dmail/read/content/{msg_id}" style="height: calc(100% - 5em); width: 100%; margin-top: 0.5em; border-top: 1px dotted; border-color: lightgray;"></iframe>
     </div>
-        <form class="tag-footer">
-           <select name="remove-tag">
-               <option selected="" value"1">Family members</option>
-               <option value="2">Sam</option>
-           </select>
-               <button class="tag-footer-btn" type="submit" formtarget="_self" name="reader-remove-tag" value="remove_tag">REMOVE TAG</button>
-           <select name="add-tag">
-              <option selected="" value="1">Family members</option>
-              <option value="2">Sam</option>
-           </select>
-           <button class="tag-footer-btn" style="margin-right:0;" type="submit" formtarget="_self" name="reader-add-tag" value="add_tag">ADD TAG</button>
-           <button class="tag-footer-btn" style="margin-right:0;" type="submit" formtarget="_self" title="Add tag and remove all others." name="reader-add-tag" value="move_to_tag">MOVE TO TAG</button>
-        </form>
+    <form class="tag-footer" target="_self" action="morphis://.dmail/modify_message_tag" method="get" accept-charset="UTF-8 ISO-8859-1">
+        <input type="hidden" name="csrf_token" value="{csrf_token}"/>
+        <input type="hidden" name="redirect" value="morphis://.dmail/read/{addr}/{tag}/{msg_id}"/>
+        <input type="hidden" name="msg_id" value="{msg_id}"/>
+        <span class="{remove_tag_class}">
+            <select name="remove_tag">
+                {existing_tags}
+            </select>
+            <button class="tag-footer-btn" type="submit" name="submit" value="remove_tag">REMOVE TAG</button>
+        </span>
+        <select name="add_tag">
+            {available_tags}
+        </select>
+        <button class="tag-footer-btn" style="margin-right:0;" type="submit" name="submit" value="add_tag">ADD TAG</button>
+        <button class="tag-footer-btn" style="margin-right:0;" type="submit" title="Add tag and remove all others." name="submit" value="move_to_tag">MOVE TO TAG</button>
+    </form>
 </div>
 </body></html>

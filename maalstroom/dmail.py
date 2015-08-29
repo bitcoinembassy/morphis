@@ -9,7 +9,7 @@ import logging
 import textwrap
 import threading
 import time
-from urllib.parse import parse_qs, quote_plus
+from urllib.parse import parse_qs, quote_plus, unquote
 
 from sqlalchemy import func, not_, and_
 from sqlalchemy.orm import joinedload
@@ -30,9 +30,12 @@ import sshtype
 log = logging.getLogger(__name__)
 
 s_dmail = ".dmail"
+top_tags = ["Inbox", "Outbox", "Sent", "Drafts", "Trash"]
 
 @asyncio.coroutine
 def serve_get(dispatcher, rpath):
+    global top_tags
+
     log.info("Service .dmail request.")
 
     req = rpath[len(s_dmail):]
@@ -166,7 +169,6 @@ def serve_get(dispatcher, rpath):
 
         template = templates.dmail_aside[0]
 
-        top_tags = ["Inbox", "Outbox", "Sent", "Drafts", "Trash"]
         fmt = {}
 
         for top_tag in top_tags:
@@ -204,7 +206,7 @@ def serve_get(dispatcher, rpath):
         params = req[15:]
         p0 = params.index('/')
         addr_enc = params[:p0]
-        tag = params[p0+1:]
+        tag = unquote(params[p0+1:])
 
         template = templates.dmail_msg_list_list_start[0]
 
@@ -248,7 +250,7 @@ def serve_get(dispatcher, rpath):
         template = templates.dmail_msg_list[0]
         template = template.format(\
             csrf_token=dispatcher.client_engine.csrf_token,\
-            tag=tag,\
+            tag=unquote(tag),\
             addr=addr_enc,\
             empty_trash_button_class=empty_trash_button_class)
 
@@ -303,7 +305,7 @@ def serve_get(dispatcher, rpath):
 
         msg_dbid = params
 
-        dm = yield from _load_dmail(dispatcher, msg_dbid)
+        dm = yield from _load_dmail(dispatcher, msg_dbid, fetch_parts=True)
 
         dmail_text = _format_dmail_content(dm)
 
@@ -341,7 +343,7 @@ def serve_get(dispatcher, rpath):
             return True
 
         dm = yield from _process_dmail_message(\
-            dispatcher, msg_dbid, processor, fetch_parts=True)
+            dispatcher, msg_dbid, processor, fetch_parts=True, fetch_tags=True)
 
         if dm.hidden:
             trash_msg = "REMOVE FROM TRASH"
@@ -364,6 +366,41 @@ def serve_get(dispatcher, rpath):
             dest_addr_enc = ""
             dest_class = " display_none"
 
+        unquoted_tag = unquote(tag)
+
+        existing_tag_rows = []
+        if len(dm.tags) > 1:
+            remove_tag_class = ""
+
+            for etag in dm.tags:
+                if etag.name == unquoted_tag:
+                    selected = "selected "
+                else:
+                    selected = ""
+
+                row = '<option {selected}value"{tag_id}">{tag_name}</option>'\
+                    .format(\
+                        selected=selected,\
+                        tag_id=etag.id,\
+                        tag_name=etag.name)
+                existing_tag_rows.append(row)
+        else:
+            remove_tag_class = "display_none"
+
+        current_tag_names = [x.name for x in dm.tags]
+        current_tag_names.extend(top_tags)
+        current_tag_names.remove("Inbox")
+        tags = yield from _load_tags(dispatcher, current_tag_names)
+
+        available_tag_rows = []
+
+        for atag in tags:
+            row = '<option value"{tag_id}">{tag_name}</option>'\
+                .format(\
+                    tag_id=atag.id,\
+                    tag_name=atag.name)
+            available_tag_rows.append(row)
+
         template = templates.dmail_read[0]
         template = template.format(\
             csrf_token=dispatcher.client_engine.csrf_token,\
@@ -376,7 +413,10 @@ def serve_get(dispatcher, rpath):
             sender=sender_addr,\
             dest_class=dest_class,\
             dest_addr=dest_addr_enc,\
-            date=mutil.format_human_no_ms_datetime(dm.date))
+            date=mutil.format_human_no_ms_datetime(dm.date),\
+            remove_tag_class=remove_tag_class,\
+            existing_tags=''.join(existing_tag_rows),\
+            available_tags=''.join(available_tag_rows))
 
         dispatcher.send_content(template)
     elif req.startswith("/compose/"):
@@ -537,6 +577,51 @@ def serve_get(dispatcher, rpath):
 
         redirect = qdict.get("redirect")
         if r and redirect:
+            dispatcher.send_301(redirect[0])
+        else:
+            dispatcher.send_204()
+    elif req.startswith("/modify_message_tag?"):
+        query = req[20:]
+
+        qdict = parse_qs(query, keep_blank_values=True)
+
+        csrf_token = qdict["csrf_token"][0]
+
+        if not dispatcher.check_csrf_token(csrf_token):
+            return
+
+        submit = qdict["submit"][0]
+
+        def processor(sess, dm):
+            if submit == "add_tag":
+                dmail.attach_dmail_tag(sess, dm, qdict["add_tag"][0])
+                return True
+            elif submit == "move_to_tag":
+                dm.tags.clear()
+                dmail.attach_dmail_tag(sess, dm, qdict["add_tag"][0])
+                return True
+            elif submit == "remove_tag":
+                if len(dm.tags) <= 1:
+                    return False
+
+                remove_tag = qdict["remove_tag"][0]
+                remove_target = None
+                for tag in dm.tags:
+                    if tag.name == remove_tag:
+                        remove_target = tag
+                        break
+                dm.tags.remove(remove_target)
+                return True
+            else:
+                return False
+
+        msg_id = qdict["msg_id"][0]
+
+        dm = yield from _process_dmail_message(\
+            dispatcher, msg_id, processor, fetch_tags=True)
+
+        redirect = qdict.get("redirect")
+        if redirect:
             dispatcher.send_301(redirect[0])
         else:
             dispatcher.send_204()
@@ -1467,7 +1552,7 @@ def _load_dmails_for_tag(dispatcher, addr, tag):
 def _load_tags(dispatcher, exclude_tags=None):
     def dbcall():
         with dispatcher.node.db.open_session(True) as sess:
-            q = sess.query(DmailTag)
+            q = sess.query(DmailTag).group_by(DmailTag.name)
 
             if exclude_tags:
                 q = q.filter(~DmailTag.name.in_(exclude_tags))
@@ -1545,12 +1630,17 @@ def _list_dmails_for_tag(dispatcher, addr, tag):
         dispatcher.send_partial_content(row)
 
 @asyncio.coroutine
-def _load_dmail(dispatcher, dmail_dbid):
+def _load_dmail(dispatcher, dmail_dbid, fetch_parts=False, fetch_tags=False):
     def dbcall():
         with dispatcher.node.db.open_session(True) as sess:
-            q = sess.query(DmailMessage)\
-                .options(joinedload("parts"))\
-                .filter(DmailMessage.id == dmail_dbid)
+            q = sess.query(DmailMessage)
+
+            if fetch_parts:
+                q = q.options(joinedload("parts"))
+            if fetch_tags:
+                q = q.options(joinedload("tags"))
+
+            q = q.filter(DmailMessage.id == dmail_dbid)
 
             dm = q.first()
 
@@ -1564,12 +1654,14 @@ def _load_dmail(dispatcher, dmail_dbid):
 
 @asyncio.coroutine
 def _process_dmail_message(dispatcher, msg_dbid, process_call,\
-        fetch_parts=False):
+        fetch_parts=False, fetch_tags=False):
     def dbcall():
         with dispatcher.node.db.open_session() as sess:
             q = sess.query(DmailMessage)
             if fetch_parts:
                 q = q.options(joinedload("parts"))
+            if fetch_tags:
+                q = q.options(joinedload("tags"))
             q = q.filter(DmailMessage.id == msg_dbid)
 
             dm = q.first()

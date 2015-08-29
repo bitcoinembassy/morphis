@@ -15,10 +15,10 @@
 	</ul>
     </span>
 <div class="divider"></div>
-    <ul><form accept-charset="UTF-8 ISO-8859-1" action="morphis://.dmail/create_tag" method="get">
+    <ul><form target="_self" action="morphis://.dmail/create_tag" method="get" accept-charset="UTF-8 ISO-8859-1">
     <input type="hidden" name="csrf_token" value="{csrf_token}"/>
     <input type="hidden" name="redirect" value="morphis://.dmail/aside/{addr}/{tag}"/>
-	<span class="tag-head"><li class="tag-icon"><span class="tag-text-pad"><input class="tag-text" type="text" name="tag_name" placeholder="ADD TAG"/><button class="add-tag" value="send" name="add-tag" formtarget="_self" type="submit">+</button></span></li>
+	<span class="tag-head"><li class="tag-icon"><span class="tag-text-pad"><input class="tag-text" type="text" name="tag_name" placeholder="ADD TAG"/><button class="add-tag" value="send" name="add-tag" type="submit">+</button></span></li>
     </span></form>
     <span class="tag-list">
         {tag_rows}
