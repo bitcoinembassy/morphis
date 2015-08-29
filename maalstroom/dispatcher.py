@@ -263,7 +263,7 @@ class MaalstroomDispatcher(object):
         try:
             data_key, significant_bits = mutil.decode_key(rpath)
         except (ValueError, IndexError) as e:
-            log.exception("mutil.decode_key(..)")
+            log.exception("mutil.decode_key(..), rpath=[{}].".format(rpath))
             self.send_error("Invalid encoded key: [{}].".format(rpath), 400)
             return
 
