@@ -1425,7 +1425,9 @@ def _list_dmails_for_tag(dispatcher, addr, tag):
         mail_icon = "new-mail-icon" if unread else "mail-icon"
 
         subject = msg.subject
-        if not subject:
+        if subject:
+            subject = subject.replace('"', "&quot;")
+        else:
             subject = "[no subject]"
 
         safe_reply_subject = generate_safe_reply_subject(msg)
