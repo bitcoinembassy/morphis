@@ -1017,11 +1017,18 @@ def serve_post(dispatcher, rpath):
                 dm.date,\
                 dm.parts[0].data)
 
-        if not storing_nodes:
+        if storing_nodes is False:
+            dispatcher.send_content(\
+                "FAIL.<br/><p>Could not fetch destination's Dmail site,"\
+                    " try again later; message remains in outbox.</p>"\
+                        .format(dest_addr_enc).encode())
+            return
+        elif not storing_nodes:
             dispatcher.send_content(\
                 "FAIL.<br/><p>Dmail timed out being stored on the network;"\
                     " message remains in outbox.</p>"\
                         .format(dest_addr_enc).encode())
+            return
 
         dispatcher.send_content(\
             "SUCCESS.<br/><p>Dmail successfully sent to: {}</p>"\

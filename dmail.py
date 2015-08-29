@@ -320,6 +320,9 @@ class DmailEngine(object):
 
         recipients = yield from self.fetch_recipient_dmail_sites(recipients)
 
+        if not recipients:
+            return False
+
         storing_nodes = 0
 
         for recipient in recipients:
