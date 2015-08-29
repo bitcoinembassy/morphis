@@ -298,26 +298,6 @@ dmail_fetch_panel_content = [\
 
 dmail_create_address_content = [None, None]
 
-dmail_create_address_form_content = [\
-    b"""<!DOCTYPE html>
-<html><head><base target="_top" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/css"/></head><body class="iframe">
-<form action="morphis://.dmail/create_address/make_it_so" method="get">
-    <h4>Dmail Address Generation</h4>
-    <p>To create yourself a new Dmail Address, simply click the Create button below. Changing these values from their defaults is not needed at all.</p>
-    <p>
-        <label for="difficulty">Difficulty</label>
-        <input type="textfield" name="difficulty" id="difficulty" value="20"/>
-    </p>
-    <p>NOTE: Difficulty is the anti-spam setting that determines how much work it is to send you a Dmail. Its effect is exponential (work=2^difficulty). Do not set it too low -- I would recommend no lower than 20. If 2^difficulty is lower than the amount of nodes in the network, then the network will likely have trouble finding your Dmails.</p>
-    <p>
-        <label for="prefix">Dmail Prefix</label>
-        <input type="textfield" name="prefix" id="prefix"/>&nbsp;<span class="italic">(Optional)</span>
-    </p>
-    <p>NOTE: Each letter in the prefix will make the address take 32x longer to generate. Three letters takes almost an hour on my test machine.</p>
-    <input type="submit" formtarget="_self" id="create" value="Create"/>
-</form>
-</body></html>""", None]
-
 dmail_compose_dmail_content = [None, None]
 
 dmail_compose_dmail_form_start =\
@@ -409,6 +389,7 @@ if not initialized_template:
     dmail_address_list = load("dmail/address_list.html", True)
     dmail_address_list_row = load("dmail/address_list_row.html", True)
 
+    dmail_create_address = load("dmail/create_address.html", True)
     dmail_address_config = load("dmail/address_config.html", True)
 
     for entry_name in os.listdir("maalstroom/resources/images/dmail"):

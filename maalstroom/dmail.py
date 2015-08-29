@@ -150,7 +150,10 @@ def serve_get(dispatcher, rpath):
 
         template = templates.dmail_nav[0]
 
-        template = template.format(addr=addr_enc, tag=tag)
+        template = template.format(\
+            csrf_token=dispatcher.client_engine.csrf_token,\
+            addr=addr_enc,\
+            tag=tag)
 
         dispatcher.send_content(template)
     elif req.startswith("/aside/"):
@@ -228,6 +231,7 @@ def serve_get(dispatcher, rpath):
 
         template = templates.dmail_msg_list[0]
         template = template.format(\
+            csrf_token=dispatcher.client_engine.csrf_token,\
             tag=tag,\
             addr=addr_enc,\
             empty_trash_button_class=empty_trash_button_class)
@@ -346,6 +350,7 @@ def serve_get(dispatcher, rpath):
 
         template = templates.dmail_read[0]
         template = template.format(\
+            csrf_token=dispatcher.client_engine.csrf_token,\
             addr=addr_enc,\
             tag=tag,\
             safe_reply_subject=safe_reply_subject,\
@@ -455,6 +460,8 @@ def serve_get(dispatcher, rpath):
         addrs = yield from _list_dmail_addresses(dispatcher)
         default_id = yield from _load_default_dmail_address_id(dispatcher)
 
+        csrf_token = dispatcher.client_engine.csrf_token
+
         row_template = templates.dmail_address_list_row[0]
 
         rows = []
@@ -475,6 +482,7 @@ def serve_get(dispatcher, rpath):
                 autoscan_interval = 60
 
             resp = row_template.format(\
+                csrf_token=csrf_token,\
                 addr=site_key_enc,\
                 addr_dbid=addr.id,\
                 set_default_class=set_default_class,\
@@ -650,7 +658,15 @@ def serve_get(dispatcher, rpath):
 ##### OLD:
 
     elif req == "/create_address":
-        dispatcher.send_content(templates.dmail_create_address_form_content)
+        if dispatcher.handle_cache(req):
+            return
+
+        template = templates.dmail_create_address[0]
+
+        template = template.format(\
+            csrf_token=dispatcher.client_engine.csrf_token)
+
+        dispatcher.send_content([template, req])
     elif req.startswith("/address_config/"):
         params = req[16:]
 
@@ -662,6 +678,9 @@ def serve_get(dispatcher, rpath):
 
         content = templates.dmail_address_config[0]
 
+        content = content.replace(\
+            "{csrf_token}",\
+            dispatcher.client_engine.csrf_token)
         content = content.replace(\
             "${DIFFICULTY}",\
             str(dmail_address.keys[0].difficulty))
@@ -708,9 +727,9 @@ def serve_get(dispatcher, rpath):
                 "<p>Your Dmail site was generated successfully; however,"\
                 " it failed to be stored on the network. To remedy this,"\
                 " simply go to your Dmail address page and click the"\
-                " [<a href=\"morphis://.dmail/addr/settings/{}\">Address"\
-                " Settings</a>] link, and then click the \"Republish"\
-                " Dmail Site\" button.</p>"\
+                " [<a target=\"_self\" href=\"morphis://.dmail/"\
+                "address_config/{}\">Address Settings</a>] link, and then"\
+                " click the \"Republish Dmail Site\" button.</p>"\
                     .format(dmail_key_enc).encode())
 
         dispatcher.send_partial_content(\
@@ -1443,6 +1462,7 @@ def _list_dmails_for_tag(dispatcher, addr, tag):
             addr_value = "[Anonymous]"
 
         row = row_template.format(
+            csrf_token=dispatcher.client_engine.csrf_token,\
             mail_icon=mail_icon,\
             tag=tag,\
             unread=unread,\
