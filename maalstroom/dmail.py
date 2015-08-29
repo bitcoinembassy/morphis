@@ -181,7 +181,21 @@ def serve_get(dispatcher, rpath):
                 ("active-notify" if active else "inactive-notify")\
                     if unread_count else ""
 
-        template = template.format(addr=addr_enc, **fmt)
+        tags = yield from _load_tags(dispatcher, top_tags)
+
+        tag_rows = []
+
+        for tag in tags:
+            row = '<li class="bullet"><span class="mailbox-pad">'\
+                '<a href="morphis://.dmail/wrapper/{addr}/{tag}">{tag}</a>'\
+                '</span></li>'\
+                    .format(addr=addr_enc, tag=tag.name)
+            tag_rows.append(row)
+
+        template = template.format(\
+            addr=addr_enc,\
+            tag_rows=''.join(tag_rows),\
+            **fmt)
 
         dispatcher.send_content(template)
     elif req.startswith("/msg_list/list/"):
@@ -1400,6 +1414,21 @@ def _load_dmails_for_tag(dispatcher, addr, tag):
     msgs = yield from dispatcher.node.loop.run_in_executor(None, dbcall)
 
     return msgs
+
+@asyncio.coroutine
+def _load_tags(dispatcher, exclude_tags=None):
+    def dbcall():
+        with dispatcher.node.db.open_session(True) as sess:
+            q = sess.query(DmailTag)
+
+            if exclude_tags:
+                q = q.filter(~DmailTag.name.in_(exclude_tags))
+
+            return q.all()
+
+    tags = dispatcher.node.loop.run_in_executor(None, dbcall)
+
+    return tags
 
 @asyncio.coroutine
 def _list_dmails_for_tag(dispatcher, addr, tag):
