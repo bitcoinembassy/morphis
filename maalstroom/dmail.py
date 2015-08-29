@@ -495,7 +495,13 @@ def serve_get(dispatcher, rpath):
     elif req.startswith("/refresh/"):
         params = req[9:]
 
-        addr_enc = params
+        p0 = params.index('/')
+
+        csrf_token = params[:p0]
+        addr_enc = params[p0+1:]
+
+        if not dispatcher.check_csrf_token(csrf_token):
+            return
 
         dmail_address = yield from _load_dmail_address(\
             dispatcher, site_key=mbase32.decode(addr_enc), fetch_keys=True)
@@ -505,14 +511,21 @@ def serve_get(dispatcher, rpath):
         dispatcher.send_204()
     elif req.startswith("/toggle_read/"):
         params = req[13:]
-        p0 = params.find("?redirect=")
-        if p0 != -1:
-            redirect = params[p0+10:]
+
+        pq = params.find("?redirect=")
+        if pq != -1:
+            redirect = params[pq+10:]
         else:
             redirect = None
-            p0 = len(params)
+            pq = len(params)
 
-        msg_dbid = params[:p0]
+        p0 = params.index('/', 0, pq)
+
+        csrf_token = params[:p0]
+        msg_dbid = params[p0+1:pq]
+
+        if not dispatcher.check_csrf_token(csrf_token):
+            return
 
         def processor(sess, dm):
             dm.read = not dm.read
@@ -526,14 +539,20 @@ def serve_get(dispatcher, rpath):
             dispatcher.send_204()
     elif req.startswith("/toggle_trashed/"):
         params = req[16:]
-        p0 = params.find("?redirect=")
-        if p0 != -1:
-            redirect = params[p0+10:]
+        pq = params.find("?redirect=")
+        if pq != -1:
+            redirect = params[pq+10:]
         else:
             redirect = None
-            p0 = len(params)
+            pq = len(params)
 
-        msg_dbid = params[:p0]
+        p0 = params.index('/', 0, pq)
+
+        csrf_token = params[:p0]
+        msg_dbid = params[p0+1:pq]
+
+        if not dispatcher.check_csrf_token(csrf_token):
+            return
 
         def processor(sess, dm):
             dm.hidden = not dm.hidden
@@ -547,6 +566,7 @@ def serve_get(dispatcher, rpath):
             dispatcher.send_204()
     elif req.startswith("/set_autoscan/"):
         params = req[14:]
+
         pq = params.find("?redirect=")
         if pq != -1:
             redirect = params[pq+10:]
@@ -555,9 +575,14 @@ def serve_get(dispatcher, rpath):
             pq = len(params)
 
         p0 = params.index('/', 0, pq)
+        p1 = params.index('/', p0+1, pq)
 
-        addr_id = int(params[:p0])
-        interval = int(params[p0+1:pq])
+        csrf_token = params[:p0]
+        addr_id = int(params[p0+1:p1])
+        interval = int(params[p1+1:pq])
+
+        if not dispatcher.check_csrf_token(csrf_token):
+            return
 
         def processor(sess, addr):
             addr.scan_interval = interval
@@ -575,14 +600,21 @@ def serve_get(dispatcher, rpath):
             dispatcher.send_204()
     elif req.startswith("/empty_trash/"):
         params = req[13:]
-        p0 = params.find("?redirect=")
-        if p0 != -1:
-            redirect = params[p0+10:]
+
+        pq = params.find("?redirect=")
+        if pq != -1:
+            redirect = params[pq+10:]
         else:
             redirect = None
-            p0 = len(params)
+            pq = len(params)
 
-        addr_enc = params[:p0]
+        p0 = params.index('/', 0, pq)
+
+        csrf_token = params[:p0]
+        addr_enc = params[p0+1:pq]
+
+        if not dispatcher.check_csrf_token(csrf_token):
+            return
 
         yield from _empty_trash(dispatcher, addr_enc)
 
@@ -592,14 +624,21 @@ def serve_get(dispatcher, rpath):
             dispatcher.send_204()
     elif req.startswith("/make_address_default/"):
         params = req[22:]
-        p0 = params.find("?redirect=")
-        if p0 != -1:
-            redirect = params[p0+10:]
+
+        pq = params.find("?redirect=")
+        if pq != -1:
+            redirect = params[pq+10:]
         else:
             redirect = None
-            p0 = len(params)
+            pq = len(params)
 
-        addr_dbid = params[:p0]
+        p0 = params.index('/')
+
+        csrf_token = params[:p0]
+        addr_dbid = params[p0+1:pq]
+
+        if not dispatcher.check_csrf_token(csrf_token):
+            return
 
         yield from _set_default_dmail_address(dispatcher, addr_dbid)
 
@@ -648,6 +687,10 @@ def serve_get(dispatcher, rpath):
 
         prefix = qdict["prefix"][0]
         difficulty = int(qdict["difficulty"][0])
+        csrf_token = qdict["csrf_token"][0]
+
+        if not dispatcher.check_csrf_token(csrf_token):
+            return
 
         log.info("prefix=[{}].".format(prefix))
         privkey, dmail_key, dms, storing_nodes =\
@@ -683,6 +726,10 @@ def serve_get(dispatcher, rpath):
 
         addr_enc = qdict["dmail_address"][0]
         difficulty = qdict["difficulty"][0]
+        csrf_token = qdict["csrf_token"][0]
+
+        if not dispatcher.check_csrf_token(csrf_token):
+            return
 
         def processor(sess, dmail_address):
             if difficulty != dmail_address.keys[0].difficulty:

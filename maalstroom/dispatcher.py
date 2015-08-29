@@ -661,6 +661,14 @@ class MaalstroomDispatcher(object):
         self.end_headers()
         self.finish_response()
 
+    def check_csrf_token(self, req_token):
+        if self.client_engine.csrf_token == req_token:
+            return True
+
+        self.send_error("Invalid csrf_token.", 400)
+
+        return False
+
     def handle_cache(self, content_id, max_age=300):
         if self.handler.headers["If-None-Match"] != content_id:
             return False
