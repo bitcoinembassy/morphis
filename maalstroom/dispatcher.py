@@ -171,26 +171,31 @@ class MaalstroomDispatcher(object):
                 return
 
             if rpath == ".upload" or rpath == ".upload/":
-                self.send_content(maalstroom.static_upload_page_content)
-            else:
-                content =\
-                    maalstroom.upload_page_content.replace(\
-                        b"${PRIVATE_KEY}",\
-                        rpath[8:].encode()) # 8 = len(".upload/")
-                content =\
-                    content.replace(\
-                        b"${VERSION}",\
-                        str(int(time.time()*1000)).encode())
-                content =\
-                    content.replace(\
-                        b"${UPDATEABLE_KEY_MODE_DISPLAY}",\
-                        b"")
-                content =\
-                    content.replace(\
-                        b"${STATIC_MODE_DISPLAY}",\
-                        b"display: none")
+                if (self.handle_cache(rpath)):
+                    return
 
-                self.send_content(content)
+                template = templates.main_combined_upload[0]
+
+                template = template.format(\
+                    csrf_token=self.client_engine.csrf_token,\
+                    private_key="",\
+                    version="",\
+                    updateable_key_mode_display="display: none;",\
+                    static_mode_display="")
+
+                self.send_content(template)
+            else:
+                template = templates.main_combined_upload[0]
+
+                # 8 = len(".upload/").
+                template = template.format(\
+                    csrf_token=self.client_engine.csrf_token,\
+                    private_key=rpath[8:],\
+                    version=str(int(time.time()*1000)),\
+                    updateable_key_mode_display="",\
+                    static_mode_display="display: none;")
+
+                self.send_content(template)
 
             return
         elif rpath.startswith(".dmail"):

@@ -373,6 +373,8 @@ if not initialized_template:
     # V2 UI:
     main_css = dmail_css_content 
 
+    main_combined_upload = load("main/combined_upload.html", True)
+
     dmail_css = load_resource("style.css")
 
     dmail_page_wrapper = load("dmail/page_wrapper.html", True)

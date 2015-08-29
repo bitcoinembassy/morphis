@@ -329,8 +329,6 @@ def __main():
             " FIRST PARAMETER!].")
     parser.add_argument("--maxconn", type=int,\
         help="Specify the maximum connections to seek.")
-    parser.add_argument("--maaluppage",\
-        help="Override Maalstroom upload page with the specified file.")
     parser.add_argument("--nodecount", type=int,\
         help="Specify amount of nodes to start.")
     parser.add_argument("--offline", action="store_true",\
@@ -376,7 +374,6 @@ def __main():
         port = int(port) + instanceoffset
         bindaddr = "{}:{}".format(host, port)
     maalstroom_enabled = False if args.dm else True
-    maaluppage = args.maaluppage
     nodecount = args.nodecount
     if nodecount == None:
         nodecount = 1
@@ -412,10 +409,9 @@ def __main():
             if maalstroom_enabled:
                 import maalstroom
 
-                if maaluppage:
-                    maalstroom.set_upload_page(maaluppage)
                 if args.updatetest:
                     maalstroom.update_test = True
+
                 yield from maalstroom.start_maalstroom_server(node)
 
             yield from node.init_db()
