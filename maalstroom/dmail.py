@@ -360,7 +360,7 @@ def serve_get(dispatcher, rpath):
             sender=sender_addr,\
             dest_class=dest_class,\
             dest_addr=dest_addr_enc,\
-            date=dm.date)
+            date=mutil.format_human_no_ms_datetime(dm.date))
 
         dispatcher.send_content(template)
     elif req.startswith("/compose/"):
@@ -1208,7 +1208,7 @@ def _read_dmail_post(dispatcher, data):
         dp.data = content[0].encode()
         dm.parts.append(dp)
 
-    dm.date = datetime.today()
+    dm.date = mutil.utc_datetime()
 
     dm.hidden = False
     dm.read = True
@@ -1479,7 +1479,7 @@ def _list_dmails_for_tag(dispatcher, addr, tag):
             subject=subject,\
             safe_reply_subject=safe_reply_subject,\
             sender=addr_value,\
-            timestamp=msg.date)
+            timestamp=mutil.format_human_no_ms_datetime(msg.date))
 
         dispatcher.send_partial_content(row)
 
@@ -1619,7 +1619,7 @@ def _empty_trash(dispatcher, addr_enc):
                 msg.destination_dmail_key = None
                 msg.destination_significant_bits = None
                 msg.subject = ""
-                msg.date = datetime.today()
+                msg.date = mutil.utc_datetime()
                 msg.parts.clear()
                 msg.read = False
                 msg.hidden = True

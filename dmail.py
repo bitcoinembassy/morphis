@@ -265,7 +265,7 @@ class DmailEngine(object):
             m_dest_ids.append((m_dest_enc, m_dest_id, sig_bits))
             p0 = p1 + 1
 
-        date = datetime.today()
+        date = mutil.utc_datetime()
 
         if message_text[p0] == '\n':
             p0 += 1
@@ -288,12 +288,12 @@ class DmailEngine(object):
             message_text = message_text.encode()
 
         if not date:
-            date = datetime.today()
+            date = mutil.utc_datetime()
 
         dmail = Dmail()
         dmail.sender_pubkey = from_asymkey.asbytes() if from_asymkey else b""
         dmail.subject = subject
-        dmail.date = date.isoformat()
+        dmail.date = mutil.format_iso_datetime(date)
 
         if message_text:
             part = DmailPart()

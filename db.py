@@ -11,13 +11,14 @@ from contextlib import contextmanager
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.schema import Index
 from sqlalchemy import create_engine, text, event, MetaData, func, Table,\
-    Column, ForeignKey, Integer, String, DateTime
+    Column, ForeignKey, Integer, String, DateTime, TypeDecorator
 from sqlalchemy.exc import ProgrammingError, OperationalError
 from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.pool import Pool
 from sqlalchemy.types import LargeBinary, Boolean, DateTime
 
 import consts
+import mutil
 
 log = logging.getLogger(__name__)
 
@@ -31,6 +32,13 @@ DmailKey = None
 DmailMessage = None
 DmailPart = None
 DmailTag = None
+
+class UtcDateTime(TypeDecorator):
+    impl = DateTime
+
+    def process_result_value(self, value, dialect):
+        return\
+            None if value is None else value.replace(tzinfo=mutil.UTC_TZINFO)
 
 def _init_daos(Base, d):
     # If I recall correctly, this abomination is purely for PostgreSQL mode,
@@ -56,7 +64,7 @@ def _init_daos(Base, d):
 
         connected = Column(Boolean, nullable=False)
 
-        last_connect_attempt = Column(DateTime, nullable=True)
+        last_connect_attempt = Column(UtcDateTime, nullable=True)
 
     Index("node_id", Peer.node_id)
     Index("distance", Peer.distance)
@@ -73,8 +81,8 @@ def _init_daos(Base, d):
         data_id = Column(LargeBinary, nullable=False)
         distance = Column(LargeBinary, nullable=False)
         original_size = Column(Integer, nullable=False)
-        insert_timestamp = Column(DateTime, nullable=False)
-        last_access = Column(DateTime, nullable=True)
+        insert_timestamp = Column(UtcDateTime, nullable=False)
+        last_access = Column(UtcDateTime, nullable=True)
         version = Column(String, nullable=True) # str for sqlite bigint :(.
         signature = Column(LargeBinary, nullable=True)
         epubkey = Column(LargeBinary, nullable=True)
@@ -157,7 +165,7 @@ def _init_daos(Base, d):
         destination_dmail_key = Column(LargeBinary, nullable=True)
         destination_significant_bits = Column(Integer, nullable=True)
         subject = Column(String, nullable=False)
-        date = Column(DateTime, nullable=False)
+        date = Column(UtcDateTime, nullable=False)
         read = Column(Boolean, nullable=False)
         hidden = Column(Boolean, nullable=False)
         deleted = Column(Boolean, nullable=False)
