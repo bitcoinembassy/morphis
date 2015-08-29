@@ -344,18 +344,17 @@ div.panel span {
 }
 .logo {
     color: #ffffff;
-    height: 3.8em;
     width: 97px;
-    float: left;
+    display: inline-block;
 }
 .version {
   color: #999ba0;
   font-style: italic;
   font-size: 9px;
-  float: left;
-  padding-top: 14px;
-  padding-left: 5px;
-  line-height: 14px;
+  display: inline-block;
+  padding-top: 1.5em;
+  padding-left: 0;
+  vertical-align: top;
 }
 .version a {
     color: red;
@@ -560,7 +559,6 @@ a:hover.tooltips span {
 }
 
 /*Styles for Message list*/
-
 table.field {
     margin: 0;
     padding: 0;
@@ -992,4 +990,11 @@ input.subject-field {
     -o-text-overflow: ellipsis;  // for Opera 9 & 10
     white-space: nowrap;
     display: block;
+    color: #141c30;
+    padding: .3em;
+}
+input.subject-field:focus {
+    border: 0;
+    outline: 0;
+    box-shadow: none;
 }
