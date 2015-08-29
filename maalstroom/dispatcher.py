@@ -127,6 +127,10 @@ class MaalstroomDispatcher(object):
                 self.send_exception(e)
 
             return
+        elif rpath == "favicon.ico":
+            self.send_content(\
+                templates.favicon_content, content_type="image/png")
+            return
 
         # At this point we assume it is a key URL.
         yield from self.dispatch_get_data(rpath)
@@ -153,7 +157,7 @@ class MaalstroomDispatcher(object):
             else:
                 self.send_error(errcode=400)
             return
-        elif rpath == ".images/favicon.ico" or rpath == "favicon.ico":
+        elif rpath == ".images/favicon.ico":
             self.send_content(\
                 templates.favicon_content, content_type="image/png")
             return
