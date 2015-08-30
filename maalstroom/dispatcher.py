@@ -674,7 +674,10 @@ class MaalstroomDispatcher(object):
         if self.client_engine.csrf_token == req_token:
             return True
 
-        self.send_error("Invalid csrf_token.", 400)
+        self.send_error(\
+            "Invalid csrf_token. If this was a valid request, then please"\
+                " clear your browsers cache (shift reload will do).",\
+            400)
 
         return False
 

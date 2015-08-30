@@ -366,10 +366,13 @@ def serve_get(dispatcher, rpath):
 
         if dm.sender_dmail_key:
             sender_addr = mbase32.encode(dm.sender_dmail_key)
+            if dm.sender_valid:
+                sender_class = "valid_sender"
+            else:
+                sender_class = "invalid_sender"
         else:
             sender_addr = "[Anonymous]"
-        sender_class =\
-            "valid_sender" if dm.sender_valid else "invalid_sender"
+            sender_class = "valid_sender"
 
         if dm.destination_dmail_key:
             dest_addr_enc = mbase32.encode(dm.destination_dmail_key)
@@ -485,6 +488,8 @@ def serve_get(dispatcher, rpath):
         else:
             sender_addr = None
             default_id = yield from _load_default_dmail_address_id(dispatcher)
+            if not default_id:
+                owner_if_anon_id = ""
 
         from_addr_options = []
 
@@ -498,7 +503,7 @@ def serve_get(dispatcher, rpath):
 
             if selected:
                 option = '<option value="{}" selected>{}</option>'
-                owner_if_anon = addr
+                owner_if_anon_id = addr.id
             else:
                 option = '<option value="{}">{}</option>'
 
@@ -515,7 +520,7 @@ def serve_get(dispatcher, rpath):
         template = template.format(\
             csrf_token=dispatcher.client_engine.csrf_token,\
             delete_class="display_none",\
-            owner_if_anon=owner_if_anon.id,\
+            owner_if_anon=owner_if_anon_id,\
             from_addr_options=from_addr_options,\
             dest_addr=dest_addr_enc,\
             subject=subject,\
@@ -971,8 +976,8 @@ def serve_post(dispatcher, rpath):
                 dispatcher.node.chord_engine.tasks, dispatcher.node.db)
 
         sender_asymkey =\
-            rsakey.RsaKey(privdata=dm.address.site_privatekey) if dm.address\
-                else None
+            rsakey.RsaKey(privdata=dm.address.site_privatekey)\
+                if dm.sender_dmail_key else None
 
         dest_addr_enc = mbase32.encode(dm.destination_dmail_key)
         destinations = [
@@ -1100,7 +1105,7 @@ def _read_dmail_post(dispatcher, data):
 
     if not dm.address:
         owner_if_anon = dd.get("owner_if_anon")
-        if owner_if_anon:
+        if owner_if_anon and owner_if_anon[0]:
             dmail_address =\
                 yield from _load_dmail_address(dispatcher, owner_if_anon[0])
             dm.address = dmail_address
@@ -1253,15 +1258,18 @@ def _load_default_dmail_address(dispatcher):
                 .limit(1)\
                 .first()
 
-            sess.expire_on_commit = False
+            if addr:
+                sess.expire_on_commit = False
 
-            ns = NodeState()
-            ns.key = consts.NSK_DEFAULT_ADDRESS
-            ns.value = str(addr.id)
-            sess.add(ns)
-            sess.commit()
+                ns = NodeState()
+                ns.key = consts.NSK_DEFAULT_ADDRESS
+                ns.value = str(addr.id)
+                sess.add(ns)
 
-            sess.expunge(addr)
+                sess.commit()
+
+                sess.expunge(addr)
+
             return addr
 
     addr = yield from dispatcher.loop.run_in_executor(None, dbcall)
