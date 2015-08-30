@@ -976,8 +976,8 @@ def serve_post(dispatcher, rpath):
                 dispatcher.node.chord_engine.tasks, dispatcher.node.db)
 
         sender_asymkey =\
-            rsakey.RsaKey(privdata=dm.address.site_privatekey) if dm.address\
-                else None
+            rsakey.RsaKey(privdata=dm.address.site_privatekey)\
+                if dm.sender_dmail_key else None
 
         dest_addr_enc = mbase32.encode(dm.destination_dmail_key)
         destinations = [
