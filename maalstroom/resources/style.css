@@ -279,6 +279,10 @@ div.panel span {
   background: url("images/bullet_white.png") no-repeat center left;
   background-position: 37px;
 }
+.bullet.active_tag {
+  background: url("images/bullet_white.png") no-repeat center left;
+  background-position: 37px;
+}
 .mailbox-list li {
 }
 .active-mailbox {
@@ -335,6 +339,12 @@ div.panel span {
 }
 .tag-list a:visited {
   color: #141c30;
+}
+.tag-list li.active_tag {
+  background-color: #38A3AF;
+}
+.tag-list li.active_tag a {
+  color: #ffffff;
 }
 
 /*Styles for top navigation*/
