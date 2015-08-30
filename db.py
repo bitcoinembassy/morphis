@@ -22,6 +22,8 @@ import mutil
 
 log = logging.getLogger(__name__)
 
+LATEST_SCHEMA_VERSION = 4
+
 Base = declarative_base()
 
 Peer = None
@@ -302,7 +304,7 @@ class Db():
             with self.open_session() as sess:
                 ns = NodeState()
                 ns.key = consts.NSK_SCHEMA_VERSION
-                ns.value = "1"
+                ns.value = str(LATEST_SCHEMA_VERSION)
                 sess.add(ns)
                 sess.commit()
                 return
@@ -318,8 +320,11 @@ class Db():
 
         # Perform necessary upgrades.
         if version == 1:
-            _upgrade_1_to_2(self)
-            version = 2
+            if _test_and_fix_if_really_4(self):
+                version = 4
+            else:
+                _upgrade_1_to_2(self)
+                version = 2
 
         if version == 2:
             _upgrade_2_to_3(self)
@@ -327,7 +332,7 @@ class Db():
 
         if version == 3:
             _upgrade_3_to_4(self)
-            version = 4
+            version = LATEST_SCHEMA_VERSION
 
     def _create_schema(self):
         log.info("Creating schema.")
@@ -368,6 +373,8 @@ if Peer is None:
     DmailTag = d.DmailTag
 
 def _update_node_state(sess, version):
+    "Caller must call commit."
+
     q = sess.query(NodeState)\
         .filter(NodeState.key == consts.NSK_SCHEMA_VERSION)
 
@@ -379,6 +386,24 @@ def _update_node_state(sess, version):
         sess.add(ns)
 
     ns.value = str(version)
+
+def _test_and_fix_if_really_4(db):
+    with db.open_session() as sess:
+        q = sess.query(DmailMessage)\
+            .filter(DmailMessage.deleted == False)
+
+        try:
+            test = q.all()
+
+            _update_node_state(sess, 4)
+
+            sess.commit()
+
+            is_4 = True
+        except Exception:
+            is_4 = False
+
+        return is_4
 
 def _upgrade_1_to_2(db):
     log.warning("NOTE: Upgrading database schema from version 1 to 2.")
