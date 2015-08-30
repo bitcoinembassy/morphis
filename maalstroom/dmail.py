@@ -485,6 +485,8 @@ def serve_get(dispatcher, rpath):
         else:
             sender_addr = None
             default_id = yield from _load_default_dmail_address_id(dispatcher)
+            if not default_id:
+                owner_if_anon_id = ""
 
         from_addr_options = []
 
@@ -498,7 +500,7 @@ def serve_get(dispatcher, rpath):
 
             if selected:
                 option = '<option value="{}" selected>{}</option>'
-                owner_if_anon = addr
+                owner_if_anon_id = addr.id
             else:
                 option = '<option value="{}">{}</option>'
 
@@ -515,7 +517,7 @@ def serve_get(dispatcher, rpath):
         template = template.format(\
             csrf_token=dispatcher.client_engine.csrf_token,\
             delete_class="display_none",\
-            owner_if_anon=owner_if_anon.id,\
+            owner_if_anon=owner_if_anon_id,\
             from_addr_options=from_addr_options,\
             dest_addr=dest_addr_enc,\
             subject=subject,\
@@ -1100,7 +1102,7 @@ def _read_dmail_post(dispatcher, data):
 
     if not dm.address:
         owner_if_anon = dd.get("owner_if_anon")
-        if owner_if_anon:
+        if owner_if_anon and owner_if_anon[0]:
             dmail_address =\
                 yield from _load_dmail_address(dispatcher, owner_if_anon[0])
             dm.address = dmail_address
