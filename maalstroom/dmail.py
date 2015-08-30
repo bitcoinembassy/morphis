@@ -366,10 +366,13 @@ def serve_get(dispatcher, rpath):
 
         if dm.sender_dmail_key:
             sender_addr = mbase32.encode(dm.sender_dmail_key)
+            if dm.sender_valid:
+                sender_class = "valid_sender"
+            else:
+                sender_class = "invalid_sender"
         else:
             sender_addr = "[Anonymous]"
-        sender_class =\
-            "valid_sender" if dm.sender_valid else "invalid_sender"
+            sender_class = "valid_sender"
 
         if dm.destination_dmail_key:
             dest_addr_enc = mbase32.encode(dm.destination_dmail_key)
