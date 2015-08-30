@@ -1253,15 +1253,18 @@ def _load_default_dmail_address(dispatcher):
                 .limit(1)\
                 .first()
 
-            sess.expire_on_commit = False
+            if addr:
+                sess.expire_on_commit = False
 
-            ns = NodeState()
-            ns.key = consts.NSK_DEFAULT_ADDRESS
-            ns.value = str(addr.id)
-            sess.add(ns)
-            sess.commit()
+                ns = NodeState()
+                ns.key = consts.NSK_DEFAULT_ADDRESS
+                ns.value = str(addr.id)
+                sess.add(ns)
 
-            sess.expunge(addr)
+                sess.commit()
+
+                sess.expunge(addr)
+
             return addr
 
     addr = yield from dispatcher.loop.run_in_executor(None, dbcall)
