@@ -763,6 +763,7 @@ class MaalstroomDispatcher(object):
             self.send_header("ETag", content_id)
         else:
             self._send_no_cache()
+        self.send_header("X-Frame-Options", "SAMEORIGIN")
 
         self.end_headers()
         self.write(content)
@@ -788,6 +789,7 @@ class MaalstroomDispatcher(object):
             self.send_header("Transfer-Encoding", "chunked")
             self.send_header("Content-Type",\
                 "text/html" if content_type is None else content_type)
+            self.send_header("X-Frame-Options", "SAMEORIGIN")
             self.end_headers()
 
         chunklen = len(content)
