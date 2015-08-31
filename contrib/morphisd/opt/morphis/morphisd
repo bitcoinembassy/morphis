@@ -1,0 +1,12 @@
+#!/bin/sh
+
+if [ -r /etc/default/morphisd ]; then
+  source /etc/default/morphisd
+fi
+
+if [ -x /opt/morphis/setargv ]; then
+  exec /opt/morphis/setargv python morphisd node.py "${@}"
+fi
+exec python node.py "${@}"
+
+# eof
