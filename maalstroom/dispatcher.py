@@ -511,6 +511,16 @@ class MaalstroomDispatcher(object):
                 == "application/x-www-form-urlencoded":
             log.debug("Content-Type=[application/x-www-form-urlencoded].")
 
+            user_agent = self.handler.headers["User-Agent"]
+
+            if not (user_agent.startswith("curl/")\
+                    or user_agent.startswith("Wget/")):
+                send_error(\
+                    "application/x-www-form-urlencoded uploads only allowed"\
+                        " from Curl and Wget for CSRF protection reasons; use"\
+                        " multipart/form-data instead.")
+                return
+
             data = yield from self.read_request()
             privatekey = None
         else:
@@ -529,6 +539,10 @@ class MaalstroomDispatcher(object):
 
             if log.isEnabledFor(logging.DEBUG):
                 log.debug("form=[{}].".format(form))
+
+            csrf_token = form["csrf_token"].value
+            if not self.check_csrf_token(csrf_token):
+                return
 
             formelement = form["fileToUpload"]
             filename = formelement.filename
