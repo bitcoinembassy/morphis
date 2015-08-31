@@ -123,7 +123,8 @@ class MaalstroomDispatcher(object):
             try:
                 yield from self.dispatch_GET(rpath)
             except Exception as e:
-                log.exception(e)
+                log.exception(\
+                    "Exception serving GET: rpath=[{}]".format(rpath))
                 self.send_exception(e)
 
             return
@@ -478,7 +479,8 @@ class MaalstroomDispatcher(object):
         except KeyboardInterrupt:
             raise
         except Exception as e:
-            log.exception(e)
+            log.exception(\
+                "Exception serving POST: rpath=[{}]".format(rpath))
             self.send_exception(e)
 
         if not self.finished_request:
