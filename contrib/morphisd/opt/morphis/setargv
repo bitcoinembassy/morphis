@@ -1,0 +1,49 @@
+#!/usr/bin/python
+# -*- mode: python; coding: utf-8 -*-
+"""
+usage: setargv <real> <fake> [arg…]
+"""
+##############################################################################
+# This program is free software; you can redistribute it and/or modify it    #
+# under the terms of the GNU General Public License as published by the Free #
+# Software Foundation; either version 3 of the License, or (at your option)  #
+# any later version.                                                         #
+#                                                                            #
+# This program is distributed in the hope that it will be useful, but with-  #
+# out any warranty; without even the implied warranty of merchantability or  #
+# fitness for a particular purpose.  See the GNU General Public License for  #
+# more details.  <http://gplv3.fsf.org/>                                     #
+##############################################################################
+
+import os
+import sys
+
+__version__ = '0.5.0'
+__revision__ = '2013-05-03'
+__author__ = 'Klaus Alexander Seistrup <klaus@seistrup.dk>'
+
+argc = len(sys.argv)
+stderr = sys.stderr
+
+if argc == 2:
+    arg = sys.argv[1]
+    if arg in ('-h', '--help') or arg.endswith('help'):
+        print(__doc__.strip())
+        sys.exit(0)
+    if arg in ('-v', '--version') or arg.endswith('version'):
+        print('setargv/%s (%s)' % (__version__, __revision__))
+        sys.exit(0)
+
+if argc < 3:
+    print(__doc__.strip(), file=stderr)
+    sys.exit(1)
+
+(real, fake, args) = (sys.argv[1], sys.argv[2], sys.argv[2:])
+
+try:
+    os.execvp(real, args)
+except OSError as err:
+    print('unable to run %s: %s' % (real, str(err).split(']', 1)[-1].strip().lower()), file=stderr)
+
+sys.exit(-1)
+# eof

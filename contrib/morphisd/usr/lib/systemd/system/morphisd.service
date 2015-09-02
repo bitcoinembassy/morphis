@@ -1,0 +1,16 @@
+[Unit]
+Description=MORPHiS distributed data store
+After=syslog.target
+After=network.target
+
+[Service]
+Type=simple
+User=morphis
+Group=morphis
+WorkingDirectory=/opt/morphis
+ExecStart=/opt/morphis/morphisd
+Restart=always
+Environment=USER=morphis HOME=/opt/morphis
+
+[Install]
+WantedBy=multi-user.target
