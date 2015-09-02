@@ -20,8 +20,8 @@ WORKERS = os.cpu_count()
 HASH_BITS = enc.ID_BITS
 HASH_BYTES = HASH_BITS >> 3
 
-def generate_targeted_block(prefix, nbits, data, noonce_offset, noonce_size):
-    "Brute force finds a noonce for the passed data which allows the data to"
+def generate_targeted_block(prefix, nbits, data, nonce_offset, nonce_size):
+    "Brute force finds a nonce for the passed data which allows the data to"
     " hash to the desired prefix with nbits matching. This is the first hash"
     " of the block being targetd, thus the key, the id is not what is bruted."
 
@@ -44,20 +44,20 @@ def generate_targeted_block(prefix, nbits, data, noonce_offset, noonce_size):
             lp, rp = mp.Pipe()
 
             pool.apply_async(\
-                _find_noonce,\
+                _find_nonce,\
                 args=(rp,))
 
             pipes.append(lp)
             refs.append(rp)
 
-            lp.send((i, prefix, nbits, data, noonce_offset, noonce_size))
+            lp.send((i, prefix, nbits, data, nonce_offset, nonce_size))
 
         ready = mp.connection.wait(pipes)
         block = ready[0].recv()
     except Exception:
         log.exception("Exception generating targeted block.")
 
-    log.info("Found TargetedBlock noonce; terminating workers.")
+    log.info("Found TargetedBlock nonce; terminating workers.")
 
     pool.terminate()
 
@@ -98,29 +98,29 @@ def generate_key(prefix):
 
     return key
 
-def _find_noonce(rp):
+def _find_nonce(rp):
     try:
-        __find_noonce(rp)
+        __find_nonce(rp)
     except Exception:
-        log.exception("__find_noonce(..)")
+        log.exception("__find_nonce(..)")
 
-def __find_noonce(rp):
+def __find_nonce(rp):
 #    log.debug("Worker running.")
 
-    wid, prefix, nbits, data, noonce_offset, noonce_size = rp.recv()
+    wid, prefix, nbits, data, nonce_offset, nonce_size = rp.recv()
 
     max_dist = HASH_BITS - nbits
     nbytes = int(nbits / 8)
     nbytes += 4 # Extra bytes to increase probability of enough possibilities.
-    nbytes = min(nbytes, noonce_size)
-    ne = noonce_offset + noonce_size
-    noonce_offset = ne - nbytes
+    nbytes = min(nbytes, nonce_size)
+    ne = nonce_offset + nonce_size
+    nonce_offset = ne - nbytes
 
-    noonce = wid
+    nonce = wid
 
     while True:
-        noonce_bytes = noonce.to_bytes(nbytes, "big")
-        data[noonce_offset:ne] = noonce_bytes
+        nonce_bytes = nonce.to_bytes(nbytes, "big")
+        data[nonce_offset:ne] = nonce_bytes
 
         h = enc.generate_ID(data)
 
@@ -133,16 +133,16 @@ def __find_noonce(rp):
 
         if match:
 #            if log.isEnabledFor(logging.INFO):
-#                log.info("noonce_bytes=[{}]."\
-#                    .format(mutil.hex_string(noonce_bytes)))
+#                log.info("nonce_bytes=[{}]."\
+#                    .format(mutil.hex_string(nonce_bytes)))
 #            if log.isEnabledFor(logging.DEBUG):
 #                log.debug("resulting block=[\n{}]."\
 #                    .format(mutil.hex_dump(data)))
 
-            rp.send(noonce_bytes)
+            rp.send(nonce_bytes)
             return
 
-        noonce += WORKERS
+        nonce += WORKERS
 
 def _find_key(rp):
     try:

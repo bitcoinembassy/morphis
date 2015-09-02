@@ -199,15 +199,15 @@ class TargetedBlock(MorphisBlock):
         + 2 * consts.NODE_ID_BYTES
 
     @staticmethod
-    def set_noonce(data, noonce_bytes):
-        assert type(noonce_bytes) in (bytes, bytearray)
-        lenn = len(noonce_bytes)
+    def set_nonce(data, nonce_bytes):
+        assert type(nonce_bytes) in (bytes, bytearray)
+        lenn = len(nonce_bytes)
         end = TargetedBlock.NOONCE_OFFSET + TargetedBlock.NOONCE_SIZE
         start = end - lenn
-        data[start:end] = noonce_bytes
+        data[start:end] = nonce_bytes
 
     def __init__(self, buf=None):
-        self.noonce = b' ' * TargetedBlock.NOONCE_SIZE
+        self.nonce = b' ' * TargetedBlock.NOONCE_SIZE
         self.target_key = None
         self.block_hash = None
         self.block = None
@@ -217,8 +217,8 @@ class TargetedBlock(MorphisBlock):
     def encode(self):
         nbuf = super().encode()
 
-        assert len(self.noonce) == TargetedBlock.NOONCE_SIZE
-        nbuf += self.noonce
+        assert len(self.nonce) == TargetedBlock.NOONCE_SIZE
+        nbuf += self.nonce
         assert self.target_key is not None\
             and len(self.target_key) == consts.NODE_ID_BYTES
         nbuf += self.target_key
@@ -238,7 +238,7 @@ class TargetedBlock(MorphisBlock):
     def parse(self):
         i = super().parse()
 
-        self.noonce = self.buf[i:i+TargetedBlock.NOONCE_SIZE]
+        self.nonce = self.buf[i:i+TargetedBlock.NOONCE_SIZE]
         i += TargetedBlock.NOONCE_SIZE
         self.target_key = self.buf[i:i+consts.NODE_ID_BYTES]
         i += consts.NODE_ID_BYTES

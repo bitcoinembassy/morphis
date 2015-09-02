@@ -85,6 +85,8 @@ class MaalstroomDispatcher(object):
     def do_GET(self, rpath):
         self.finished_request = False
 
+        self.rpath = rpath
+
         assert self.outq.empty()
 
         yield from self._ensure_client_engine()
@@ -123,7 +125,8 @@ class MaalstroomDispatcher(object):
             try:
                 yield from self.dispatch_GET(rpath)
             except Exception as e:
-                log.exception(e)
+                log.exception(\
+                    "Exception serving GET: rpath=[{}]".format(rpath))
                 self.send_exception(e)
 
             return
@@ -471,6 +474,8 @@ class MaalstroomDispatcher(object):
     def do_POST(self, rpath):
         self.finished_request = False
 
+        self.rpath = rpath
+
         yield from self._ensure_client_engine()
 
         try:
@@ -478,7 +483,8 @@ class MaalstroomDispatcher(object):
         except KeyboardInterrupt:
             raise
         except Exception as e:
-            log.exception(e)
+            log.exception(\
+                "Exception serving POST: rpath=[{}]".format(rpath))
             self.send_exception(e)
 
         if not self.finished_request:
@@ -509,6 +515,16 @@ class MaalstroomDispatcher(object):
                 == "application/x-www-form-urlencoded":
             log.debug("Content-Type=[application/x-www-form-urlencoded].")
 
+            user_agent = self.handler.headers["User-Agent"]
+
+            if not (user_agent.startswith("curl/")\
+                    or user_agent.startswith("Wget/")):
+                send_error(\
+                    "application/x-www-form-urlencoded uploads only allowed"\
+                        " from Curl and Wget for CSRF protection reasons; use"\
+                        " multipart/form-data instead.")
+                return
+
             data = yield from self.read_request()
             privatekey = None
         else:
@@ -527,6 +543,10 @@ class MaalstroomDispatcher(object):
 
             if log.isEnabledFor(logging.DEBUG):
                 log.debug("form=[{}].".format(form))
+
+            csrf_token = form["csrf_token"].value
+            if not self.check_csrf_token(csrf_token):
+                return
 
             formelement = form["fileToUpload"]
             filename = formelement.filename
@@ -761,11 +781,31 @@ class MaalstroomDispatcher(object):
             self.send_header("ETag", content_id)
         else:
             self._send_no_cache()
-
+        self.send_frame_options_header()
         self.end_headers()
         self.write(content)
         self.finish_response()
         return
+
+    def send_frame_options_header(self):
+        if self.handler.maalstroom_plugin_used:
+            rpath = self.rpath
+            if len(rpath) and rpath[0] == '.':
+                p0 = rpath.find('/')
+                if p0 != -1:
+                    origin = rpath[:p0]
+                else:
+                    origin = ""
+            else:
+                origin = ""
+            self.send_header(\
+                "X-Frame-Options",\
+                "ALLOW-FROM morphis://" + origin + '/')
+        else:
+            self.send_header(\
+                "X-Frame-Options",\
+                "ALLOW-FROM {}"\
+                    .format(self.handler.maalstroom_url_prefix_str))
 
     def send_partial_content(self, content, start=False, content_type=None,\
             cacheable=False):
@@ -786,6 +826,7 @@ class MaalstroomDispatcher(object):
             self.send_header("Transfer-Encoding", "chunked")
             self.send_header("Content-Type",\
                 "text/html" if content_type is None else content_type)
+            self.send_frame_options_header()
             self.end_headers()
 
         chunklen = len(content)

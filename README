@@ -26,6 +26,8 @@ Dependencies:
 
 NOTE: SqlAlchemy 0.9.8 does have a bug and thus you should use the latest, 1.0.8 if you can.
 
+NOTE: If your system does not include packages for the above dependencies, then use pip3.4 to install them. Do not use pip, because that will only install the Python 2 versions. Example: "pip3.4 install sqlalchemy".
+
 To run, execute the following:
 
 > ./run.sh

@@ -519,7 +519,7 @@ class DmailEngine(object):
 
         tb = mp.TargetedBlock()
         tb.target_key = target_key
-        tb.noonce = int(0).to_bytes(64, "big")
+        tb.nonce = int(0).to_bytes(64, "big")
         tb.block = dw
 
         tb_data = tb.encode()
@@ -536,15 +536,15 @@ class DmailEngine(object):
                 mp.TargetedBlock.NOONCE_OFFSET,\
                 mp.TargetedBlock.NOONCE_SIZE)
 
-        noonce_bytes = yield from self.loop.run_in_executor(None, threadcall)
+        nonce_bytes = yield from self.loop.run_in_executor(None, threadcall)
 
         if log.isEnabledFor(logging.INFO):
-            log.info("Work found noonce [{}].".format(noonce_bytes))
+            log.info("Work found nonce [{}].".format(nonce_bytes))
 
-        mp.TargetedBlock.set_noonce(tb_data, noonce_bytes)
+        mp.TargetedBlock.set_nonce(tb_data, nonce_bytes)
 
         if log.isEnabledFor(logging.INFO):
-            mp.TargetedBlock.set_noonce(tb_header, noonce_bytes)
+            mp.TargetedBlock.set_nonce(tb_header, nonce_bytes)
             log.info("hash=[{}]."\
                 .format(mbase32.encode(enc.generate_ID(tb_header))))
 

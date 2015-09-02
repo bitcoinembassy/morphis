@@ -812,11 +812,22 @@ def serve_get(dispatcher, rpath):
     elif req.startswith("/address_config/"):
         params = req[16:]
 
-        addr_enc = params
+        if params:
+            addr_enc = params
 
-        dmail_address = yield from\
-            _load_dmail_address(\
-                dispatcher, site_key=mbase32.decode(addr_enc), fetch_keys=True)
+            dmail_address = yield from\
+                _load_dmail_address(\
+                    dispatcher, site_key=mbase32.decode(addr_enc),\
+                    fetch_keys=True)
+        else:
+            dmail_address = yield from\
+                _load_default_dmail_address(dispatcher, fetch_keys=True)
+            if dmail_address:
+                addr_enc = mbase32.encode(dmail_address.site_key)
+            else:
+                dispatcher.send_content(\
+                    "No dmail addresses, please create one first.")
+                return
 
         content = templates.dmail_address_config[0]
 
@@ -839,7 +850,7 @@ def serve_get(dispatcher, rpath):
             "${TARGET_KEY}",\
             base58.encode(dmail_address.keys[0].target_key))
 
-        dispatcher.send_content([content, None])
+        dispatcher.send_content(content)
 ##### OLD ACTIONS:
     elif req.startswith("/create_address/make_it_so?"):
         query = req[27:]
@@ -1236,7 +1247,7 @@ def _load_default_dmail_address_id(dispatcher):
     return dispatcher.loop.run_in_executor(None, dbcall)
 
 @asyncio.coroutine
-def _load_default_dmail_address(dispatcher):
+def _load_default_dmail_address(dispatcher, fetch_keys=False):
     def dbcall():
         with dispatcher.node.db.open_session() as sess:
             q = sess.query(NodeState)\
@@ -1245,9 +1256,11 @@ def _load_default_dmail_address(dispatcher):
             ns = q.first()
 
             if ns:
-                addr = sess.query(DmailAddress)\
-                    .filter(DmailAddress.id == int(ns.value))\
-                    .first()
+                q = sess.query(DmailAddress)\
+                    .filter(DmailAddress.id == int(ns.value))
+                if fetch_keys:
+                    q = q.options(joinedload("keys"))
+                addr = q.first()
 
                 if addr:
                     sess.expunge(addr)
