@@ -603,24 +603,52 @@ class MaalstroomDispatcher(object):
                         self.handler.maalstroom_url_prefix_str,\
                         enckey,\
                         path.decode("UTF-8"))
+                short_url = "{}{}/{}"\
+                    .format(\
+                        self.handler.maalstroom_url_prefix_str,\
+                        enckey[:32],\
+                        path.decode("UTF-8"))
             else:
                 url = "{}{}"\
                     .format(\
                         self.handler.maalstroom_url_prefix_str,\
                         enckey)
+                short_url = "{}{}"\
+                    .format(\
+                        self.handler.maalstroom_url_prefix_str,\
+                        enckey[:32])
 
             if privatekey:
-                message = '<a id="key" href="{}">updateable key link</a>'\
-                    .format(url)
+                message =\
+                    '<a id="key" href="{}">updateable key link</a><br/>'\
+                        .format(url)
+                message +=\
+                    '<a id="short_key" href="{}">short updateable key link'\
+                        '</a><br/>'\
+                            .format(short_url)
 
                 if key_callback.referred_key:
+                    referred_key_enc =\
+                        mbase32.encode(key_callback.referred_key)
+
                     message +=\
                         '<br/><a id="referred_key" href="{}{}">perma link</a>'\
-                            .format(\
-                                self.handler.maalstroom_url_prefix_str,\
-                                mbase32.encode(key_callback.referred_key))
+                            '<br/>'\
+                                .format(\
+                                    self.handler.maalstroom_url_prefix_str,\
+                                    referred_key_enc)
+                    message +=\
+                        '<a id="short_referred_key" href="{}{}">'\
+                            'short perma link</a><br/>'\
+                                .format(\
+                                    self.handler.maalstroom_url_prefix_str,\
+                                    referred_key_enc[:32])
             else:
-                message = '<a id="key" href="{}">perma link</a>'.format(url)
+                message = '<a id="key" href="{}">perma link</a><br/>'\
+                    .format(url)
+                message +=\
+                    '<a id="short_key" href="{}">short perma link</a><br/>'\
+                        .format(short_url)
 
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
