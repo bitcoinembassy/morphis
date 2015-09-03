@@ -7,6 +7,7 @@ import io
 import logging
 from threading import Event
 import time
+from urllib.parse import unquote
 
 import base58
 import chord
@@ -668,6 +669,10 @@ class MaalstroomDispatcher(object):
         self.finish_response()
 
     def send_301(self, url, message=None):
+        if not self.handler.maalstroom_plugin_used\
+                and url.startswith("morphis://"):
+            url = self.handler.maalstroom_url_prefix_str + url[10:]
+
         self.send_response(301)
         self.send_header("Location", url)
 

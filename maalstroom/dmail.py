@@ -189,8 +189,8 @@ def serve_get(dispatcher, rpath):
 
         unquoted_tag = unquote(tag)
 
-        for tag in tags:
-            if unquoted_tag == tag.name:
+        for ctag in tags:
+            if unquoted_tag == ctag.name:
                 active = " active_tag"
             else:
                 active = ""
@@ -201,7 +201,7 @@ def serve_get(dispatcher, rpath):
                     .format(\
                         active=active,\
                         addr=addr_enc,\
-                        tag=tag.name)
+                        tag=ctag.name)
             tag_rows.append(row)
 
         template = template.format(\
@@ -664,7 +664,7 @@ def serve_get(dispatcher, rpath):
 
         pq = params.find("?redirect=")
         if pq != -1:
-            redirect = params[pq+10:]
+            redirect = unquote(params[pq+10:])
         else:
             redirect = None
             pq = len(params)
@@ -691,7 +691,7 @@ def serve_get(dispatcher, rpath):
         params = req[16:]
         pq = params.find("?redirect=")
         if pq != -1:
-            redirect = params[pq+10:]
+            redirect = unquote(params[pq+10:])
         else:
             redirect = None
             pq = len(params)
@@ -719,7 +719,7 @@ def serve_get(dispatcher, rpath):
 
         pq = params.find("?redirect=")
         if pq != -1:
-            redirect = params[pq+10:]
+            redirect = unquote(params[pq+10:])
         else:
             redirect = None
             pq = len(params)
@@ -753,7 +753,7 @@ def serve_get(dispatcher, rpath):
 
         pq = params.find("?redirect=")
         if pq != -1:
-            redirect = params[pq+10:]
+            redirect = unquote(params[pq+10:])
         else:
             redirect = None
             pq = len(params)
@@ -777,7 +777,7 @@ def serve_get(dispatcher, rpath):
 
         pq = params.find("?redirect=")
         if pq != -1:
-            redirect = params[pq+10:]
+            redirect = unquote(params[pq+10:])
         else:
             redirect = None
             pq = len(params)
