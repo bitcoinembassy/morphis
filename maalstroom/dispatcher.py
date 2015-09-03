@@ -841,11 +841,19 @@ class MaalstroomDispatcher(object):
                     .format(self.handler.maalstroom_url_prefix_str))
 
     def send_partial_content(self, content, start=False, content_type=None,\
-            cacheable=False):
+            cacheable=False, charset=None):
         assert content is not None
 
+        if not content_type:
+            if not charset:
+                charset = self.get_accept_charset()
+            content_type = "text/html; charset={}".format(charset)
+
         if type(content) is str:
-            content = content.encode()
+            if charset:
+                content = content.encode(charset)
+            else:
+                content = content.encode()
 
         if not self.handler.maalstroom_plugin_used:
             content =\
@@ -857,8 +865,7 @@ class MaalstroomDispatcher(object):
             if not cacheable:
                 self._send_no_cache()
             self.send_header("Transfer-Encoding", "chunked")
-            self.send_header("Content-Type",\
-                "text/html" if content_type is None else content_type)
+            self.send_header("Content-Type", content_type)
             self.send_frame_options_header()
             self.end_headers()
 
