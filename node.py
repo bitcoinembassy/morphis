@@ -312,6 +312,8 @@ def __main():
         help="Disable Maalstroom Upload UI and API.")
     parser.add_argument("--disableautopublish", action="store_true",\
         help="Disable Dmail auto-publish check/publish mechanism.")
+    parser.add_argument("--disableautoscan", action="store_true",\
+        help="Disable Dmail auto-scan scanning.")
     parser.add_argument("--disableshell", action="store_true",\
         help="Disable MORPHiS from allowing ssh shell connections from"\
             " localhost.")
@@ -453,6 +455,8 @@ def __main():
                     ce.update_test = True
                 if args.disableautopublish:
                     ce.auto_publish_enabled = False
+                if args.disableautoscan:
+                    ce.auto_scan_enabled = False
 
                 maalstroom.set_client_engine(ce)
 

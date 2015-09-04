@@ -31,6 +31,7 @@ class ClientEngine(object):
         self.latest_version_data = None
 
         self.auto_publish_enabled = True
+        self.auto_scan_enabled = True
 
         self.csrf_token = base58.encode(os.urandom(64))
 
@@ -65,7 +66,8 @@ class ClientEngine(object):
             self._dmail_engine = dmail.DmailEngine(self.engine.tasks, self.db)
 
         asyncio.async(self._start_version_poller(), loop=self.loop)
-        asyncio.async(self._start_dmail_autoscan(), loop=self.loop)
+        if self.auto_scan_enabled:
+            asyncio.async(self._start_dmail_autoscan(), loop=self.loop)
         if self.auto_publish_enabled:
             asyncio.async(self._start_dmail_auto_publish(), loop=self.loop)
 
@@ -201,6 +203,9 @@ class ClientEngine(object):
             self.update_dmail_autoscan(addr)
 
     def update_dmail_autoscan(self, addr):
+        if not self.auto_scan_enabled:
+            return
+
         if log.isEnabledFor(logging.INFO):
             log.info(\
                 "Starting/Updating autoscan (scan_interval=[{}]) process for"\
