@@ -165,7 +165,7 @@ class MaalstroomDispatcher(object):
             self.send_content(\
                 templates.favicon_content, content_type="image/png")
             return
-        elif rpath.startswith(".upload"):
+        elif rpath.startswith(".upload") and maalstroom.upload_enabled:
             if rpath.startswith(".upload/generate"):
                 priv_key =\
                     base58.encode(\
@@ -206,7 +206,7 @@ class MaalstroomDispatcher(object):
                 self.send_content(template)
 
             return
-        elif rpath.startswith(".dmail"):
+        elif rpath.startswith(".dmail") and maalstroom.dmail_enabled:
             yield from maalstroom.dmail.serve_get(self, rpath)
             return
         else:
@@ -496,8 +496,12 @@ class MaalstroomDispatcher(object):
     def _do_POST(self, rpath):
         log.info("POST; rpath=[{}].".format(rpath))
 
-        if rpath != ".upload/upload":
+        if rpath.startswith(".dmail") and maalstroom.dmail_enabled:
             yield from maalstroom.dmail.serve_post(self, rpath)
+            return
+
+        if rpath != ".upload/upload" or not maalstroom.upload_enabled:
+            self.send_error(errcode=400)
             return
 
         if not self.connection_count:

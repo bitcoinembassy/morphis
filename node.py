@@ -306,6 +306,10 @@ def __main():
         help="Specify the database url to use.")
     parser.add_argument("--dm", action="store_true",\
         help="Disable Maalstroom server.")
+    parser.add_argument("--dmdmail", action="store_true",\
+        help="Disable Maalstroom Dmail UI and API.")
+    parser.add_argument("--dmupload", action="store_true",\
+        help="Disable Maalstroom Upload UI and API.")
     parser.add_argument("--disableautopublish", action="store_true",\
         help="Disable Dmail auto-publish check/publish mechanism.")
     parser.add_argument("--disableshell", action="store_true",\
@@ -410,6 +414,11 @@ def __main():
 
             if maalstroom_enabled:
                 import maalstroom
+
+                if args.dmdmail:
+                    maalstroom.dmail_enabled = False
+                if args.dmupload:
+                    maalstroom.upload_enabled = False
 
                 yield from maalstroom.start_maalstroom_server(node)
 

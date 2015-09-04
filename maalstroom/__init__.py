@@ -28,6 +28,9 @@ node = None
 server = None
 client_engine = None
 
+dmail_enabled = True
+upload_enabled = True
+
 _request_lock = threading.Lock()
 _concurrent_request_count = 0
 
