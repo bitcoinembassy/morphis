@@ -160,7 +160,8 @@ class Client(object):
         return int(r[p0:p1])
 
     @asyncio.coroutine
-    def send_find_key(self, prefix, target_key=None, significant_bits=None):
+    def send_find_key(self, prefix, target_key=None, significant_bits=None,\
+            retry_factor=None):
         cmd = "findkey " + mbase32.encode(prefix)
         if target_key:
             cmd += " " + mbase32.encode(target_key)
@@ -184,7 +185,7 @@ class Client(object):
         return data_rw
 
     @asyncio.coroutine
-    def send_get_data(self, data_key, path=None):
+    def send_get_data(self, data_key, path=None, retry_factor=None):
         data_key_enc = mbase32.encode(data_key)
 
         if path:
