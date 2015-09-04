@@ -122,11 +122,15 @@ class ClientEngine(object):
         yield from self.engine.protocol_ready.wait()
 
         def dbcall():
-            with self.db.open_session() as sess:
+            with self.db.open_session(True) as sess:
                 q = sess.query(DmailAddress)\
                     .options(joinedload("keys"))
 
-                return q.all()
+                r = q.all()
+
+                sess.expunge_all()
+
+                return r
 
         while self._running:
             addrs = yield from self.loop.run_in_executor(None, dbcall)
@@ -185,7 +189,11 @@ class ClientEngine(object):
                     .options(joinedload("keys"))\
                     .filter(DmailAddress.scan_interval > 0)
 
-                return q.all()
+                r = q.all()
+
+                sess.expunge_all()
+
+                return r
 
         addrs = yield from self.loop.run_in_executor(None, dbcall)
 

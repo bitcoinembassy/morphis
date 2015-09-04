@@ -180,7 +180,8 @@ def __main():
 
         dmail_target = args.dmail_target
 
-        dm, valid_sig = yield from de.fetch_dmail(key, x_int, dmail_target)
+        dm, valid_sig =\
+            yield from de.fetch_dmail(key, x_int, None, dmail_target)
 
         if not dm:
             raise Exception("No dmail found.")

@@ -189,12 +189,12 @@ class DmailV1(object):
         return idx
 
 class Dmail(object):
-    def __init__(self, buf=None, offset=0, length=None):
+    def __init__(self, buf=None, offset=0):
         self.buf = buf
 
         self.version = 2
         self.sender_pubkey = None
-        self.recipient_addr = None
+        self.destination_addr = None
         self.subject = None
         self.date = None
         self.parts = [] # [DmailPart].
@@ -203,14 +203,14 @@ class Dmail(object):
         self.signature = None
 
         if buf:
-            self.parse_from(buf, offset, length)
+            self.parse_from(buf, offset)
 
     def encode(self, obuf=None):
         self.buf = buf = obuf if obuf else bytearray()
 
         buf += struct.pack(">L", self.version)
         buf += sshtype.encodeBinary(self.sender_pubkey)
-        buf += sshtype.encodeBinary(self.recipient_addr)
+        buf += sshtype.encodeBinary(self.destination_addr)
         buf += sshtype.encodeString(self.subject)
         buf += sshtype.encodeString(self.date)
 
@@ -233,13 +233,10 @@ class Dmail(object):
         return buf
 
     def parse_from(self, buf, idx):
-        if not length:
-            length = len(buf)
-
         self.version = struct.unpack_from(">L", buf, idx)[0]
         idx += 4
         idx, self.sender_pubkey = sshtype.parse_binary_from(buf, idx)
-        idx, self.recipient_addr = sshtype.parse_binary_from(buf, idx)
+        idx, self.destination_addr = sshtype.parse_binary_from(buf, idx)
         idx, self.subject = sshtype.parse_string_from(buf, idx)
         idx, self.date = sshtype.parse_string_from(buf, idx)
 
@@ -395,15 +392,15 @@ class DmailEngine(object):
         return storing_nodes
 
     @asyncio.coroutine
-    def send_dmail(self, from_asymkey, recipient_addr, subject, date,\
+    def send_dmail(self, from_asymkey, destination_addr, subject, date,\
             message_text):
         assert from_asymkey is None or type(from_asymkey) is rsakey.RsaKey
-        assert type(recipient_addr) in (list, tuple, bytes, bytearray, str),\
-            type(recipient_addr)
+        assert type(destination_addr) in (list, tuple, bytes, bytearray, str),\
+            type(destination_addr)
         assert not date or type(date) is datetime
 
         addr, rsite =\
-            yield from self.fetch_recipient_dmail_site(recipient_addr)
+            yield from self.fetch_recipient_dmail_site(destination_addr)
 
         if not rsite:
             return False
@@ -419,7 +416,7 @@ class DmailEngine(object):
 
         dmail = Dmail()
         dmail.sender_pubkey = from_asymkey.asbytes() if from_asymkey else b""
-        dmail.recipient_addr = addr
+        dmail.destination_addr = addr
         dmail.subject = subject
         dmail.date = mutil.format_iso_datetime(date)
 
@@ -433,7 +430,7 @@ class DmailEngine(object):
 
         if from_asymkey:
             signature = from_asymkey.calc_rsassa_pss_sig(dmail_bytes)
-            dmail_bytes += signature
+            dmail_bytes += sshtype.encodeBinary(signature)
 
         storing_nodes = yield from\
             self._send_dmail(from_asymkey, rsite, dmail_bytes, signature)
@@ -579,7 +576,47 @@ class DmailEngine(object):
 
     @asyncio.coroutine
     def _process_dmail_v2(self, key, x, tb, data_rw):
-        raise Exception("Not Implemented.")
+        dw = DmailWrapper(tb.buf, mp.TargetedBlock.BLOCK_OFFSET)
+
+        if dw.ssm != "mdh-v1":
+            raise DmailException(\
+                "Unrecognized key exchange method in dmail [{}]."\
+                    .format(dw.ssm))
+
+        # Calculate the shared secret.
+        kex = dhgroup14.DhGroup14()
+        kex.x = x
+        kex.generate_e()
+        kex.f = dw.ssf
+
+        if dw.sse != kex.e:
+            raise DmailException(\
+                "Dmail [{}] is encrypted with a different e [{}] than"\
+                " the specified x resulted in [{}]."\
+                    .format(mbase32.encode(data_rw.data_key), dw.sse, kex.e))
+
+        kex.calculate_k()
+
+        # Generate the AES-256 encryption key.
+        key = self._generate_encryption_key(tb.target_key, kex.k)
+
+        # Decrypt the data.
+        data = enc.decrypt_data_block(dw.data_enc, key)
+
+        if not data:
+            raise DmailException("Dmail data was empty.")
+
+        dmail = Dmail(data)
+
+        if dmail.signature:
+            pubkey = rsakey.RsaKey(dmail.sender_pubkey)
+            valid_sig =\
+                pubkey.verify_rsassa_pss_sig(\
+                    data[:dmail.signature_offset], dmail.signature)
+
+            return dmail, valid_sig
+        else:
+            return dmail, False
 
     def _generate_encryption_key(self, target_key, k):
         return enc.generate_ID(\
@@ -740,6 +777,8 @@ class DmailEngine(object):
 
     @asyncio.coroutine
     def scan_and_save_new_dmails(self, dmail_address):
+        assert type(dmail_address) is db.DmailAddress, type(dmail_address)
+
         new_dmail_cnt = 0
         old_dmail_cnt = 0
         err_dmail_cnt = 0
@@ -825,6 +864,16 @@ class DmailEngine(object):
                 log.info("Dmail was not found on the network.")
             return False
 
+        if dmobj.version > 1:
+            if dmobj.destination_addr != dmail_address.site_key:
+                log.warning(\
+                    "Dmail was addressed to [{}], yet passed address was"\
+                        " [{}]."\
+                            .format(mbase32.encode(dmobj.destination_addr),\
+                                mbase32.encode(dmail_address.site_key)))
+                sig_valid = False
+
+        # Save the Dmail to our local database.
         def dbcall():
             with self.db.open_session() as sess:
                 self.db.lock_table(sess, db.DmailMessage)
@@ -836,7 +885,7 @@ class DmailEngine(object):
                     return False
 
                 msg = db.DmailMessage()
-                msg.dmail_address_id = dmail_address.id
+                msg.address = dmail_address
                 msg.dmail_key_id = address_key.id
                 msg.data_key = dmail_message_key
                 msg.sender_dmail_key =\

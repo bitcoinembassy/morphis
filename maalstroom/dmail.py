@@ -1415,15 +1415,14 @@ def _list_dmails_for_tag(dispatcher, addr, tag):
 
         safe_reply_subject = generate_safe_reply_subject(msg)
 
+        sender_class = ""
+
         if show_sender:
             addr_key = msg.sender_dmail_key
             if addr_key:
-                addr_key_enc = mbase32.encode(addr_key)
-                if msg.sender_valid:
-                    addr_value = addr_key_enc
-                else:
-                    addr_value = '<span class="strikethrough">'\
-                        + addr_key_enc + "</span>"
+                addr_value = mbase32.encode(addr_key)
+                if not msg.sender_valid:
+                    sender_class = " invalid_sender"
             else:
                 addr_value = None
         else:
@@ -1445,6 +1444,7 @@ def _list_dmails_for_tag(dispatcher, addr, tag):
             msg_id=msg.id,\
             subject=subject,\
             safe_reply_subject=safe_reply_subject,\
+            sender_class=sender_class,\
             sender=addr_value,\
             timestamp=mutil.format_human_no_ms_datetime(msg.date))
 
