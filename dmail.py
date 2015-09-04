@@ -64,7 +64,7 @@ class DmailSite(object):
     def export(self):
         return json.dumps(self.root).encode()
 
-class DmailWrapper(object):
+class DmailWrapperV1(object):
     def __init__(self, buf=None, offset=0):
         self.version = 1
         self.ssm = None
@@ -108,9 +108,94 @@ class DmailWrapper(object):
 
         return idx
 
-class Dmail(object):
+class DmailWrapper(object):
+    def __init__(self, buf=None, offset=0):
+        self.version = 2
+        self.ssm = None
+        self.sse = None
+        self.ssf = None
+
+        self.signature = None
+
+        self.data = None
+        self.data_len = None
+        self.data_enc = None
+
+        if buf is not None:
+            self.parse_from(buf, offset)
+
+    def encode(self, obuf=None):
+        buf = obuf if obuf else bytearray()
+        buf += struct.pack(">L", self.version)
+        buf += sshtype.encodeString(self.ssm)
+        buf += sshtype.encodeMpint(self.sse)
+        buf += sshtype.encodeMpint(self.ssf)
+
+        buf += sshtype.encodeBinary(self.signature)
+
+        buf += struct.pack(">L", self.data_len)
+        buf += self.data_enc
+
+    def parse_from(self, buf, idx):
+        self.version = struct.unpack_from(">L", buf, idx)[0]
+        idx += 4
+        idx, self.ssm = sshtype.parse_string_from(buf, idx)
+        idx, self.sse = sshtype.parse_mpint_from(buf, idx)
+        idx, self.ssf = sshtype.parse_mpint_from(buf, idx)
+
+        idx, self.signature = sshtype.parse_binary_from(buf, idx)
+
+        self.data_len = struct.unpack_from(">L", buf, idx)[0]
+        idx += 4
+
+        self.data_enc = buf[idx:]
+
+        return idx
+
+class DmailV1(object):
     def __init__(self, buf=None, offset=0, length=None):
         self.version = 1
+        self.sender_pubkey = None
+        self.subject = None
+        self.date = None
+        self.parts = [] # [DmailPart].
+
+        if buf:
+            self.parse_from(buf, offset, length)
+
+    def encode(self, obuf=None):
+        buf = obuf if obuf else bytearray()
+
+        buf += struct.pack(">L", self.version)
+        buf += sshtype.encodeBinary(self.sender_pubkey)
+        buf += sshtype.encodeString(self.subject)
+        buf += sshtype.encodeString(self.date)
+
+        for part in self.parts:
+            part.encode(buf)
+
+        return buf
+
+    def parse_from(self, buf, idx, length=None):
+        if not length:
+            length = len(buf)
+
+        self.version = struct.unpack_from(">L", buf, idx)[0]
+        idx += 4
+        idx, self.sender_pubkey = sshtype.parse_binary_from(buf, idx)
+        idx, self.subject = sshtype.parse_string_from(buf, idx)
+        idx, self.date = sshtype.parse_string_from(buf, idx)
+
+        while idx < length:
+            part = DmailPart()
+            idx = part.parse_from(buf, idx)
+            self.parts.append(part)
+
+        return idx
+
+class Dmail(object):
+    def __init__(self, buf=None, offset=0, length=None):
+        self.version = 2
         self.sender_pubkey = None
         self.subject = None
         self.date = None
@@ -297,7 +382,7 @@ class DmailEngine(object):
         if not date:
             date = mutil.utc_datetime()
 
-        dmail = Dmail()
+        dmail = DmailV1()
         dmail.sender_pubkey = from_asymkey.asbytes() if from_asymkey else b""
         dmail.subject = subject
         dmail.date = mutil.format_iso_datetime(date)
@@ -315,7 +400,7 @@ class DmailEngine(object):
 
     @asyncio.coroutine
     def _send_dmail(self, dmail, from_asymkey, recipients):
-        assert type(dmail) is Dmail, type(dmail)
+        assert type(dmail) is DmailV1, type(dmail)
 
         if len(recipients) == 0:
             raise DmailException("No recipients were specified.")
@@ -431,7 +516,22 @@ class DmailEngine(object):
                     " [{}]."\
                         .format(tb_tid_enc, tid_enc))
 
-        dw = DmailWrapper(tb.buf, mp.TargetedBlock.BLOCK_OFFSET)
+        version =\
+            struct.unpack_from(">L", tb.buf, mp.TargetedBlock.BLOCK_OFFSET)[0]
+
+        if version == 1:
+            dmail, valid_sig =\
+                yield from self._process_dmail_v1(key, x, tb, data_rw)
+        else:
+            assert version == 2
+            dmail, valid_sig =\
+                yield from self._process_dmail_v2(key, x, tb, data_rw)
+
+        return dmail, valid_sig
+
+    @asyncio.coroutine
+    def _process_dmail_v1(self, key, x, tb, data_rw):
+        dw = DmailWrapperV1(tb.buf, mp.TargetedBlock.BLOCK_OFFSET)
 
         if dw.ssm != "mdh-v1":
             raise DmailException(\
@@ -458,7 +558,7 @@ class DmailEngine(object):
         if not data:
             raise DmailException("Dmail data was empty.")
 
-        dmail = Dmail(data, 0, dw.data_len)
+        dmail = DmailV1(data, 0, dw.data_len)
 
         if dw.signature:
             signature = dw.signature
@@ -469,10 +569,14 @@ class DmailEngine(object):
         else:
             return dmail, False
 
+    @asyncio.coroutine
+    def _process_dmail_v2(self, key, x, tb, data_rw):
+        raise Exception("Not Implemented.")
+
     def _generate_encryption_key(self, target_key, k):
         return enc.generate_ID(\
-            b"The life forms running github are more retarded than any retard!"\
-            + target_key + sshtype.encodeMpint(k)\
+            b"The life forms running github are more retarded than any"\
+            + b" retard!" + target_key + sshtype.encodeMpint(k)\
             + b"https://github.com/nixxquality/WebMConverter/commit/"\
             + b"c1ac0baac06fa7175677a4a1bf65860a84708d67")
 
@@ -504,7 +608,7 @@ class DmailEngine(object):
         else:
             m = r
 
-        dw = DmailWrapper()
+        dw = DmailWrapperV1()
         dw.ssm = _dh_method_name
         dw.sse = sse
         dw.ssf = dh.e
