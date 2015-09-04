@@ -156,8 +156,9 @@ class MaalstroomDispatcher(object):
             if rpath == "style.css":
                 self.send_content(\
                     templates.main_css, content_type="text/css")
-            elif rpath == "csrf_token":
-                self.send_content(self.client_engine.csrf_token)
+#TODO: Have a UI where the user can enable this on a per portal basis only.
+#            elif rpath == "csrf_token":
+#                self.send_content(self.client_engine.csrf_token)
             else:
                 self.send_error(errcode=400)
             return
