@@ -364,21 +364,34 @@ class DmailEngine(object):
 
         message_text = message_text[p0:]
 
-        storing_nodes = yield from self.send_dmail(\
-            m_from_asymkey, m_dest_ids, subject, date, message_text)
+        storing_nodes = 0
+
+        for dest_id in m_dest_ids:
+            storing_nodes += yield from self.send_dmail(\
+                m_from_asymkey, dest_id, subject, date, message_text)
 
         return storing_nodes
 
     @asyncio.coroutine
-    def send_dmail(self, from_asymkey, recipients, subject, date,\
+    def send_dmail(self, from_asymkey, recipient_addr, subject, date,\
             message_text):
         assert from_asymkey is None or type(from_asymkey) is rsakey.RsaKey
-        assert type(recipients) is list, type(recipients)
+        assert type(recipient_addr) in (list, tuple, bytes, bytearray, str),\
+            type(recipient_addr)
         assert not date or type(date) is datetime
+
+        addr, rsite =\
+            yield from self.fetch_recipient_dmail_site(recipient_addr)
+
+        if not rsite:
+            return False
+
+        if rsite.root["ssm"] != _dh_method_name:
+            raise DmailException("Unsupported ss method [{}]."\
+                .format(rsite.root["ssm"]))
 
         if type(message_text) is str:
             message_text = message_text.encode()
-
         if not date:
             date = mutil.utc_datetime()
 
@@ -394,45 +407,14 @@ class DmailEngine(object):
             dmail.parts.append(part)
 
         storing_nodes =\
-            yield from self._send_dmail(dmail, from_asymkey, recipients)
-
-        return storing_nodes
-
-    @asyncio.coroutine
-    def _send_dmail(self, dmail, from_asymkey, recipients):
-        assert type(dmail) is DmailV1, type(dmail)
-
-        if len(recipients) == 0:
-            raise DmailException("No recipients were specified.")
-
-        if log.isEnabledFor(logging.INFO):
-            log.info("len(recipients)=[{}].".format(len(recipients)))
-
-        dmail_bytes = dmail.encode()
-
-        recipients = yield from self.fetch_recipient_dmail_sites(recipients)
-
-        if not recipients:
-            return False
-
-        storing_nodes = 0
-
-        for recipient in recipients:
-            if recipient.root["ssm"] != _dh_method_name:
-                raise DmailException("Unsupported ss method [{}]."\
-                    .format(recipient.root["ssm"]))
-
-            storing_nodes =\
-                yield from self.__send_dmail(from_asymkey, recipient, dmail)
+            yield from self._send_dmail(from_asymkey, rsite, dmail)
 
         return storing_nodes
 
     @asyncio.coroutine
     def scan_dmail_address(self, addr, significant_bits, key_callback=None):
-        addr_enc = mbase32.encode(addr)
-
         if log.isEnabledFor(logging.INFO):
-            log.info("Scanning dmail [{}].".format(addr_enc))
+            log.info("Scanning dmail [{}].".format(mbase32.encode(addr)))
 
         def dbcall():
             with self.db.open_session() as sess:
@@ -457,14 +439,11 @@ class DmailEngine(object):
             log.info("DmailAddress not found locally, fetching settings from"\
                 " the network.")
 
-            dsites = yield from\
-                self.fetch_recipient_dmail_sites(\
-                    [(addr_enc, addr, significant_bits)])
+            addr, dsite = yield from\
+                self.fetch_recipient_dmail_site(addr, significant_bits)
 
-            if not dsites:
+            if not dsite:
                 raise DmailException("Dmail site not found.")
-
-            dsite = dsites[0]
 
             target = dsite.root["target"]
             significant_bits = dsite.root["difficulty"]
@@ -581,7 +560,7 @@ class DmailEngine(object):
             + b"c1ac0baac06fa7175677a4a1bf65860a84708d67")
 
     @asyncio.coroutine
-    def __send_dmail(self, from_asymkey, recipient, dmail):
+    def _send_dmail(self, from_asymkey, recipient, dmail):
         assert type(recipient) is DmailSite
 
         root = recipient.root
@@ -694,48 +673,40 @@ class DmailEngine(object):
         return total_storing
 
     @asyncio.coroutine
-    def fetch_recipient_dmail_sites(self, recipients):
-        robjs = []
+    def fetch_recipient_dmail_site(self, addr, significant_bits=None):
+        if type(addr) is str:
+            addr, significant_bits = mutil.decode_key(addr)
+        elif type(addr) in (list, tuple):
+            addr, significant_bits = addr
+        else:
+            assert type(addr) in (bytes, bytearray)
 
-        for entry in recipients:
-            if type(entry) is str:
-                recipient, significant_bits =\
-                    mutil.decode_key(entry)
-                recipient =\
-                    (entry, bytes(recipient), significant_bits)
+        if significant_bits:
+            data_rw = yield from self.task_engine.send_find_key(\
+                addr, significant_bits=significant_bits)
 
-            if type(entry) in (tuple, list):
-                recipient_enc, recipient, significant_bits = entry
+            addr = bytes(data_rw.data_key)
 
-                if significant_bits:
-                    data_rw = yield from self.task_engine.send_find_key(\
-                        recipient, significant_bits=significant_bits)
+            if not addr:
+                log.info("Failed to find key for prefix [{}]."\
+                    .format(recipient_enc))
+                return None, None
 
-                    recipient = bytes(data_rw.data_key)
+        data_rw =\
+            yield from self.task_engine.send_get_data(addr, retry_factor=100)
 
-                    if not recipient:
-                        log.info("Failed to find key for prefix [{}]."\
-                            .format(recipient_enc))
-            else:
-                recipient = entry
-
-            data_rw = yield from self.task_engine.send_get_data(recipient,\
-                retry_factor=100)
-
-            if not data_rw.data:
-                if log.isEnabledFor(logging.INFO):
-                    log.info("Failed to fetch dmail site [{}]."\
-                        .format(mbase32.encode(recipient)))
-                continue
-
-            site_data = data_rw.data.decode("UTF-8")
-
+        if not data_rw.data:
             if log.isEnabledFor(logging.INFO):
-                log.info("site_data=[{}].".format(site_data))
+                log.info("Failed to fetch dmail site [{}]."\
+                    .format(mbase32.encode(recipient)))
+            return None, None
 
-            robjs.append(DmailSite(site_data))
+        site_data = data_rw.data.decode("UTF-8")
 
-        return robjs
+        if log.isEnabledFor(logging.INFO):
+            log.info("site_data=[{}].".format(site_data))
+
+        return addr, DmailSite(site_data)
 
     @asyncio.coroutine
     def scan_and_save_new_dmails(self, dmail_address):

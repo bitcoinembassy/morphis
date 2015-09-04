@@ -995,19 +995,17 @@ def serve_post(dispatcher, rpath):
             rsakey.RsaKey(privdata=dm.address.site_privatekey)\
                 if dm.sender_dmail_key else None
 
-        dest_addr_enc = mbase32.encode(dm.destination_dmail_key)
-        destinations = [
-            (dest_addr_enc,\
-                dm.destination_dmail_key,\
-                dm.destination_significant_bits)]
+        dest_addr = (dm.destination_dmail_key, dm.destination_significant_bits)
 
         storing_nodes =\
             yield from de.send_dmail(\
                 sender_asymkey,\
-                destinations,\
+                dest_addr,\
                 dm.subject,\
                 dm.date,\
                 dm.parts[0].data)
+
+        dest_addr_enc = mbase32.encode(dm.destination_dmail_key)
 
         if storing_nodes is False:
             dispatcher.send_partial_content(\
