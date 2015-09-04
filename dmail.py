@@ -16,6 +16,7 @@ from sqlalchemy import func
 import base58
 import brute
 import chord
+import consts
 import db
 import mbase32
 import multipart as mp
@@ -115,8 +116,6 @@ class DmailWrapper(object):
         self.sse = None
         self.ssf = None
 
-        self.signature = None
-
         self.data = None
         self.data_len = None
         self.data_enc = None
@@ -131,8 +130,6 @@ class DmailWrapper(object):
         buf += sshtype.encodeMpint(self.sse)
         buf += sshtype.encodeMpint(self.ssf)
 
-        buf += sshtype.encodeBinary(self.signature)
-
         buf += struct.pack(">L", self.data_len)
         buf += self.data_enc
 
@@ -142,8 +139,6 @@ class DmailWrapper(object):
         idx, self.ssm = sshtype.parse_string_from(buf, idx)
         idx, self.sse = sshtype.parse_mpint_from(buf, idx)
         idx, self.ssf = sshtype.parse_mpint_from(buf, idx)
-
-        idx, self.signature = sshtype.parse_binary_from(buf, idx)
 
         self.data_len = struct.unpack_from(">L", buf, idx)[0]
         idx += 4
@@ -195,42 +190,69 @@ class DmailV1(object):
 
 class Dmail(object):
     def __init__(self, buf=None, offset=0, length=None):
+        self.buf = buf
+
         self.version = 2
         self.sender_pubkey = None
+        self.recipient_addr = None
         self.subject = None
         self.date = None
         self.parts = [] # [DmailPart].
+
+        self.signature_offset = None
+        self.signature = None
 
         if buf:
             self.parse_from(buf, offset, length)
 
     def encode(self, obuf=None):
-        buf = obuf if obuf else bytearray()
+        self.buf = buf = obuf if obuf else bytearray()
 
         buf += struct.pack(">L", self.version)
         buf += sshtype.encodeBinary(self.sender_pubkey)
+        buf += sshtype.encodeBinary(self.recipient_addr)
         buf += sshtype.encodeString(self.subject)
         buf += sshtype.encodeString(self.date)
 
+        buf += struct.pack(">H", len(self.parts))
         for part in self.parts:
             part.encode(buf)
 
+        self.signature_offset = len(buf)
+
+        # Reserve space for signature, MorphisBlock and TargetedBlock header.
+        max_size = consts.MAX_DATA_BLOCK_SIZE - 2768
+
+        if len(buf) > max_size:
+            raise DmailException(\
+                "Dmail is [{}] bytes, yet cannot be larger than [{}] bytes."\
+                    .format(len(buf), max_size))
+
+        # 512 byte RSA-4096 signature goes at the end.
+
         return buf
 
-    def parse_from(self, buf, idx, length=None):
+    def parse_from(self, buf, idx):
         if not length:
             length = len(buf)
 
         self.version = struct.unpack_from(">L", buf, idx)[0]
         idx += 4
         idx, self.sender_pubkey = sshtype.parse_binary_from(buf, idx)
+        idx, self.recipient_addr = sshtype.parse_binary_from(buf, idx)
         idx, self.subject = sshtype.parse_string_from(buf, idx)
         idx, self.date = sshtype.parse_string_from(buf, idx)
 
-        while idx < length:
+        part_cnt = struct.unpack_from(">H", buf, idx)[0]
+        idx += 2
+
+        for i in range(part_cnt):
             part = DmailPart()
             idx = part.parse_from(buf, idx)
             self.parts.append(part)
+
+        self.signature_offset = idx
+        idx, self.signature = sshtype.parse_binary_from(buf, idx)
 
         return idx
 
@@ -395,8 +417,9 @@ class DmailEngine(object):
         if not date:
             date = mutil.utc_datetime()
 
-        dmail = DmailV1()
+        dmail = Dmail()
         dmail.sender_pubkey = from_asymkey.asbytes() if from_asymkey else b""
+        dmail.recipient_addr = addr
         dmail.subject = subject
         dmail.date = mutil.format_iso_datetime(date)
 
@@ -406,8 +429,14 @@ class DmailEngine(object):
             part.data = message_text
             dmail.parts.append(part)
 
-        storing_nodes =\
-            yield from self._send_dmail(from_asymkey, rsite, dmail)
+        dmail_bytes = dmail.encode()
+
+        if from_asymkey:
+            signature = from_asymkey.calc_rsassa_pss_sig(dmail_bytes)
+            dmail_bytes += signature
+
+        storing_nodes = yield from\
+            self._send_dmail(from_asymkey, rsite, dmail_bytes, signature)
 
         return storing_nodes
 
@@ -560,14 +589,16 @@ class DmailEngine(object):
             + b"c1ac0baac06fa7175677a4a1bf65860a84708d67")
 
     @asyncio.coroutine
-    def _send_dmail(self, from_asymkey, recipient, dmail):
+    def _send_dmail(self, from_asymkey, recipient, dmail_bytes, signature):
         assert type(recipient) is DmailSite
 
+        # Read in recipient DmailSite.
         root = recipient.root
         sse = sshtype.parseMpint(base58.decode(root["sse"]))[1]
-        target = root["target"]
+        target_enc = root["target"]
         difficulty = root["difficulty"]
 
+        # Calculate a shared secret.
         dh = dhgroup14.DhGroup14()
         dh.generate_x()
         dh.generate_e()
@@ -575,11 +606,11 @@ class DmailEngine(object):
 
         k = dh.calculate_k()
 
-        target_key = mbase32.decode(target)
+        target_key = mbase32.decode(target_enc)
 
         key = self._generate_encryption_key(target_key, k)
-        dmail_bytes = dmail.encode()
 
+        # Encrypt the Dmail bytes.
         m, r = enc.encrypt_data_block(dmail_bytes, key)
         if m:
             if r:
@@ -587,19 +618,16 @@ class DmailEngine(object):
         else:
             m = r
 
-        dw = DmailWrapperV1()
+        # Store it in a DmailWrapper.
+        dw = DmailWrapper()
         dw.ssm = _dh_method_name
         dw.sse = sse
         dw.ssf = dh.e
 
-        if from_asymkey:
-            dw.signature = from_asymkey.calc_rsassa_pss_sig(m)
-        else:
-            dw.signature = b''
-
         dw.data_len = len(dmail_bytes)
         dw.data_enc = m
 
+        # Store the DmailWrapper in a TargetedBlock.
         tb = mp.TargetedBlock()
         tb.target_key = target_key
         tb.nonce = int(0).to_bytes(64, "big")
@@ -608,10 +636,11 @@ class DmailEngine(object):
         tb_data = tb.encode()
         tb_header = tb_data[:mp.TargetedBlock.BLOCK_OFFSET]
 
+        # Do the POW on the TargetedBlock.
         if log.isEnabledFor(logging.INFO):
             log.info(\
                 "Attempting work on dmail (target=[{}], difficulty=[{}])."\
-                    .format(target, difficulty))
+                    .format(target_enc, difficulty))
 
         def threadcall():
             return brute.generate_targeted_block(\
@@ -628,7 +657,7 @@ class DmailEngine(object):
 
         if log.isEnabledFor(logging.INFO):
             mp.TargetedBlock.set_nonce(tb_header, nonce_bytes)
-            log.info("hash=[{}]."\
+            log.info("Message key=[{}]."\
                 .format(mbase32.encode(enc.generate_ID(tb_header))))
 
         key = None
@@ -637,11 +666,12 @@ class DmailEngine(object):
             nonlocal key
             key = val
 
-        log.info("Sending dmail to the network.")
-
         if log.isEnabledFor(logging.DEBUG):
-            log.debug("dmail block data=[\n{}]."\
+            log.debug("TargetedBlock dump=[\n{}]."\
                 .format(mutil.hex_dump(tb_data)))
+
+        # Upload the TargetedBlock to the network.
+        log.info("Sending dmail to the network.")
 
         total_storing = 0
         retry = 0

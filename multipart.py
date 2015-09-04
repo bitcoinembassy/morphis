@@ -194,7 +194,7 @@ class LinkBlock(MorphisBlock):
 
 class TargetedBlock(MorphisBlock):
     NOONCE_OFFSET = MorphisBlock.HEADER_BYTES
-    NOONCE_SIZE = 64
+    NOONCE_SIZE = 64 #FIXME: This was suppose to be 64 bits, not bytes.
     BLOCK_OFFSET = MorphisBlock.HEADER_BYTES + NOONCE_SIZE\
         + 2 * consts.NODE_ID_BYTES
 
