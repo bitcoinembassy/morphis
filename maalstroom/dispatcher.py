@@ -370,6 +370,7 @@ class MaalstroomDispatcher(object):
                 self.send_exception(data_callback.exception)
 
             self.send_response(200)
+            self.send_default_headers()
 
             rewrite_urls = False
 
@@ -656,6 +657,7 @@ class MaalstroomDispatcher(object):
                         .format(short_url)
 
             self.send_response(200)
+            self.send_default_headers()
             self.send_header("Content-Type", "text/html")
             self.send_header("Content-Length", len(message))
             self.end_headers()
@@ -693,6 +695,16 @@ class MaalstroomDispatcher(object):
 
         self._accept_charset = acharset
         return acharset
+
+    def send_default_headers(self):
+        if self.handler.maalstroom_plugin_used:
+            urls = self.handler.maalstroom_url_prefix_str + '*'
+        else:
+            urls = "'self'"
+
+        self.send_header(\
+            "Content-Security-Policy",\
+            "default-src 'unsafe-inline' 'unsafe-eval' " + urls)
 
     def send_204(self):
         "No content."
@@ -783,24 +795,9 @@ class MaalstroomDispatcher(object):
 
         etag = self.handler.headers["If-None-Match"]
         if cacheable and etag == content_id:
-#            #TODO: Consider getting rid of this updateablekey support here
-#            # because we don't send updateable keys this way ever.
-#            updateable_key = etag.startswith("updateablekey-")
-
             cache_control = self.handler.headers["Cache-Control"]
-#            if not (updateable_key and cache_control == "max-age=0")\
-#                    and cache_control != "no-cache":
             if cache_control != "no-cache":
                 self.send_response(304)
-#                if updateable_key:
-#                    p0 = etag.index('-')
-#                    p1 = etag.index('-', p0 + 1)
-#                    version = etag[p0:p1]
-#                    self.send_header(\
-#                        "X-Maalstroom-UpdateableKey-Version",\
-#                        version)
-#                    self.send_header("Cache-Control", "public,max-age=15")
-#                else:
                 self.send_header("Cache-Control", "public,max-age=300")
                 self.send_header("ETag", content_id)
                 self.send_header("Content-Length", 0)
@@ -812,6 +809,7 @@ class MaalstroomDispatcher(object):
             content = content()
 
         self.send_response(200)
+        self.send_default_headers()
         self.send_header("Content-Length", len(content))
         self.send_header("Content-Type", content_type)
         if cacheable:
@@ -867,6 +865,7 @@ class MaalstroomDispatcher(object):
 
         if start:
             self.send_response(200)
+            self.send_default_headers()
             if not cacheable:
                 self._send_no_cache()
             self.send_header("Transfer-Encoding", "chunked")
@@ -933,6 +932,7 @@ class MaalstroomDispatcher(object):
             self.send_response(500)
 
         if msg:
+            self.send_default_headers()
             if type(msg) is str:
                 msg = msg.encode()
 
