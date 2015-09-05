@@ -31,6 +31,8 @@ client_engine = None
 dmail_enabled = True
 upload_enabled = True
 
+proxy_url = None
+
 _request_lock = threading.Lock()
 _concurrent_request_count = 0
 
@@ -46,6 +48,8 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
         self.maalstroom_plugin_used = False
         self.maalstroom_url_prefix = None
         self.maalstroom_url_prefix_str = None
+
+        self.proxy_used = False
 
 #        self._inq = queue.Queue()
         self._inq = asyncio.Queue(loop=self.loop)
@@ -115,6 +119,11 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
     def _prepare_for_request(self):
         self._abort_event.clear()
 
+        global proxy_url
+
+        if self.headers["X-Forwarded-For"]:
+            self.proxy_used = True
+
         if self.headers["X-Maalstroom-Plugin"]:
             self.maalstroom_plugin_used = True
             self.maalstroom_url_prefix_str =\
@@ -123,11 +132,17 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
                 self.maalstroom_url_prefix_str.encode()
         else:
             global port
-            host = self.headers["Host"]
+            if self.proxy_used and proxy_url:
+                host = proxy_url
+            else:
+                host = self.headers["Host"]
+
             if log.isEnabledFor(logging.DEBUG):
-                log.debug("No plugin used for request, rewriting URLs using"\
-                    " host=[{}]."\
-                        .format(host))
+                log.debug(\
+                    "No plugin used for request, rewriting URLs using"\
+                        " host=[{}]."\
+                            .format(host))
+
             # Host header includes port.
             self.maalstroom_url_prefix_str =\
                 self._maalstroom_http_url_prefix.format(host)

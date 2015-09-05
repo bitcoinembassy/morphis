@@ -343,6 +343,8 @@ def __main():
         help="Enable offline mode. Only Maalstroom will be enabled.")
     parser.add_argument("--parallellaunch", action="store_true",\
         help="Enable parallel launch of the nodecount nodes.")
+    parser.add_argument("--proxyurl",\
+        help="Specify the proxy URL to rewrite URLs to for proxy requests.")
     parser.add_argument("--reinitds", action="store_true",\
         help="Allow reinitialization of the Datastore. This will only happen"\
             " if the Datastore directory has already been manually deleted.")
@@ -421,6 +423,8 @@ def __main():
                     maalstroom.dmail_enabled = False
                 if args.dmupload:
                     maalstroom.upload_enabled = False
+                if args.proxyurl:
+                    maalstroom.proxy_url = args.proxyurl
 
                 yield from maalstroom.start_maalstroom_server(node)
 
