@@ -189,8 +189,8 @@ def serve_get(dispatcher, rpath):
 
         unquoted_tag = unquote(tag)
 
-        for tag in tags:
-            if unquoted_tag == tag.name:
+        for ctag in tags:
+            if unquoted_tag == ctag.name:
                 active = " active_tag"
             else:
                 active = ""
@@ -201,7 +201,7 @@ def serve_get(dispatcher, rpath):
                     .format(\
                         active=active,\
                         addr=addr_enc,\
-                        tag=tag.name)
+                        tag=ctag.name)
             tag_rows.append(row)
 
         template = template.format(\
@@ -362,7 +362,7 @@ def serve_get(dispatcher, rpath):
         else:
             trash_msg = "MOVE TO TRASH"
 
-        safe_reply_subject = generate_safe_reply_subject(dm)
+        m32_reply_subject = generate_safe_reply_subject(dm, True)
 
         if dm.sender_dmail_key:
             sender_addr = mbase32.encode(dm.sender_dmail_key)
@@ -421,7 +421,7 @@ def serve_get(dispatcher, rpath):
             csrf_token=dispatcher.client_engine.csrf_token,\
             addr=addr_enc,\
             tag=tag,\
-            safe_reply_subject=safe_reply_subject,\
+            m32_reply_subject=m32_reply_subject,\
             trash_msg=trash_msg,\
             msg_id=msg_dbid,\
             sender_class=sender_class,\
@@ -448,7 +448,12 @@ def serve_get(dispatcher, rpath):
             if subject:
                 subject = subject[0].replace('"', "&quot;")
             else:
-                subject = ""
+                esubject = eparams.get("esubject")
+                if esubject:
+                    subject = mbase32.decode(esubject[0]).decode()
+                    subject = subject.replace('"', "&quot;")
+                else:
+                    subject = ""
 
             sender_addr_enc = eparams.get("sender")
             if sender_addr_enc:
@@ -664,7 +669,7 @@ def serve_get(dispatcher, rpath):
 
         pq = params.find("?redirect=")
         if pq != -1:
-            redirect = params[pq+10:]
+            redirect = unquote(params[pq+10:])
         else:
             redirect = None
             pq = len(params)
@@ -691,7 +696,7 @@ def serve_get(dispatcher, rpath):
         params = req[16:]
         pq = params.find("?redirect=")
         if pq != -1:
-            redirect = params[pq+10:]
+            redirect = unquote(params[pq+10:])
         else:
             redirect = None
             pq = len(params)
@@ -719,7 +724,7 @@ def serve_get(dispatcher, rpath):
 
         pq = params.find("?redirect=")
         if pq != -1:
-            redirect = params[pq+10:]
+            redirect = unquote(params[pq+10:])
         else:
             redirect = None
             pq = len(params)
@@ -753,7 +758,7 @@ def serve_get(dispatcher, rpath):
 
         pq = params.find("?redirect=")
         if pq != -1:
-            redirect = params[pq+10:]
+            redirect = unquote(params[pq+10:])
         else:
             redirect = None
             pq = len(params)
@@ -777,7 +782,7 @@ def serve_get(dispatcher, rpath):
 
         pq = params.find("?redirect=")
         if pq != -1:
-            redirect = params[pq+10:]
+            redirect = unquote(params[pq+10:])
         else:
             redirect = None
             pq = len(params)
@@ -980,6 +985,11 @@ def serve_post(dispatcher, rpath):
                 "SAVED.<br/><p>Dmail successfully saved to Drafts.</p>")
             return
 
+        dispatcher.send_partial_content(\
+            "<!DOCTYPE html>\n"\
+                "<p>Message saved to Outbox; sending...</p>",\
+            start=True)
+
         log.info("Sending submitted Dmail.")
 
         de =\
@@ -990,36 +1000,37 @@ def serve_post(dispatcher, rpath):
             rsakey.RsaKey(privdata=dm.address.site_privatekey)\
                 if dm.sender_dmail_key else None
 
-        dest_addr_enc = mbase32.encode(dm.destination_dmail_key)
-        destinations = [
-            (dest_addr_enc,\
-                dm.destination_dmail_key,\
-                dm.destination_significant_bits)]
+        dest_addr = (dm.destination_dmail_key, dm.destination_significant_bits)
 
         storing_nodes =\
             yield from de.send_dmail(\
                 sender_asymkey,\
-                destinations,\
+                dest_addr,\
                 dm.subject,\
                 dm.date,\
                 dm.parts[0].data)
 
+        dest_addr_enc = mbase32.encode(dm.destination_dmail_key)
+
         if storing_nodes is False:
-            dispatcher.send_content(\
+            dispatcher.send_partial_content(\
                 "FAIL.<br/><p>Could not fetch destination's Dmail site,"\
-                    " try again later; message remains in outbox.</p>"\
-                        .format(dest_addr_enc).encode())
+                    " try again later; message remains in Outbox.</p>"\
+                        .format(dest_addr_enc))
+            dispatcher.end_partial_content()
             return
         elif not storing_nodes:
-            dispatcher.send_content(\
+            dispatcher.send_partial_content(\
                 "FAIL.<br/><p>Dmail timed out being stored on the network;"\
-                    " message remains in outbox.</p>"\
-                        .format(dest_addr_enc).encode())
+                    " message remains in Outbox.</p>"\
+                        .format(dest_addr_enc))
+            dispatcher.end_partial_content()
             return
 
-        dispatcher.send_content(\
+        dispatcher.send_partial_content(\
             "SUCCESS.<br/><p>Dmail successfully sent to: {}</p>"\
-                .format(dest_addr_enc).encode())
+                .format(dest_addr_enc))
+        dispatcher.end_partial_content()
 
         def processor(sess, dm):
             log.info("Moving sent Dmail from Outbox to Sent.")
@@ -1219,7 +1230,7 @@ def _load_dmail_address(dispatcher, dbid=None, site_key=None,\
             if not dmailaddr:
                 return None
 
-            sess.expunge(dmailaddr)
+            sess.expunge_all()
 
             return dmailaddr
 
@@ -1263,7 +1274,7 @@ def _load_default_dmail_address(dispatcher, fetch_keys=False):
                 addr = q.first()
 
                 if addr:
-                    sess.expunge(addr)
+                    sess.expunge_all()
                     return addr
 
             addr = sess.query(DmailAddress)\
@@ -1281,7 +1292,7 @@ def _load_default_dmail_address(dispatcher, fetch_keys=False):
 
                 sess.commit()
 
-                sess.expunge(addr)
+                sess.expunge_all()
 
             return addr
 
@@ -1409,15 +1420,14 @@ def _list_dmails_for_tag(dispatcher, addr, tag):
 
         safe_reply_subject = generate_safe_reply_subject(msg)
 
+        sender_class = ""
+
         if show_sender:
             addr_key = msg.sender_dmail_key
             if addr_key:
-                addr_key_enc = mbase32.encode(addr_key)
-                if msg.sender_valid:
-                    addr_value = addr_key_enc
-                else:
-                    addr_value = '<span class="strikethrough">'\
-                        + addr_key_enc + "</span>"
+                addr_value = mbase32.encode(addr_key)
+                if not msg.sender_valid:
+                    sender_class = " invalid_sender"
             else:
                 addr_value = None
         else:
@@ -1439,6 +1449,7 @@ def _list_dmails_for_tag(dispatcher, addr, tag):
             msg_id=msg.id,\
             subject=subject,\
             safe_reply_subject=safe_reply_subject,\
+            sender_class=sender_class,\
             sender=addr_value,\
             timestamp=mutil.format_human_no_ms_datetime(msg.date))
 
@@ -1764,7 +1775,10 @@ def _create_dmail_address(dispatcher, prefix, difficulty):
         yield from de.generate_dmail_address(prefix, difficulty)
     return privkey, data_key, dms, storing_nodes
 
-def generate_safe_reply_subject(dm):
+def generate_safe_reply_subject(dm, m32=False):
     reply_subject = dm.subject if dm.subject.startswith("Re: ")\
         else "Re: " + dm.subject
-    return quote_plus(reply_subject)
+    if m32:
+        return mbase32.encode(reply_subject.encode())
+    else:
+        return quote_plus(reply_subject)

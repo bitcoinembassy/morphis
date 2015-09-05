@@ -31,6 +31,7 @@ class ClientEngine(object):
         self.latest_version_data = None
 
         self.auto_publish_enabled = True
+        self.auto_scan_enabled = True
 
         self.csrf_token = base58.encode(os.urandom(64))
 
@@ -65,7 +66,8 @@ class ClientEngine(object):
             self._dmail_engine = dmail.DmailEngine(self.engine.tasks, self.db)
 
         asyncio.async(self._start_version_poller(), loop=self.loop)
-        asyncio.async(self._start_dmail_autoscan(), loop=self.loop)
+        if self.auto_scan_enabled:
+            asyncio.async(self._start_dmail_autoscan(), loop=self.loop)
         if self.auto_publish_enabled:
             asyncio.async(self._start_dmail_auto_publish(), loop=self.loop)
 
@@ -122,11 +124,15 @@ class ClientEngine(object):
         yield from self.engine.protocol_ready.wait()
 
         def dbcall():
-            with self.db.open_session() as sess:
+            with self.db.open_session(True) as sess:
                 q = sess.query(DmailAddress)\
                     .options(joinedload("keys"))
 
-                return q.all()
+                r = q.all()
+
+                sess.expunge_all()
+
+                return r
 
         while self._running:
             addrs = yield from self.loop.run_in_executor(None, dbcall)
@@ -185,7 +191,11 @@ class ClientEngine(object):
                     .options(joinedload("keys"))\
                     .filter(DmailAddress.scan_interval > 0)
 
-                return q.all()
+                r = q.all()
+
+                sess.expunge_all()
+
+                return r
 
         addrs = yield from self.loop.run_in_executor(None, dbcall)
 
@@ -193,6 +203,9 @@ class ClientEngine(object):
             self.update_dmail_autoscan(addr)
 
     def update_dmail_autoscan(self, addr):
+        if not self.auto_scan_enabled:
+            return
+
         if log.isEnabledFor(logging.INFO):
             log.info(\
                 "Starting/Updating autoscan (scan_interval=[{}]) process for"\
@@ -305,7 +318,9 @@ class DmailAutoscanProcess(object):
                     log.info("Sleeping for [{}] seconds.".format(time_left))
 
                 self._task =\
-                    asyncio.async(asyncio.sleep(time_left), loop=self.loop)
+                    asyncio.async(\
+                        asyncio.sleep(time_left, loop=self.loop),\
+                        loop=self.loop)
 
                 try:
                     yield from self._task

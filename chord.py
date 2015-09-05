@@ -361,11 +361,13 @@ class ChordEngine():
             yield from self.loop.run_in_executor(None, dbcall)
 
         if log.isEnabledFor(logging.INFO):
-            log.info("Database Peer count=[{}]."\
-                .format(self.last_db_peer_count))
+            log.info("Database Peer count=[{}], closestdistance=[{}]."\
+                .format(self.last_db_peer_count, closestdistance))
 
         if not closestdistance:
             return
+
+        MAX_CONCURRENT_CONNECTIONS = 7
 
         pbuffer = []
         connect_futures = []
@@ -392,6 +394,7 @@ class ChordEngine():
                             Peer.connected == False,\
                             or_(Peer.last_connect_attempt == None,\
                                 Peer.last_connect_attempt < grace))\
+                        .order_by(Peer.last_connect_attempt != None)\
                         .order_by(func.random())\
                         .limit(bucket_needs)
 
@@ -411,20 +414,40 @@ class ChordEngine():
             for dbpeer in rs:
                 pbuffer.append(dbpeer)
 
-            while pbuffer and len(connect_futures) < 7:
+            if len(connect_futures) == MAX_CONCURRENT_CONNECTIONS:
+                connected, pending = yield from asyncio.wait(\
+                    connect_futures, loop=self.loop,\
+                    return_when=futures.FIRST_COMPLETED)
+
+                connect_futures = list(pending)
+
+            while pbuffer\
+                    and len(connect_futures) < MAX_CONCURRENT_CONNECTIONS:
                 dbpeer = pbuffer.pop()
                 if len(self.peer_buckets[dbpeer.distance - 1]) >= BUCKET_SIZE:
                     continue
 
-                connect_c = self._connect_peer(dbpeer)
+                connect_c =\
+                    asyncio.async(self._connect_peer(dbpeer), loop=self.loop)
 
                 connect_futures.append(connect_c)
 
-            connected, pending = yield from asyncio.wait(\
-                connect_futures, loop=self.loop,\
-                return_when=futures.FIRST_COMPLETED)
+        while pbuffer:
+            dbpeer = pbuffer.pop()
+            if len(self.peer_buckets[dbpeer.distance - 1]) >= BUCKET_SIZE:
+                continue
 
-            connect_futures = list(pending)
+            connect_c =\
+                asyncio.async(self._connect_peer(dbpeer), loop=self.loop)
+
+            connect_futures.append(connect_c)
+
+            if len(connect_futures) == MAX_CONCURRENT_CONNECTIONS:
+                connected, pending = yield from asyncio.wait(\
+                    connect_futures, loop=self.loop,\
+                    return_when=futures.FIRST_COMPLETED)
+
+                connect_futures = list(pending)
 
         log.info("Finished refreshing all buckets.")
         if connect_futures:
@@ -475,8 +498,8 @@ class ChordEngine():
             return None
 
         try:
-            yield from client
-        except Exception as ex:
+            yield from asyncio.wait_for(client, timeout=30, loop=self.loop)
+        except (Exception, asyncio.TimeoutError) as ex:
             log.info("Connection to Peer (dbid=[{}]) failed: {}: {}"\
                 .format(dbpeer.id, type(ex), ex))
 

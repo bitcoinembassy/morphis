@@ -7,6 +7,7 @@ import io
 import logging
 from threading import Event
 import time
+from urllib.parse import unquote
 
 import base58
 import chord
@@ -155,8 +156,9 @@ class MaalstroomDispatcher(object):
             if rpath == "style.css":
                 self.send_content(\
                     templates.main_css, content_type="text/css")
-            elif rpath == "csrf_token":
-                self.send_content(self.client_engine.csrf_token)
+#TODO: Have a UI where the user can enable this on a per portal basis only.
+#            elif rpath == "csrf_token":
+#                self.send_content(self.client_engine.csrf_token)
             else:
                 self.send_error(errcode=400)
             return
@@ -164,7 +166,7 @@ class MaalstroomDispatcher(object):
             self.send_content(\
                 templates.favicon_content, content_type="image/png")
             return
-        elif rpath.startswith(".upload"):
+        elif rpath.startswith(".upload") and maalstroom.upload_enabled:
             if rpath.startswith(".upload/generate"):
                 priv_key =\
                     base58.encode(\
@@ -205,7 +207,7 @@ class MaalstroomDispatcher(object):
                 self.send_content(template)
 
             return
-        elif rpath.startswith(".dmail"):
+        elif rpath.startswith(".dmail") and maalstroom.dmail_enabled:
             yield from maalstroom.dmail.serve_get(self, rpath)
             return
         else:
@@ -368,6 +370,7 @@ class MaalstroomDispatcher(object):
                 self.send_exception(data_callback.exception)
 
             self.send_response(200)
+            self.send_default_headers()
 
             rewrite_urls = False
 
@@ -495,8 +498,12 @@ class MaalstroomDispatcher(object):
     def _do_POST(self, rpath):
         log.info("POST; rpath=[{}].".format(rpath))
 
-        if rpath != ".upload/upload":
+        if rpath.startswith(".dmail") and maalstroom.dmail_enabled:
             yield from maalstroom.dmail.serve_post(self, rpath)
+            return
+
+        if rpath != ".upload/upload" or not maalstroom.upload_enabled:
+            self.send_error(errcode=400)
             return
 
         if not self.connection_count:
@@ -602,26 +609,55 @@ class MaalstroomDispatcher(object):
                         self.handler.maalstroom_url_prefix_str,\
                         enckey,\
                         path.decode("UTF-8"))
+                short_url = "{}{}/{}"\
+                    .format(\
+                        self.handler.maalstroom_url_prefix_str,\
+                        enckey[:32],\
+                        path.decode("UTF-8"))
             else:
                 url = "{}{}"\
                     .format(\
                         self.handler.maalstroom_url_prefix_str,\
                         enckey)
+                short_url = "{}{}"\
+                    .format(\
+                        self.handler.maalstroom_url_prefix_str,\
+                        enckey[:32])
 
             if privatekey:
-                message = '<a id="key" href="{}">updateable key link</a>'\
-                    .format(url)
+                message =\
+                    '<a id="key" href="{}">updateable key link</a><br/>'\
+                        .format(url)
+                message +=\
+                    '<a id="short_key" href="{}">short updateable key link'\
+                        '</a><br/>'\
+                            .format(short_url)
 
                 if key_callback.referred_key:
+                    referred_key_enc =\
+                        mbase32.encode(key_callback.referred_key)
+
                     message +=\
                         '<br/><a id="referred_key" href="{}{}">perma link</a>'\
-                            .format(\
-                                self.handler.maalstroom_url_prefix_str,\
-                                mbase32.encode(key_callback.referred_key))
+                            '<br/>'\
+                                .format(\
+                                    self.handler.maalstroom_url_prefix_str,\
+                                    referred_key_enc)
+                    message +=\
+                        '<a id="short_referred_key" href="{}{}">'\
+                            'short perma link</a><br/>'\
+                                .format(\
+                                    self.handler.maalstroom_url_prefix_str,\
+                                    referred_key_enc[:32])
             else:
-                message = '<a id="key" href="{}">perma link</a>'.format(url)
+                message = '<a id="key" href="{}">perma link</a><br/>'\
+                    .format(url)
+                message +=\
+                    '<a id="short_key" href="{}">short perma link</a><br/>'\
+                        .format(short_url)
 
             self.send_response(200)
+            self.send_default_headers()
             self.send_header("Content-Type", "text/html")
             self.send_header("Content-Length", len(message))
             self.end_headers()
@@ -660,6 +696,16 @@ class MaalstroomDispatcher(object):
         self._accept_charset = acharset
         return acharset
 
+    def send_default_headers(self):
+        if self.handler.maalstroom_plugin_used:
+            urls = self.handler.maalstroom_url_prefix_str + '*'
+        else:
+            urls = "'self'"
+
+        self.send_header(\
+            "Content-Security-Policy",\
+            "default-src 'unsafe-inline' 'unsafe-eval' " + urls)
+
     def send_204(self):
         "No content."
         self.send_response(204)
@@ -668,6 +714,10 @@ class MaalstroomDispatcher(object):
         self.finish_response()
 
     def send_301(self, url, message=None):
+        if not self.handler.maalstroom_plugin_used\
+                and url.startswith("morphis://"):
+            url = self.handler.maalstroom_url_prefix_str + url[10:]
+
         self.send_response(301)
         self.send_header("Location", url)
 
@@ -745,24 +795,9 @@ class MaalstroomDispatcher(object):
 
         etag = self.handler.headers["If-None-Match"]
         if cacheable and etag == content_id:
-#            #TODO: Consider getting rid of this updateablekey support here
-#            # because we don't send updateable keys this way ever.
-#            updateable_key = etag.startswith("updateablekey-")
-
             cache_control = self.handler.headers["Cache-Control"]
-#            if not (updateable_key and cache_control == "max-age=0")\
-#                    and cache_control != "no-cache":
             if cache_control != "no-cache":
                 self.send_response(304)
-#                if updateable_key:
-#                    p0 = etag.index('-')
-#                    p1 = etag.index('-', p0 + 1)
-#                    version = etag[p0:p1]
-#                    self.send_header(\
-#                        "X-Maalstroom-UpdateableKey-Version",\
-#                        version)
-#                    self.send_header("Cache-Control", "public,max-age=15")
-#                else:
                 self.send_header("Cache-Control", "public,max-age=300")
                 self.send_header("ETag", content_id)
                 self.send_header("Content-Length", 0)
@@ -774,6 +809,7 @@ class MaalstroomDispatcher(object):
             content = content()
 
         self.send_response(200)
+        self.send_default_headers()
         self.send_header("Content-Length", len(content))
         self.send_header("Content-Type", content_type)
         if cacheable:
@@ -808,11 +844,19 @@ class MaalstroomDispatcher(object):
                     .format(self.handler.maalstroom_url_prefix_str))
 
     def send_partial_content(self, content, start=False, content_type=None,\
-            cacheable=False):
+            cacheable=False, charset=None):
         assert content is not None
 
+        if not content_type:
+            if not charset:
+                charset = self.get_accept_charset()
+            content_type = "text/html; charset={}".format(charset)
+
         if type(content) is str:
-            content = content.encode()
+            if charset:
+                content = content.encode(charset)
+            else:
+                content = content.encode()
 
         if not self.handler.maalstroom_plugin_used:
             content =\
@@ -821,11 +865,11 @@ class MaalstroomDispatcher(object):
 
         if start:
             self.send_response(200)
+            self.send_default_headers()
             if not cacheable:
                 self._send_no_cache()
             self.send_header("Transfer-Encoding", "chunked")
-            self.send_header("Content-Type",\
-                "text/html" if content_type is None else content_type)
+            self.send_header("Content-Type", content_type)
             self.send_frame_options_header()
             self.end_headers()
 
@@ -888,6 +932,7 @@ class MaalstroomDispatcher(object):
             self.send_response(500)
 
         if msg:
+            self.send_default_headers()
             if type(msg) is str:
                 msg = msg.encode()
 

@@ -16,6 +16,7 @@ from sqlalchemy import func
 import base58
 import brute
 import chord
+import consts
 import db
 import mbase32
 import multipart as mp
@@ -64,7 +65,7 @@ class DmailSite(object):
     def export(self):
         return json.dumps(self.root).encode()
 
-class DmailWrapper(object):
+class DmailWrapperV1(object):
     def __init__(self, buf=None, offset=0):
         self.version = 1
         self.ssm = None
@@ -108,7 +109,45 @@ class DmailWrapper(object):
 
         return idx
 
-class Dmail(object):
+class DmailWrapper(object):
+    def __init__(self, buf=None, offset=0):
+        self.version = 2
+        self.ssm = None
+        self.sse = None
+        self.ssf = None
+
+        self.data = None
+        self.data_len = None
+        self.data_enc = None
+
+        if buf is not None:
+            self.parse_from(buf, offset)
+
+    def encode(self, obuf=None):
+        buf = obuf if obuf else bytearray()
+        buf += struct.pack(">L", self.version)
+        buf += sshtype.encodeString(self.ssm)
+        buf += sshtype.encodeMpint(self.sse)
+        buf += sshtype.encodeMpint(self.ssf)
+
+        buf += struct.pack(">L", self.data_len)
+        buf += self.data_enc
+
+    def parse_from(self, buf, idx):
+        self.version = struct.unpack_from(">L", buf, idx)[0]
+        idx += 4
+        idx, self.ssm = sshtype.parse_string_from(buf, idx)
+        idx, self.sse = sshtype.parse_mpint_from(buf, idx)
+        idx, self.ssf = sshtype.parse_mpint_from(buf, idx)
+
+        self.data_len = struct.unpack_from(">L", buf, idx)[0]
+        idx += 4
+
+        self.data_enc = buf[idx:]
+
+        return idx
+
+class DmailV1(object):
     def __init__(self, buf=None, offset=0, length=None):
         self.version = 1
         self.sender_pubkey = None
@@ -146,6 +185,71 @@ class Dmail(object):
             part = DmailPart()
             idx = part.parse_from(buf, idx)
             self.parts.append(part)
+
+        return idx
+
+class Dmail(object):
+    def __init__(self, buf=None, offset=0):
+        self.buf = buf
+
+        self.version = 2
+        self.sender_pubkey = None
+        self.destination_addr = None
+        self.subject = None
+        self.date = None
+        self.parts = [] # [DmailPart].
+
+        self.signature_offset = None
+        self.signature = None
+
+        if buf:
+            self.parse_from(buf, offset)
+
+    def encode(self, obuf=None):
+        self.buf = buf = obuf if obuf else bytearray()
+
+        buf += struct.pack(">L", self.version)
+        buf += sshtype.encodeBinary(self.sender_pubkey)
+        buf += sshtype.encodeBinary(self.destination_addr)
+        buf += sshtype.encodeString(self.subject)
+        buf += sshtype.encodeString(self.date)
+
+        buf += struct.pack(">H", len(self.parts))
+        for part in self.parts:
+            part.encode(buf)
+
+        self.signature_offset = len(buf)
+
+        # Reserve space for signature, MorphisBlock and TargetedBlock header.
+        max_size = consts.MAX_DATA_BLOCK_SIZE - 2768
+
+        if len(buf) > max_size:
+            raise DmailException(\
+                "Dmail is [{}] bytes, yet cannot be larger than [{}] bytes."\
+                    .format(len(buf), max_size))
+
+        # 512 byte RSA-4096 signature goes at the end.
+
+        return buf
+
+    def parse_from(self, buf, idx):
+        self.version = struct.unpack_from(">L", buf, idx)[0]
+        idx += 4
+        idx, self.sender_pubkey = sshtype.parse_binary_from(buf, idx)
+        idx, self.destination_addr = sshtype.parse_binary_from(buf, idx)
+        idx, self.subject = sshtype.parse_string_from(buf, idx)
+        idx, self.date = sshtype.parse_string_from(buf, idx)
+
+        part_cnt = struct.unpack_from(">H", buf, idx)[0]
+        idx += 2
+
+        for i in range(part_cnt):
+            part = DmailPart()
+            idx = part.parse_from(buf, idx)
+            self.parts.append(part)
+
+        self.signature_offset = idx
+        idx, self.signature = sshtype.parse_binary_from(buf, idx)
 
         return idx
 
@@ -279,26 +383,40 @@ class DmailEngine(object):
 
         message_text = message_text[p0:]
 
-        storing_nodes = yield from self.send_dmail(\
-            m_from_asymkey, m_dest_ids, subject, date, message_text)
+        storing_nodes = 0
+
+        for dest_id in m_dest_ids:
+            storing_nodes += yield from self.send_dmail(\
+                m_from_asymkey, dest_id, subject, date, message_text)
 
         return storing_nodes
 
     @asyncio.coroutine
-    def send_dmail(self, from_asymkey, recipients, subject, date,\
+    def send_dmail(self, from_asymkey, destination_addr, subject, date,\
             message_text):
         assert from_asymkey is None or type(from_asymkey) is rsakey.RsaKey
-        assert type(recipients) is list, type(recipients)
+        assert type(destination_addr) in (list, tuple, bytes, bytearray, str),\
+            type(destination_addr)
         assert not date or type(date) is datetime
+
+        addr, rsite =\
+            yield from self.fetch_recipient_dmail_site(destination_addr)
+
+        if not rsite:
+            return False
+
+        if rsite.root["ssm"] != _dh_method_name:
+            raise DmailException("Unsupported ss method [{}]."\
+                .format(rsite.root["ssm"]))
 
         if type(message_text) is str:
             message_text = message_text.encode()
-
         if not date:
             date = mutil.utc_datetime()
 
         dmail = Dmail()
         dmail.sender_pubkey = from_asymkey.asbytes() if from_asymkey else b""
+        dmail.destination_addr = addr
         dmail.subject = subject
         dmail.date = mutil.format_iso_datetime(date)
 
@@ -308,46 +426,21 @@ class DmailEngine(object):
             part.data = message_text
             dmail.parts.append(part)
 
-        storing_nodes =\
-            yield from self._send_dmail(dmail, from_asymkey, recipients)
-
-        return storing_nodes
-
-    @asyncio.coroutine
-    def _send_dmail(self, dmail, from_asymkey, recipients):
-        assert type(dmail) is Dmail, type(dmail)
-
-        if len(recipients) == 0:
-            raise DmailException("No recipients were specified.")
-
-        if log.isEnabledFor(logging.INFO):
-            log.info("len(recipients)=[{}].".format(len(recipients)))
-
         dmail_bytes = dmail.encode()
 
-        recipients = yield from self.fetch_recipient_dmail_sites(recipients)
+        if from_asymkey:
+            signature = from_asymkey.calc_rsassa_pss_sig(dmail_bytes)
+            dmail_bytes += sshtype.encodeBinary(signature)
 
-        if not recipients:
-            return False
-
-        storing_nodes = 0
-
-        for recipient in recipients:
-            if recipient.root["ssm"] != _dh_method_name:
-                raise DmailException("Unsupported ss method [{}]."\
-                    .format(recipient.root["ssm"]))
-
-            storing_nodes =\
-                yield from self.__send_dmail(from_asymkey, recipient, dmail)
+        storing_nodes = yield from\
+            self._send_dmail(from_asymkey, rsite, dmail_bytes, signature)
 
         return storing_nodes
 
     @asyncio.coroutine
     def scan_dmail_address(self, addr, significant_bits, key_callback=None):
-        addr_enc = mbase32.encode(addr)
-
         if log.isEnabledFor(logging.INFO):
-            log.info("Scanning dmail [{}].".format(addr_enc))
+            log.info("Scanning dmail [{}].".format(mbase32.encode(addr)))
 
         def dbcall():
             with self.db.open_session() as sess:
@@ -372,14 +465,11 @@ class DmailEngine(object):
             log.info("DmailAddress not found locally, fetching settings from"\
                 " the network.")
 
-            dsites = yield from\
-                self.fetch_recipient_dmail_sites(\
-                    [(addr_enc, addr, significant_bits)])
+            addr, dsite = yield from\
+                self.fetch_recipient_dmail_site(addr, significant_bits)
 
-            if not dsites:
+            if not dsite:
                 raise DmailException("Dmail site not found.")
-
-            dsite = dsites[0]
 
             target = dsite.root["target"]
             significant_bits = dsite.root["difficulty"]
@@ -431,7 +521,22 @@ class DmailEngine(object):
                     " [{}]."\
                         .format(tb_tid_enc, tid_enc))
 
-        dw = DmailWrapper(tb.buf, mp.TargetedBlock.BLOCK_OFFSET)
+        version =\
+            struct.unpack_from(">L", tb.buf, mp.TargetedBlock.BLOCK_OFFSET)[0]
+
+        if version == 1:
+            dmail, valid_sig =\
+                yield from self._process_dmail_v1(key, x, tb, data_rw)
+        else:
+            assert version == 2
+            dmail, valid_sig =\
+                yield from self._process_dmail_v2(key, x, tb, data_rw)
+
+        return dmail, valid_sig
+
+    @asyncio.coroutine
+    def _process_dmail_v1(self, key, x, tb, data_rw):
+        dw = DmailWrapperV1(tb.buf, mp.TargetedBlock.BLOCK_OFFSET)
 
         if dw.ssm != "mdh-v1":
             raise DmailException(\
@@ -458,7 +563,7 @@ class DmailEngine(object):
         if not data:
             raise DmailException("Dmail data was empty.")
 
-        dmail = Dmail(data, 0, dw.data_len)
+        dmail = DmailV1(data, 0, dw.data_len)
 
         if dw.signature:
             signature = dw.signature
@@ -469,22 +574,68 @@ class DmailEngine(object):
         else:
             return dmail, False
 
+    @asyncio.coroutine
+    def _process_dmail_v2(self, key, x, tb, data_rw):
+        dw = DmailWrapper(tb.buf, mp.TargetedBlock.BLOCK_OFFSET)
+
+        if dw.ssm != "mdh-v1":
+            raise DmailException(\
+                "Unrecognized key exchange method in dmail [{}]."\
+                    .format(dw.ssm))
+
+        # Calculate the shared secret.
+        kex = dhgroup14.DhGroup14()
+        kex.x = x
+        kex.generate_e()
+        kex.f = dw.ssf
+
+        if dw.sse != kex.e:
+            raise DmailException(\
+                "Dmail [{}] is encrypted with a different e [{}] than"\
+                " the specified x resulted in [{}]."\
+                    .format(mbase32.encode(data_rw.data_key), dw.sse, kex.e))
+
+        kex.calculate_k()
+
+        # Generate the AES-256 encryption key.
+        key = self._generate_encryption_key(tb.target_key, kex.k)
+
+        # Decrypt the data.
+        data = enc.decrypt_data_block(dw.data_enc, key)
+
+        if not data:
+            raise DmailException("Dmail data was empty.")
+
+        dmail = Dmail(data)
+
+        if dmail.signature:
+            pubkey = rsakey.RsaKey(dmail.sender_pubkey)
+            valid_sig =\
+                pubkey.verify_rsassa_pss_sig(\
+                    data[:dmail.signature_offset], dmail.signature)
+
+            return dmail, valid_sig
+        else:
+            return dmail, False
+
     def _generate_encryption_key(self, target_key, k):
         return enc.generate_ID(\
-            b"The life forms running github are more retarded than any retard!"\
-            + target_key + sshtype.encodeMpint(k)\
+            b"The life forms running github are more retarded than any"\
+            + b" retard!" + target_key + sshtype.encodeMpint(k)\
             + b"https://github.com/nixxquality/WebMConverter/commit/"\
             + b"c1ac0baac06fa7175677a4a1bf65860a84708d67")
 
     @asyncio.coroutine
-    def __send_dmail(self, from_asymkey, recipient, dmail):
+    def _send_dmail(self, from_asymkey, recipient, dmail_bytes, signature):
         assert type(recipient) is DmailSite
 
+        # Read in recipient DmailSite.
         root = recipient.root
         sse = sshtype.parseMpint(base58.decode(root["sse"]))[1]
-        target = root["target"]
+        target_enc = root["target"]
         difficulty = root["difficulty"]
 
+        # Calculate a shared secret.
         dh = dhgroup14.DhGroup14()
         dh.generate_x()
         dh.generate_e()
@@ -492,11 +643,11 @@ class DmailEngine(object):
 
         k = dh.calculate_k()
 
-        target_key = mbase32.decode(target)
+        target_key = mbase32.decode(target_enc)
 
         key = self._generate_encryption_key(target_key, k)
-        dmail_bytes = dmail.encode()
 
+        # Encrypt the Dmail bytes.
         m, r = enc.encrypt_data_block(dmail_bytes, key)
         if m:
             if r:
@@ -504,19 +655,16 @@ class DmailEngine(object):
         else:
             m = r
 
+        # Store it in a DmailWrapper.
         dw = DmailWrapper()
         dw.ssm = _dh_method_name
         dw.sse = sse
         dw.ssf = dh.e
 
-        if from_asymkey:
-            dw.signature = from_asymkey.calc_rsassa_pss_sig(m)
-        else:
-            dw.signature = b''
-
         dw.data_len = len(dmail_bytes)
         dw.data_enc = m
 
+        # Store the DmailWrapper in a TargetedBlock.
         tb = mp.TargetedBlock()
         tb.target_key = target_key
         tb.nonce = int(0).to_bytes(64, "big")
@@ -525,10 +673,11 @@ class DmailEngine(object):
         tb_data = tb.encode()
         tb_header = tb_data[:mp.TargetedBlock.BLOCK_OFFSET]
 
+        # Do the POW on the TargetedBlock.
         if log.isEnabledFor(logging.INFO):
             log.info(\
                 "Attempting work on dmail (target=[{}], difficulty=[{}])."\
-                    .format(target, difficulty))
+                    .format(target_enc, difficulty))
 
         def threadcall():
             return brute.generate_targeted_block(\
@@ -545,7 +694,7 @@ class DmailEngine(object):
 
         if log.isEnabledFor(logging.INFO):
             mp.TargetedBlock.set_nonce(tb_header, nonce_bytes)
-            log.info("hash=[{}]."\
+            log.info("Message key=[{}]."\
                 .format(mbase32.encode(enc.generate_ID(tb_header))))
 
         key = None
@@ -554,11 +703,12 @@ class DmailEngine(object):
             nonlocal key
             key = val
 
-        log.info("Sending dmail to the network.")
-
         if log.isEnabledFor(logging.DEBUG):
-            log.debug("dmail block data=[\n{}]."\
+            log.debug("TargetedBlock dump=[\n{}]."\
                 .format(mutil.hex_dump(tb_data)))
+
+        # Upload the TargetedBlock to the network.
+        log.info("Sending dmail to the network.")
 
         total_storing = 0
         retry = 0
@@ -590,51 +740,45 @@ class DmailEngine(object):
         return total_storing
 
     @asyncio.coroutine
-    def fetch_recipient_dmail_sites(self, recipients):
-        robjs = []
+    def fetch_recipient_dmail_site(self, addr, significant_bits=None):
+        if type(addr) is str:
+            addr, significant_bits = mutil.decode_key(addr)
+        elif type(addr) in (list, tuple):
+            addr, significant_bits = addr
+        else:
+            assert type(addr) in (bytes, bytearray)
 
-        for entry in recipients:
-            if type(entry) is str:
-                recipient, significant_bits =\
-                    mutil.decode_key(entry)
-                recipient =\
-                    (entry, bytes(recipient), significant_bits)
+        if significant_bits:
+            data_rw = yield from self.task_engine.send_find_key(\
+                addr, significant_bits=significant_bits)
 
-            if type(entry) in (tuple, list):
-                recipient_enc, recipient, significant_bits = entry
+            addr = bytes(data_rw.data_key)
 
-                if significant_bits:
-                    data_rw = yield from self.task_engine.send_find_key(\
-                        recipient, significant_bits=significant_bits)
+            if not addr:
+                log.info("Failed to find key for prefix [{}]."\
+                    .format(recipient_enc))
+                return None, None
 
-                    recipient = bytes(data_rw.data_key)
+        data_rw =\
+            yield from self.task_engine.send_get_data(addr, retry_factor=100)
 
-                    if not recipient:
-                        log.info("Failed to find key for prefix [{}]."\
-                            .format(recipient_enc))
-            else:
-                recipient = entry
-
-            data_rw = yield from self.task_engine.send_get_data(recipient,\
-                retry_factor=100)
-
-            if not data_rw.data:
-                if log.isEnabledFor(logging.INFO):
-                    log.info("Failed to fetch dmail site [{}]."\
-                        .format(mbase32.encode(recipient)))
-                continue
-
-            site_data = data_rw.data.decode("UTF-8")
-
+        if not data_rw.data:
             if log.isEnabledFor(logging.INFO):
-                log.info("site_data=[{}].".format(site_data))
+                log.info("Failed to fetch dmail site [{}]."\
+                    .format(mbase32.encode(recipient)))
+            return None, None
 
-            robjs.append(DmailSite(site_data))
+        site_data = data_rw.data.decode("UTF-8")
 
-        return robjs
+        if log.isEnabledFor(logging.INFO):
+            log.info("site_data=[{}].".format(site_data))
+
+        return addr, DmailSite(site_data)
 
     @asyncio.coroutine
     def scan_and_save_new_dmails(self, dmail_address):
+        assert type(dmail_address) is db.DmailAddress, type(dmail_address)
+
         new_dmail_cnt = 0
         old_dmail_cnt = 0
         err_dmail_cnt = 0
@@ -720,6 +864,16 @@ class DmailEngine(object):
                 log.info("Dmail was not found on the network.")
             return False
 
+        if dmobj.version > 1:
+            if dmobj.destination_addr != dmail_address.site_key:
+                log.warning(\
+                    "Dmail was addressed to [{}], yet passed address was"\
+                        " [{}]."\
+                            .format(mbase32.encode(dmobj.destination_addr),\
+                                mbase32.encode(dmail_address.site_key)))
+                sig_valid = False
+
+        # Save the Dmail to our local database.
         def dbcall():
             with self.db.open_session() as sess:
                 self.db.lock_table(sess, db.DmailMessage)

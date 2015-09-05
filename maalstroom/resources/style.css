@@ -71,7 +71,7 @@ aside {
     height: calc(100% - 5.9em); 
 }
 .wrapper { 
-    background: url("images/stripe.png") repeat top left;
+    background: url("morphis://.dmail/images/stripe.png") repeat top left;
     border: 0;
     margin-top: 0;
     padding-top: .8em;
@@ -236,51 +236,51 @@ div.panel span {
   padding-right: .5em;
 }
 .inbox-icon-active {
-  background: url("images/inbox_white.png") no-repeat center left;
+  background: url("morphis://.dmail/images/inbox_white.png") no-repeat center left;
   background-position: 30px;
 }
 .inbox-icon {
-  background: url("images/inbox.png") no-repeat center left;
+  background: url("morphis://.dmail/images/inbox.png") no-repeat center left;
   background-position: 30px;
 }
 .inbox-icon:hover {
-  background: url("images/inbox_white.png") no-repeat center left;
+  background: url("morphis://.dmail/images/inbox_white.png") no-repeat center left;
   background-position: 30px;
 }
 .sent-icon {
-  background: url("images/sent.png") no-repeat center left;
+  background: url("morphis://.dmail/images/sent.png") no-repeat center left;
   background-position: 28px;
 }
 .sent-icon:hover {
-  background: url("images/sent_white.png") no-repeat center left;
+  background: url("morphis://.dmail/images/sent_white.png") no-repeat center left;
   background-position: 28px;
 }
 .drafts-icon {
-  background: url("images/draft.png") no-repeat center left;
+  background: url("morphis://.dmail/images/draft.png") no-repeat center left;
   background-position: 30px;
 }
 .drafts-icon:hover {
-  background: url("images/draft_white.png") no-repeat center left;
+  background: url("morphis://.dmail/images/draft_white.png") no-repeat center left;
   background-position: 30px;
 }
 .tag-icon {
-  background: url("images/tags.png") no-repeat center left;
+  background: url("morphis://.dmail/images/tags.png") no-repeat center left;
   background-position: 30px;
 }
 .tag-icon:hover {
-  background: url("images/tags_white.png") no-repeat center left;
+  background: url("morphis://.dmail/images/tags_white.png") no-repeat center left;
   background-position: 30px;
 }
 .bullet {
-  background: url("images/bullet.png") no-repeat center left;
+  background: url("morphis://.dmail/images/bullet.png") no-repeat center left;
   background-position: 37px;
 }
 .bullet:hover {
-  background: url("images/bullet_white.png") no-repeat center left;
+  background: url("morphis://.dmail/images/bullet_white.png") no-repeat center left;
   background-position: 37px;
 }
 .bullet.active_tag {
-  background: url("images/bullet_white.png") no-repeat center left;
+  background: url("morphis://.dmail/images/bullet_white.png") no-repeat center left;
   background-position: 37px;
 }
 .mailbox-list li {
@@ -302,7 +302,7 @@ div.panel span {
   color: #141c30;
 }
 .divider {
-  background: url("images/divider.gif") no-repeat top left;
+  background: url("morphis://.dmail/images/divider.gif") no-repeat top left;
   width: 163px;
   height: 5px;
   margin-left: 2.5em;
@@ -385,7 +385,7 @@ div.panel span {
   padding-top: 13px;
 }
 .refresh {
-  background: url("images/refresh.png") no-repeat center center;
+  background: url("morphis://.dmail/images/refresh.png") no-repeat center center;
   height: 22px;
   width: 22px;
 }
@@ -450,7 +450,7 @@ nav a:hover {
   float: right;
 }
 #mail-icon {
-    background: url("images/mail_icon.png") no-repeat right top;
+    background: url("morphis://.dmail/images/mail_icon.png") no-repeat right top;
     border: 0;
     height: 29px;
     width: 29px;
@@ -469,7 +469,7 @@ nav a:hover {
    font-weight: bold;
 }
 #list-addresses {
-    background: url("images/list_addresses.png") no-repeat top left;
+    background: url("morphis://.dmail/images/list_addresses.png") no-repeat top left;
     display: inline-block;
     height: 20px;
     width: 16px;
@@ -477,7 +477,7 @@ nav a:hover {
     margin-right: 1em;
 }
 #new-address {
-    background: url("images/add_address.png") no-repeat top left;
+    background: url("morphis://.dmail/images/add_address.png") no-repeat top left;
     display: inline-block;
     height: 20px;
     width: 17px;
@@ -485,7 +485,7 @@ nav a:hover {
     margin-right: 1em;
 }
 #addressbook {
-    background: url("images/addressbook.png") no-repeat top left;
+    background: url("morphis://.dmail/images/addressbook.png") no-repeat top left;
     display: inline-block;
     height: 20px;
     width: 16px;
@@ -493,7 +493,7 @@ nav a:hover {
     margin-right: 1em;
 }
 #settings {
-    background: url("images/settings.png") no-repeat top left;
+    background: url("morphis://.dmail/images/settings.png") no-repeat top left;
     display: inline-block;
     height: 20px;
     width: 17px;
@@ -501,28 +501,28 @@ nav a:hover {
     margin-right: 1.5em;
 }
 .nav-new-icon {
-  background: url("images/compose_blue.png") no-repeat left center;
+  background: url("morphis://.dmail/images/compose_blue.png") no-repeat left center;
 }
 .nav-new-icon:hover {
-  background: url("images/compose_white.png") no-repeat left center;
+  background: url("morphis://.dmail/images/compose_white.png") no-repeat left center;
 }
 .nav-reply-icon {
-  background: url("images/reply_blue.png") no-repeat left center;
+  background: url("morphis://.dmail/images/reply_blue.png") no-repeat left center;
 }
 .nav-reply-icon:hover {
-  background: url("images/reply_white.png") no-repeat left center;
+  background: url("morphis://.dmail/images/reply_white.png") no-repeat left center;
 }
 .nav-delete-icon {
-  background: url("images/trash_blue.png") no-repeat left center;
+  background: url("morphis://.dmail/images/trash_blue.png") no-repeat left center;
 }
 .nav-delete-icon:hover {
-  background: url("images/trash_white.png") no-repeat left center;
+  background: url("morphis://.dmail/images/trash_white.png") no-repeat left center;
 }
 .nav-version-icon {
-  background: url("images/reply_icon.png") no-repeat left center;
+  background: url("morphis://.dmail/images/reply_icon.png") no-repeat left center;
 }
 .nav-connections-icon {
-  background: url("images/reply_icon.png") no-repeat left center;
+  background: url("morphis://.dmail/images/reply_icon.png") no-repeat left center;
 }
 a.tooltips {
   position: relative;
@@ -619,32 +619,32 @@ table.msg_list tr.table-head:hover {
   white-space: nowrap;
 }
 .new-mail-icon {
-   background: url("images/unread.png") no-repeat center center;
+   background: url("morphis://.dmail/images/unread.png") no-repeat center center;
    height: 12px;
    width: 12px;
 }
 .mail-icon {
-   background: url("images/read.png") no-repeat center center;
+   background: url("morphis://.dmail/images/read.png") no-repeat center center;
    height: 12px;
    width: 12px;
 }
 .reply-icon {
-   background: url("images/reply_icon.png") no-repeat center center;
+   background: url("morphis://.dmail/images/reply_icon.png") no-repeat center center;
    height: 13px;
    width: 15px;
 }
 .trash-icon {
-   background: url("images/trash_icon.png") no-repeat center center;
+   background: url("morphis://.dmail/images/trash_icon.png") no-repeat center center;
    height: 13px;
    width: 11px;
 }
 .reply-icon-new {
-   background: url("images/reply_icon_new.png") no-repeat center center;
+   background: url("morphis://.dmail/images/reply_icon_new.png") no-repeat center center;
    height: 13px;
    width: 15px;
 }
 .trash-icon-new {
-   background: url("images/trash_icon_new.png") no-repeat center center;
+   background: url("morphis://.dmail/images/trash_icon_new.png") no-repeat center center;
    height: 13px;
    width: 11px;
 }
@@ -656,7 +656,7 @@ table.msg_list tr.table-head:hover {
 }
 .link-button {
    height: 31px;
-   background: url("images/gradient.jpg") top left repeat-x;
+   background: url("morphis://.dmail/images/gradient.jpg") top left repeat-x;
    margin-left: 0.5em;
    float: right;
    line-height: 31px;
@@ -801,7 +801,7 @@ button.submit:active {
     -o-box-shadow: 0 0 10px 5px #6f1772 inset;
 }
  button.addressbook-icon {
-    background: url("images/addressbook_grey.png") no-repeat left center;
+    background: url("morphis://.dmail/images/addressbook_grey.png") no-repeat left center;
     cursor: pointer;
     height: 19px;
     width: 19px;
@@ -811,7 +811,7 @@ button.submit:active {
     display: inline-block;
 }
  button.addressbook-icon:hover {
-    background: url("images/addressbook_blue.png") no-repeat left center;
+    background: url("morphis://.dmail/images/addressbook_blue.png") no-repeat left center;
 }
 .dynamicWidth {
     margin-right: 2em;
@@ -836,33 +836,33 @@ button.submit:active {
     margin: 0;
 }
 .nav-save-icon {
-    background: url("images/save_dk.png") no-repeat left center;
+    background: url("morphis://.dmail/images/save_dk.png") no-repeat left center;
 }
 .nav-save-icon:hover {
-    background: url("images/save.png") no-repeat left center;
+    background: url("morphis://.dmail/images/save.png") no-repeat left center;
 }
 .nav-send-icon {
-    background: url("images/send_purp.png") no-repeat left center;
+    background: url("morphis://.dmail/images/send_purp.png") no-repeat left center;
     color: #b025be;
 }
 .nav-send-icon:hover {
-    background: url("images/send_blue.png") no-repeat left center;
+    background: url("morphis://.dmail/images/send_blue.png") no-repeat left center;
     color: #38a3af;
 }
 .nav-reply-icon {
-    background: url("images/reply_dk.png") no-repeat left center;
+    background: url("morphis://.dmail/images/reply_dk.png") no-repeat left center;
     color: #141c30;
 }
 .nav-reply-icon:hover {
-    background: url("images/reply_blue.png") no-repeat left center;
+    background: url("morphis://.dmail/images/reply_blue.png") no-repeat left center;
     color: #38a3af;
 }
 .nav-delete-icon {
-    background: url("images/trash_dk.png") no-repeat left center;
+    background: url("morphis://.dmail/images/trash_dk.png") no-repeat left center;
     color: #141c30;
 }
 .nav-delete-icon:hover {
-    background: url("images/trash_blue.png") no-repeat left center;
+    background: url("morphis://.dmail/images/trash_blue.png") no-repeat left center;
     color: #38a3af;
 }
 .read-wrapper {
@@ -909,19 +909,19 @@ h1 {
     padding-top: 1em;
 }
 .trash-icon {
-    background: url("images/trash.png") no-repeat center left;
+    background: url("morphis://.dmail/images/trash.png") no-repeat center left;
     background-position: 30px;
 }
 .trash-icon:hover {
-    background: url("images/trash_white_in.png") no-repeat center left;
+    background: url("morphis://.dmail/images/trash_white_in.png") no-repeat center left;
     background-position: 30px;
 }
 .outbox-icon {
-    background: url("images/outbox.png") no-repeat center left;
+    background: url("morphis://.dmail/images/outbox.png") no-repeat center left;
     background-position: 30px;
 }
 .outbox-icon:hover {
-    background: url("images/outbox_white.png") no-repeat center left;
+    background: url("morphis://.dmail/images/outbox_white.png") no-repeat center left;
     background-position: 30px;
 }
 input.tag-text {
