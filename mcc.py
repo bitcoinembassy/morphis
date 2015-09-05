@@ -178,10 +178,10 @@ def __main():
         else:
             x_int = None
 
-        dmail_target = args.dmail_target
+        dmail_target = mbase32.decode(args.dmail_target)
 
         dm, valid_sig =\
-            yield from de.fetch_dmail(key, x_int, None, dmail_target)
+            yield from de.fetch_dmail(key, x_int, dmail_target)
 
         if not dm:
             raise Exception("No dmail found.")
