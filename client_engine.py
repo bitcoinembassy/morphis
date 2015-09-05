@@ -318,7 +318,9 @@ class DmailAutoscanProcess(object):
                     log.info("Sleeping for [{}] seconds.".format(time_left))
 
                 self._task =\
-                    asyncio.async(asyncio.sleep(time_left), loop=self.loop)
+                    asyncio.async(\
+                        asyncio.sleep(time_left, loop=self.loop),\
+                        loop=self.loop)
 
                 try:
                     yield from self._task
