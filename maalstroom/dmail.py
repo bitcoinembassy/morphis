@@ -1230,7 +1230,7 @@ def _load_dmail_address(dispatcher, dbid=None, site_key=None,\
             if not dmailaddr:
                 return None
 
-            sess.expunge(dmailaddr)
+            sess.expunge_all()
 
             return dmailaddr
 
@@ -1274,7 +1274,7 @@ def _load_default_dmail_address(dispatcher, fetch_keys=False):
                 addr = q.first()
 
                 if addr:
-                    sess.expunge(addr)
+                    sess.expunge_all()
                     return addr
 
             addr = sess.query(DmailAddress)\
@@ -1292,7 +1292,7 @@ def _load_default_dmail_address(dispatcher, fetch_keys=False):
 
                 sess.commit()
 
-                sess.expunge(addr)
+                sess.expunge_all()
 
             return addr
 
