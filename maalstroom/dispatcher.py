@@ -698,7 +698,8 @@ class MaalstroomDispatcher(object):
 
     def send_default_headers(self):
         if self.handler.maalstroom_plugin_used:
-            urls = self.handler.maalstroom_url_prefix_str + '*'
+            urls = self.handler.maalstroom_url_prefix_str + '* '\
+                + self.handler.actual_url_prefix_str
         else:
             urls = "'self'"
 

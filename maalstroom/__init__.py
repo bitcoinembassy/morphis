@@ -48,6 +48,7 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
         self.maalstroom_plugin_used = False
         self.maalstroom_url_prefix = None
         self.maalstroom_url_prefix_str = None
+        self.actual_url_prefix_str = None
 
         self.proxy_used = False
 
@@ -130,6 +131,13 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
                 self._maalstroom_morphis_url_prefix
             self.maalstroom_url_prefix =\
                 self.maalstroom_url_prefix_str.encode()
+
+            if self.proxy_used and proxy_url:
+                self.actual_url_prefix_str = proxy_url
+            else:
+                self.actual_url_prefix_str =\
+                    self._maalstroom_http_url_prefix.format(\
+                        self.headers["Host"])
         else:
             global port
 
