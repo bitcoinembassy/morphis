@@ -362,7 +362,7 @@ def serve_get(dispatcher, rpath):
         else:
             trash_msg = "MOVE TO TRASH"
 
-        safe_reply_subject = generate_safe_reply_subject(dm)
+        m32_reply_subject = generate_safe_reply_subject(dm, True)
 
         if dm.sender_dmail_key:
             sender_addr = mbase32.encode(dm.sender_dmail_key)
@@ -421,7 +421,7 @@ def serve_get(dispatcher, rpath):
             csrf_token=dispatcher.client_engine.csrf_token,\
             addr=addr_enc,\
             tag=tag,\
-            safe_reply_subject=safe_reply_subject,\
+            m32_reply_subject=m32_reply_subject,\
             trash_msg=trash_msg,\
             msg_id=msg_dbid,\
             sender_class=sender_class,\
@@ -448,7 +448,12 @@ def serve_get(dispatcher, rpath):
             if subject:
                 subject = subject[0].replace('"', "&quot;")
             else:
-                subject = ""
+                esubject = eparams.get("esubject")
+                if esubject:
+                    subject = mbase32.decode(esubject[0]).decode()
+                    subject = subject.replace('"', "&quot;")
+                else:
+                    subject = ""
 
             sender_addr_enc = eparams.get("sender")
             if sender_addr_enc:
@@ -1770,7 +1775,10 @@ def _create_dmail_address(dispatcher, prefix, difficulty):
         yield from de.generate_dmail_address(prefix, difficulty)
     return privkey, data_key, dms, storing_nodes
 
-def generate_safe_reply_subject(dm):
+def generate_safe_reply_subject(dm, m32=False):
     reply_subject = dm.subject if dm.subject.startswith("Re: ")\
         else "Re: " + dm.subject
-    return quote_plus(reply_subject)
+    if m32:
+        return mbase32.encode(reply_subject.encode())
+    else:
+        return quote_plus(reply_subject)
