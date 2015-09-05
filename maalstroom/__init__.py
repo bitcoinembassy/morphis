@@ -132,20 +132,21 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
                 self.maalstroom_url_prefix_str.encode()
         else:
             global port
+
             if self.proxy_used and proxy_url:
-                host = proxy_url
+                # Host header includes port.
+                self.maalstroom_url_prefix_str = proxy_url
             else:
                 host = self.headers["Host"]
+                if log.isEnabledFor(logging.DEBUG):
+                    log.debug(\
+                        "No plugin used for request, rewriting URLs using"\
+                            " host=[{}]."\
+                                .format(host))
+                # Host header includes port.
+                self.maalstroom_url_prefix_str =\
+                    self._maalstroom_http_url_prefix.format(host)
 
-            if log.isEnabledFor(logging.DEBUG):
-                log.debug(\
-                    "No plugin used for request, rewriting URLs using"\
-                        " host=[{}]."\
-                            .format(host))
-
-            # Host header includes port.
-            self.maalstroom_url_prefix_str =\
-                self._maalstroom_http_url_prefix.format(host)
             self.maalstroom_url_prefix =\
                 self.maalstroom_url_prefix_str.encode()
 
