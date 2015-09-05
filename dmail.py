@@ -885,7 +885,7 @@ class DmailEngine(object):
                     return False
 
                 msg = db.DmailMessage()
-                msg.address = dmail_address
+                msg.dmail_address_id = dmail_address.id
                 msg.dmail_key_id = address_key.id
                 msg.data_key = dmail_message_key
                 msg.sender_dmail_key =\
