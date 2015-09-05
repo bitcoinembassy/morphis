@@ -191,9 +191,17 @@ def __main():
         else:
             print("Subject: {}\n".format(dm.subject))
 
+            if valid_sig:
+                print("Valid Signature.")
+            else:
+                print("INVALID Signature.")
+
             if dm.sender_pubkey:
                 print("From: {}"\
                     .format(mbase32.encode(enc.generate_ID(dm.sender_pubkey))))
+
+            if dm.version >= 2:
+                print("To: " + mbase32.encode(dm.destination_addr))
 
             i = 0
             for part in dm.parts:
