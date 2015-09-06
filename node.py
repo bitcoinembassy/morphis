@@ -297,7 +297,8 @@ def __main():
     parser.add_argument("--addpeer",\
         help="Add a node to peer list.", action="append")
     parser.add_argument("--bind",\
-        help="Specify bind address (host:port).")
+        help="Specify bind address (host:port). The default is \":4250\";"\
+            " which will listen on all interfaces on port 4250.")
     parser.add_argument("--cleartexttransport", action="store_true",\
         help="Clear text transport and no authentication.")
     parser.add_argument("--dbpoolsize", type=int,\
