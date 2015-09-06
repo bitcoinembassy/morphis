@@ -1087,14 +1087,16 @@ def check_address(address):
         host, port = address.split(':')
         ipaddress.ip_address(host)
 
+        port = int(port)
+
         if port <= 128 or port in (443, 993, 995, 8080):
             # Just to prevent DHCP hosts from causing spamage on some common
             # ports people might complain about strange (MORPHiS until its
             # wider known) connections hitting.
-            return False
+            raise Exception("Invalid port [{}].".format(port))
 
         return True
-    except Exception:
-        if log.isEnabledFor(logging.DEBUG):
-            log.debug("Address [{}] is not acceptable.".format(address))
+    except Exception as e:
+        if log.isEnabledFor(logging.INFO):
+            log.info("Address [{}] is not acceptable: {}".format(address, e))
         return False

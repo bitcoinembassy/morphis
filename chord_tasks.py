@@ -152,7 +152,8 @@ class ChordTasks(object):
             closest_found_distance = chord.NODE_ID_BITS
             if furthest_nodes:
                 for node in furthest_nodes:
-                    if node.distance < closest_found_distance:
+                    if node.distance\
+                            and node.distance < closest_found_distance:
                         closest_found_distance = node.distance
 
             if closest_found_distance is chord.NODE_ID_BITS:
