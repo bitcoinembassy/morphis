@@ -221,7 +221,7 @@ class Tunnel(object):
     def _send_find_node(self):
         if log.isEnabledFor(logging.DEBUG):
             log.debug("Sending root level FindNode msg to Peer (dbid=[{}])."\
-                .format(peer.dbid))
+                .format(self.peer.dbid))
 
         self.peer.protocol.write_channel_data(\
             self.local_cid,\
@@ -234,6 +234,7 @@ class Tunnel(object):
             return None
 
         if self.process._data_mode.value:
+            # If data_mode, then first packet is not the PeerList.
             if data_mode is cp.DataMode.store:
                 msg = cp.ChordStorageInterest(pkt)
                 yield from self.process.process_storage_interest(\
@@ -251,6 +252,28 @@ class Tunnel(object):
             if not pkt:
                 self._set_closed()
                 return None
+
+        # Process the PeerList response.
+        msg = cp.ChordPeerList(pkt)
+
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("Root level FindNode to Peer (id=[{}]) returned {}"\
+                " PeerS.".format(self.peer.dbid, len(msg.peers)))
+
+        node_id = self.process.engine.node_id
+
+        idx = 0
+        for rpeer in msg.peers:
+            if log.isEnabledFor(logging.DEBUG):
+                log.debug("Peer (dbid=[{}]) returned PeerList containing Peer"\
+                    " (address=[{}]).".format(peer.dbid, rpeer.address))
+
+            pw = PeerWrapper(rpeer, self, [idx])
+
+            key = bittrie.XorKey(node_id, rpeer.node_id)
+            result_trie.setdefault(key, pw)
+            #TODO: YOU_ARE_HERE: Where to store result_trie? Probably two, one
+            # for tunnel process, one for root process... ?
 
         #TODO: YOU_ARE_HERE:..
 
