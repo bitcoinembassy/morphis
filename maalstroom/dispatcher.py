@@ -368,6 +368,7 @@ class MaalstroomDispatcher(object):
         if data:
             if data is Error:
                 self.send_exception(data_callback.exception)
+                return
 
             self.send_response(200)
             self.send_default_headers()
@@ -597,9 +598,11 @@ class MaalstroomDispatcher(object):
                 mime_type=mime_type)
         except asyncio.TimeoutError:
             self.send_error(errcode=408)
+            return
         except Exception as e:
             log.exception("send_store_data(..)")
             self.send_exception(e)
+            return
 
         if key_callback.data_key:
             enckey = mbase32.encode(key_callback.data_key)
