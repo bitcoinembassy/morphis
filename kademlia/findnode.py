@@ -85,13 +85,13 @@ class FindNodeProcess(object):
                 fnmsg.target_key = self.target_key
         self._find_node_msg = fnmsg
 
-        # Open the tunnels with upto max_initial_queries immediate PeerS.
-        max_initial_queries = 3
+        # Open the tunnels with upto max_initial_tunnels immediate PeerS.
+        max_initial_tunnels = 3
         tunnels = {}
         tasks = []
 
         for peer_wrapper in self._result_trie:
-            if len(tasks) == max_initial_queries:
+            if len(tasks) == max_initial_tunnels:
                 break
             if not peer_wrapper.peer.ready():
                 continue
@@ -181,6 +181,8 @@ class Tunnel(object):
 
         self.task = None
 
+        self._result_trie = None
+
     @asyncio.coroutine
     def run(self):
         "Opens a channel and sends a 'root level' FIND_NODE to the passed"\
@@ -189,14 +191,16 @@ class Tunnel(object):
         " those results through this 'root level' FIND_NODE peer."
 
         r = yield from self._open_channel()
-
         if not r:
             #TODO: YOU_ARE_HERE: Signal to processor that a tunnel died.
 
         r = yield from self._send_find_node()
-
         if not r:
             #TODO: YOU_ARE_HERE: Signal to processor that a tunnel died.
+
+        yield from self._send_next_find_nodes()
+
+        yield from self._process_responses()
 
     @asyncio.coroutine
     def _open_tunnel(self):
@@ -271,11 +275,72 @@ class Tunnel(object):
             pw = PeerWrapper(rpeer, self, [idx])
 
             key = bittrie.XorKey(node_id, rpeer.node_id)
-            result_trie.setdefault(key, pw)
-            #TODO: YOU_ARE_HERE: Where to store result_trie? Probably two, one
-            # for tunnel process, one for root process... ?
 
-        #TODO: YOU_ARE_HERE:..
+            r = self.processor._result_trie.setdefault(key, pw)
+            if not r:
+                self._result_trie.setdefault(key, pw)
+
+        return True
+
+    @asyncio.coroutine
+    def _send_next_find_nodes(self):
+        concurrent_requests = 3
+        req = 0
+
+        for pw in self._result_trie:
+            if pw.used:
+                # We've already sent to this Peer.
+                break
+
+            pw.used = True
+
+            pkt = self._generate_relay_packets(pw.path)
+            self.peer.protocol.write_channel_data(self.local_cid, pkt)
+
+            req += 1
+            if req == concurrent_requests:
+                break
+
+    @asyncio.coroutine
+    def _process_responses(self):
+        #FIXME: YOU_ARE_HERE: process responses. For each PeerList call
+        # _send_next_find_nodes. For each data response update PeerWraper and
+        # possibly signal process to do something async with that.
+
+    def _generate_relay_packets(self, path, payload=None):
+        "path: list of indexes."\
+        "payload_msg: optional packet data to wrap."
+
+        #TODO: MAYBE: replace embedded ChordRelay packets with
+        # just one that has a 'path' field. Just more simple,
+        # efficient and should be easy change. It means less work
+        # for intermediate nodes that may want to examine the deepest
+        # packet, in the case of data, in order to opportunistically
+        # store the data. This might be a less good solution for
+        # anonyminty, but it could be as easilty switched back if that
+        # is true and a priority.
+
+        #FIXME: TODO: ChordRelay should be modified to allow a message payload
+        # instead of the byte 'packet' payload. This way it can recursively
+        # call encode() on the payloads that way appending data each iteration
+        # instead of the inefficient way it does it now with inserting the
+        # wrapping packet each iteration. This is an especially important
+        # improvement now that a huge data packet is tacked on the end.
+
+        pkt = None
+        for idx in reversed(path):
+            msg = cp.ChordRelay()
+            msg.index = idx
+            if pkt:
+                msg.packets = [pkt]
+            else:
+                if payload:
+                    msg.packets = [payload]
+                else:
+                    msg.packets = []
+            pkt = msg.encode()
+
+        return pkt
 
 class PeerWrapper(object):
     def __init__(self, peer=None, tunnel=None, path=None):
