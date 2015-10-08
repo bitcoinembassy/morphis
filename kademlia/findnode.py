@@ -114,7 +114,6 @@ class FindNodeProcess(object):
         if log.isEnabledFor(logging.INFO):
             tp = type(peer)
             if tp is Peer:
-                #FIXME: YOU_ARE_HERE: What is tunnel data type?
                 log.info(\
                     "Peer (tunnel dbid=[{}], path=[{}]) said will_store=[{}]."\
                         .format(\
@@ -137,7 +136,6 @@ class FindNodeProcess(object):
         if log.isEnabledFor(logging.INFO):
             tp = type(peer)
             if tp is Peer:
-                #FIXME: YOU_ARE_HERE: What is tunnel data type?
                 log.info(\
                     "Peer (tunnel dbid=[{}], path=[{}]) said"\
                         " data_present=[{}], first_id=[{}]."\
@@ -164,12 +162,12 @@ class FindNodeProcess(object):
 
 class Tunnel(object):
     def __init__(self, process, peer_wrapper):
-        assert type(peer) is mnpeer.Peer
-
         self.process = process
         self.peer_wrapper = peer_wrapper
 
+        peer = peer_wrapper.peer
         self.peer = peer
+        assert type(peer) is mnpeer.Peer
 
         self.loop = process.loop
 
@@ -182,6 +180,7 @@ class Tunnel(object):
         self.task = None
 
         self._result_trie = None
+        self._peers_by_path = {} # {path, PeerWrapper}.
 
     @asyncio.coroutine
     def run(self):
@@ -194,7 +193,7 @@ class Tunnel(object):
         if not r:
             #TODO: YOU_ARE_HERE: Signal to processor that a tunnel died.
 
-        r = yield from self._send_find_node()
+        r = yield from self._send_and_process_root_find_nodes()
         if not r:
             #TODO: YOU_ARE_HERE: Signal to processor that a tunnel died.
 
@@ -222,7 +221,7 @@ class Tunnel(object):
         self.local_cid = None
 
     @asyncio.coroutine
-    def _send_find_node(self):
+    def _send_and_process_root_find_nodes(self):
         if log.isEnabledFor(logging.DEBUG):
             log.debug("Sending root level FindNode msg to Peer (dbid=[{}])."\
                 .format(self.peer.dbid))
@@ -231,7 +230,7 @@ class Tunnel(object):
             self.local_cid,\
             self.process.find_node_msg.encode())
 
-        pkt = yield from queue.get()
+        pkt = yield from self.queue.get()
 
         if not pkt:
             self._set_closed()
@@ -252,7 +251,7 @@ class Tunnel(object):
 
             # In data_mode, first packet was data_presence/will_store, and next
             # packet is the PeerList.
-            pkt = yield from queue.get()
+            pkt = yield from self.queue.get()
             if not pkt:
                 self._set_closed()
                 return None
@@ -264,7 +263,7 @@ class Tunnel(object):
             log.debug("Root level FindNode to Peer (id=[{}]) returned {}"\
                 " PeerS.".format(self.peer.dbid, len(msg.peers)))
 
-        node_id = self.process.engine.node_id
+        req_id = self.process.req_id
 
         idx = 0
         for rpeer in msg.peers:
@@ -272,13 +271,16 @@ class Tunnel(object):
                 log.debug("Peer (dbid=[{}]) returned PeerList containing Peer"\
                     " (address=[{}]).".format(peer.dbid, rpeer.address))
 
-            pw = PeerWrapper(rpeer, self, [idx])
-
-            key = bittrie.XorKey(node_id, rpeer.node_id)
+            path = (idx,)
+            pw = PeerWrapper(rpeer, self, path)
+            key = bittrie.XorKey(req_id, rpeer.node_id)
 
             r = self.processor._result_trie.setdefault(key, pw)
-            if not r:
-                self._result_trie.setdefault(key, pw)
+            if r:
+                continue
+
+            self._result_trie.setdefault(key, pw)
+            self._peers_for_path[path] = pw
 
         return True
 
@@ -290,6 +292,8 @@ class Tunnel(object):
         for pw in self._result_trie:
             if pw.used:
                 # We've already sent to this Peer.
+                # For the first run through, we will only send to closer and
+                # closer nodes.
                 break
 
             pw.used = True
@@ -303,9 +307,93 @@ class Tunnel(object):
 
     @asyncio.coroutine
     def _process_responses(self):
-        #FIXME: YOU_ARE_HERE: process responses. For each PeerList call
-        # _send_next_find_nodes. For each data response update PeerWraper and
-        # possibly signal process to do something async with that.
+        while True:
+            pkt = yield from self.queue.get()
+            if not pkt:
+                return
+
+            pkt_type = cp.ChordMessage.parse_type(pkts[0])
+
+            if pkt_type != cp.CHORD_MSG_RELAY:
+                #TODO: YOU_ARE_HERE: Can get a DataResponse or DataStored.
+                raise ChordException("Peer (dbid=[{}]) sent an unexpected"\
+                    " unwrapped packet of type [{}]."\
+                        .format(self.peer.dbid, pkt_type))
+
+            if log.isEnabledFor(logging.DEBUG):
+                log.debug("Unwrapping ChordRelay packet.")
+
+            pkts, path = self._unwrap_relay_packets(pkt, data_mode)
+            path = tuple(path)
+
+            pw = self._peers_by_path[path]
+
+            for pkt in pkts:
+                pkt_type = cp.ChordMessage.parse(pkt)
+
+                if pkt_type == cp.CHORD_MSG_PEER_LIST:
+                    r = self._process_peer_list(pw, path, pkt)
+                    if r:
+                        self._send_next_find_nodes()
+                elif pkt_type == cp.CHORD_MSG_DATA_PRESENCE:
+                    msg = cp.ChordDataPresence(pkt)
+                    yield from self.process.process_data_presence(\
+                        self.peer_wrapper, msg)
+                elif pkt_type == cp.CHORD_MSG_STORAGE_INTEREST:
+                    msg = cp.ChordStorageInterest(pkt)
+                    yield from self.process.process_storage_interest(\
+                        self.peer_wrapper, msg)
+                else:
+                    #TODO: YOU_ARE_HERE: Can get a DataResponse or DataStored.
+                    log.debug("Peer (tunnel dbid=[{}], path=[{}]) returned"\
+                        " an unexpected packet of type [{}]; ignoring."\
+                        .format(self.peer.dbid, path, pkt_type))
+                    continue
+
+    def _process_peer_list(self, source_pw, path, pkt):
+        "Processes a PeerList response packet from a tunneled Peer."\
+        "Returns the count of new PeerS for this FindNode process."
+
+        if pw.peer_list_packet_count == 1:
+            log.info(\
+                "Peer (id=[{}]) sent too many PeerList pkts."\
+                    .format(mbase32.encode(pw.peer.node_id)))
+            return 0
+        else:
+            assert pw.peer_list_packet_count == 0
+            pw.peer_list_packet_count = 1
+
+        msg = cp.ChordPeerList(pkt)
+
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("Peer (tunnel dbid=[{}], path=[{}]) returned {} PeerS."\
+                .format(self.peer.dbid, path, len(msg.peers)))
+
+        req_id = self.process.req_id
+
+        added_peers = 0
+        idx = 0
+        for rpeer in msg.peers:
+            if log.isEnabledFor(logging.DEBUG):
+                log.debug("Peer (tunnel dbid=[{}], path=[{}]) returned"\
+                    " PeerList containing Peer (address=[{}])."\
+                        .format(self.peer.dbid, path, rpeer.address))
+
+            end_path = path + (idx,)
+
+            pw = PeerWrapper(rpeer, self, end_path)
+            key = bittrie.XorKey(req_id, rpeer.node_id)
+
+            r = self.processor._result_trie.setdefault(key, pw)
+            if r:
+                continue
+
+            self._result_trie.setdefault(key, pw)
+            self._peers_by_path[path] = pw
+
+            added_peers += 1
+
+        return added_peers
 
     def _generate_relay_packets(self, path, payload=None):
         "path: list of indexes."\
@@ -342,6 +430,39 @@ class Tunnel(object):
 
         return pkt
 
+    def _unwrap_relay_packets(self, pkt, data_mode):
+        "Returns the inner most packet and the path stored in the relay"\
+        " packets."
+
+        path = []
+        invalid = False
+
+        while True:
+            msg = cp.ChordRelay(pkt)
+            path.append(msg.index)
+            pkts = msg.packets
+
+            if len(pkts) == 1:
+                pkt = pkts[0]
+
+                packet_type = cp.ChordMessage.parse_type(pkt)
+                if packet_type == cp.CHORD_MSG_RELAY:
+                    continue
+                else:
+                    # Break as we reached deepest packet.
+                    break
+            else:
+                # In data mode, PeerS return their storage intent, as well as a
+                # list of their connected PeerS.
+                # Break as we reached deepest packets.
+                break
+
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("Unwrapped {} packets with path=[{}]."\
+                .format(len(pkts), path))
+
+        return pkts, path
+
 class PeerWrapper(object):
     def __init__(self, peer=None, tunnel=None, path=None):
         # self.peer can be a mnpeer.Peer for immediate Peer, or a db.Peer for
@@ -354,3 +475,5 @@ class PeerWrapper(object):
         self.used = False
         self.will_store = False
         self.data_present = False
+
+        self.peer_list_packet_count = 0
