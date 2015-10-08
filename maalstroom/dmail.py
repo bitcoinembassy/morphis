@@ -1711,7 +1711,7 @@ def wrap_long_lines(text, limit=79):
         ps = text.rfind(' ', p0, max_next)
         p1 = max(pd, ps)
 
-        if p1 == -1:
+        if p1 == -1 or p1 == p0:
             out.append(text[p0:max_next])
             p0 += limit
             continue
