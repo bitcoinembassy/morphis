@@ -28,7 +28,8 @@ class FindNodeProcess(object):
         self._data_mode = None
         self._result_trie = None
 
-        self._setup()
+        self._waiting_on_get_data = False
+        self._data_present_peers = []
 
     @asyncio.coroutine
     def run(self):
@@ -110,55 +111,22 @@ class FindNodeProcess(object):
         #TODO: YOU_ARE_HERE: Wait on some event that is signaled when the data
         # is found or sent or whatever.
 
-    def process_storage_interest(self, peer_wrapper, msg):
-        if log.isEnabledFor(logging.INFO):
-            tp = type(peer)
-            if tp is Peer:
-                log.info(\
-                    "Peer (tunnel dbid=[{}], path=[{}]) said will_store=[{}]."\
-                        .format(\
-                            peer_wrapper.tunnel.peer.dbid,\
-                            peer_wrapper.path,\
-                            msg.will_store))
-            else:
-                assert tp is mnpeer.Peer
-                log.info("Peer (dbid=[{}]) said will_store=[{}]."\
-                    .format(peer_wrapper.peer.dbid, msg.will_store))
+    @asyncio.continue
+    def _notify_data_presence(self, peer_wrapper):
+        self._data_present_peers.append(peer_wrapper)
 
-        peer_wrapper.will_store = msg.will_store
+        if self._waiting_on_get_data:
+            return
 
-        if msg.will_store:
-            #TODO: YOU_ARE_HERE: Track storage cnt and trigger async store
-            # process.
-            pass
+        self._send_get_data(peer_wrapper)
 
-    def process_data_presence(self, peer_wrapper, msg):
-        if log.isEnabledFor(logging.INFO):
-            tp = type(peer)
-            if tp is Peer:
-                log.info(\
-                    "Peer (tunnel dbid=[{}], path=[{}]) said"\
-                        " data_present=[{}], first_id=[{}]."\
-                            .format(\
-                                peer_wrapper.tunnel.peer.dbid,\
-                                peer_wrapper.path,\
-                                msg.data_present,\
-                                mbase32.encode(msg.first_id)))
-            else:
-                assert tp is mnpeer.Peer
-                log.info(\
-                    "Peer (dbid=[{}]) said data_present=[{}], first_id=[{}]."\
-                        .format(\
-                            peer_wrapper.peer.dbid,\
-                            msg.will_store,\
-                            mbase32.encode(msg.first_id)))
+    @asyncio.coroutine
+    def _send_get_data(self, peer_wrapper):
+        assert not self._waiting_on_get_data
+        self._waiting_on_get_data = True
 
-        if self._find_node_msg.significant_bits:
-            peer_wrapper.data_present = msg.first_id
-        else:
-            peer_wrapper.data_present = msg.data_present
+        peer_wrapper.tunnel.peer.channel.write_packet
 
-        #TODO: YOU_ARE_HERE: Track presence cnt and trigger async get process.
 
 class Tunnel(object):
     def __init__(self, process, peer_wrapper):
@@ -240,11 +208,11 @@ class Tunnel(object):
             # If data_mode, then first packet is not the PeerList.
             if data_mode is cp.DataMode.store:
                 msg = cp.ChordStorageInterest(pkt)
-                yield from self.process.process_storage_interest(\
+                yield from self.process._process_storage_interest(\
                     self.peer_wrapper, msg)
             elif data_mode is cp.DataMode.get:
                 msg = cp.ChordDataPresence(pkt)
-                yield from self.process.process_data_presence(\
+                yield from self.process._process_data_presence(\
                     self.peer_wrapper, msg)
             else:
                 assert False
@@ -337,11 +305,11 @@ class Tunnel(object):
                         self._send_next_find_nodes()
                 elif pkt_type == cp.CHORD_MSG_DATA_PRESENCE:
                     msg = cp.ChordDataPresence(pkt)
-                    yield from self.process.process_data_presence(\
+                    yield from self.process._process_data_presence(\
                         self.peer_wrapper, msg)
                 elif pkt_type == cp.CHORD_MSG_STORAGE_INTEREST:
                     msg = cp.ChordStorageInterest(pkt)
-                    yield from self.process.process_storage_interest(\
+                    yield from self.process._process_storage_interest(\
                         self.peer_wrapper, msg)
                 else:
                     #TODO: YOU_ARE_HERE: Can get a DataResponse or DataStored.
@@ -394,6 +362,58 @@ class Tunnel(object):
             added_peers += 1
 
         return added_peers
+
+    @asyncio.coroutine
+    def _process_storage_interest(self, peer_wrapper, msg):
+        if log.isEnabledFor(logging.INFO):
+            tp = type(peer)
+            if tp is Peer:
+                log.info(\
+                    "Peer (tunnel dbid=[{}], path=[{}]) said will_store=[{}]."\
+                        .format(\
+                            self.peer.dbid,\
+                            peer_wrapper.path,\
+                            msg.will_store))
+            else:
+                assert tp is mnpeer.Peer
+                log.info("Peer (dbid=[{}]) said will_store=[{}]."\
+                    .format(self.peer.dbid, msg.will_store))
+
+        peer_wrapper.will_store = msg.will_store
+
+        if msg.will_store:
+            #TODO: YOU_ARE_HERE: Track storage cnt and trigger async store
+            # process.
+            pass
+
+    @asyncio.coroutine
+    def _process_data_presence(self, peer_wrapper, msg):
+        if log.isEnabledFor(logging.INFO):
+            tp = type(peer)
+            if tp is Peer:
+                log.info(\
+                    "Peer (tunnel dbid=[{}], path=[{}]) said"\
+                        " data_present=[{}], first_id=[{}]."\
+                            .format(\
+                                self.peer.dbid,\
+                                peer_wrapper.path,\
+                                msg.data_present,\
+                                mbase32.encode(msg.first_id)))
+            else:
+                assert tp is mnpeer.Peer
+                log.info(\
+                    "Peer (dbid=[{}]) said data_present=[{}], first_id=[{}]."\
+                        .format(\
+                            self.peer.dbid,\
+                            msg.will_store,\
+                            mbase32.encode(msg.first_id)))
+
+        if self.process._find_node_msg.significant_bits:
+            peer_wrapper.data_present = msg.first_id
+        else:
+            peer_wrapper.data_present = msg.data_present
+
+        yield from self.process._notify_data_presence(peer_wrapper)
 
     def _generate_relay_packets(self, path, payload=None):
         "path: list of indexes."\
