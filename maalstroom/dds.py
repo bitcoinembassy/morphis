@@ -74,10 +74,11 @@ def _process_create_synapse(dispatcher):
     if not axon_addr:
         return
 
-    def dbcall():
-        with dispatcher.node.db.open_session() as sess:
-            Synapse s = Synapse()
-            s.axon_addr = mbase32.decode(axon_addr)
+#TODO: YOU_ARE_HERE
+#    def dbcall():
+#        with dispatcher.node.db.open_session() as sess:
+#            Synapse s = Synapse()
+#            s.axon_addr = mbase32.decode(axon_addr)
 
     dispatcher.send_content(\
         "SYNAPSE CREATED!<br/>"\
