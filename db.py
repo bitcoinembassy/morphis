@@ -35,6 +35,12 @@ DmailMessage = None
 DmailPart = None
 DmailTag = None
 
+##FIXME: NEW
+Subscription = None
+Feed = None
+User = None
+##.
+
 class UtcDateTime(TypeDecorator):
     impl = DateTime
 
@@ -178,6 +184,38 @@ def _init_daos(Base, d):
     Index("dmailmessage__data_key", DmailMessage.data_key)
 
     d.DmailMessage = DmailMessage
+
+    class Subscription(Base):
+        __tablename__ = "subscription"
+
+        id = Column(Integer, primary_key=True)
+        address = Column(LargeBinary, nullable=False)
+
+    d.Subscription = Subscription
+
+    feed__subscription = Table(\
+        "feed__subscription",\
+        Base.metadata,\
+        Column("feed_id", Integer, ForeignKey("feed.id")),\
+        Column("subscription_id", Integer, ForeignKey("subscription.id")))
+
+    class Feed(Base):
+        __tablename__ = "feed"
+
+        id = Column(Integer, primary_key=True)
+
+        name = Column(String, nullable=True)
+        subscriptions =\
+            relationship(Subscription, secondary=feed__subscription)
+
+    d.Feed = Feed
+
+    class User(Base):
+        __tablename__ = "user"
+
+        id = Column(Integer, primary_key=True)
+
+    d.User = User
 
     return d
 
@@ -371,6 +409,10 @@ if Peer is None:
     DmailMessage = d.DmailMessage
     DmailPart = d.DmailPart
     DmailTag = d.DmailTag
+
+    Subscription = d.Subscription
+    Feed = d.Feed
+    User = d.User
 
 def _update_node_state(sess, version):
     "Caller must call commit."
