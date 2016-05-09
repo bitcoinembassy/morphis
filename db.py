@@ -36,9 +36,9 @@ DmailPart = None
 DmailTag = None
 
 ##FIXME: NEW
-Subscription = None
-Feed = None
 User = None
+Synapse = None
+Neuron = None
 ##.
 
 class UtcDateTime(TypeDecorator):
@@ -185,37 +185,43 @@ def _init_daos(Base, d):
 
     d.DmailMessage = DmailMessage
 
-    class Subscription(Base):
-        __tablename__ = "subscription"
-
-        id = Column(Integer, primary_key=True)
-        address = Column(LargeBinary, nullable=False)
-
-    d.Subscription = Subscription
-
-    feed__subscription = Table(\
-        "feed__subscription",\
-        Base.metadata,\
-        Column("feed_id", Integer, ForeignKey("feed.id")),\
-        Column("subscription_id", Integer, ForeignKey("subscription.id")))
-
-    class Feed(Base):
-        __tablename__ = "feed"
-
-        id = Column(Integer, primary_key=True)
-
-        name = Column(String, nullable=True)
-        subscriptions =\
-            relationship(Subscription, secondary=feed__subscription)
-
-    d.Feed = Feed
-
     class User(Base):
         __tablename__ = "user"
 
         id = Column(Integer, primary_key=True)
 
     d.User = User
+
+    class Synapse(Base):
+        __tablename__ = "synapse"
+
+        id = Column(Integer, primary_key=True)
+        axon_addr = Column(LargeBinary, nullable=False)
+
+    d.Synapse = Synapse
+
+    neuron__user = Table(\
+        "neuron__user",\
+        Base.metadata,\
+        Column("neuron_id", Integer, ForeignKey("neuron.id")),\
+        Column("user_id", Integer, ForeignKey("user.id")))
+
+    neuron__synapse = Table(\
+        "neuron__synapse",\
+        Base.metadata,\
+        Column("neuron_id", Integer, ForeignKey("neuron.id")),\
+        Column("synapse_id", Integer, ForeignKey("synapse.id")))
+
+    class Neuron(Base):
+        __tablename__ = "neuron"
+
+        id = Column(Integer, primary_key=True)
+
+        user = relationship(User, secondary=neuron__user)
+        name = Column(String, nullable=True)
+        synapses = relationship(Synapse, secondary=neuron__synapse)
+
+    d.Neuron = Neuron
 
     return d
 
@@ -410,9 +416,9 @@ if Peer is None:
     DmailPart = d.DmailPart
     DmailTag = d.DmailTag
 
-    Subscription = d.Subscription
-    Feed = d.Feed
     User = d.User
+    Synapse = d.Synapse
+    Neuron = d.Neuron
 
 def _update_node_state(sess, version):
     "Caller must call commit."

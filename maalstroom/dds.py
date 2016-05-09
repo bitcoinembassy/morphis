@@ -7,6 +7,7 @@ import asyncio
 from datetime import datetime
 import logging
 
+from db import User, Neuron, Synapse
 import maalstroom.dmail as dmail
 import maalstroom.templates as templates
 import mbase32
@@ -35,11 +36,11 @@ def serve_get(dispatcher, rpath):
 
         dispatcher.send_content(addr_enc)
         return
-    elif req == "/feed":
+    elif req == "/neuron":
         if dispatcher.handle_cache(req):
             return
 
-        template = templates.dds_feed[0]
+        template = templates.dds_neuron[0]
         template = template.format(\
             csrf_token=dispatcher.client_engine.csrf_token,
             delete_class="")
@@ -57,15 +58,29 @@ def serve_post(dispatcher, rpath):
 
     req = rpath[s_dds_len:]
 
-    if req == "/subscribe/make_it_so":
-        dd = yield from dispatcher.read_post()
-        if not dd: return # Invalid csrf_token.
-
-        feed_addr = fia(dd["feed_addr"])
-
-        dispatcher.send_content(\
-            "SUBSCRIBED!<br/><p>Dpush feed [{}] successfully subscribed.</p>"\
-                .format(feed_addr))
+    if req == "/synapse/create/make_it_so":
+        yield from _process_create_synapse(dispatcher)
         return
 
     dispatcher.send_error("request: {}".format(req), errcode=400)
+
+@asyncio.coroutine
+def _process_create_synapse(dispatcher):
+    dd = yield from dispatcher.read_post()
+    if not dd: return # Invalid csrf_token.
+
+    axon_addr = fia(dd["axon_addr"])
+
+    if not axon_addr:
+        return
+
+    def dbcall():
+        with dispatcher.node.db.open_session() as sess:
+            Synapse s = Synapse()
+            s.axon_addr = mbase32.decode(axon_addr)
+
+    dispatcher.send_content(\
+        "SYNAPSE CREATED!<br/>"\
+        "<p>axon_addr [{}] successfully synapsed."\
+            "</p>"\
+            .format(axon_addr))
