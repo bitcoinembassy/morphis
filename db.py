@@ -22,7 +22,7 @@ import mutil
 
 log = logging.getLogger(__name__)
 
-LATEST_SCHEMA_VERSION = 4
+LATEST_SCHEMA_VERSION = 5
 
 Base = declarative_base()
 
@@ -376,11 +376,21 @@ class Db():
 
         if version == 3:
             _upgrade_3_to_4(self)
+            version = 4
+
+        if version == 4:
+            _upgrade_4_to_5(self)
             version = LATEST_SCHEMA_VERSION
 
     def _create_schema(self):
         log.info("Creating schema.")
+        self._create_or_update_schema()
 
+    def _update_schema(self):
+        log.info("Updating schema.")
+        self._create_or_update_schema()
+
+    def _create_or_update_schema(self):
         if self._schema:
             tmp_Base = declarative_base()
             d = _init_daos(tmp_Base, DObject())
@@ -514,6 +524,17 @@ def _upgrade_3_to_4(db):
 
         _update_node_state(sess, 4)
 
+        sess.commit()
+
+    log.warning("NOTE: Database schema upgraded.")
+
+def _upgrade_4_to_5(db):
+    log.warning("NOTE: Upgrading database schema from version 4 to 5.")
+
+    db._update_schema()
+
+    with db.open_session() as sess:
+        _update_node_state(sess, 5)
         sess.commit()
 
     log.warning("NOTE: Database schema upgraded.")
