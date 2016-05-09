@@ -210,6 +210,9 @@ class MaalstroomDispatcher(object):
         elif rpath.startswith(".dmail") and maalstroom.dmail_enabled:
             yield from maalstroom.dmail.serve_get(self, rpath)
             return
+        elif rpath.startswith(".dds") and maalstroom.dds_enabled:
+            yield from maalstroom.dds.serve_get(self, rpath)
+            return
         else:
             self.send_error(errcode=400)
 
@@ -527,7 +530,7 @@ class MaalstroomDispatcher(object):
 
             if not (user_agent.startswith("curl/")\
                     or user_agent.startswith("Wget/")):
-                send_error(\
+                self.send_error(\
                     "application/x-www-form-urlencoded uploads only allowed"\
                         " from Curl and Wget for CSRF protection reasons; use"\
                         " multipart/form-data instead.")
@@ -958,23 +961,26 @@ class KeyCallback(multipart.KeyCallback):
     def notify_referred_key(self, key):
         self.referred_key = key
 
-@asyncio.coroutine
-def _send_store_data(data, data_rw, privatekey=None, path=None, version=None,\
-        mime_type=""):
-
-    try:
-        key_callback = KeyCallback(data_rw)
-
-        yield from multipart.store_data(\
-            node.chord_engine, data, privatekey=privatekey, path=path,\
-            version=version, key_callback=key_callback, mime_type=mime_type)
-    except asyncio.TimeoutError:
-        data_rw.timed_out = True
-    except Exception:
-        log.exception("send_store_data(..)")
-        data_rw.exception = True
-
-    data_rw.is_done.set()
+##
+# Wouldn't compile anymore and doesn't seem used.
+#
+#@asyncio.coroutine
+#def _send_store_data(data, data_rw, privatekey=None, path=None, version=None,\
+#        mime_type=""):
+#
+#    try:
+#        key_callback = KeyCallback(data_rw)
+#
+#        yield from multipart.store_data(\
+#            node.chord_engine, data, privatekey=privatekey, path=path,\
+#            version=version, key_callback=key_callback, mime_type=mime_type)
+#    except asyncio.TimeoutError:
+#        data_rw.timed_out = True
+#    except Exception:
+#        log.exception("send_store_data(..)")
+#        data_rw.exception = True
+#
+#    data_rw.is_done.set()
 
 class Downloader(multipart.DataCallback):
     def __init__(self, dispatcher, queue):

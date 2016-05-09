@@ -30,5 +30,8 @@ def handle_exception(log, info):
     log.fatal("{} threw [{}]: {}".format(info, sys.exc_info()[0], str(sys.exc_info()[0])))
     traceback.print_tb(sys.exc_info()[2])
 
+def printl(value):
+    print({"value": value, "end": ''})
+
 if not logging_initialized:
     init()

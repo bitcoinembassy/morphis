@@ -6,9 +6,6 @@ import llog
 import asyncio
 from datetime import datetime
 import logging
-import textwrap
-import threading
-import time
 from urllib.parse import parse_qs, quote_plus, unquote
 
 from sqlalchemy import func, not_, and_
@@ -30,6 +27,7 @@ import sshtype
 log = logging.getLogger(__name__)
 
 s_dmail = ".dmail"
+s_dmail_len = len(s_dmail)
 top_tags = ["Inbox", "Outbox", "Sent", "Drafts", "Trash"]
 
 @asyncio.coroutine
@@ -38,7 +36,7 @@ def serve_get(dispatcher, rpath):
 
     log.info("Service .dmail request.")
 
-    req = rpath[len(s_dmail):]
+    req = rpath[s_dmail_len:]
 
 #    if log.isEnabledFor(logging.INFO):
 #        log.info("req=[{}].".format(req))
@@ -954,7 +952,7 @@ def serve_get(dispatcher, rpath):
 def serve_post(dispatcher, rpath):
     assert rpath.startswith(s_dmail)
 
-    req = rpath[len(s_dmail):]
+    req = rpath[s_dmail_len:]
 
     if req == "/compose/make_it_so":
         data = yield from dispatcher.read_request()
@@ -1184,7 +1182,7 @@ def _save_outgoing_dmail(dispatcher, dm, tag_name):
                     log.warning(\
                         "Not saving dmail we already have saved,"\
                         " data_key=[{}]."\
-                            .format(dmail_key))
+                            .format(mbase32.encode(dm.data_key)))
                     return None
             else:
                 # Local only message, as we haven't sent it yet.

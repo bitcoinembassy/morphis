@@ -1,6 +1,8 @@
 # Copyright (c) 2014-2015  Sam Maloney.
 # License: GPL v2.
 
+from enum import Enum
+
 import enc
 
 NODE_ID_BITS = enc.ID_BITS
@@ -9,3 +11,10 @@ MAX_DATA_BLOCK_SIZE = 32768
 
 NSK_DEFAULT_ADDRESS = "default_address"
 NSK_SCHEMA_VERSION = "schema_version"
+
+class BlockType(Enum):
+    hash_tree = 0x2D4100
+    link = 0x2D4200
+    targeted = 0x2D4300
+    user = 0x80000000
+

@@ -129,7 +129,7 @@ def __main():
 
     if args.stat:
         r = yield from mc.send_command("stat")
-        print(r.decode("UTF-8"), end='')
+        llog.printl(r.decode("UTF-8"))
 
     if args.create_dmail:
         log.info("Creating and uploading dmail site.")

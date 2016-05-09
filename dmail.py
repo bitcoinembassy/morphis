@@ -18,8 +18,10 @@ import brute
 import chord
 import consts
 import db
+import dpush
 import mbase32
 import multipart as mp
+from targetedblock import TargetedBlock
 import mutil
 import dhgroup14
 import enc
@@ -33,19 +35,11 @@ _dh_method_name = "mdh-v1"
 class DmailException(Exception):
     pass
 
-class DmailSite(object):
+class DmailSite(dpush.DpushSite):
     def __init__(self, prev=None):
-        self.root = json.loads(prev) if prev else {}
+        super().__init__(prev)
 
         self.dh = None
-
-    def generate_target(self):
-        target = os.urandom(chord.NODE_ID_BYTES)
-
-        if log.isEnabledFor(logging.INFO):
-            log.info("dmail target=[{}].".format(mbase32.encode(target)))
-
-        self.root["target"] = mbase32.encode(target)
 
     def generate_ss(self):
         self.dh = dh = dhgroup14.DhGroup14()
@@ -53,7 +47,7 @@ class DmailSite(object):
         dh.generate_e()
 
         if log.isEnabledFor(logging.INFO):
-            log.info("dmail e=[{}].".format(dh.e))
+            log.info("DmailSite e=[{}].".format(dh.e))
 
         self.root["ssm"] = _dh_method_name
         self.root["sse"] = base58.encode(sshtype.encodeMpint(dh.e))
@@ -61,9 +55,6 @@ class DmailSite(object):
     def generate(self):
         self.generate_target()
         self.generate_ss()
-
-    def export(self):
-        return json.dumps(self.root).encode()
 
 class DmailWrapperV1(object):
     def __init__(self, buf=None, offset=0):
@@ -510,7 +501,7 @@ class DmailEngine(object):
         if not x:
             return data, None
 
-        tb = mp.TargetedBlock(data)
+        tb = TargetedBlock(data)
 
         if target_key:
             if tb.target_key != target_key:
@@ -522,7 +513,7 @@ class DmailEngine(object):
                         .format(tb_tid_enc, tid_enc))
 
         version =\
-            struct.unpack_from(">L", tb.buf, mp.TargetedBlock.BLOCK_OFFSET)[0]
+            struct.unpack_from(">L", tb.buf, TargetedBlock.BLOCK_OFFSET)[0]
 
         if version == 1:
             dmail, valid_sig =\
@@ -536,7 +527,7 @@ class DmailEngine(object):
 
     @asyncio.coroutine
     def _process_dmail_v1(self, key, x, tb, data_rw):
-        dw = DmailWrapperV1(tb.buf, mp.TargetedBlock.BLOCK_OFFSET)
+        dw = DmailWrapperV1(tb.buf, TargetedBlock.BLOCK_OFFSET)
 
         if dw.ssm != "mdh-v1":
             raise DmailException(\
@@ -576,7 +567,7 @@ class DmailEngine(object):
 
     @asyncio.coroutine
     def _process_dmail_v2(self, key, x, tb, data_rw):
-        dw = DmailWrapper(tb.buf, mp.TargetedBlock.BLOCK_OFFSET)
+        dw = DmailWrapper(tb.buf, TargetedBlock.BLOCK_OFFSET)
 
         if dw.ssm != "mdh-v1":
             raise DmailException(\
@@ -665,13 +656,13 @@ class DmailEngine(object):
         dw.data_enc = m
 
         # Store the DmailWrapper in a TargetedBlock.
-        tb = mp.TargetedBlock()
+        tb = TargetedBlock()
         tb.target_key = target_key
         tb.nonce = int(0).to_bytes(64, "big")
         tb.block = dw
 
         tb_data = tb.encode()
-        tb_header = tb_data[:mp.TargetedBlock.BLOCK_OFFSET]
+        tb_header = tb_data[:TargetedBlock.BLOCK_OFFSET]
 
         # Do the POW on the TargetedBlock.
         if log.isEnabledFor(logging.INFO):
@@ -682,18 +673,18 @@ class DmailEngine(object):
         def threadcall():
             return brute.generate_targeted_block(\
                 target_key, difficulty, tb_header,\
-                mp.TargetedBlock.NOONCE_OFFSET,\
-                mp.TargetedBlock.NOONCE_SIZE)
+                TargetedBlock.NOONCE_OFFSET,\
+                TargetedBlock.NOONCE_SIZE)
 
         nonce_bytes = yield from self.loop.run_in_executor(None, threadcall)
 
         if log.isEnabledFor(logging.INFO):
             log.info("Work found nonce [{}].".format(nonce_bytes))
 
-        mp.TargetedBlock.set_nonce(tb_data, nonce_bytes)
+        TargetedBlock.set_nonce(tb_data, nonce_bytes)
 
         if log.isEnabledFor(logging.INFO):
-            mp.TargetedBlock.set_nonce(tb_header, nonce_bytes)
+            TargetedBlock.set_nonce(tb_header, nonce_bytes)
             log.info("Message key=[{}]."\
                 .format(mbase32.encode(enc.generate_ID(tb_header))))
 
@@ -749,15 +740,16 @@ class DmailEngine(object):
             assert type(addr) in (bytes, bytearray)
 
         if significant_bits:
+            log.info("Key was incomplete, searching the network.")
             data_rw = yield from self.task_engine.send_find_key(\
                 addr, significant_bits=significant_bits)
 
-            addr = bytes(data_rw.data_key)
-
-            if not addr:
+            if not data_rw.data_key:
                 log.info("Failed to find key for prefix [{}]."\
-                    .format(recipient_enc))
+                    .format(addr))
                 return None, None
+
+            addr = bytes(data_rw.data_key)
 
         data_rw =\
             yield from self.task_engine.send_get_data(addr, retry_factor=100)
@@ -765,7 +757,7 @@ class DmailEngine(object):
         if not data_rw.data:
             if log.isEnabledFor(logging.INFO):
                 log.info("Failed to fetch dmail site [{}]."\
-                    .format(mbase32.encode(recipient)))
+                    .format(mbase32.encode(addr)))
             return None, None
 
         site_data = data_rw.data.decode("UTF-8")

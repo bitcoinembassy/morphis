@@ -18,6 +18,7 @@ import mbase32
 import maalstroom.templates as templates
 import maalstroom.dispatcher as dispatcher
 import maalstroom.dmail
+import maalstroom.dds
 
 log = logging.getLogger(__name__)
 
@@ -29,6 +30,7 @@ server = None
 client_engine = None
 
 dmail_enabled = True
+dds_enabled = True
 upload_enabled = True
 
 proxy_url = None
@@ -169,6 +171,7 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
                         importlib.reload(maalstroom.templates)
                         importlib.reload(maalstroom.dispatcher)
                         importlib.reload(maalstroom.dmail)
+                        importlib.reload(maalstroom.dds)
                     except KeyboardInterrupt:
                         raise
                     except Exception as e:

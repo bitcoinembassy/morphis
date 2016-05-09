@@ -7,3 +7,5 @@ test:
 clean:
 	rm -f *.c *.so
 	rm -rf __pycache__
+	rm -f maalstroom/*.c maalstroom/*.so
+	rm -rf maalstroom/__pycache__

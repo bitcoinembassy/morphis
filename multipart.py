@@ -12,11 +12,11 @@ import heapq
 import logging
 import random
 import struct
-from enum import Enum
 
 import consts
 import enc
 import mbase32
+from morphisblock import MorphisBlock
 import node
 import peer as mnpeer
 import sshtype
@@ -88,61 +88,6 @@ class KeyCallback(object):
         " via this call, notify_referred_key(..)."
         pass
 
-class BlockType(Enum):
-    hash_tree = 0x2D4100
-    link = 0x2D4200
-    targeted = 0x2D4300
-    user = 0x80000000
-
-class MorphisBlock(object):
-    UUID = b'\x86\xa0\x47\x79\xc1\x2e\x4f\x48\x90\xc3\xee\x27\x53\x6d\x26\x96'
-    HEADER_BYTES = 31
-
-    @staticmethod
-    def parse_block_type(buf):
-        return struct.unpack_from(">L", buf, 16 + 7)[0]
-
-    def __init__(self, block_type=None, buf=None):
-        self.buf = buf
-        self.block_type = block_type
-        self.ext_type = 0
-
-        if not buf:
-            return
-
-        self.parse()
-
-    def encode(self):
-        nbuf = bytearray()
-
-        nbuf += MorphisBlock.UUID
-        nbuf += b"MORPHiS"
-        nbuf += struct.pack(">L", self.block_type)
-        nbuf += struct.pack(">L", self.ext_type)
-
-        self.buf = nbuf
-
-        return nbuf
-
-    def parse(self):
-        assert self.buf[:16] == MorphisBlock.UUID
-        i = 16
-
-        i += 7 # MORPHiS
-
-        block_type = struct.unpack_from(">L", self.buf, i)[0]
-        if self.block_type:
-            if block_type != self.block_type:
-                raise Exception("Expecting block_type [{}] but got [{}]."\
-                    .format(self.block_type, block_type))
-        self.block_type = block_type
-        i += 4
-
-        self.ext_type = struct.unpack_from(">L", self.buf, i)[0]
-        i += 4
-
-        return i
-
 class HashTreeBlock(MorphisBlock):
     HEADER_BYTES = 64
 
@@ -151,7 +96,7 @@ class HashTreeBlock(MorphisBlock):
         self.size = 0
         self.data = None
 
-        super().__init__(BlockType.hash_tree.value, buf)
+        super().__init__(consts.BlockType.hash_tree.value, buf)
 
     def encode(self):
         nbuf = super().encode()
@@ -177,7 +122,7 @@ class LinkBlock(MorphisBlock):
         self.mime_type = None
         self.destination = None
 
-        super().__init__(BlockType.link.value, buf)
+        super().__init__(consts.BlockType.link.value, buf)
 
     def encode(self):
         nbuf = super().encode()
@@ -191,59 +136,6 @@ class LinkBlock(MorphisBlock):
 
         i, self.mime_type = sshtype.parse_string_from(self.buf, i)
         self.destination = self.buf[i:]
-
-class TargetedBlock(MorphisBlock):
-    NOONCE_OFFSET = MorphisBlock.HEADER_BYTES
-    NOONCE_SIZE = 64 #FIXME: This was suppose to be 64 bits, not bytes.
-    BLOCK_OFFSET = MorphisBlock.HEADER_BYTES + NOONCE_SIZE\
-        + 2 * consts.NODE_ID_BYTES
-
-    @staticmethod
-    def set_nonce(data, nonce_bytes):
-        assert type(nonce_bytes) in (bytes, bytearray)
-        lenn = len(nonce_bytes)
-        end = TargetedBlock.NOONCE_OFFSET + TargetedBlock.NOONCE_SIZE
-        start = end - lenn
-        data[start:end] = nonce_bytes
-
-    def __init__(self, buf=None):
-        self.nonce = b' ' * TargetedBlock.NOONCE_SIZE
-        self.target_key = None
-        self.block_hash = None
-        self.block = None
-
-        super().__init__(BlockType.targeted.value, buf)
-
-    def encode(self):
-        nbuf = super().encode()
-
-        assert len(self.nonce) == TargetedBlock.NOONCE_SIZE
-        nbuf += self.nonce
-        assert self.target_key is not None\
-            and len(self.target_key) == consts.NODE_ID_BYTES
-        nbuf += self.target_key
-
-        nbuf += b' ' * consts.NODE_ID_BYTES # block_hash placeholder.
-
-        assert len(nbuf) == TargetedBlock.BLOCK_OFFSET
-
-        self.block.encode(nbuf)
-
-        self.block_hash = enc.generate_ID(nbuf[TargetedBlock.BLOCK_OFFSET:])
-        block_hash_offset = TargetedBlock.BLOCK_OFFSET-consts.NODE_ID_BYTES
-        nbuf[block_hash_offset:TargetedBlock.BLOCK_OFFSET] = self.block_hash
-
-        return nbuf
-
-    def parse(self):
-        i = super().parse()
-
-        self.nonce = self.buf[i:i+TargetedBlock.NOONCE_SIZE]
-        i += TargetedBlock.NOONCE_SIZE
-        self.target_key = self.buf[i:i+consts.NODE_ID_BYTES]
-        i += consts.NODE_ID_BYTES
-        self.block_hash = self.buf[i:i+consts.NODE_ID_BYTES]
-        i += consts.NODE_ID_BYTES
 
 class HashTreeFetch(object):
     def __init__(self, engine, data_callback, ordered=False, positions=None,\
@@ -545,7 +437,7 @@ def get_data(engine, data_key, data_callback, path=None, ordered=False,\
 
         block_type = MorphisBlock.parse_block_type(data)
 
-        if block_type == BlockType.link.value:
+        if block_type == consts.BlockType.link.value:
             link_depth += 1
 
             if link_depth > max_link_depth:
@@ -573,7 +465,7 @@ def get_data(engine, data_key, data_callback, path=None, ordered=False,\
 
             continue
 
-        if block_type != BlockType.hash_tree.value:
+        if block_type != consts.BlockType.hash_tree.value:
             data_callback.notify_size(len(data))
             data_callback.notify_data(0, data)
             data_callback.notify_finished(True)

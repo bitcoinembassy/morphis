@@ -400,4 +400,7 @@ if not initialized_template:
 
         imgs[entry_name] = load_resource("images/dmail/" + entry_name)
 
+    # dds.
+    dds_feed = load("dds/feed.html", True)
+
     initialized_template = True

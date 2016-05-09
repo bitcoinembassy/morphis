@@ -20,13 +20,13 @@ import chord_packet as cp
 from chordexception import ChordException
 from db import Peer, DataBlock, NodeState
 import mbase32
-import multipart as mp
 import mutil
 import enc
 import node as mnnode
 import peer as mnpeer
 import rsakey
 import sshtype
+from targetedblock import TargetedBlock
 
 log = logging.getLogger(__name__)
 
@@ -417,7 +417,7 @@ class ChordTasks(object):
         "Sends a StoreData request for a TargetedBlock, returning the count"\
         " of nodes that claim to have stored it."
 
-        tb_header = data[:mp.TargetedBlock.BLOCK_OFFSET]
+        tb_header = data[:TargetedBlock.BLOCK_OFFSET]
 
         # data_id is a double hash due to the anti-entrapment feature.
         data_key = enc.generate_ID(tb_header)
@@ -2304,7 +2304,7 @@ class ChordTasks(object):
 
             if data_rw.targeted:
                 data_hash =\
-                    enc.generate_ID(data[:mp.TargetedBlock.BLOCK_OFFSET])
+                    enc.generate_ID(data[:TargetedBlock.BLOCK_OFFSET])
             else:
                 data_hash = enc.generate_ID(data)
 
@@ -2774,16 +2774,16 @@ class ChordTasks(object):
             return False
 
     def _check_store_targeted_block(self, data):
-        tb = mp.TargetedBlock(data)
+        tb = TargetedBlock(data)
 
         block_hash = enc.generate_ID(\
-            data[mp.TargetedBlock.BLOCK_OFFSET:])
+            data[TargetedBlock.BLOCK_OFFSET:])
 
         if block_hash != tb.block_hash:
             raise ChordException(\
                 "The block_hash did not match the block.")
 
-        tb_header = data[:mp.TargetedBlock.BLOCK_OFFSET]
+        tb_header = data[:TargetedBlock.BLOCK_OFFSET]
         data_key = enc.generate_ID(tb_header)
 
         return tb, data_key

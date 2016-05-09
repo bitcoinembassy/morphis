@@ -315,7 +315,8 @@ class DmailAutoscanProcess(object):
 
             while time_left > 0:
                 if log.isEnabledFor(logging.INFO):
-                    log.info("Sleeping for [{}] seconds.".format(time_left))
+                    log.info("DmailAutoscanProcess sleeping for [{}] seconds."\
+                        .format(time_left))
 
                 self._task =\
                     asyncio.async(\
