@@ -7,7 +7,7 @@ import io
 import logging
 from threading import Event
 import time
-from urllib.parse import unquote
+from urllib.parse import parse_qs, unquote
 
 import base58
 import chord
@@ -37,6 +37,7 @@ class MaalstroomDispatcher(object):
 
         self._abort_event = abort_event
         self._accept_charset = None
+        self._charset = None
 
     @asyncio.coroutine
     def _ensure_client_engine(self):
@@ -505,6 +506,9 @@ class MaalstroomDispatcher(object):
         if rpath.startswith(".dmail") and maalstroom.dmail_enabled:
             yield from maalstroom.dmail.serve_post(self, rpath)
             return
+        elif rpath.startswith(".dds") and maalstroom.dds_enabled:
+            yield from maalstroom.dds.serve_post(self, rpath)
+            return
 
         if rpath != ".upload/upload" or not maalstroom.upload_enabled:
             self.send_error(errcode=400)
@@ -685,6 +689,52 @@ class MaalstroomDispatcher(object):
 
         return b''.join(datas)
 
+    @asyncio.coroutine
+    def read_post(self):
+        data = yield from self.read_request()
+
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("data=[{}].".format(data))
+
+        charset = self.get_charset()
+
+        qs = data.decode(charset)
+        dd = parse_qs(qs, keep_blank_values=True)
+
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("dd=[{}].".format(dd))
+
+        if not self.check_csrf_token(dd["csrf_token"][0]):
+            return None
+
+        return dd
+
+    def get_charset(self):
+        if self._charset:
+            return self._charset
+
+        charset = self.handler.headers["Content-Type"]
+        if charset:
+            p0 = charset.find("charset=")
+            if p0 > -1:
+                p0 += 8
+                p1 = charset.find(' ', p0+8)
+                if p1 == -1:
+                    p1 = charset.find(';', p0+8)
+                if p1 > -1:
+                    charset = charset[p0:p1].strip()
+                else:
+                    charset = charset[p0:].strip()
+
+                if log.isEnabledFor(logging.DEBUG):
+                    log.debug("Form charset=[{}].".format(charset))
+            else:
+                charset = "UTF-8"
+
+        self._charset = charset
+
+        return charset
+
     def get_accept_charset(self):
         if self._accept_charset:
             return self._accept_charset
@@ -750,6 +800,9 @@ class MaalstroomDispatcher(object):
     def check_csrf_token(self, req_token):
         if self.client_engine.csrf_token == req_token:
             return True
+
+        if log.isEnabledFor(logging.INFO):
+            log.info("Invalid CSRF token!")
 
         self.send_error(\
             "Invalid csrf_token. If this was a valid request, then please"\

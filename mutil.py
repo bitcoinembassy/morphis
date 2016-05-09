@@ -208,3 +208,9 @@ def format_human_no_ms_datetime(datetime, convert_local=True, assume_gmt=False):
     if convert_local and (assume_gmt or datetime.tzinfo is UTC_TZINFO):
         datetime = datetime - timedelta(seconds=get_utc_offset_seconds())
     return datetime.strftime(iso_fmt_human_no_ms)
+
+def fia(array):
+    "First in array; None if array is None."
+    if array:
+        return array[0]
+    return None

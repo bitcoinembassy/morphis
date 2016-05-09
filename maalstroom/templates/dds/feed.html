@@ -4,7 +4,7 @@
 <base target="_top" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/style.css">
 </head>
 <body class="iframe">
-<span class="inbox-head nowrap">New Message</span>
+<span class="inbox-head nowrap">Subscribe to Feed</span>
 <div class="right-icons-inner">
     <ul>
 	<!--a href="morphis://.dmail/compose"><div style="display:inline"><li class="nav-send-icon">SEND</li></div></a>
@@ -12,29 +12,15 @@
 	<a href="morphis://.dmail/delete" class="{delete_class}"><div style="display:inline"><li class="nav-delete-icon">DELETE</li></div></a>
     </ul>
 </div><br/><br/>
-<div class="compose-bkg">
-<form class="message nowrap" style="height: calc(100% - 2em);" action="morphis://.dmail/compose/make_it_so" method="post" accept-charset="UTF-8 ISO-8859-1">
+<div class="Xcompose-bkg">
+<form class="message nowrap" style="height: calc(100% - 2em);" action="morphis://.dds/subscribe/make_it_so" method="post" accept-charset="UTF-8 ISO-8859-1">
 <ul style="height: calc(100% - 10em);">
     <input type="hidden" name="csrf_token" id="csrf_token" value="{csrf_token}"/>
-    <input type="hidden" name="owner_if_anon" value="{owner_if_anon}"/>
-    <label for="sender">From</label> 
-    <select name="sender" class="from-address">
-      {from_addr_options}
-    </select>
     <li>
-        <label class="to" for="destination">To</label> <!-- Please rename classes to match names. -->
-        <input type="text" name="destination" value="{dest_addr}" required{dest_addr_autofocus}/>&nbsp;&nbsp;<button class="addressbook-icon" type="submit"></button>
+        <label class="to" for="feed_addr">Feed</label> <!-- Please rename classes to match names. -->
+        <input type="text" name="feed_addr" value="" required autofocus/>&nbsp;&nbsp;<button class="addressbook-icon" type="submit"></button>
     </li>
-    <li>
-	<label for="subject">Subject</label>
-	<input type="text" name="subject" value="{subject}"{subject_autofocus}/>
-    </li>
-     <li style="height:100%">
-	<textarea name="content"{message_text_autofocus}>{message_text}</textarea>
-    </li>
-    <li>
-	<button class="submit" type="submit" formtarget="_self" name="submit" value="send">SEND</button>
-	<button class="submit" type="submit" formtarget="_self" name="submit" value="draft">SAVE AS DRAFT</button>
+	<button class="submit" type="submit" formtarget="_self" name="submit" value="send">SUBSCRIBE</button>
     </li>
 </ul>
 </form><br/><br/>

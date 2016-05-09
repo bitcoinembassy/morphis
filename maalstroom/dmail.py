@@ -955,12 +955,7 @@ def serve_post(dispatcher, rpath):
     req = rpath[s_dmail_len:]
 
     if req == "/compose/make_it_so":
-        data = yield from dispatcher.read_request()
-
-        if log.isEnabledFor(logging.DEBUG):
-            log.debug("data=[{}].".format(data))
-
-        dm, submit = yield from _read_dmail_post(dispatcher, data)
+        dm, submit = yield from _read_dmail_post(dispatcher)
 
         if not dm:
             # Invalid csrf_token.
@@ -1069,32 +1064,9 @@ def _create_tag(dispatcher, tag_name):
     return r
 
 @asyncio.coroutine
-def _read_dmail_post(dispatcher, data):
-    charset = dispatcher.handler.headers["Content-Type"]
-    if charset:
-        p0 = charset.find("charset=")
-        if p0 > -1:
-            p0 += 8
-            p1 = charset.find(' ', p0+8)
-            if p1 == -1:
-                p1 = charset.find(';', p0+8)
-            if p1 > -1:
-                charset = charset[p0:p1].strip()
-            else:
-                charset = charset[p0:].strip()
-
-            if log.isEnabledFor(logging.DEBUG):
-                log.debug("Form charset=[{}].".format(charset))
-        else:
-            charset = "UTF-8"
-
-    qs = data.decode(charset)
-    dd = parse_qs(qs, keep_blank_values=True)
-
-    if log.isEnabledFor(logging.DEBUG):
-        log.debug("dd=[{}].".format(dd))
-
-    if not dispatcher.check_csrf_token(dd["csrf_token"][0]):
+def _read_dmail_post(dispatcher):
+    dd = yield from dispatcher.read_post()
+    if not dd:
         return None, None
 
     dm = DmailMessage()
