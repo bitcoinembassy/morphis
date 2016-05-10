@@ -85,6 +85,6 @@ class DpushEngine(object):
                     .format(mbase32.encode(key)))
 
             if key_callback:
-                key_callback(key)
+                yield from key_callback(key)
 
             start = key

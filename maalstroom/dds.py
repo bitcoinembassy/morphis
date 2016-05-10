@@ -12,7 +12,7 @@ import dpush
 import maalstroom.dmail as dmail
 import maalstroom.templates as templates
 import mbase32
-from mutil import fia
+from mutil import fia, hex_dump
 
 log = logging.getLogger(__name__)
 
@@ -117,10 +117,21 @@ def _process_neuron(dispatcher):
         dispatcher.send_partial_content(\
             "Address:&nbsp;[{}]<br/><br/>".format(mbase32.encode(s.axon_addr)))
 
+        @asyncio.coroutine
         def cb(key):
             msg = "MSG:&nbsp;[{}]<br/>".format(mbase32.encode(key))
             dispatcher.send_partial_content(msg)
-            pass
+
+            data_rw =\
+                yield from\
+                    dispatcher.node.chord_engine.tasks.send_get_targeted_data(\
+                        bytes(key))
+
+            if not data_rw.data:
+                return
+
+            msg = "<pre>{}</pre>".format(hex_dump(data_rw.data))
+            dispatcher.send_partial_content(msg)
 
         yield from dp.scan_targeted_blocks(s.axon_addr, 20, cb)
 
