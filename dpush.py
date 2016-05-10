@@ -51,3 +51,40 @@ class DpushSite(object):
 
     def export(self):
         return json.dumps(self.root).encode()
+
+class DpushEngine(object):
+    def __init__(self, node):
+        self.core = node.chord_engine
+        self.db = node.db
+        self.loop = node.loop
+
+    @asyncio.coroutine
+    def scan_targeted_blocks(\
+            self, target, significant_bits, key_callback):
+        "Scans the network for TargetedBlockS matching requested details."
+        if log.isEnabledFor(logging.INFO):
+            log.info("Scanning for TargetedBlockS for target=[{}]."\
+                .format(mbase32.encode(target)))
+
+        start = target
+
+        while True:
+            data_rw = yield from self.core.tasks.send_find_key(\
+                start, target_key=target, significant_bits=significant_bits,\
+                retry_factor=100)
+
+            key = data_rw.data_key
+
+            if not key:
+                if log.isEnabledFor(logging.INFO):
+                    log.info("send_find_key(..) returned no more results.")
+                break
+
+            if log.isEnabledFor(logging.INFO):
+                log.info("Found TargetedBlock (key=[{}])."\
+                    .format(mbase32.encode(key)))
+
+            if key_callback:
+                key_callback(key)
+
+            start = key

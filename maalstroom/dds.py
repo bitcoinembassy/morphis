@@ -8,6 +8,7 @@ from datetime import datetime
 import logging
 
 from db import User, Neuron, Synapse
+import dpush
 import maalstroom.dmail as dmail
 import maalstroom.templates as templates
 import mbase32
@@ -25,7 +26,9 @@ def serve_get(dispatcher, rpath):
     req = rpath[s_dds_len:]
 
     if req == "" or req == "/":
-        dispatcher.send_content("HI!")
+        dispatcher.send_content(\
+            "<a href='/.dds/synapse'>synapse</a><br/>"\
+            "<a href='/.dds/neuron'>neuron</a><br/>")
         return
     elif req == "/test":
         dmail_address =\
@@ -36,7 +39,7 @@ def serve_get(dispatcher, rpath):
 
         dispatcher.send_content(addr_enc)
         return
-    elif req == "/neuron":
+    elif req == "/synapse":
         if dispatcher.handle_cache(req):
             return
 
@@ -46,6 +49,9 @@ def serve_get(dispatcher, rpath):
             delete_class="")
 
         dispatcher.send_content([template, req])
+        return
+    elif req == "/neuron":
+        yield from _process_neuron(dispatcher)
         return
 
     dispatcher.send_error("request: {}".format(req), errcode=400)
@@ -74,14 +80,48 @@ def _process_create_synapse(dispatcher):
     if not axon_addr:
         return
 
-#TODO: YOU_ARE_HERE
-#    def dbcall():
-#        with dispatcher.node.db.open_session() as sess:
-#            Synapse s = Synapse()
-#            s.axon_addr = mbase32.decode(axon_addr)
+    def dbcall():
+        with dispatcher.node.db.open_session() as sess:
+            s = Synapse()
+            s.axon_addr = mbase32.decode(axon_addr)
+
+            sess.add(s)
+
+            sess.commit()
+
+            return True
+
+    r = yield from dispatcher.loop.run_in_executor(None, dbcall)
 
     dispatcher.send_content(\
         "SYNAPSE CREATED!<br/>"\
         "<p>axon_addr [{}] successfully synapsed."\
             "</p>"\
             .format(axon_addr))
+
+@asyncio.coroutine
+def _process_neuron(dispatcher):
+    def dbcall():
+        with dispatcher.node.db.open_session() as sess:
+            q = sess.query(Synapse)
+
+            return q.all()
+
+    r = yield from dispatcher.loop.run_in_executor(None, dbcall)
+
+    out = ""
+
+    dp = dpush.DpushEngine(dispatcher.node)
+
+    for s in r:
+        out += "[" + mbase32.encode(s.axon_addr) + "]"
+
+        def cb(key):
+#            nonlocal out
+#            log.info("HI")
+#            out += "<FOUND:{}>".format(mbase32.encode(key))
+            pass
+
+        yield from dp.scan_targeted_blocks(s.axon_addr, 20, cb)
+
+    dispatcher.send_content(out)
