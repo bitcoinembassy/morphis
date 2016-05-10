@@ -109,19 +109,19 @@ def _process_neuron(dispatcher):
 
     r = yield from dispatcher.loop.run_in_executor(None, dbcall)
 
-    out = ""
-
     dp = dpush.DpushEngine(dispatcher.node)
 
+    dispatcher.send_partial_content("<p>Signals</p>", True)
+
     for s in r:
-        out += "[" + mbase32.encode(s.axon_addr) + "]"
+        dispatcher.send_partial_content(\
+            "Address:&nbsp;[{}]<br/><br/>".format(mbase32.encode(s.axon_addr)))
 
         def cb(key):
-#            nonlocal out
-#            log.info("HI")
-#            out += "<FOUND:{}>".format(mbase32.encode(key))
+            msg = "MSG:&nbsp;[{}]<br/>".format(mbase32.encode(key))
+            dispatcher.send_partial_content(msg)
             pass
 
         yield from dp.scan_targeted_blocks(s.axon_addr, 20, cb)
 
-    dispatcher.send_content(out)
+    dispatcher.end_partial_content()
