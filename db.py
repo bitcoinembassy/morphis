@@ -37,6 +37,7 @@ DmailTag = None
 
 ##FIXME: NEW
 User = None
+AxonKey = None
 Synapse = None
 Neuron = None
 ##.
@@ -192,12 +193,24 @@ def _init_daos(Base, d):
 
     d.User = User
 
+    class AxonKey(Base):
+        __tablename__ = "axonkey"
+
+        id = Column(Integer, primary_key=True)
+        synapse_id = Column(Integer, ForeignKey("synapse.id"))
+        x = Column(LargeBinary, nullable=False)
+
+    d.AxonKey = AxonKey
+
     class Synapse(Base):
         __tablename__ = "synapse"
 
         id = Column(Integer, primary_key=True)
         neuron_id = Column(Integer, ForeignKey("neuron.id"))
         axon_addr = Column(LargeBinary, nullable=False)
+        axon_keys = relationship(AxonKey)
+
+    Index("synapse__axon_addr", Synapse.axon_addr)
 
     d.Synapse = Synapse
 
@@ -368,7 +381,7 @@ class Db():
             _upgrade_3_to_4(self)
             version = 4
 
-        if version == 4:
+        if version == 4 or True:
             _upgrade_4_to_5(self)
             version = LATEST_SCHEMA_VERSION
 
@@ -417,6 +430,7 @@ if Peer is None:
     DmailTag = d.DmailTag
 
     User = d.User
+    AxonKey = d.AxonKey
     Synapse = d.Synapse
     Neuron = d.Neuron
 
@@ -525,6 +539,15 @@ def _upgrade_4_to_5(db):
 
     with db.open_session() as sess:
         _update_node_state(sess, 5)
+
+        f = sess.query(DmailKey).first()
+
+        k = AxonKey()
+        k.synapse_id = 1
+        k.x = f.x
+
+        sess.add(k)
+
         sess.commit()
 
     log.warning("NOTE: Database schema upgraded.")

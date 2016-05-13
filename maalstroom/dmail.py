@@ -317,7 +317,7 @@ def serve_get(dispatcher, rpath):
 
         dm = yield from _load_dmail(dispatcher, msg_dbid, fetch_parts=True)
 
-        dmail_text = _format_dmail_content(dm)
+        dmail_text = _format_dmail_content(dm.parts)
 
         acharset = dispatcher.get_accept_charset()
 
@@ -1643,17 +1643,17 @@ def _fetch_dmail(dispatcher, dmail_addr, dmail_key):
 
     return dm, valid_sig
 
-def _format_dmail_content(dm):
-    assert type(dm) is DmailMessage
+def _format_dmail_content(parts):
+    assert isinstance(parts, list), type(parts)
 
     dmail_text = []
 
     i = 0
-    for part in dm.parts:
+    for part in parts:
         dmail_text += part.data.decode()
         dmail_text += '\n'
 
-        if len(dm.parts) > 1:
+        if len(parts) > 1:
             dmail_text += "----- ^ dmail part #{} ^ -----\n\n".format(i)
             i += 1
 

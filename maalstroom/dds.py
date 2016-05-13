@@ -7,12 +7,14 @@ import asyncio
 from datetime import datetime
 import logging
 
-from db import User, Neuron, Synapse
+from db import User, Neuron, Synapse, AxonKey
+from dmail import DmailEngine
 import dpush
 import maalstroom.dmail as dmail
 import maalstroom.templates as templates
 import mbase32
 from mutil import fia, hex_dump
+import sshtype
 
 log = logging.getLogger(__name__)
 
@@ -110,41 +112,102 @@ def _process_neuron(dispatcher):
 
             return q.all()
 
-    r = yield from dispatcher.loop.run_in_executor(None, dbcall)
+    synapses = yield from dispatcher.loop.run_in_executor(None, dbcall)
 
     dp = dpush.DpushEngine(dispatcher.node)
 
     dispatcher.send_partial_content("<p>Signals</p>", True)
 
-    for s in r:
+    for synapse in synapses:
         dispatcher.send_partial_content(\
-            "Address:&nbsp;[{}]<br/><br/>".format(mbase32.encode(s.axon_addr)))
+            "Address:&nbsp;[{}]<br/><br/>"\
+                .format(mbase32.encode(synapse.axon_addr)))
 
         @asyncio.coroutine
         def cb(key):
             msg = "MSG:&nbsp;[{key}]<br/>"\
-                "<iframe src='http://localhost:4252/.dds/read/content/{key}' style='height: 25%; width: 100%;'></iframe>"\
-                    .format(key=mbase32.encode(key))
+                "<iframe src='http://localhost:4252/.dds/read/content/{key}/{target_key}' style='height: 25%; width: 100%;'></iframe>"\
+                    .format(key=mbase32.encode(key),\
+                        target_key=mbase32.encode(synapse.axon_addr))
 
             dispatcher.send_partial_content(msg)
 
-        yield from dp.scan_targeted_blocks(s.axon_addr, 20, cb)
+        yield from dp.scan_targeted_blocks(synapse.axon_addr, 20, cb)
 
     dispatcher.end_partial_content()
 
 @asyncio.coroutine
 def _process_read_content(dispatcher, req):
-    key = mbase32.decode(req)
-    data_rw =\
-        yield from\
-            dispatcher.node.chord_engine.tasks.send_get_targeted_data(\
-                bytes(key))
+    p0 = req.index('/')
+    key = mbase32.decode(req[:p0])
+    target_key = mbase32.decode(req[p0+1:])
 
-    if not data_rw.data:
-        return
 
-    msg = "<pre>{}</pre>".format(hex_dump(data_rw.data))
+    def dbcall():
+        with dispatcher.node.db.open_session() as sess:
+            t = sess.query(AxonKey).first()
+            log.info("AN X=[{}].".format(mbase32.encode(t.x)))
 
-    acharset = dispatcher.get_accept_charset()
-    dispatcher.send_content(\
-        msg, content_type="text/plain; charset={}".format(acharset))
+            q = sess.query(Neuron)\
+                .filter(Neuron.synapses.any(Synapse.axon_addr == target_key))
+
+            sess.expunge_all()
+
+            neuron = q.first()
+
+            if not neuron:
+                return None
+
+            found = False
+            for synapse in neuron.synapses:
+                if synapse.axon_addr == target_key:
+                    found = True
+                    break
+
+            assert found
+
+            axon_key = synapse.axon_keys[0]
+
+            log.info(\
+                "Found AxonKey (x=[{}])!".format(mbase32.encode(axon_key.x)))
+
+            sess.expunge_all()
+
+            return axon_key
+
+    axon_key = yield from dispatcher.loop.run_in_executor(None, dbcall)
+
+    if axon_key:
+        log.info("YES FOUND!")
+
+        de =\
+            DmailEngine(\
+                dispatcher.node.chord_engine.tasks, dispatcher.node.db)
+
+        l, x = sshtype.parseMpint(axon_key.x)
+        dm, sender_auth_valid = yield from\
+            de.fetch_dmail(bytes(key), x, target_key=target_key)
+
+        msg_txt = ""
+        if not sender_auth_valid:
+            msg_txt += "[WARNING: SENDER ADDRESS IS FORGED]\n"
+
+        msg_txt = dmail._format_dmail_content(dm.parts)
+
+        dispatcher.send_content(msg_txt)
+    else:
+        log.info("NOT FOUND!")
+
+        data_rw =\
+            yield from\
+                dispatcher.node.chord_engine.tasks.send_get_targeted_data(\
+                    bytes(key))
+
+        if not data_rw.data:
+            return
+
+        msg = "{}".format(hex_dump(data_rw.data))
+
+        acharset = dispatcher.get_accept_charset()
+        dispatcher.send_content(\
+            msg, content_type="text/plain; charset={}".format(acharset))
