@@ -53,6 +53,9 @@ def serve_get(dispatcher, rpath):
     elif req == "/neuron":
         yield from _process_neuron(dispatcher)
         return
+    elif req.startswith("/read/content/"):
+        yield from _process_read_content(dispatcher, req[14:])
+        return
 
     dispatcher.send_error("request: {}".format(req), errcode=400)
 
@@ -119,20 +122,29 @@ def _process_neuron(dispatcher):
 
         @asyncio.coroutine
         def cb(key):
-            msg = "MSG:&nbsp;[{}]<br/>".format(mbase32.encode(key))
-            dispatcher.send_partial_content(msg)
+            msg = "MSG:&nbsp;[{key}]<br/>"\
+                "<iframe src='http://localhost:4252/.dds/read/content/{key}' style='height: 25%; width: 100%;'></iframe>"\
+                    .format(key=mbase32.encode(key))
 
-            data_rw =\
-                yield from\
-                    dispatcher.node.chord_engine.tasks.send_get_targeted_data(\
-                        bytes(key))
-
-            if not data_rw.data:
-                return
-
-            msg = "<pre>{}</pre>".format(hex_dump(data_rw.data))
             dispatcher.send_partial_content(msg)
 
         yield from dp.scan_targeted_blocks(s.axon_addr, 20, cb)
 
     dispatcher.end_partial_content()
+
+@asyncio.coroutine
+def _process_read_content(dispatcher, req):
+    key = mbase32.decode(req)
+    data_rw =\
+        yield from\
+            dispatcher.node.chord_engine.tasks.send_get_targeted_data(\
+                bytes(key))
+
+    if not data_rw.data:
+        return
+
+    msg = "<pre>{}</pre>".format(hex_dump(data_rw.data))
+
+    acharset = dispatcher.get_accept_charset()
+    dispatcher.send_content(\
+        msg, content_type="text/plain; charset={}".format(acharset))
