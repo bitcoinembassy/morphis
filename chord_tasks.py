@@ -29,6 +29,7 @@ import sshtype
 from targetedblock import TargetedBlock
 
 log = logging.getLogger(__name__)
+log2 = logging.getLogger(__name__ + ".datastore")
 
 class Counter(object):
     def __init__(self, value=None):
@@ -2394,6 +2395,11 @@ class ChordTasks(object):
         if not data_block:
             return None, None, None, None, None, None
 
+        if log.isEnabledFor(logging.INFO):
+            log.info("Loading data to respond to data request.")
+        elif log2.isEnabledFor(logging.INFO):
+            log2.info("Loading data to respond to data request.")
+
         def iocall():
             filename = self.engine.node.data_block_file_path.format(\
                 self.engine.node.instance, data_block.id)
@@ -2729,6 +2735,9 @@ class ChordTasks(object):
 
             if log.isEnabledFor(logging.INFO):
                 log.info("Stored data for data_id=[{}] as [{}.blk]."\
+                    .format(mbase32.encode(data_id), data_block_id))
+            elif log2.isEnabledFor(logging.INFO):
+                log2.info("Stored data for data_id=[{}] as [{}.blk]."\
                     .format(mbase32.encode(data_id), data_block_id))
 
             return True
