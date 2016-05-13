@@ -196,30 +196,20 @@ def _init_daos(Base, d):
         __tablename__ = "synapse"
 
         id = Column(Integer, primary_key=True)
+        neuron_id = Column(Integer, ForeignKey("neuron.id"))
         axon_addr = Column(LargeBinary, nullable=False)
 
     d.Synapse = Synapse
-
-    neuron__user = Table(\
-        "neuron__user",\
-        Base.metadata,\
-        Column("neuron_id", Integer, ForeignKey("neuron.id")),\
-        Column("user_id", Integer, ForeignKey("user.id")))
-
-    neuron__synapse = Table(\
-        "neuron__synapse",\
-        Base.metadata,\
-        Column("neuron_id", Integer, ForeignKey("neuron.id")),\
-        Column("synapse_id", Integer, ForeignKey("synapse.id")))
 
     class Neuron(Base):
         __tablename__ = "neuron"
 
         id = Column(Integer, primary_key=True)
 
-        user = relationship(User, secondary=neuron__user)
+        user = relationship(User)
+        user_id = Column(Integer, ForeignKey("user.id"))
         name = Column(String, nullable=True)
-        synapses = relationship(Synapse, secondary=neuron__synapse)
+        synapses = relationship(Synapse)
 
     d.Neuron = Neuron
 
