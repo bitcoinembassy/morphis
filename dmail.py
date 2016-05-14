@@ -636,7 +636,7 @@ class DmailEngine(object):
 
         target_key = mbase32.decode(target_enc)
 
-        key = self._generate_encryption_key(target_key, k)
+        key = yield from self._generate_encryption_key(target_key, k)
 
         # Encrypt the Dmail bytes.
         m, r = enc.encrypt_data_block(dmail_bytes, key)
@@ -656,37 +656,7 @@ class DmailEngine(object):
         dw.data_enc = m
 
         # Store the DmailWrapper in a TargetedBlock.
-        tb = TargetedBlock()
-        tb.target_key = target_key
-        tb.nonce = int(0).to_bytes(64, "big")
-        tb.block = dw
-
-        tb_data = tb.encode()
-        tb_header = tb_data[:TargetedBlock.BLOCK_OFFSET]
-
-        # Do the POW on the TargetedBlock.
-        if log.isEnabledFor(logging.INFO):
-            log.info(\
-                "Attempting work on dmail (target=[{}], difficulty=[{}])."\
-                    .format(target_enc, difficulty))
-
-        def threadcall():
-            return brute.generate_targeted_block(\
-                target_key, difficulty, tb_header,\
-                TargetedBlock.NOONCE_OFFSET,\
-                TargetedBlock.NOONCE_SIZE)
-
-        nonce_bytes = yield from self.loop.run_in_executor(None, threadcall)
-
-        if log.isEnabledFor(logging.INFO):
-            log.info("Work found nonce [{}].".format(nonce_bytes))
-
-        TargetedBlock.set_nonce(tb_data, nonce_bytes)
-
-        if log.isEnabledFor(logging.INFO):
-            TargetedBlock.set_nonce(tb_header, nonce_bytes)
-            log.info("Message key=[{}]."\
-                .format(mbase32.encode(enc.generate_ID(tb_header))))
+        tb, tb_data = self.generate_targeted_block(target_key, difficulty, dw)
 
         key = None
 
@@ -729,6 +699,43 @@ class DmailEngine(object):
                 .format(key_enc, id_enc, total_storing))
 
         return total_storing
+
+    @asyncio.coroutine
+    def generate_targeted_block(self, target_key, difficulty, data_or_wrapper):
+        tb = TargetedBlock()
+        tb.target_key = target_key
+        tb.nonce = int(0).to_bytes(64, "big")
+        tb.block = data_or_wrapper
+
+        tb_data = tb.encode()
+        tb_header = tb_data[:TargetedBlock.BLOCK_OFFSET]
+
+        # Do the POW on the TargetedBlock.
+        if log.isEnabledFor(logging.INFO):
+            log.info(\
+                "Attempting work on TargetedBlock"\
+                    " (target=[{}], difficulty=[{}])."\
+                        .format(mbase32.encode(target_key), difficulty))
+
+        def threadcall():
+            return brute.generate_targeted_block(\
+                target_key, difficulty, tb_header,\
+                TargetedBlock.NOONCE_OFFSET,\
+                TargetedBlock.NOONCE_SIZE)
+
+        nonce_bytes = yield from self.loop.run_in_executor(None, threadcall)
+
+        if log.isEnabledFor(logging.INFO):
+            log.info("Work found nonce [{}].".format(nonce_bytes))
+
+        TargetedBlock.set_nonce(tb_data, nonce_bytes)
+
+        if log.isEnabledFor(logging.INFO):
+            TargetedBlock.set_nonce(tb_header, nonce_bytes)
+            log.info("Message key=[{}]."\
+                .format(mbase32.encode(enc.generate_ID(tb_header))))
+
+        return tb, tb_data
 
     @asyncio.coroutine
     def fetch_recipient_dmail_site(self, addr, significant_bits=None):

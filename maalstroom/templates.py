@@ -402,5 +402,6 @@ if not initialized_template:
 
     # dds.
     dds_neuron = load("dds/neuron.html", True)
+    dds_axon = load("dds/axon.html", True)
 
     initialized_template = True

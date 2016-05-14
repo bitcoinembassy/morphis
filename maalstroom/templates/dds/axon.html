@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+<base target="_top" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/style.css">
+</head>
+<body class="iframe">
+<span class="inbox-head nowrap">Create New Axon</span>
+<div class="right-icons-inner">
+    <ul>
+	<!--a href="morphis://.dmail/compose"><div style="display:inline"><li class="nav-send-icon">SEND</li></div></a>
+    <a href="morphis://.dmail/save"><div style="display:inline"><li class="nav-save-icon">SAVE</li></div></a--><!-- These need to be in the form. -->
+	<a href="morphis://.dmail/delete" class="{delete_class}"><div style="display:inline"><li class="nav-delete-icon">DELETE</li></div></a>
+    </ul>
+</div><br/><br/>
+<div class="Xcompose-bkg">
+<form class="message nowrap" style="height: calc(100% - 2em);" action="morphis://.dds/axon/create" method="post" accept-charset="UTF-8 ISO-8859-1">
+<ul style="height: calc(100% - 10em);">
+    <input type="hidden" name="csrf_token" id="csrf_token" value="{csrf_token}"/>
+    <li>
+        <label class="to" for="target_addr">Target Axon</label> <!-- Please rename classes to match names. -->
+        <input type="text" name="target_addr" value="" autofocus/>&nbsp;&nbsp;<button class="addressbook-icon" type="submit"></button>
+    </li>
+    <li>
+        <textarea name="content" autofocus>{message_text}</textarea>
+    </li>
+	<button class="submit" type="submit" formtarget="_self" name="submit" value="send">CREATE AXON</button>
+    </li>
+</ul>
+</form><br/><br/>
+</div>
+</body></html>

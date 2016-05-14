@@ -13,6 +13,8 @@ import dpush
 import maalstroom.dmail as dmail
 import maalstroom.templates as templates
 import mbase32
+from morphisblock import MorphisBlock
+from targetedblock import TargetedBlock
 from mutil import fia, hex_dump
 import sshtype
 
@@ -29,8 +31,9 @@ def serve_get(dispatcher, rpath):
 
     if req == "" or req == "/":
         dispatcher.send_content(\
-            "<a href='/.dds/synapse'>synapse</a><br/>"\
-            "<a href='/.dds/neuron'>neuron</a><br/>")
+            "<a href='/.dds/axon'>axon</a><br/>"\
+            "<a href='/.dds/synapse'>subscribe</a><br/>"\
+            "<a href='/.dds/neuron'>feeds</a><br/>")
         return
     elif req == "/test":
         dmail_address =\
@@ -55,8 +58,11 @@ def serve_get(dispatcher, rpath):
     elif req == "/neuron":
         yield from _process_neuron(dispatcher)
         return
-    elif req.startswith("/read/content/"):
-        yield from _process_read_content(dispatcher, req[14:])
+    elif req == "/axon":
+        yield from _process_axon(dispatcher, req[5:])
+        return
+    elif req.startswith("/axon/read/"):
+        yield from _process_read_axon(dispatcher, req[11:])
         return
 
     dispatcher.send_error("request: {}".format(req), errcode=400)
@@ -71,6 +77,9 @@ def serve_post(dispatcher, rpath):
 
     if req == "/synapse/create/make_it_so":
         yield from _process_create_synapse(dispatcher)
+        return
+    elif req == "/axon/create":
+        yield from _process_create_axon(dispatcher)
         return
 
     dispatcher.send_error("request: {}".format(req), errcode=400)
@@ -105,6 +114,49 @@ def _process_create_synapse(dispatcher):
             .format(axon_addr))
 
 @asyncio.coroutine
+def _process_create_axon(dispatcher):
+    dd = yield from dispatcher.read_post()
+    if not dd: return
+
+    content = fia(dd["content"])
+    if not content:
+        return
+
+    key = None
+    def key_callback(akey):
+        nonlocal key
+        key = akey
+
+    content = content.encode()
+
+    target_addr = fia(dd["target_addr"])
+
+    if target_addr:
+        target_addr = mbase32.decode(target_addr)
+
+        de =\
+            DmailEngine(\
+                dispatcher.node.chord_engine.tasks, dispatcher.node.db)
+
+        tb, tb_data =\
+            yield from de.generate_targeted_block(target_addr, 20, content)
+
+        yield from\
+            dispatcher.node.chord_engine.tasks.send_store_targeted_data(\
+                tb_data, store_key=True, key_callback=key_callback)
+    else:
+        yield from\
+            dispatcher.node.chord_engine.tasks.send_store_data(\
+                content, store_key=True, key_callback=key_callback)
+
+    resp =\
+        "Resulting&nbsp;<a href='morphis://.dds/axon/read/{axon_addr}'>"\
+            "Axon</a>&nbsp;Address:<br/>{axon_addr}"\
+                 .format(axon_addr=mbase32.encode(key))
+
+    dispatcher.send_content(resp)
+
+@asyncio.coroutine
 def _process_neuron(dispatcher):
     def dbcall():
         with dispatcher.node.db.open_session() as sess:
@@ -126,7 +178,7 @@ def _process_neuron(dispatcher):
         @asyncio.coroutine
         def cb(key):
             msg = "MSG:&nbsp;[{key}]<br/>"\
-                "<iframe src='http://localhost:4252/.dds/read/content/{key}/{target_key}' style='height: 7em; width: 100%;'></iframe>"\
+                "<iframe src='morphis://.dds/axon/read/{key}/{target_key}' style='height: 7em; width: 100%;'></iframe>"\
                     .format(key=mbase32.encode(key),\
                         target_key=mbase32.encode(synapse.axon_addr))
 
@@ -137,12 +189,28 @@ def _process_neuron(dispatcher):
     dispatcher.end_partial_content()
 
 @asyncio.coroutine
-def _process_read_content(dispatcher, req):
-    p0 = req.index('/')
-    key = mbase32.decode(req[:p0])
-    target_key = mbase32.decode(req[p0+1:])
+def _process_axon(dispatcher, req):
+    template = templates.dds_axon[0]
+    template = template.format(\
+        message_text="",
+        csrf_token=dispatcher.client_engine.csrf_token,
+        delete_class="")
 
+    dispatcher.send_content([template, req])
 
+@asyncio.coroutine
+def _process_read_axon(dispatcher, req):
+    p0 = req.find('/')
+    if p0 == -1:
+        key = mbase32.decode(req)
+        target_key = key
+    else:
+        key = mbase32.decode(req[:p0])
+        target_key = mbase32.decode(req[p0+1:])
+
+    #FIXME: Move this to after we know the axon signal is encrypted!
+    # Unfortunately we will need to refactor the fetch_dmail(..) method first
+    # for that.
     def dbcall():
         with dispatcher.node.db.open_session() as sess:
             q = sess.query(Neuron)\
@@ -177,11 +245,15 @@ def _process_read_content(dispatcher, req):
     axon_key = yield from dispatcher.loop.run_in_executor(None, dbcall)
 
     if axon_key:
-        log.info("YES FOUND!")
-
         de =\
             DmailEngine(\
                 dispatcher.node.chord_engine.tasks, dispatcher.node.db)
+
+        if target_key is key:
+            # Signal to fetch_dmail(..) not to try to verify the proof of work
+            # since there will be none since this is not a targeted read
+            # request.
+            target_key = None
 
         l, x = sshtype.parseMpint(axon_key.x)
         dm, sender_auth_valid = yield from\
@@ -195,8 +267,6 @@ def _process_read_content(dispatcher, req):
 
         dispatcher.send_content(msg_txt)
     else:
-        log.info("NOT FOUND!")
-
         data_rw =\
             yield from\
                 dispatcher.node.chord_engine.tasks.send_get_targeted_data(\
@@ -205,7 +275,10 @@ def _process_read_content(dispatcher, req):
         if not data_rw.data:
             return
 
-        msg = "{}".format(hex_dump(data_rw.data))
+        if data_rw.data.startswith(MorphisBlock.UUID):
+            msg = "{}".format(hex_dump(data_rw.data))
+        else:
+            msg = data_rw.data
 
         acharset = dispatcher.get_accept_charset()
         dispatcher.send_content(\

@@ -46,7 +46,10 @@ class TargetedBlock(MorphisBlock):
 
         assert len(nbuf) == TargetedBlock.BLOCK_OFFSET
 
-        self.block.encode(nbuf)
+        if type(self.block) in (bytes, bytearray):
+            nbuf += self.block
+        else:
+            self.block.encode(nbuf)
 
         self.block_hash = enc.generate_ID(nbuf[TargetedBlock.BLOCK_OFFSET:])
         block_hash_offset = TargetedBlock.BLOCK_OFFSET-consts.NODE_ID_BYTES
