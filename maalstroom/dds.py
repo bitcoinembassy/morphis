@@ -145,9 +145,6 @@ def _process_read_content(dispatcher, req):
 
     def dbcall():
         with dispatcher.node.db.open_session() as sess:
-            t = sess.query(AxonKey).first()
-            log.info("AN X=[{}].".format(mbase32.encode(t.x)))
-
             q = sess.query(Neuron)\
                 .filter(Neuron.synapses.any(Synapse.axon_addr == target_key))
 
@@ -168,8 +165,10 @@ def _process_read_content(dispatcher, req):
 
             axon_key = synapse.axon_keys[0]
 
-            log.info(\
-                "Found AxonKey (x=[{}])!".format(mbase32.encode(axon_key.x)))
+            if log.isEnabledFor(logging.INFO):
+                log.info(\
+                    "Found AxonKey (x=[{}])!"\
+                        .format(mbase32.encode(axon_key.x)))
 
             sess.expunge_all()
 
