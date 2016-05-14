@@ -126,7 +126,7 @@ def _process_neuron(dispatcher):
         @asyncio.coroutine
         def cb(key):
             msg = "MSG:&nbsp;[{key}]<br/>"\
-                "<iframe src='http://localhost:4252/.dds/read/content/{key}/{target_key}' style='height: 25%; width: 100%;'></iframe>"\
+                "<iframe src='http://localhost:4252/.dds/read/content/{key}/{target_key}' style='height: 7em; width: 100%;'></iframe>"\
                     .format(key=mbase32.encode(key),\
                         target_key=mbase32.encode(synapse.axon_addr))
 
