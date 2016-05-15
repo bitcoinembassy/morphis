@@ -536,15 +536,17 @@ def _upgrade_3_to_4(db):
 def _upgrade_4_to_5(db):
     log.warning("NOTE: Upgrading database schema from version 4 to 5.")
 
-    t_boolean = "BOOLEAN" if db.is_sqlite else "boolean"
-
     db._update_schema()
 
     with db.open_session() as sess:
-        st = "ALTER TABLE synapse ADD COLUMN disabled "\
-            + t_boolean
+        default = "0" if db.is_sqlite else "false"
+        st = "ALTER TABLE synapse ADD COLUMN disabled BOOLEAN not null"\
+            " default " + default
 
-        sess.execute(st)
+        try:
+            sess.execute(st)
+        except:
+            pass
 
         _update_node_state(sess, 5)
 
