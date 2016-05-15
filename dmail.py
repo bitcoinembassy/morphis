@@ -636,7 +636,7 @@ class DmailEngine(object):
 
         target_key = mbase32.decode(target_enc)
 
-        key = yield from self._generate_encryption_key(target_key, k)
+        key = self._generate_encryption_key(target_key, k)
 
         # Encrypt the Dmail bytes.
         m, r = enc.encrypt_data_block(dmail_bytes, key)
