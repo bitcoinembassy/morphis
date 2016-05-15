@@ -160,7 +160,7 @@ def _process_create_axon(dispatcher):
 def _process_neuron(dispatcher):
     def dbcall():
         with dispatcher.node.db.open_session() as sess:
-            q = sess.query(Synapse)
+            q = sess.query(Synapse).filter(Synapse.disabled == False)
 
             return q.all()
 

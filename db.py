@@ -209,6 +209,7 @@ def _init_daos(Base, d):
         neuron_id = Column(Integer, ForeignKey("neuron.id"))
         axon_addr = Column(LargeBinary, nullable=False)
         axon_keys = relationship(AxonKey)
+        disabled = Column(Boolean, nullable=False)
 
     Index("synapse__axon_addr", Synapse.axon_addr)
 
@@ -535,9 +536,16 @@ def _upgrade_3_to_4(db):
 def _upgrade_4_to_5(db):
     log.warning("NOTE: Upgrading database schema from version 4 to 5.")
 
+    t_boolean = "BOOLEAN" if db.is_sqlite else "boolean"
+
     db._update_schema()
 
     with db.open_session() as sess:
+        st = "ALTER TABLE synapse ADD COLUMN disabled "\
+            + t_boolean
+
+        sess.execute(st)
+
         _update_node_state(sess, 5)
 
         f = sess.query(DmailKey).first()
