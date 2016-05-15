@@ -401,6 +401,7 @@ if not initialized_template:
         imgs[entry_name] = load_resource("images/dmail/" + entry_name)
 
     # dds.
+    dds_main = load("dds/main.html", True)
     dds_neuron = load("dds/neuron.html", True)
     dds_axon = load("dds/axon.html", True)
 

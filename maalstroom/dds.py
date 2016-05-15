@@ -30,10 +30,9 @@ def serve_get(dispatcher, rpath):
     req = rpath[s_dds_len:]
 
     if req == "" or req == "/":
-        dispatcher.send_content(\
-            "<a href='/.dds/axon'>axon</a><br/>"\
-            "<a href='/.dds/synapse'>subscribe</a><br/>"\
-            "<a href='/.dds/neuron'>feeds</a><br/>")
+        template = templates.dds_main[0]
+
+        dispatcher.send_content(template)
         return
     elif req == "/test":
         dmail_address =\
