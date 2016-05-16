@@ -214,3 +214,30 @@ def fia(array):
     if array:
         return array[0]
     return None
+
+from html.parser import HTMLParser
+
+# MLStripper inherited from Eloff@stackoverflow's idea.
+class MLStripper(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.reset()
+        self.strict = False
+        self.convert_charrefs= True
+        self.fed = []
+    def handle_data(self, d):
+        self.fed.append(d)
+    def get_data(self):
+        return ''.join(self.fed)
+
+def strip_html_tags(html):
+    s = MLStripper()
+    s.feed(html)
+    return s.get_data()
+
+import html
+
+def make_safe_for_html_content(text):
+    # NOTE: This is only safe as content like this: <div>here</div>.
+    # https://www.owasp.org/index.php/XSS_%28Cross_Site_Scripting%29_Prevention_Cheat_Sheet#Why_Can.27t_I_Just_HTML_Entity_Encode_Untrusted_Data.3F
+    return html.escape(text)

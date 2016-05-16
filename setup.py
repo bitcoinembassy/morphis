@@ -11,6 +11,7 @@ modules = [\
     "chord_packet",
     "dhgroup14",
     "enc",
+    "htmlsafe",
     "llog",
     "mbase32",
     "mutil",
