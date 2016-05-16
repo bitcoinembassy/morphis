@@ -41,6 +41,7 @@ home_page_content = [\
     <p>
         <a href="morphis://.upload/">Upload</a> (Upload data to the network.)<br/>
         <a href="morphis://.dmail/">Dmail</a> (Encrypted Uncensorable Messaging!)<br/>
+        <a href="morphis://.dds/">DDS</a> (Distributed Discussion System)<br/>
     </p>
 </div>
 </body></html>""", None]
