@@ -209,7 +209,7 @@ def _init_daos(Base, d):
         neuron_id = Column(Integer, ForeignKey("neuron.id"))
         axon_addr = Column(LargeBinary, nullable=False)
         axon_keys = relationship(AxonKey)
-        disabled = Column(Boolean, nullable=False)
+        disabled = Column(Boolean, nullable=False, default=False)
 
     Index("synapse__axon_addr", Synapse.axon_addr)
 
