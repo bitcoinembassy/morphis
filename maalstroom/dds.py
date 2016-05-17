@@ -143,15 +143,22 @@ def _process_create_axon(dispatcher):
         yield from\
             dispatcher.node.chord_engine.tasks.send_store_targeted_data(\
                 tb_data, store_key=True, key_callback=key_callback)
+
+        resp =\
+            "Resulting&nbsp;<a href='morphis://.dds/axon/read/{axon_addr}/"\
+                "{target_addr}'>Axon</a>&nbsp;Address:<br/>{axon_addr}"\
+                     .format(\
+                        axon_addr=mbase32.encode(key),\
+                        target_addr=mbase32.encode(target_addr))
     else:
         yield from\
             dispatcher.node.chord_engine.tasks.send_store_data(\
                 content, store_key=True, key_callback=key_callback)
 
-    resp =\
-        "Resulting&nbsp;<a href='morphis://.dds/axon/read/{axon_addr}'>"\
-            "Axon</a>&nbsp;Address:<br/>{axon_addr}"\
-                 .format(axon_addr=mbase32.encode(key))
+        resp =\
+            "Resulting&nbsp;<a href='morphis://.dds/axon/read/{axon_addr}'>"\
+                "Axon</a>&nbsp;Address:<br/>{axon_addr}"\
+                     .format(axon_addr=mbase32.encode(key))
 
     dispatcher.send_content(resp)
 
@@ -176,10 +183,9 @@ def _process_neuron(dispatcher):
 
         @asyncio.coroutine
         def cb(key):
-            msg = "MSG:&nbsp;[{key}]<br/>"\
-                "<iframe src='morphis://.dds/axon/read/{key}/{target_key}' style='height: 7em; width: 100%;'></iframe>"\
-                    .format(key=mbase32.encode(key),\
-                        target_key=mbase32.encode(synapse.axon_addr))
+            msg = "<iframe src='morphis://.dds/axon/read/{key}/{target_key}' style='height: 5.5em; width: 100%;' seamless='seamless'></iframe>"\
+                .format(key=mbase32.encode(key),\
+                    target_key=mbase32.encode(synapse.axon_addr))
 
             dispatcher.send_partial_content(msg)
 
@@ -225,11 +231,11 @@ def _process_read_axon(dispatcher, req):
 
     if not data.startswith(MorphisBlock.UUID):
         # Plain data, return it!
-        msg = make_safe_for_html_content(data)
+        msg = _format_post(data, key)
 
         acharset = dispatcher.get_accept_charset()
         dispatcher.send_content(\
-            msg, content_type="text/plain; charset={}".format(acharset))
+            msg, content_type="text/html; charset={}".format(acharset))
         return
 
     # We assume it is a Dmail if it is a MorphisBlock.
@@ -265,6 +271,34 @@ def _process_read_axon(dispatcher, req):
     msg_txt = make_safe_for_html_content(msg_txt)
 
     dispatcher.send_content(msg_txt)
+
+def _format_post(data, key):
+    return __format_post(data)\
+        + "<div style='position:absolute; bottom: 0; right: 0;'>{}</div>"\
+            .format(mbase32.encode(key))
+
+def __format_post(data):
+    fr = data.find(b'\r')
+    fn = data.find(b'\n')
+
+    if fr == -1 and fn == -1:
+        return "<body style='padding:0;margin:0;'><h3>{}</h3></body>".format(make_safe_for_html_content(data))
+
+    if fr == -1:
+        end = fn
+        start = end + 1
+    elif fn == -1:
+        end = fr
+        start = end + 1
+    else:
+        end = fr
+        start = end + 2
+
+    return "<body style='padding:0;margin:0;'>"\
+        "<h3 style='padding:0;margin:0;'>{}</h3>"\
+        "<pre style='padding:0;margin:0;'>{}</pre></body>"\
+            .format(\
+                data[:end].decode(), make_safe_for_html_content(data[start:]))
 
 @asyncio.coroutine
 def __load_axon_key(dispatcher, axon_addr):
