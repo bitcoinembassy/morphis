@@ -502,18 +502,17 @@ class DmailEngine(object):
         if not x:
             return data, None
 
-        return (yield from _process_dmail(key, x, data_rw))
+        return (yield from self._process_dmail(key, x, data_rw))
 
     @asyncio.coroutine
     def _process_dmail(self, key, x, data_rw):
-        version =\
-            struct.unpack_from(">L", data, TargetedBlock.BLOCK_OFFSET)[0]
+        version = struct.unpack_from(">L", data_rw.data)[0]
 
         if version == 1:
             dmail, valid_sig =\
                 yield from self._process_dmail_v1(key, x, data_rw)
         else:
-            assert version == 2
+            assert version == 2, version
             dmail, valid_sig =\
                 yield from self._process_dmail_v2(key, x, data_rw)
 
@@ -650,7 +649,8 @@ class DmailEngine(object):
         dw.data_enc = m
 
         # Store the DmailWrapper in a TargetedBlock.
-        tb, tb_data = self.generate_targeted_block(target_key, difficulty, dw)
+        tb, tb_data =\
+            yield from self.generate_targeted_block(target_key, difficulty, dw)
 
         key = None
 
