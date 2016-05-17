@@ -237,7 +237,10 @@ def strip_html_tags(html):
 
 import html
 
-def make_safe_for_html_content(text):
+def make_safe_for_html_content(val):
     # NOTE: This is only safe as content like this: <div>here</div>.
     # https://www.owasp.org/index.php/XSS_%28Cross_Site_Scripting%29_Prevention_Cheat_Sheet#Why_Can.27t_I_Just_HTML_Entity_Encode_Untrusted_Data.3F
-    return html.escape(text)
+    if isinstance(val, bytes):
+        return html.escape(val.decode())
+    else:
+        return html.escape(val)

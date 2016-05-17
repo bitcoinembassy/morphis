@@ -492,7 +492,8 @@ class DmailEngine(object):
         "Fetch the Dmail referred to by key from the network."\
         " Returns a Dmail object, not a db.DmailMessage object."
 
-        data_rw = yield from self.task_engine.send_get_targeted_data(key)
+        data_rw =\
+            yield from self.task_engine.send_get_targeted_data(key, target_key)
 
         data = data_rw.data
 
@@ -501,33 +502,26 @@ class DmailEngine(object):
         if not x:
             return data, None
 
-        tb = TargetedBlock(data)
+        return (yield from _process_dmail(key, x, data_rw))
 
-        if target_key:
-            if tb.target_key != target_key:
-                tb_tid_enc = mbase32.encode(tb.target_key)
-                tid_enc = mbase32.encode(target_key)
-                raise DmailException(\
-                    "TargetedBlock->target_key [{}] does not match request"\
-                    " [{}]."\
-                        .format(tb_tid_enc, tid_enc))
-
+    @asyncio.coroutine
+    def _process_dmail(self, key, x, data_rw):
         version =\
-            struct.unpack_from(">L", tb.buf, TargetedBlock.BLOCK_OFFSET)[0]
+            struct.unpack_from(">L", data, TargetedBlock.BLOCK_OFFSET)[0]
 
         if version == 1:
             dmail, valid_sig =\
-                yield from self._process_dmail_v1(key, x, tb, data_rw)
+                yield from self._process_dmail_v1(key, x, data_rw)
         else:
             assert version == 2
             dmail, valid_sig =\
-                yield from self._process_dmail_v2(key, x, tb, data_rw)
+                yield from self._process_dmail_v2(key, x, data_rw)
 
         return dmail, valid_sig
 
     @asyncio.coroutine
-    def _process_dmail_v1(self, key, x, tb, data_rw):
-        dw = DmailWrapperV1(tb.buf, TargetedBlock.BLOCK_OFFSET)
+    def _process_dmail_v1(self, key, x, data_rw):
+        dw = DmailWrapperV1(data_rw.data, TargetedBlock.BLOCK_OFFSET)
 
         if dw.ssm != "mdh-v1":
             raise DmailException(\
@@ -547,7 +541,7 @@ class DmailEngine(object):
 
         kex.calculate_k()
 
-        key = self._generate_encryption_key(tb.target_key, kex.k)
+        key = self._generate_encryption_key(data_rw.target_key, kex.k)
 
         data = enc.decrypt_data_block(dw.data_enc, key)
 
@@ -566,8 +560,8 @@ class DmailEngine(object):
             return dmail, False
 
     @asyncio.coroutine
-    def _process_dmail_v2(self, key, x, tb, data_rw):
-        dw = DmailWrapper(tb.buf, TargetedBlock.BLOCK_OFFSET)
+    def _process_dmail_v2(self, key, x, data_rw):
+        dw = DmailWrapper(data_rw.data, TargetedBlock.BLOCK_OFFSET)
 
         if dw.ssm != "mdh-v1":
             raise DmailException(\
@@ -589,7 +583,7 @@ class DmailEngine(object):
         kex.calculate_k()
 
         # Generate the AES-256 encryption key.
-        key = self._generate_encryption_key(tb.target_key, kex.k)
+        key = self._generate_encryption_key(data_rw.target_key, kex.k)
 
         # Decrypt the data.
         data = enc.decrypt_data_block(dw.data_enc, key)

@@ -47,6 +47,7 @@ class DataResponseWrapper(object):
         self.path_hash = b""
         self.version = None
         self.targeted = False
+        self.target_key = None
         self.data_done = None
         self.data_present_cnt = 0
         self.will_store_cnt = 0
@@ -311,7 +312,8 @@ class ChordTasks(object):
         return data_rw
 
     @asyncio.coroutine
-    def send_get_targeted_data(self, data_key, retry_factor=1):
+    def send_get_targeted_data(self, data_key, target_key=None,\
+            retry_factor=1):
         assert type(data_key) in (bytes, bytearray)\
             and len(data_key) == chord.NODE_ID_BYTES,\
             "type(data_key)=[{}], len={}."\
@@ -321,7 +323,8 @@ class ChordTasks(object):
 
         data_rw = yield from\
             self.send_find_node(data_id, for_data=True, data_key=data_key,\
-                targeted=True, retry_factor=retry_factor)
+                targeted=True, target_key=target_key,\
+                retry_factor=retry_factor)
 
         return data_rw
 
@@ -571,6 +574,7 @@ class ChordTasks(object):
                 data_rw.path_hash = path_hash
             if targeted:
                 data_rw.targeted = True
+                data_rw.target_key = target_key
 
         # Open the tunnels with upto max_initial_queries immediate PeerS.
         for peer in input_trie:
@@ -791,6 +795,9 @@ class ChordTasks(object):
                     data_present = yield from\
                         self._check_has_data(\
                             node_id, significant_bits, target_key)
+
+                    #NOTE: For significant_bits not None, data_present return
+                    # value is a key -- not boolean.
 
                     if data_present:
                         closest_datas.append(data_present)
@@ -2299,22 +2306,38 @@ class ChordTasks(object):
             # Truncate the data to exclude the cipher padding.
             data = data[:drmsg.original_size]
 
-            if log.isEnabledFor(logging.INFO):
-                log.info("data_rw.targeted=[{}]."\
-                    .format(data_rw.targeted))
-
             if data_rw.targeted:
-                data_hash =\
-                    enc.generate_ID(data[:TargetedBlock.BLOCK_OFFSET])
-            else:
-                data_hash = enc.generate_ID(data)
+                # TargetedBlock mode.
+                if drmsg.version is not None:
+                    #TODO: Implement updateable TargetedBlock at this level?
+                    log.warning("Received versioned (version=[{}])"\
+                        " DataResponse when we requested a TargetedBlock,"\
+                        " that is invalid.".format(drmsg.version))
+                    return None
 
-            if drmsg.version is not None:
+                tb = self._check_targeted_block(data, data_rw.data_key)
+
+                if not tb:
+                    if log.isEnabledFor(logging.INFO):
+                        log.info("DataResponse is invalid!")
+                    return None
+
+                if data_rw.target_key is not None and\
+                        data_rw.target_key != tb.target_key :
+                    if log.isEnabledFor(logging.INFO):
+                        log.info("Unexpected target_key in header;"\
+                            " DataResponse is invalid!")
+                    return None
+
+                # We do not return the TargetedBlock header. (We use to before
+                # this commit.)
+                data = data[TargetedBlock.BLOCK_OFFSET:]
+
+                # Everything checks out.
+                valid = True
+            elif drmsg.version is not None:
                 # Updateable key mode.
-                if data_rw.targeted:
-                    log.warning("Received versioned DataResponse when we"\
-                        " requested a TargetedBlock, that is invalid.")
-                    return False
+                data_hash = enc.generate_ID(data)
 
                 data_rw.version = drmsg.version
 
@@ -2331,12 +2354,13 @@ class ChordTasks(object):
 
                     data_key = enc.generate_ID(pubkey)
                     if data_rw.path_hash:
-                        data_key = enc.generate_ID(data_key + data_rw.path_hash)
+                        data_key =\
+                            enc.generate_ID(data_key + data_rw.path_hash)
 
                     if data_key != data_rw.data_key:
                         if log.isEnabledFor(logging.DEBUG):
                             log.debug("DataResponse is invalid!")
-                        return False
+                        return None
 
                 # Return the signature to the original caller.
                 data_rw.signature = drmsg.signature
@@ -2351,23 +2375,28 @@ class ChordTasks(object):
             else:
                 # Verify that the decrypted data matches the original hash of
                 # it.
+                data_hash = enc.generate_ID(data)
                 valid = data_hash == data_rw.data_key
 
-            if valid:
-                data_rw.data = data
-                if log.isEnabledFor(logging.DEBUG):
-                    log.debug("DataResponse is valid.")
-                return True
-            else:
+            if not valid:
                 if log.isEnabledFor(logging.DEBUG):
                     log.debug("DataResponse is invalid!")
-                return False
+                return None
+
+            if log.isEnabledFor(logging.DEBUG):
+                log.debug("DataResponse is valid.")
+
+            return data
 
         r = yield from self.loop.run_in_executor(None, threadcall)
 
-        data_rw.data_done.set()
-
-        return r
+        if r:
+            data_rw.data = r
+            data_rw.data_done.set()
+            return True
+        else:
+            data_rw.data_done.set()
+            return False
 
     @asyncio.coroutine
     def _retrieve_data(self, data_id):
@@ -2437,11 +2466,12 @@ class ChordTasks(object):
     @asyncio.coroutine
     def _store_key(self, peer, data_id, dmsg):
         if dmsg.targeted:
-            tb, data_key = self._check_store_targeted_block(dmsg.data)
+            valid = self._check_targeted_block(dmsg.data, data_id)
         else:
             data_key = enc.generate_ID(dmsg.data)
+            valid = data_id == data_key
 
-        if data_key != data_id:
+        if not valid:
             errmsg = "Peer (dbid=[{}]) sent a data that didn't match the"\
                 "data_id."
             log.warning(errmsg)
@@ -2552,11 +2582,12 @@ class ChordTasks(object):
                 raise ChordException(errmsg)
         else:
             if targeted:
-                tb, data_key = self._check_store_targeted_block(data)
+                valid = self._check_targeted_block(data)
             else:
                 data_key = enc.generate_ID(data)
+                valid = data_id == enc.generate_ID(data_key)
 
-            if data_id != enc.generate_ID(data_key):
+            if not valid:
                 errmsg = "Peer (dbid=[{}]) sent a data_id that didn't match"\
                     " the data!".format(peer_dbid)
                 log.warning(errmsg)
@@ -2782,20 +2813,33 @@ class ChordTasks(object):
 
             return False
 
-    def _check_store_targeted_block(self, data):
+    def _check_targeted_block(self, data, data_key):
+        # Check that the hash(header) matches the data_key we expect.
+        header_hash =\
+            enc.generate_ID(data[:TargetedBlock.BLOCK_OFFSET])
+
+        if header_hash != data_key:
+            if log.isEnabledFor(logging.INFO):
+                log.debug(\
+                    "TargetedData response is invalid (header/hash mismatch)!")
+            return False
+
         tb = TargetedBlock(data)
 
+        # Check that the hash(data) matches the value in the header.
         block_hash = enc.generate_ID(\
             data[TargetedBlock.BLOCK_OFFSET:])
 
         if block_hash != tb.block_hash:
-            raise ChordException(\
-                "The block_hash did not match the block.")
+            if log.isEnabledFor(logging.DEBUG):
+                log.debug(\
+                    "TargetedData response is invalid (data/header mismatch)!")
+            return False
 
-        tb_header = data[:TargetedBlock.BLOCK_OFFSET]
-        data_key = enc.generate_ID(tb_header)
+        log.warning("DISTANCE=[{}]."\
+            .format(mutil.calc_log_distance(data_key, tb.target_key)))
 
-        return tb, data_key
+        return tb
 
     def _update_nodestate(self, sess, size_diff):
         # Rule: only update this NodeState row when holding a lock on
