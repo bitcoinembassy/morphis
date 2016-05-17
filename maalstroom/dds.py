@@ -183,7 +183,7 @@ def _process_neuron(dispatcher):
 
         @asyncio.coroutine
         def cb(key):
-            msg = "<iframe src='morphis://.dds/axon/read/{key}/{target_key}' style='height: 5.5em; width: 100%;' seamless='seamless'></iframe>"\
+            msg = "<iframe src='morphis://.dds/axon/read/{key}/{target_key}' style='height: 5.5em; width: 100%; border: 0;' seamless='seamless'></iframe>"\
                 .format(key=mbase32.encode(key),\
                     target_key=mbase32.encode(synapse.axon_addr))
 
@@ -274,8 +274,8 @@ def _process_read_axon(dispatcher, req):
 
 def _format_post(data, key):
     return __format_post(data)\
-        + "<div style='position:absolute; bottom: 0; right: 0;'>{}</div>"\
-            .format(mbase32.encode(key))
+        + "<div style='color: #7070ff; position:absolute; bottom: 0;"\
+            "right: 0;'>{}</div>".format(mbase32.encode(key))
 
 def __format_post(data):
     fr = data.find(b'\r')
@@ -296,7 +296,7 @@ def __format_post(data):
 
     return "<body style='padding:0;margin:0;'>"\
         "<h3 style='padding:0;margin:0;'>{}</h3>"\
-        "<pre style='padding:0;margin:0;'>{}</pre></body>"\
+        "<pre style='color: gray; padding:0;margin:0;'>{}</pre></body>"\
             .format(\
                 data[:end].decode(), make_safe_for_html_content(data[start:]))
 
