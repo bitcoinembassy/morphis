@@ -15,7 +15,7 @@ import maalstroom.templates as templates
 import mbase32
 from morphisblock import MorphisBlock
 from targetedblock import TargetedBlock
-from mutil import fia, hex_dump
+from mutil import fia, hex_dump, make_safe_for_html_content
 import sshtype
 
 log = logging.getLogger(__name__)
@@ -202,18 +202,76 @@ def _process_read_axon(dispatcher, req):
     p0 = req.find('/')
     if p0 == -1:
         key = mbase32.decode(req)
-        target_key = key
+        target_key = None
+
+        data_rw =\
+            yield from\
+                dispatcher.node.chord_engine.tasks.send_get_data(\
+                    bytes(key))
     else:
         key = mbase32.decode(req[:p0])
         target_key = mbase32.decode(req[p0+1:])
 
-    #FIXME: Move this to after we know the axon signal is encrypted!
-    # Unfortunately we will need to refactor the fetch_dmail(..) method first
-    # for that.
+        data_rw =\
+            yield from\
+                dispatcher.node.chord_engine.tasks.send_get_targeted_data(\
+                    bytes(key), target_key=target_key)
+
+    data = data_rw.data
+
+    if not data:
+        dispatcher.send_content("Not found on the network at the moment.")
+        return
+
+    if not data.startswith(MorphisBlock.UUID):
+        # Plain data, return it!
+        msg = make_safe_for_html_content(data)
+
+        acharset = dispatcher.get_accept_charset()
+        dispatcher.send_content(\
+            msg, content_type="text/plain; charset={}".format(acharset))
+        return
+
+    # We assume it is a Dmail if it is a MorphisBlock.
+    de =\
+        DmailEngine(\
+            dispatcher.node.chord_engine.tasks, dispatcher.node.db)
+
+    axon_key = yield from __load_axon_key(\
+            dispatcher,\
+            target_key if target_key else key)
+
+    if not axon_key:
+        # If we can't decrypt it, send a hexdump.
+        msg = hexdump(data)
+
+        acharset = dispatcher.get_accept_charset()
+        dispatcher.send_content(\
+            msg, content_type="text/plain; charset={}".format(acharset))
+        return
+
+    l, x = sshtype.parseMpint(axon_key.x)
+
+    dm, sender_auth_valid = yield from\
+        de.fetch_dmail(bytes(key), x, data_rw)
+
+    msg_txt = ""
+    if not sender_auth_valid:
+        msg_txt += "[WARNING: SENDER ADDRESS IS FORGED]\n"
+
+    msg_txt = dmail._format_dmail_content(dm.parts)
+
+    #FIXME: Move this into dmail._format_dmail_content(..) above.
+    msg_txt = make_safe_for_html_content(msg_txt)
+
+    dispatcher.send_content(msg_txt)
+
+@asyncio.coroutine
+def __load_axon_key(dispatcher, axon_addr):
     def dbcall():
         with dispatcher.node.db.open_session() as sess:
             q = sess.query(Neuron)\
-                .filter(Neuron.synapses.any(Synapse.axon_addr == target_key))
+                .filter(Neuron.synapses.any(Synapse.axon_addr == axon_addr))
 
             sess.expunge_all()
 
@@ -224,7 +282,7 @@ def _process_read_axon(dispatcher, req):
 
             found = False
             for synapse in neuron.synapses:
-                if synapse.axon_addr == target_key:
+                if synapse.axon_addr == axon_addr:
                     found = True
                     break
 
@@ -241,44 +299,4 @@ def _process_read_axon(dispatcher, req):
 
             return axon_key
 
-    axon_key = yield from dispatcher.loop.run_in_executor(None, dbcall)
-
-    if axon_key:
-        de =\
-            DmailEngine(\
-                dispatcher.node.chord_engine.tasks, dispatcher.node.db)
-
-        if target_key is key:
-            # Signal to fetch_dmail(..) not to try to verify the proof of work
-            # since there will be none since this is not a targeted read
-            # request.
-            target_key = None
-
-        l, x = sshtype.parseMpint(axon_key.x)
-        dm, sender_auth_valid = yield from\
-            de.fetch_dmail(bytes(key), x, target_key=target_key)
-
-        msg_txt = ""
-        if not sender_auth_valid:
-            msg_txt += "[WARNING: SENDER ADDRESS IS FORGED]\n"
-
-        msg_txt = dmail._format_dmail_content(dm.parts)
-
-        dispatcher.send_content(msg_txt)
-    else:
-        data_rw =\
-            yield from\
-                dispatcher.node.chord_engine.tasks.send_get_targeted_data(\
-                    bytes(key))
-
-        if not data_rw.data:
-            return
-
-        if data_rw.data.startswith(MorphisBlock.UUID):
-            msg = "{}".format(hex_dump(data_rw.data))
-        else:
-            msg = data_rw.data
-
-        acharset = dispatcher.get_accept_charset()
-        dispatcher.send_content(\
-            msg, content_type="text/plain; charset={}".format(acharset))
+    return (yield from dispatcher.loop.run_in_executor(None, dbcall))
