@@ -2497,7 +2497,7 @@ class ChordTasks(object):
                 data_block.insert_timestamp = mutil.utc_datetime()
 
                 if dmsg.targeted:
-                    data_block.target_key = tb.target_key
+                    data_block.target_key = valid.target_key
 
                 sess.add(data_block)
 
