@@ -520,7 +520,7 @@ class DmailEngine(object):
 
     @asyncio.coroutine
     def _process_dmail_v1(self, key, x, data_rw):
-        dw = DmailWrapperV1(data_rw.data, TargetedBlock.BLOCK_OFFSET)
+        dw = DmailWrapperV1(data_rw.data)
 
         if dw.ssm != "mdh-v1":
             raise DmailException(\
@@ -560,7 +560,7 @@ class DmailEngine(object):
 
     @asyncio.coroutine
     def _process_dmail_v2(self, key, x, data_rw):
-        dw = DmailWrapper(data_rw.data, TargetedBlock.BLOCK_OFFSET)
+        dw = DmailWrapper(data_rw.data)
 
         if dw.ssm != "mdh-v1":
             raise DmailException(\
