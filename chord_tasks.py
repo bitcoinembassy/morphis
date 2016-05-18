@@ -2582,7 +2582,7 @@ class ChordTasks(object):
                 raise ChordException(errmsg)
         else:
             if targeted:
-                valid = self._check_targeted_block(data)
+                valid = self._check_targeted_block(data, data_id)
             else:
                 data_key = enc.generate_ID(data)
                 valid = data_id == enc.generate_ID(data_key)
