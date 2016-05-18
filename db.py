@@ -552,11 +552,12 @@ def _upgrade_4_to_5(db):
 
         f = sess.query(DmailKey).first()
 
-        k = AxonKey()
-        k.synapse_id = 1
-        k.x = f.x
+        if f:
+            k = AxonKey()
+            k.synapse_id = 1
+            k.x = f.x
 
-        sess.add(k)
+            sess.add(k)
 
         sess.commit()
 
