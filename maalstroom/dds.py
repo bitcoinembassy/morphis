@@ -275,7 +275,7 @@ def _process_read_axon(dispatcher, req):
 def _format_post(data, key):
     return __format_post(data)\
         + "<div style='color: #7070ff; position:absolute; bottom: 0;"\
-            "right: 0;'>{}</div>".format(mbase32.encode(key))
+            "right: 0;'>{}</div>".format(mbase32.encode(key)[:32])
 
 def __format_post(data):
     fr = data.find(b'\r')
