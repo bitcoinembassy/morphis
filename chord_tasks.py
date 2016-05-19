@@ -2582,7 +2582,10 @@ class ChordTasks(object):
                 raise ChordException(errmsg)
         else:
             if targeted:
-                valid = self._check_targeted_block(data, data_id)
+                tb = self._check_targeted_block(data, data_id=data_id)
+                if tb:
+                    valid = True
+                    data_key = bytes(tb.target_key)
             else:
                 data_key = enc.generate_ID(data)
                 valid = data_id == enc.generate_ID(data_key)
@@ -2813,15 +2816,22 @@ class ChordTasks(object):
 
             return False
 
-    def _check_targeted_block(self, data, data_key):
+    def _check_targeted_block(self, data, data_key=None, data_id=None):
         # Check that the hash(header) matches the data_key we expect.
         header_hash =\
             enc.generate_ID(data[:TargetedBlock.BLOCK_OFFSET])
 
-        if header_hash != data_key:
-            if log.isEnabledFor(logging.INFO):
-                log.debug(\
-                    "TargetedData response is invalid (header/hash mismatch)!")
+        if data_key is not None:
+            valid_header_hash = header_hash == data_key
+        else:
+            assert data_id is not None
+            data_key = header_hash
+            valid_header_hash = enc.generate_ID(data_key) == data_id
+
+        if not valid_header_hash:
+            if log.isEnabledFor(logging.WARNING):
+                log.warning(\
+                    "TargetedData response is invalid (header/hash mismatch!")
             return False
 
         tb = TargetedBlock(data)
@@ -2831,8 +2841,8 @@ class ChordTasks(object):
             data[TargetedBlock.BLOCK_OFFSET:])
 
         if block_hash != tb.block_hash:
-            if log.isEnabledFor(logging.DEBUG):
-                log.debug(\
+            if log.isEnabledFor(logging.WARNING):
+                log.warning(\
                     "TargetedData response is invalid (data/header mismatch)!")
             return False
 
