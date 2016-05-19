@@ -273,43 +273,15 @@ class MaalstroomDispatcher(object):
             self.send_error(msg, 400)
             return
 
-        try:
-            data_key, significant_bits = mutil.decode_key(rpath)
-        except (ValueError, IndexError) as e:
-            log.exception("mutil.decode_key(..), rpath=[{}].".format(rpath))
-            self.send_error("Invalid encoded key: [{}].".format(rpath), 400)
-            return
+        data_key, significant_bits = self.decode_key(rpath)
 
         if significant_bits:
-            # Resolve key via send_find_key.
-            if significant_bits < 32:
-                log.warning("Request supplied key with too few bits [{}]."\
-                    .format(significant_bits))
+            key = yield from self.fetch_key(data_key, significant_bits)
 
-                self.send_error(\
-                    "Key must have at least 32 bits or 7 characters,"\
-                    " len(key)=[{}].".format(len(rpath)), 400)
+            if not key:
                 return
 
-            try:
-                data_rw =\
-                    yield from asyncio.wait_for(\
-                        self.node.chord_engine.tasks.send_find_key(\
-                            data_key, significant_bits),\
-                        15.0,\
-                        loop=self.loop)
-                data_key = data_rw.data_key
-            except asyncio.TimeoutError:
-                data_key = None
-
-            if not data_key:
-                self.send_error(b"Key Not Found", errcode=404)
-                return
-
-            if log.isEnabledFor(logging.INFO):
-                log.info("Found key=[{}].".format(mbase32.encode(data_key)))
-
-            key_enc = mbase32.encode(data_rw.data_key)
+            key_enc = mbase32.encode(key)
 
             if path:
                 url = "{}{}/{}"\
@@ -477,6 +449,47 @@ class MaalstroomDispatcher(object):
                     break
         else:
             self.send_error(b"Data not found on network.", 404)
+
+    def decode_key(self, rpath):
+        try:
+            return mutil.decode_key(rpath)
+        except (ValueError, IndexError) as e:
+            log.exception("mutil.decode_key(..), rpath=[{}].".format(rpath))
+            self.send_error("Invalid encoded key: [{}].".format(rpath), 400)
+            return None, None
+
+    @asyncio.coroutine
+    def fetch_key(self, data_key, significant_bits):
+        # Resolve key via send_find_key.
+        if significant_bits < 32:
+            log.warning("Request supplied key with too few bits [{}]."\
+                .format(significant_bits))
+
+            self.send_error(\
+                "Key must have at least 32 bits or 7 characters,"\
+                " len(key)=[{}].".format(len(rpath)), 400)
+
+            return None
+
+        try:
+            data_rw =\
+                yield from asyncio.wait_for(\
+                    self.node.chord_engine.tasks.send_find_key(\
+                        data_key, significant_bits),\
+                    15.0,\
+                    loop=self.loop)
+            data_key = data_rw.data_key
+        except asyncio.TimeoutError:
+            data_key = None
+
+        if not data_key:
+            self.send_error(b"Key Not Found", errcode=404)
+            return None
+
+        if log.isEnabledFor(logging.INFO):
+            log.info("Found key=[{}].".format(mbase32.encode(data_key)))
+
+        return data_rw.data_key
 
     @asyncio.coroutine
     def do_POST(self, rpath):

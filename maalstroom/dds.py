@@ -211,7 +211,11 @@ def _process_axon(dispatcher, req):
 
 @asyncio.coroutine
 def _process_view_axon(dispatcher, req):
-    key = mbase32.decode(req)
+    key, significant_bits = dispatcher.decode_key(req)
+
+    if significant_bits:
+        # Support prefix keys.
+        key = yield from dispatcher.fetch_key(key, significant_bits)
 
     msg = "<iframe src='morphis://.dds/axon/read/{key}'"\
         " style='height: 5.5em; width: 100%; border: 1;'"\
@@ -222,6 +226,7 @@ def _process_view_axon(dispatcher, req):
             .format(key=mbase32.encode(key))
 
     dispatcher.send_content(msg)
+    return
 
 @asyncio.coroutine
 def _process_synapse_axon(dispatcher, axon_addr_enc):
