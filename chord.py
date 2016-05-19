@@ -463,7 +463,7 @@ class ChordEngine():
         address = dbpeer.address
         p0 = address.rindex(':')
         host = address[:p0]
-        port = address[p0+1:]
+        port = int(address[p0+1:])
 
         peer = mnpeer.Peer(self, dbpeer)
 
