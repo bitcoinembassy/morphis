@@ -504,8 +504,8 @@ class ChordEngine():
                 log.info("Connection to Peer (dbid=[{}]) failed: {}: {}"\
                     .format(dbpeer.id, type(ex), ex))
             else:
-                log.exception("Connection to Peer (dbid=[{}]) failed: {}: {}"\
-                    .format(dbpeer.id, type(ex), ex))
+                log.warning("Connection to Peer (dbid=[{}]) failed: {}: {}"\
+                    .format(dbpeer.id, type(ex), ex), exc_info=1)
 
             # An exception on connect; update db, Etc.
             def dbcall(dbpeer):
