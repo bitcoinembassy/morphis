@@ -60,8 +60,14 @@ def serve_get(dispatcher, rpath):
     elif req == "/axon":
         yield from _process_axon(dispatcher, req[5:])
         return
+    elif req.startswith("/axon/view/"):
+        yield from _process_view_axon(dispatcher, req[11:])
+        return
     elif req.startswith("/axon/read/"):
         yield from _process_read_axon(dispatcher, req[11:])
+        return
+    elif req.startswith("/axon/synapse/"):
+        yield from _process_synapse_axon(dispatcher, req[14:])
         return
 
     dispatcher.send_error("request: {}".format(req), errcode=400)
@@ -204,11 +210,48 @@ def _process_axon(dispatcher, req):
     dispatcher.send_content([template, req])
 
 @asyncio.coroutine
+def _process_view_axon(dispatcher, req):
+    key = mbase32.decode(req)
+
+    msg = "<iframe src='morphis://.dds/axon/read/{key}'"\
+        " style='height: 5.5em; width: 100%; border: 1;'"\
+        " seamless='seamless'></iframe><iframe"\
+        " src='morphis://.dds/axon/synapse/{key}'"\
+        " style='height: calc(100% - 5.6em); width: 100%; border: 0;'"\
+        " seamless='seamless'></iframe>"\
+            .format(key=mbase32.encode(key))
+
+    dispatcher.send_content(msg)
+
+@asyncio.coroutine
+def _process_synapse_axon(dispatcher, axon_addr_enc):
+    axon_addr = mbase32.decode(axon_addr_enc)
+
+    dp = dpush.DpushEngine(dispatcher.node)
+
+    first = True
+
+    @asyncio.coroutine
+    def cb(key):
+        nonlocal first
+
+        msg = "<iframe src='morphis://.dds/axon/read/{key}/{target_key}' style='height: 5.5em; width: 100%; border: 0;' seamless='seamless'></iframe>\n"\
+            .format(key=mbase32.encode(key),\
+                target_key=axon_addr_enc)
+
+        dispatcher.send_partial_content(msg, first)
+
+        first = False
+
+    yield from dp.scan_targeted_blocks(axon_addr, 20, cb)
+
+    dispatcher.end_partial_content()
+
+@asyncio.coroutine
 def _process_read_axon(dispatcher, req):
     p0 = req.find('/')
     if p0 == -1:
         key = mbase32.decode(req)
-        target_key = None
 
         data_rw =\
             yield from\
