@@ -500,7 +500,7 @@ class ChordEngine():
         try:
             yield from asyncio.wait_for(client, timeout=30, loop=self.loop)
         except (Exception, asyncio.TimeoutError) as ex:
-            log.info("Connection to Peer (dbid=[{}]) failed: {}: {}"\
+            log.exception("Connection to Peer (dbid=[{}]) failed: {}: {}"\
                 .format(dbpeer.id, type(ex), ex))
 
             # An exception on connect; update db, Etc.
