@@ -275,6 +275,10 @@ class MaalstroomDispatcher(object):
 
         data_key, significant_bits = self.decode_key(rpath)
 
+        if not data_key:
+            self.send_error("Invalid encoded key: [{}].".format(rpath), 400)
+            return
+
         if significant_bits:
             key = yield from self.fetch_key(data_key, significant_bits)
 
@@ -455,11 +459,14 @@ class MaalstroomDispatcher(object):
             return mutil.decode_key(rpath)
         except (ValueError, IndexError) as e:
             log.exception("mutil.decode_key(..), rpath=[{}].".format(rpath))
-            self.send_error("Invalid encoded key: [{}].".format(rpath), 400)
             return None, None
 
     @asyncio.coroutine
     def fetch_key(self, data_key, significant_bits):
+        #TODO: Handle errors better as this was factored out of somewhere and
+        # thus it directly sends the errors to the user instead of the calling
+        # method doing that.
+
         # Resolve key via send_find_key.
         if significant_bits < 32:
             log.warning("Request supplied key with too few bits [{}]."\
@@ -467,7 +474,7 @@ class MaalstroomDispatcher(object):
 
             self.send_error(\
                 "Key must have at least 32 bits or 7 characters,"\
-                " len(key)=[{}].".format(len(rpath)), 400)
+                " key_bits=[{}].".format(significant_bits), 400)
 
             return None
 
