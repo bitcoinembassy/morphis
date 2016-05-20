@@ -69,6 +69,9 @@ def serve_get(dispatcher, rpath):
     elif req.startswith("/axon/synapse/"):
         yield from _process_synapse_axon(dispatcher, req[14:])
         return
+    elif req.startswith("/axon/create/"):
+        yield from _process_create_axon(dispatcher, req[13:])
+        return
 
     dispatcher.send_error("request: {}".format(req), errcode=400)
 
@@ -84,7 +87,7 @@ def serve_post(dispatcher, rpath):
         yield from _process_create_synapse(dispatcher)
         return
     elif req == "/axon/create":
-        yield from _process_create_axon(dispatcher)
+        yield from _process_create_axon_post(dispatcher)
         return
 
     dispatcher.send_error("request: {}".format(req), errcode=400)
@@ -119,7 +122,7 @@ def _process_create_synapse(dispatcher):
             .format(axon_addr))
 
 @asyncio.coroutine
-def _process_create_axon(dispatcher):
+def _process_create_axon_post(dispatcher):
     dd = yield from dispatcher.read_post()
     if not dd: return
 
@@ -218,10 +221,13 @@ def _process_view_axon(dispatcher, req):
         key = yield from dispatcher.fetch_key(key, significant_bits)
 
     msg = "<iframe src='morphis://.dds/axon/read/{key}'"\
-        " style='height: 5.5em; width: 100%; border: 1;'"\
+        " style='height: 7em; width: 100%; border: 1;'"\
         " seamless='seamless'></iframe><iframe"\
         " src='morphis://.dds/axon/synapse/{key}'"\
-        " style='height: calc(100% - 5.6em); width: 100%; border: 0;'"\
+        " style='height: calc(100% - 14.5em); width: 100%; border: 0;'"\
+        " seamless='seamless'></iframe><iframe"\
+        " src='morphis://.dds/axon/create/{key}'"\
+        " style='height: 7em; width: 100%; border: 1;'"\
         " seamless='seamless'></iframe>"\
             .format(key=mbase32.encode(key))
 
@@ -382,3 +388,14 @@ def __load_axon_key(dispatcher, axon_addr):
             return axon_key
 
     return (yield from dispatcher.loop.run_in_executor(None, dbcall))
+
+@asyncio.coroutine
+def _process_create_axon(dispatcher, target_addr):
+    template = templates.dds_signal[0]
+
+    template = template.format(\
+        csrf_token=dispatcher.client_engine.csrf_token,\
+        message_text="",\
+        target_addr=target_addr)
+
+    dispatcher.send_content(template)

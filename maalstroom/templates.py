@@ -405,5 +405,6 @@ if not initialized_template:
     dds_main = load("dds/main.html", True)
     dds_neuron = load("dds/neuron.html", True)
     dds_axon = load("dds/axon.html", True)
+    dds_signal = load("dds/signal.html", True)
 
     initialized_template = True
