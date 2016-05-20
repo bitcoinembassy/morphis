@@ -216,9 +216,17 @@ def _process_axon(dispatcher, req):
 def _process_view_axon(dispatcher, req):
     key, significant_bits = dispatcher.decode_key(req)
 
+    if not key:
+        dispatcher.send_error(\
+            "Invalid encoded key: [{}].".format(req), 400)
+        return
+
     if significant_bits:
         # Support prefix keys.
         key = yield from dispatcher.fetch_key(key, significant_bits)
+
+        if not key:
+            return
 
     msg = "<iframe src='morphis://.dds/axon/read/{key}'"\
         " style='height: 7em; width: 100%; border: 1;'"\
