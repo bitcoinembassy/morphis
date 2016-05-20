@@ -10,6 +10,7 @@ import logging
 from db import User, Neuron, Synapse, AxonKey
 from dmail import DmailEngine
 import dpush
+import enc
 import maalstroom.dmail as dmail
 import maalstroom.templates as templates
 import mbase32
@@ -214,12 +215,17 @@ def _process_axon(dispatcher, req):
 
 @asyncio.coroutine
 def _process_view_axon(dispatcher, req):
-    key, significant_bits = dispatcher.decode_key(req)
+    log.warning("req:{}".format(req))
+    if req.startswith("@"):
+        key = enc.generate_ID(req[1:].encode())
+        significant_bits = None
+    else:
+        key, significant_bits = dispatcher.decode_key(req)
 
-    if not key:
-        dispatcher.send_error(\
-            "Invalid encoded key: [{}].".format(req), 400)
-        return
+        if not key:
+            dispatcher.send_error(\
+                "Invalid encoded key: [{}].".format(req), 400)
+            return
 
     if significant_bits:
         # Support prefix keys.
