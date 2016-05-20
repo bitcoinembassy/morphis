@@ -217,7 +217,10 @@ def _process_axon(dispatcher, req):
 def _process_view_axon(dispatcher, req):
     log.warning("req:{}".format(req))
     if req.startswith("@"):
-        key = enc.generate_ID(req[1:].encode())
+        #TODO: Come up with a formal spec. We should probably deal with
+        # unprintable characters by merging them, Etc.
+        str_id = req[1:].encode().lower()
+        key = enc.generate_ID(str_id)
         significant_bits = None
     else:
         key, significant_bits = dispatcher.decode_key(req)
