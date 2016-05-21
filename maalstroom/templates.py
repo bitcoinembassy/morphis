@@ -32,7 +32,7 @@ home_page_content = [\
 <div class="msection">
     <h3>MORPHiS Web</h3>
     <p>
-        <a href="morphis://sp1nara3xhndtgswh7fznt414we4mi3y6kdwbkz4jmt8ocb6x4w1faqjotjkcrefta11swe3h53dt6oru3r13t667pr7cpe3ocxeuma/blog">Official MORPHiS ???Site! (need new word here :)</a><br/>
+        <a href="morphis://sp1nara3xhndtgswh7fznt414we4mi3y6kdwbkz4jmt8ocb6x4w1faqjotjkcrefta11swe3h53dt6oru3r13t667pr7cpe3ocxeuma">Official MORPHiS ???Site! (need new word here :)</a><br/>
         <hr/>
 
         <a href="morphis://sp1nara3xhndtgswh7fznt414we4mi3y6kdwbkz4jmt8ocb6x4w1faqjotjkcrefta11swe3h53dt6oru3r13t667pr7cpe3ocxeuma">MORPHiS Mirror of MORPHiS' Stone Age Web-site :)</a><br/>
