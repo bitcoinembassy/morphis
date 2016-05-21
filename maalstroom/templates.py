@@ -35,7 +35,7 @@ home_page_content = [\
         <a href="morphis://sp1nara3xhndtgswh7fznt414we4mi3y6kdwbkz4jmt8ocb6x4w1faqjotjkcrefta11swe3h53dt6oru3r13t667pr7cpe3ocxeuma">Official MORPHiS ???Site! (need new word here :)</a><br/>
         <hr/>
 
-        <a href="morphis://sp1nara3xhndtgswh7fznt414we4mi3y6kdwbkz4jmt8ocb6x4w1faqjotjkcrefta11swe3h53dt6oru3r13t667pr7cpe3ocxeuma">MORPHiS Mirror of MORPHiS' Stone Age Web-site :)</a><br/>
+        <a href="morphis://sp1nara3xhndtgswh7fznt414we4mi3y6kdwbkz4jmt8ocb6x4w1faqjotjkcrefta11swe3h53dt6oru3r13t667pr7cpe3ocxeuma/webmirror">MORPHiS Mirror of MORPHiS' Stone Age Web-site :)</a><br/>
         <a href="morphis://sp1nara3xhndtgswh7fznt414we4mi3y6kdwbkz4jmt8ocb6x4w1faqjotjkcrefta11swe3h53dt6oru3r13t667pr7cpe3ocxeuma/firefox_plugin">MORPHiS Firefox Plugin</a><br/>
     </p>
 </div>
