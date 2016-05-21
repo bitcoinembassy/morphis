@@ -70,8 +70,8 @@ def serve_get(dispatcher, rpath):
     elif req.startswith("/axon/synapser/"):
         yield from _process_synapse_axon(dispatcher, req[15:])
         return
-    elif req.startswith("/axon/create/"):
-        yield from _process_create_axon(dispatcher, req[13:])
+    elif req.startswith("/synapse/create/"):
+        yield from _process_create_axon(dispatcher, req[16:])
         return
 
     dispatcher.send_error("request: {}".format(req), errcode=400)
@@ -87,7 +87,7 @@ def serve_post(dispatcher, rpath):
     if req == "/synapse/create/make_it_so":
         yield from _process_create_synapse(dispatcher)
         return
-    elif req == "/axon/create":
+    elif req == "/synapse/create":
         yield from _process_create_axon_post(dispatcher)
         return
 
@@ -240,10 +240,10 @@ def _process_view_axon(dispatcher, req):
     msg = "<iframe src='morphis://.dds/axon/read/{key}'"\
         " style='height: 7em; width: 100%; border: 1;'"\
         " seamless='seamless'></iframe><iframe"\
-        " src='morphis://.dds/axon/synapse/{key}'"\
+        " src='morphis://.dds/axon/synapser/{key}'"\
         " style='height: calc(100% - 14.5em); width: 100%; border: 0;'"\
         " seamless='seamless'></iframe><iframe"\
-        " src='morphis://.dds/axon/create/{key}'"\
+        " src='morphis://.dds/synapse/create/{key}'"\
         " style='height: 7em; width: 100%; border: 1;'"\
         " seamless='seamless'></iframe>"\
             .format(key=mbase32.encode(key))
