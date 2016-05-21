@@ -61,14 +61,14 @@ def serve_get(dispatcher, rpath):
     elif req == "/axon":
         yield from _process_axon(dispatcher, req[5:])
         return
-    elif req.startswith("/axon/view/"):
+    elif req.startswith("/axon/view/") or req.startswith("/axon/grok/"):
         yield from _process_view_axon(dispatcher, req[11:])
         return
     elif req.startswith("/axon/read/"):
         yield from _process_read_axon(dispatcher, req[11:])
         return
-    elif req.startswith("/axon/synapse/"):
-        yield from _process_synapse_axon(dispatcher, req[14:])
+    elif req.startswith("/axon/synapser/"):
+        yield from _process_synapse_axon(dispatcher, req[15:])
         return
     elif req.startswith("/axon/create/"):
         yield from _process_create_axon(dispatcher, req[13:])

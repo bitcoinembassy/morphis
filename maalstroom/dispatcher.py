@@ -526,9 +526,13 @@ class MaalstroomDispatcher(object):
         if rpath.startswith(".dmail") and maalstroom.dmail_enabled:
             yield from maalstroom.dmail.serve_post(self, rpath)
             return
-        elif rpath.startswith(".dds") and maalstroom.dds_enabled:
-            yield from maalstroom.dds.serve_post(self, rpath)
-            return
+        elif maalstroom.dds_enabled:
+            if rpath.startswith(".grok"):
+                rpath = ".dds/axon/grok" + rpath[5:]
+
+            if rpath.startswith(".dds"):
+                yield from maalstroom.dds.serve_post(self, rpath)
+                return
 
         if rpath != ".upload/upload" or not maalstroom.upload_enabled:
             self.send_error(errcode=400)
