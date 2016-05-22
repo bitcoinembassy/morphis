@@ -310,7 +310,8 @@ def _process_synapse_axon(dispatcher, axon_addr_enc):
         dispatcher.send_partial_content("Nothing found yet.</body>")
 
     dispatcher.send_partial_content(\
-        "<span id='end' style='color: gray'>Last refreshed: {}</span></body>"\
+        "<div>Last refreshed: {}</div><span id='end' style='color: gray'/>"\
+        "</body>"\
             .format(utc_datetime()))
 
     dispatcher.end_partial_content()
