@@ -240,7 +240,7 @@ def _process_view_axon(dispatcher, req):
     msg = "<iframe src='morphis://.dds/axon/read/{key}'"\
         " style='height: 7em; width: 100%; border: 1;'"\
         " seamless='seamless'></iframe><iframe"\
-        " src='morphis://.dds/axon/synapser/{key}'"\
+        " src='morphis://.dds/axon/synapser/{key}#new'"\
         " style='height: calc(100% - 14.5em); width: 100%; border: 0;'"\
         " seamless='seamless'></iframe><iframe"\
         " src='morphis://.dds/synapse/create/{key}'"\
@@ -277,7 +277,7 @@ def _process_synapse_axon(dispatcher, axon_addr_enc):
         first = False
         loaded[axon.key] = True
 
-    dispatcher.send_partial_content("<hr/>", first)
+    dispatcher.send_partial_content("<hr id='new'/>", first)
 
     @asyncio.coroutine
     def cb(key):
@@ -304,6 +304,8 @@ def _process_synapse_axon(dispatcher, axon_addr_enc):
 
     if first:
         dispatcher.send_partial_content("Nothing found yet.")
+    else:
+        dispatcher.send_partial_content("<span id='end'/>")
 
     dispatcher.end_partial_content()
 
