@@ -255,6 +255,12 @@ def _process_view_axon(dispatcher, req):
 def _process_synapse_axon(dispatcher, axon_addr_enc):
     axon_addr = mbase32.decode(axon_addr_enc)
 
+    dispatcher.send_partial_content(\
+        "<head><meta target='_self' http-equiv='refresh' content='30'></meta>"\
+            "</head><body>", True)
+
+    first = False # Get rid of this now as we always open with <body>.
+
     def dbcall():
         with dispatcher.node.db.open_session() as sess:
             q = sess.query(Axon)\
@@ -265,7 +271,6 @@ def _process_synapse_axon(dispatcher, axon_addr_enc):
 
     axons = yield from dispatcher.loop.run_in_executor(None, dbcall)
 
-    first = True
     loaded = {}
 
     for axon in axons:
@@ -303,9 +308,9 @@ def _process_synapse_axon(dispatcher, axon_addr_enc):
     yield from dp.scan_targeted_blocks(axon_addr, 20, cb)
 
     if first:
-        dispatcher.send_partial_content("Nothing found yet.")
+        dispatcher.send_partial_content("Nothing found yet.</body>")
     else:
-        dispatcher.send_partial_content("<span id='end'/>")
+        dispatcher.send_partial_content("<span id='end'/></body>")
 
     dispatcher.end_partial_content()
 
