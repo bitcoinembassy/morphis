@@ -7,7 +7,7 @@ import asyncio
 from datetime import datetime
 import logging
 
-from db import User, Neuron, Synapse, AxonKey
+from db import User, Neuron, Synapse, Axon, AxonKey
 from dmail import DmailEngine
 import dpush
 import enc
@@ -16,7 +16,7 @@ import maalstroom.templates as templates
 import mbase32
 from morphisblock import MorphisBlock
 from targetedblock import TargetedBlock
-from mutil import fia, hex_dump, make_safe_for_html_content
+from mutil import fia, hex_dump, make_safe_for_html_content, utc_datetime
 import sshtype
 
 log = logging.getLogger(__name__)
@@ -255,54 +255,100 @@ def _process_view_axon(dispatcher, req):
 def _process_synapse_axon(dispatcher, axon_addr_enc):
     axon_addr = mbase32.decode(axon_addr_enc)
 
-    dp = dpush.DpushEngine(dispatcher.node)
+    def dbcall():
+        with dispatcher.node.db.open_session() as sess:
+            q = sess.query(Axon)\
+                .filter(Axon.target_key == axon_addr)\
+                .order_by(Axon.first_seen)
+
+            return q.all()
+
+    axons = yield from dispatcher.loop.run_in_executor(None, dbcall)
 
     first = True
+    loaded = {}
+
+    for axon in axons:
+        msg = "<div style='height: 5.5em; width: 100%; overflow: hidden;'>"\
+            "{}</div>\n".format(_format_post(axon.data, axon.key))
+
+        dispatcher.send_partial_content(msg, first)
+
+        first = False
+        loaded[axon.key] = True
 
     @asyncio.coroutine
     def cb(key):
         nonlocal first
 
+        key_enc = mbase32.encode(key)
+
+        if loaded.get(bytes(key)):
+            log.info("Skipping already loaded synapse for key=[{}]."\
+                .format(key_enc))
+            return
+
         msg = "<iframe src='morphis://.dds/axon/read/{key}/{target_key}' style='height: 5.5em; width: 100%; border: 0;' seamless='seamless'></iframe>\n"\
-            .format(key=mbase32.encode(key),\
+            .format(key=key_enc,\
                 target_key=axon_addr_enc)
 
         dispatcher.send_partial_content(msg, first)
 
         first = False
 
+    dp = dpush.DpushEngine(dispatcher.node)
+
     yield from dp.scan_targeted_blocks(axon_addr, 20, cb)
+
+    if first:
+        dispatcher.send_content("Nothing here yet.")
+        return
 
     dispatcher.end_partial_content()
 
 @asyncio.coroutine
 def _process_read_axon(dispatcher, req):
     p0 = req.find('/')
-    if p0 == -1:
-        key = mbase32.decode(req)
 
-        data_rw =\
-            yield from\
-                dispatcher.node.chord_engine.tasks.send_get_data(\
-                    bytes(key))
-    else:
+    if p0 > -1:
+        # Then the request is for a TargetedBlock.
         key = mbase32.decode(req[:p0])
         target_key = mbase32.decode(req[p0+1:])
+    else:
+        # Then the request is not for a TargetedBlock.
+        key = mbase32.decode(req)
+        target_key = None
 
-        data_rw =\
-            yield from\
-                dispatcher.node.chord_engine.tasks.send_get_targeted_data(\
-                    bytes(key), target_key=target_key)
+    axon = yield from _load_axon(dispatcher, key, target_key)
 
-    data = data_rw.data
+    axon_id = axon.id if axon else None
+
+    if not axon or axon.data is None:
+        if target_key:
+            data_rw =\
+                yield from\
+                    dispatcher.node.chord_engine.tasks.send_get_targeted_data(\
+                        bytes(key), target_key=target_key)
+        else:
+            data_rw =\
+                yield from\
+                    dispatcher.node.chord_engine.tasks.send_get_data(\
+                        bytes(key))
+
+        data = data_rw.data
+    else:
+        data = axon.data
 
     if not data:
         dispatcher.send_content("Not found on the network at the moment.")
         return
 
+    yield from _save_axon(dispatcher, key, target_key, data, axon_id)
+
     if not data.startswith(MorphisBlock.UUID):
         # Plain data, return it!
-        msg = _format_post(data, key)
+        msg = "<body style='padding:0;margin:0;'>{}</body>"\
+            .format(_format_post(data, key))
 
         acharset = dispatcher.get_accept_charset()
         dispatcher.send_content(\
@@ -345,7 +391,7 @@ def _process_read_axon(dispatcher, req):
 
 def _format_post(data, key):
     return __format_post(data)\
-        + "<div style='color: #7070ff; position:absolute; bottom: 0;"\
+        + "<div style='color: #7070ff; position: absolute; bottom: 0;"\
             "right: 0;'>{}</div>".format(mbase32.encode(key)[:32])
 
 def __format_post(data):
@@ -353,7 +399,7 @@ def __format_post(data):
     fn = data.find(b'\n')
 
     if fr == -1 and fn == -1:
-        return "<body style='padding:0;margin:0;'><h3>{}</h3></body>".format(make_safe_for_html_content(data))
+        return "<h3>{}</h3>".format(make_safe_for_html_content(data))
 
     if fr == -1:
         end = fn
@@ -365,9 +411,8 @@ def __format_post(data):
         end = fr
         start = end + 2
 
-    return "<body style='padding:0;margin:0;'>"\
-        "<h3 style='padding:0;margin:0;'>{}</h3>"\
-        "<pre style='color: gray; padding:0;margin:0;'>{}</pre></body>"\
+    return "<h3 style='padding:0;margin:0;'>{}</h3>"\
+        "<pre style='color: gray; padding:0;margin:0;'>{}</pre>"\
             .format(\
                 data[:end].decode(), make_safe_for_html_content(data[start:]))
 
@@ -416,3 +461,41 @@ def _process_create_axon(dispatcher, target_addr):
         target_addr=target_addr)
 
     dispatcher.send_content(template)
+
+@asyncio.coroutine
+def _load_axon(dispatcher, key, target_key):
+    def dbcall():
+        with dispatcher.node.db.open_session() as sess:
+            q = sess.query(Axon).filter(Axon.key == key)
+
+            return q.first()
+
+    return (yield from dispatcher.loop.run_in_executor(None, dbcall))
+
+@asyncio.coroutine
+def _save_axon(dispatcher, key, target_key=None, data=None, dbid=None):
+    def dbcall():
+        with dispatcher.node.db.open_session() as sess:
+            axon = None
+
+            if dbid:
+                axon = sess.query(Axon).get(dbid)
+
+            if not axon:
+                axon = Axon()
+                axon.key = key
+                axon.first_seen = utc_datetime()
+
+                if target_key:
+                    axon.target_key = target_key
+
+                sess.add(axon)
+
+            if data:
+                axon.data = data
+
+            sess.commit()
+
+            return axon
+
+    return (yield from dispatcher.loop.run_in_executor(None, dbcall))

@@ -37,6 +37,7 @@ DmailTag = None
 
 ##FIXME: NEW
 User = None
+Axon = None
 AxonKey = None
 Synapse = None
 Neuron = None
@@ -192,6 +193,19 @@ def _init_daos(Base, d):
         id = Column(Integer, primary_key=True)
 
     d.User = User
+
+    class Axon(Base):
+        __tablename__ = "axon"
+
+        id = Column(Integer, primary_key=True)
+        key = Column(LargeBinary, nullable=False)
+        target_key = Column(LargeBinary, nullable=True)
+        data = Column(LargeBinary, nullable=True)
+        first_seen = Column(UtcDateTime, nullable=False)
+
+    Index("axon__target_key", Axon.target_key)
+
+    d.Axon = Axon
 
     class AxonKey(Base):
         __tablename__ = "axonkey"
@@ -431,6 +445,7 @@ if Peer is None:
     DmailTag = d.DmailTag
 
     User = d.User
+    Axon = d.Axon
     AxonKey = d.AxonKey
     Synapse = d.Synapse
     Neuron = d.Neuron
