@@ -133,10 +133,20 @@ def _process_create_synapse(dispatcher):
 @asyncio.coroutine
 def _process_create_axon_post(dispatcher):
     dd = yield from dispatcher.read_post()
-    if not dd: return
+    if not dd:
+        dispatcher.send_error("request: {}".format(req), errcode=400)
+        return
 
     content = fia(dd["content"])
+    content2 = fia(dd["content2"])
+
     if not content:
+        content = content2
+    elif content2:
+        content = content + "\r\n" + content2
+
+    if not content:
+        dispatcher.send_error("No content.", errcode=400)
         return
 
     key = None
