@@ -211,13 +211,13 @@ class MaalstroomDispatcher(object):
         elif rpath.startswith(".dmail") and maalstroom.dmail_enabled:
             yield from maalstroom.dmail.serve_get(self, rpath)
             return
-        elif maalstroom.dds_enabled:
-            if rpath.startswith(".grok"):
-                rpath = ".dds/axon/grok" + rpath[5:]
-
-            if rpath.startswith(".dds"):
-                yield from maalstroom.dds.serve_get(self, rpath)
-                return
+        elif rpath.startswith(".dds") and maalstroom.dds_enabled:
+            yield from maalstroom.dds.serve_get(self, rpath)
+            return
+        elif rpath.startswith(".grok"):
+            self.send_301(self.handler.maalstroom_url_prefix_str\
+                + ".dds/axon/" + rpath[1:])
+            return
         else:
             self.send_error(errcode=400)
 
@@ -795,6 +795,7 @@ class MaalstroomDispatcher(object):
         self.finish_response()
 
     def send_301(self, url, message=None):
+        "Redirect."
         if not self.handler.maalstroom_plugin_used\
                 and url.startswith("morphis://"):
             url = self.handler.maalstroom_url_prefix_str + url[10:]
