@@ -308,8 +308,10 @@ def _process_synapse_axon(dispatcher, axon_addr_enc):
 
     if first:
         dispatcher.send_partial_content("Nothing found yet.</body>")
-    else:
-        dispatcher.send_partial_content("<span id='end'/></body>")
+
+    dispatcher.send_partial_content(\
+        "<span id='end' style='color: gray'>Last refreshed: {}</span></body>"\
+            .format(utc_datetime()))
 
     dispatcher.end_partial_content()
 
