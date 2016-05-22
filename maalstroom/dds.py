@@ -277,6 +277,8 @@ def _process_synapse_axon(dispatcher, axon_addr_enc):
         first = False
         loaded[axon.key] = True
 
+    dispatcher.send_partial_content("<hr/>")
+
     @asyncio.coroutine
     def cb(key):
         nonlocal first
