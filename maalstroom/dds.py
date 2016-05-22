@@ -215,7 +215,6 @@ def _process_axon(dispatcher, req):
 
 @asyncio.coroutine
 def _process_view_axon(dispatcher, req):
-    log.warning("req:{}".format(req))
     if req.startswith("@"):
         #TODO: Come up with a formal spec. We should probably deal with
         # unprintable characters by merging them, Etc.
