@@ -127,6 +127,7 @@ h2 {
     padding: 20px;
     border-radius: 8px;
     border: solid thin #dddee0;
+    position: relative;
 }
 .dds-post-wrapper:hover {
     border: solid thin #aeb3b8;
@@ -349,3 +350,4 @@ input[type=checkbox]:checked ~ [for="read_more"] span:first-of-type {
 
 input[type=checkbox]:checked ~ [for="read_more"] span:last-of-type {
     display: block;
+}

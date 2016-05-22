@@ -275,7 +275,7 @@ def serve_get(dispatcher, rpath):
         dispatcher.send_content(template)
 
     elif req.startswith("/images/"):
-        dispatcher.send_content(templates.imgs[req[8:]])
+        dispatcher.send_content(templates.dmail_imgs[req[8:]])
 
     elif req.startswith("/tag/view/list/"):
         params = req[15:]

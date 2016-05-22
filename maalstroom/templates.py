@@ -371,7 +371,16 @@ def load_resource(filepath):
     ext = filepath[filepath.rindex('.')+1:]
     return [fh.read(), None, _resource_type_mapping[ext]]
 
-imgs = {}
+def load_resources(store, dirpath):
+    for entry_name in os.listdir("maalstroom/resources/" + dirpath):
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("Loading resource [{}][{}]."\
+                .format(dirpath, entry_name))
+
+        store[entry_name] = load_resource(dirpath + "/" + entry_name)
+
+dmail_imgs = {}
+dds_imgs = {}
 
 if not initialized_template:
     # V2 UI:
@@ -398,16 +407,17 @@ if not initialized_template:
     dmail_create_address = load("dmail/create_address.html", True)
     dmail_address_config = load("dmail/address_config.html", True)
 
-    for entry_name in os.listdir("maalstroom/resources/images/dmail"):
-        if log.isEnabledFor(logging.DEBUG):
-            log.debug("Loading resource [{}].".format(entry_name))
-
-        imgs[entry_name] = load_resource("images/dmail/" + entry_name)
+    load_resources(dmail_imgs, "images/dmail")
 
     # dds.
     dds_main = load("dds/main.html", True)
     dds_neuron = load("dds/neuron.html", True)
     dds_axon = load("dds/axon.html", True)
-    dds_signal = load("dds/signal.html", True)
+    dds_create_synapse = load("dds/create_synapse.html", True)
+    dds_axon_synapses_start = load("dds/axon_synapses_start.html", True)
+    dds_grok_css = load("dds/style.css", True)
+    dds_synapse_view = load("dds/synapse_view.html", True)
+
+    load_resources(dds_imgs, "images/dds")
 
     initialized_template = True

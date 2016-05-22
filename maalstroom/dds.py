@@ -61,17 +61,25 @@ def serve_get(dispatcher, rpath):
     elif req == "/axon":
         yield from _process_axon(dispatcher, req[5:])
         return
-    elif req.startswith("/axon/view/") or req.startswith("/axon/grok/"):
+    elif req == "/axon/grok/style.css":
+        template = templates.dds_grok_css[0]
+
+        dispatcher.send_content(template, content_type="text/css")
+        return
+    elif req.startswith("/axon/grok/"):
         yield from _process_view_axon(dispatcher, req[11:])
         return
     elif req.startswith("/axon/read/"):
         yield from _process_read_axon(dispatcher, req[11:])
         return
-    elif req.startswith("/axon/synapser/"):
-        yield from _process_synapse_axon(dispatcher, req[15:])
+    elif req.startswith("/axon/synapses/"):
+        yield from _process_axon_synapses(dispatcher, req[15:])
         return
     elif req.startswith("/synapse/create/"):
-        yield from _process_create_axon(dispatcher, req[16:])
+        yield from _process_create_synapse(dispatcher, req[16:])
+        return
+    elif req.startswith("/images/"):
+        dispatcher.send_content(templates.dds_imgs[req[8:]])
         return
 
     dispatcher.send_error("request: {}".format(req), errcode=400)
@@ -193,7 +201,7 @@ def _process_neuron(dispatcher):
 
         @asyncio.coroutine
         def cb(key):
-            msg = "<iframe src='morphis://.dds/axon/read/{key}/{target_key}' style='height: 5.5em; width: 100%; border: 0;' seamless='seamless'></iframe>"\
+            msg = "<iframe src='morphis://.dds/axon/read/{key}/{target_key}' style='height: 10em; width: 100%; border: 0;' seamless='seamless'></iframe>"\
                 .format(key=mbase32.encode(key),\
                     target_key=mbase32.encode(synapse.axon_addr))
 
@@ -237,10 +245,10 @@ def _process_view_axon(dispatcher, req):
             return
 
     msg = "<iframe src='morphis://.dds/axon/read/{key}'"\
-        " style='height: 7em; width: 100%; border: 1;'"\
+        " style='height: 10em; width: 100%; border: 1;'"\
         " seamless='seamless'></iframe><iframe"\
-        " src='morphis://.dds/axon/synapser/{key}#new'"\
-        " style='height: calc(100% - 14.5em); width: 100%; border: 0;'"\
+        " src='morphis://.dds/axon/synapses/{key}#new'"\
+        " style='height: calc(100% - 17.5em); width: 100%; border: 0;'"\
         " seamless='seamless'></iframe><iframe"\
         " src='morphis://.dds/synapse/create/{key}'"\
         " style='height: 7em; width: 100%; border: 1;'"\
@@ -251,12 +259,13 @@ def _process_view_axon(dispatcher, req):
     return
 
 @asyncio.coroutine
-def _process_synapse_axon(dispatcher, axon_addr_enc):
+def _process_axon_synapses(dispatcher, axon_addr_enc):
     axon_addr = mbase32.decode(axon_addr_enc)
 
-    dispatcher.send_partial_content(\
-        "<head><meta target='_self' http-equiv='refresh' content='15'></meta>"\
-            "</head><body>", True)
+#    dispatcher.send_partial_content(\
+#        "<head><meta target='_self' http-equiv='refresh' content='15'></meta>"\
+#            "</head><body>", True)
+    dispatcher.send_partial_content(templates.dds_axon_synapses_start[0], True)
 
     first = False # Get rid of this now as we always open with <body>.
 
@@ -273,10 +282,17 @@ def _process_synapse_axon(dispatcher, axon_addr_enc):
     loaded = {}
 
     for axon in axons:
-        msg = "<div style='height: 5.5em; width: 100%; overflow: hidden;'>"\
-            "{}</div>\n".format(_format_post(axon.data, axon.key))
+#        msg = "<div style='height: 5.5em; width: 100%; overflow: hidden;'>"\
+#            "{}</div>\n".format(_format_axon(axon.data, axon.key))
 
-        dispatcher.send_partial_content(msg, first)
+        template = templates.dds_synapse_view[0]
+
+        template = template.format(\
+            key=axon_addr_enc,\
+            content=_format_axon(\
+                axon.data, axon.key, mbase32.encode(axon.key)))
+
+        dispatcher.send_partial_content(template, first)
 
         first = False
         loaded[axon.key] = True
@@ -294,7 +310,7 @@ def _process_synapse_axon(dispatcher, axon_addr_enc):
                 .format(key_enc))
             return
 
-        msg = "<iframe src='morphis://.dds/axon/read/{key}/{target_key}' style='height: 5.5em; width: 100%; border: 0;' seamless='seamless'></iframe>\n"\
+        msg = "<iframe src='morphis://.dds/axon/read/{key}/{target_key}' style='height: 15em; width: 100%; border: 0;' seamless='seamless'></iframe>\n"\
             .format(key=key_enc,\
                 target_key=axon_addr_enc)
 
@@ -311,7 +327,7 @@ def _process_synapse_axon(dispatcher, axon_addr_enc):
 
     dispatcher.send_partial_content(\
         "<div>Last refreshed: {}</div><span id='end' style='color: gray'/>"\
-        "</body>"\
+        "</body></html>"\
             .format(utc_datetime()))
 
     dispatcher.end_partial_content()
@@ -357,8 +373,14 @@ def _process_read_axon(dispatcher, req):
 
     if not data.startswith(MorphisBlock.UUID):
         # Plain data, return it!
-        msg = "<body style='padding:0;margin:0;'>{}</body>"\
-            .format(_format_post(data, key))
+        key_enc = mbase32.encode(key)
+
+        template = templates.dds_synapse_view[0]
+
+        template = template.format(\
+            key=key_enc, content=_format_axon(data, key, key_enc))
+
+        msg = "<head><link rel='stylesheet' href='morphis://.dds/axon/grok/style.css'></link></head><body style='height: 90%; padding:0;margin:0;'>{}</body>".format(template)
 
         acharset = dispatcher.get_accept_charset()
         dispatcher.send_content(\
@@ -399,10 +421,11 @@ def _process_read_axon(dispatcher, req):
 
     dispatcher.send_content(msg_txt)
 
-def _format_post(data, key):
+def _format_axon(data, key, key_enc):
     return __format_post(data)\
-        + "<div style='color: #7070ff; position: absolute; bottom: 0;"\
-            "right: 0;'>{}</div>".format(mbase32.encode(key)[:32])
+        + "<div style='font-family: monospace; font-size: 8pt;"\
+            "color: #a0a0ff; position: absolute; bottom: 0.3em;"\
+            "right: 0.3em;'>{}</div>".format(key_enc[:32])
 
 def __format_post(data):
     fr = data.find(b'\r')
@@ -462,8 +485,8 @@ def __load_axon_key(dispatcher, axon_addr):
     return (yield from dispatcher.loop.run_in_executor(None, dbcall))
 
 @asyncio.coroutine
-def _process_create_axon(dispatcher, target_addr):
-    template = templates.dds_signal[0]
+def _process_create_synapse(dispatcher, target_addr):
+    template = templates.dds_create_synapse[0]
 
     template = template.format(\
         csrf_token=dispatcher.client_engine.csrf_token,\
