@@ -277,7 +277,7 @@ def _process_synapse_axon(dispatcher, axon_addr_enc):
         first = False
         loaded[axon.key] = True
 
-    dispatcher.send_partial_content("<hr/>")
+    dispatcher.send_partial_content("<hr/>", first)
 
     @asyncio.coroutine
     def cb(key):
@@ -294,7 +294,7 @@ def _process_synapse_axon(dispatcher, axon_addr_enc):
             .format(key=key_enc,\
                 target_key=axon_addr_enc)
 
-        dispatcher.send_partial_content(msg, first)
+        dispatcher.send_partial_content(msg)
 
         first = False
 
@@ -303,8 +303,7 @@ def _process_synapse_axon(dispatcher, axon_addr_enc):
     yield from dp.scan_targeted_blocks(axon_addr, 20, cb)
 
     if first:
-        dispatcher.send_content("Nothing here yet.")
-        return
+        dispatcher.send_partial_content("Nothing found yet.")
 
     dispatcher.end_partial_content()
 
