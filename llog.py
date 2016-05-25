@@ -6,6 +6,8 @@ import logging.config
 import traceback
 import sys
 
+import llog_nocython
+
 logging_initialized = False;
 
 def init():
@@ -31,7 +33,7 @@ def handle_exception(log, info):
     traceback.print_tb(sys.exc_info()[2])
 
 def printl(value):
-    print({"value": value, "end": ''})
+    llog_nocython.printl(value)
 
 if not logging_initialized:
     init()
