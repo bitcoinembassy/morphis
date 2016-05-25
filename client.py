@@ -17,11 +17,20 @@ from shell import BinaryMessage
 
 log = logging.getLogger(__name__)
 
+class ClientCore(object):
+    def __init__(self, tasks):
+        self.tasks = tasks
+
+    @property
+    def loop(self):
+        return self.tasks.loop
+
 #TODO: This uses the text ssh user protocol; make it use a binary Node one.
 class Client(object):
     "A lightweight MORPHiS Node."
 
     def __init__(self, loop, client_key=None, address="127.0.0.1:4250"):
+        self.engine = ClientCore(self)
         self.loop = loop
         self.address = address
 

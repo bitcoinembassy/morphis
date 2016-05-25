@@ -795,6 +795,12 @@ class ChordTasks(object):
                     data_present = yield from\
                         self._check_has_data(\
                             node_id, significant_bits, target_key)
+                    #NOTE: Regarding FIXME above: we didn't 'have' it, we have
+                    # something close, but we want closest we can find overall,
+                    # so we don't even care what we have until after we see
+                    # what the network has because we then are only interested
+                    # in the closest. (Something like that is the answer to the
+                    # above FIXME question).
 
                     #NOTE: For significant_bits not None, data_present return
                     # value is a key -- not boolean.
