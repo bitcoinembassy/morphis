@@ -92,6 +92,7 @@ def __main():
         client_key = rsakey.RsaKey(filename=key_filename)
     else:
         log.info("mget private key file missing, generating.")
+        os.mkdir("data")
         client_key = rsakey.RsaKey.generate(bits=4096)
         client_key.write_private_key_file(key_filename)
 
@@ -101,7 +102,7 @@ def __main():
     conn = yield from mc.connect()
 
     if not conn:
-        print("Connect failed, starting node instead.")
+        log.warning("Connect failed, starting node instead.")
         import node
 
         node.loop = loop
@@ -153,9 +154,14 @@ def __process(args, loop, mc):
             log.error("Key [{}] was not found.".format(args.key))
             return
 
-    data_rw = yield from mc.send_get_data(key)
+#    data_rw = yield from mc.send_get_data(key)
+    import multipart
 
-    if not data_rw.data:
+    r = yield from multipart.get_data_buffered(mc.engine, key)
+
+    data = r.data
+
+    if not data:
         log.error(\
             "Data for key [{}] was not found.".format(mbase32.encode(key)))
         return
@@ -163,10 +169,10 @@ def __process(args, loop, mc):
     if args.o:
         # Write to a file instead of stdout.
         f = open(args.o, "wb")
-        f.write(data_rw.data)
+        f.write(data)
     else:
         # Write the response to stdout.
-        print(data_rw.data.decode())
+        print(data.decode())
 
 def init_db(args):
     if args.dburl:
