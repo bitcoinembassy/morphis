@@ -2431,9 +2431,11 @@ class ChordTasks(object):
             return None, None, None, None, None, None
 
         if log.isEnabledFor(logging.INFO):
-            log.info("Loading data to respond to data request.")
+            log.info("Loading data id=[{}] to respond to data request."\
+                .format(mbase32.encode(data_id)))
         elif log2.isEnabledFor(logging.INFO):
-            log2.info("Loading data to respond to data request.")
+            log2.info("Loading data id=[{}] to respond to data request."\
+                .format(mbase32.encode(data_id)))
 
         def iocall():
             filename = self.engine.node.data_block_file_path.format(\
