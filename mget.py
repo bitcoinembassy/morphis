@@ -124,17 +124,29 @@ def __process(args, loop, mc):
         return
 
     # Process the request (for now, we support send_get_data(..) requests.
-    key = mbase32.decode(args.key)
+    key, sig_bits = mutil.decode_key(args.key)
 
-    datarw = yield from mc.send_get_data(key)
+    if sig_bits:
+        data_rw = yield from mc.send_find_key(key, sig_bits)
+        key = data_rw.data_key
+        if not key:
+            log.error("Key [{}] was not found.".format(args.key))
+            return
+
+    data_rw = yield from mc.send_get_data(key)
+
+    if not data_rw.data:
+        log.error(\
+            "Data for key [{}] was not found.".format(mbase32.encode(key)))
+        return
 
     if args.o:
         # Write to a file instead of stdout.
         f = open(args.o, "wb")
-        f.write(datarw.data)
+        f.write(data_rw.data)
     else:
         # Write the response to stdout.
-        print(datarw.data.decode())
+        print(data_rw.data.decode())
 
 def init_db(args):
     if args.dburl:
