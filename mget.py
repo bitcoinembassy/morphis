@@ -97,20 +97,40 @@ def __main():
 
     # Connect a Morphis Client (lightweight Node) instance.
     mc = client.Client(loop, client_key=client_key, address=args.address)
-    r = yield from mc.connect()
 
-    if not r:
-        log.warning("Connection failed; exiting.")
-        loop.stop()
-        return
+    conn = yield from mc.connect()
+
+    if not conn:
+        print("Connect failed, starting node instead.")
+        import node
+
+        node.loop = loop
+        node.maalstroom_enabled = False
+
+        import sys
+        sys.argv = ["node.py"]
+
+        yield from node.__main()
+
+        yield from node.nodes[0].chord_engine.protocol_ready.wait()
+
+        mc = node.nodes[0].chord_engine.tasks
+
+#    if not conn:
+#        log.warning("Connection failed; exiting.")
+#        loop.stop()
+#        return
 
 #    dbase = init_db(args)
 
     yield from __process(args, loop, mc)
 
     # Finished request, clean up.
-    log.info("Disconnecting.")
-    yield from mc.disconnect()
+    if conn:
+        log.info("Disconnecting.")
+        yield from mc.disconnect()
+    else:
+        mc.engine.node.stop()
 
     loop.stop()
 

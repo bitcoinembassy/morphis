@@ -34,7 +34,7 @@ loop = None
 nodes = []
 
 dumptasksonexit = False
-maalstroom_enabled = False
+maalstroom_enabled = True
 
 class Node():
     def __init__(self, loop, instance_id=None, dburl=None):
@@ -385,7 +385,8 @@ def __main():
         host, port = bindaddr.split(':')
         port = int(port) + instanceoffset
         bindaddr = "{}:{}".format(host, port)
-    maalstroom_enabled = False if args.dm else True
+    if args.dm:
+        maalstroom_enabled = False
     nodecount = args.nodecount
     if nodecount == None:
         nodecount = 1
