@@ -350,6 +350,9 @@ def __main():
     parser.add_argument("--reinitds", action="store_true",\
         help="Allow reinitialization of the Datastore. This will only happen"\
             " if the Datastore directory has already been manually deleted.")
+    parser.add_argument("--rewriteport", type=int,\
+        help="Specify the port for Maalstroom to use when rewriting"\
+            " morphis:// urls.")
     parser.add_argument("--tormode", action="store_true",\
         help="Enable torify mode. This makes MORPHiS work better over torify"\
             " or proxychains. Currently it fixes the remote address check so"\
@@ -428,6 +431,8 @@ def __main():
                     maalstroom.upload_enabled = False
                 if args.proxyurl:
                     maalstroom.proxy_url = args.proxyurl
+                if args.rewriteport:
+                    maalstroom.rewrite_port = args.rewriteport
 
                 yield from maalstroom.start_maalstroom_server(node)
 

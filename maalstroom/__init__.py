@@ -34,6 +34,7 @@ dds_enabled = True
 upload_enabled = True
 
 proxy_url = None
+rewrite_port = None
 
 _request_lock = threading.Lock()
 _concurrent_request_count = 0
@@ -122,7 +123,7 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
     def _prepare_for_request(self):
         self._abort_event.clear()
 
-        global proxy_url
+        global proxy_url, rewrite_port
 
         if self.headers["X-Forwarded-For"]:
             self.proxy_used = True
@@ -140,6 +141,12 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
                 self.actual_url_prefix_str =\
                     self._maalstroom_http_url_prefix.format(\
                         self.headers["Host"])
+                if rewrite_port:
+                    print("U=[{}].".format(self.actual_url_prefix_str))
+                    p0 = self.actual_url_prefix_str.find(':')
+                    self.actual_url_prefix_str =\
+                        self.actual_url_prefix_str[:p0+1] + self.rewrite_port
+
         else:
             global port
 
