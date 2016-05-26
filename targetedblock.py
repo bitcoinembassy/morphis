@@ -67,3 +67,28 @@ class TargetedBlock(MorphisBlock):
         self.block_hash = self.buf[i:i+consts.NODE_ID_BYTES]
         i += consts.NODE_ID_BYTES
 
+class Synapse():
+    def __init__(self, buf=None):
+        assert len(target_key) == consts.NODE_ID_BYTES
+        assert len(dest_key) == consts.NODE_ID_BYTES
+        assert not ext_key or len(ext_key) == consts.NODE_ID_BYTES
+        self.target_key = None
+        self.dest_key = None
+        self.ext_key = None
+        self.timestamp = None
+        self.signature = None
+        self.nonce = None
+
+    def encode(self):
+        nbuf = bytearray()
+
+        nbuf += self.target_key
+        nbuf += self.dest_key
+        nbuf += self.ext_key if self.ext_key else consts.NULL_KEY
+
+        if not self.timestamp:
+            self.timestamp = int(time.time() * 1000)
+
+        nbuf += sshtype.encodeMpint(self.timestamp)
+
+        #TODO: YOU_ARE_HERE: signature?
