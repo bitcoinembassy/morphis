@@ -239,19 +239,13 @@ class Shell(cmd.Cmd):
 
     def write_raw(self, val):
         assert type(val) in (bytes, bytearray), type(val)
-        assert len(val) < mn1.MAX_PACKET_LENGTH
-
-        if len(self.out_buffer) + len(val) > mn1.MAX_PACKET_LENGTH:
-            self.flush()
 
         self.out_buffer += val
 
-    def _write(self, val):
-        assert len(val) < mn1.MAX_PACKET_LENGTH
-
-        if len(self.out_buffer) + len(val) > mn1.MAX_PACKET_LENGTH:
+        if len(self.out_buffer) >= mn1.MAX_PACKET_LENGTH:
             self.flush()
 
+    def _write(self, val):
         if isinstance(val, bytearray) or isinstance(val, bytes):
             val = val.replace(b'\n', b"\r\n")
             self.out_buffer += val
@@ -259,15 +253,22 @@ class Shell(cmd.Cmd):
             val = val.replace('\n', "\r\n")
             self.out_buffer += val.encode("UTF-8")
 
+        if len(self.out_buffer) >= mn1.MAX_PACKET_LENGTH:
+            self.flush()
+
     def flush(self):
         if not self.out_buffer:
             return
+        #FIXME: Not sure the correct number here. The value 24 was the largest
+        # I noticed that it needed to be during testing of a multipart dl.
+        maxlen = mn1.MAX_PACKET_LENGTH - 24
 
         while True:
             outbuf = self.out_buffer
-            if len(outbuf) > mn1.MAX_PACKET_LENGTH:
-                outbuf = outbuf[:mn1.MAX_PACKET_LENGTH]
-                self.out_buffer = outbuf[mn1.MAX_PACKET_LENGTH:]
+
+            if len(outbuf) > maxlen:
+                self.out_buffer = outbuf[maxlen:]
+                outbuf = outbuf[:maxlen]
 
             rmsg = BinaryMessage()
             rmsg.value = outbuf
