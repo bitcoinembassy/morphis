@@ -26,6 +26,9 @@ class ClientCore(object):
         return self.tasks.loop
 
 #TODO: This uses the text ssh user protocol; make it use a binary Node one.
+#FIXME: The above is now a FIXME because the text protocol uses the multipart
+# API when we call getdata, so we can't even fetch just one block. This means
+# this proxy won't work right if you try to download a multipart link.
 class Client(object):
     "A lightweight MORPHiS Node."
 
