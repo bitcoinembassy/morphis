@@ -239,22 +239,25 @@ class Shell(cmd.Cmd):
 
     def write_raw(self, val):
         assert type(val) in (bytes, bytearray), type(val)
+        assert len(val) < mn1.MAX_PACKET_LENGTH
+
+        if len(self.out_buffer) + len(val) > mn1.MAX_PACKET_LENGTH:
+            self.flush()
 
         self.out_buffer += val
 
-        if len(self.out_buffer) > mn1.MAX_PACKET_LENGTH:
+    def _write(self, val):
+        assert len(val) < mn1.MAX_PACKET_LENGTH
+
+        if len(self.out_buffer) + len(val) > mn1.MAX_PACKET_LENGTH:
             self.flush()
 
-    def _write(self, val):
         if isinstance(val, bytearray) or isinstance(val, bytes):
             val = val.replace(b'\n', b"\r\n")
             self.out_buffer += val
         else:
             val = val.replace('\n', "\r\n")
             self.out_buffer += val.encode("UTF-8")
-
-        if len(self.out_buffer) > mn1.MAX_PACKET_LENGTH:
-            self.flush()
 
     def flush(self):
         if not self.out_buffer:
