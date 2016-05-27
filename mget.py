@@ -8,13 +8,14 @@ import argparse
 import asyncio
 import logging
 import os
-from sys import stdin
+import sys
 
 import base58
 import client
 import db
 import enc
 import mbase32
+import multipart
 import mutil
 import rsakey
 import sshtype
@@ -62,13 +63,15 @@ def __main():
     parser.add_argument(\
         "--dburl",\
         help="Specify the database url to use.")
+    parser.add_argument("--store-data", action="store_true",
+        help="Store data in MORPHiS and return the key.")
     parser.add_argument("--nn", type=int,\
         help="Node instance number.")
     parser.add_argument("-l", dest="logconf",\
         help="Specify alternate logging.ini [IF SPECIFIED, THIS MUST BE THE"\
             " FIRST PARAMETER!].")
 
-    parser.add_argument("key", type=str)
+    parser.add_argument("key", type=str, nargs="?")
 
     parser.add_argument(\
         "-i",\
@@ -145,6 +148,23 @@ def __process(args, loop, mc):
         llog.printl(r.decode("UTF-8"))
         return
 
+    if args.store_data:
+        if args.i:
+            data = open(args.i, "rb").read()
+        else:
+            data = sys.stdin.read().encode()
+
+        def key_callback(key):
+            key_enc = mbase32.encode(key)
+
+            print("SHORT KEY: " + key_enc[:32])
+            print("FULL KEY: " + key_enc)
+
+        yield from\
+            multipart.store_data(mc.engine, data, key_callback=key_callback)
+
+        return
+
     # Process the request (for now, we support send_get_data(..) requests.
     key, sig_bits = mutil.decode_key(args.key)
 
@@ -156,8 +176,6 @@ def __process(args, loop, mc):
             return
 
 #    data_rw = yield from mc.send_get_data(key)
-    import multipart
-
     r = yield from multipart.get_data_buffered(mc.engine, key)
 
     data = r.data
@@ -173,7 +191,7 @@ def __process(args, loop, mc):
         f.write(data)
     else:
         # Write the response to stdout.
-        print(data.decode())
+        llog.printl(data.decode())
 
 def init_db(args):
     if args.dburl:

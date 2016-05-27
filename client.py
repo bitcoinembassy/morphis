@@ -133,6 +133,27 @@ class Client(object):
         return int(r[p0:p1])
 
     @asyncio.coroutine
+    def send_store_key(self, data, data_key=None, targeted=False,\
+            key_callback=None, retry_factor=5):
+        assert not targeted, "Not implemented yet."
+
+        data_enc = base58.encode(data)
+
+        r = yield from\
+            self.send_command("storekey {}".format(data_enc))
+
+        p0 = r.find(b']')
+        data_key = mbase32.decode(r[10:p0].decode("UTF-8"))
+
+        if key_callback:
+            key_callback(data_key)
+
+        p0 = r.find(b"storing_nodes=[", p0) + 15
+        p1 = r.find(b']', p0)
+
+        return int(r[p0:p1])
+
+    @asyncio.coroutine
     def send_store_updateable_key(\
             self, data, privkey, path=None, version=None, store_key=True,\
             key_callback=None):
