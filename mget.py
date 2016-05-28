@@ -95,7 +95,7 @@ def __main():
         client_key = rsakey.RsaKey(filename=key_filename)
     else:
         log.info("mget private key file missing, generating.")
-        if not os.path.exists:
+        if not os.path.exists("data"):
             os.mkdir("data")
         client_key = rsakey.RsaKey.generate(bits=4096)
         client_key.write_private_key_file(key_filename)
