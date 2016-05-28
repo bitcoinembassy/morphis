@@ -385,11 +385,11 @@ def get_data_buffered(engine, data_key, path=None, retry_seconds=30,\
         if r is None:
             if log.isEnabledFor(logging.INFO):
                 log.info("Key not found.")
-            return None, None
+            return None
         else:
             if log.isEnabledFor(logging.INFO):
                 log.info("Download timed out.")
-            return False, None
+            return False
 
     if log.isEnabledFor(logging.INFO):
         log.info("Download complete; len=[{}].".format(len(cb.data)))
