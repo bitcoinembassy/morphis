@@ -440,7 +440,7 @@ class ChordTasks(object):
 
         if store_key:
             yield from self.send_store_key(data, data_key, targeted=True,\
-            retry_factor=retry_factor)
+                retry_factor=retry_factor)
 
         return storing_nodes
 
