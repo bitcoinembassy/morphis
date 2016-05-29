@@ -511,10 +511,10 @@ def store_data(engine, data, privatekey=None, path=None, version=None,\
             log.info("Data fits in one block, performing simple store.")
 
         if privatekey and not store_link:
-            yield from engine.tasks.send_store_updateable_key(\
+            store_cnt = yield from engine.tasks.send_store_updateable_key(\
                 data, privatekey, path, version, store_key, key_callback)
         else:
-            yield from\
+            store_cnt = yield from\
                 engine.tasks.send_store_data(data, store_key=store_key,\
                     key_callback=key_callback)
 
@@ -527,6 +527,8 @@ def store_data(engine, data, privatekey=None, path=None, version=None,\
         yield from _store_data_multipart(\
                 engine, data, key_callback, store_key, concurrency)
 
+        store_cnt = -1
+
         log.info("Multipart storage complete.")
 
     if store_link:
@@ -538,16 +540,20 @@ def store_data(engine, data, privatekey=None, path=None, version=None,\
         link_data = block.encode()
 
         if privatekey:
-            yield from engine.tasks.send_store_updateable_key(\
+            link_cnt = yield from engine.tasks.send_store_updateable_key(\
                 link_data, privatekey, path, version, store_key,\
                 orig_key_callback)
         else:
-            yield from\
+            link_cnt = yield from\
                 engine.tasks.send_store_data(\
                     link_data, store_key=store_key,\
                     key_callback=orig_key_callback)
 
         log.info("Link stored.")
+    else:
+        link_cnt = 0
+
+    return store_cnt, link_cnt
 
 def __key_callback(keys, idx, key):
     key_len = len(key)

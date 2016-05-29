@@ -160,7 +160,7 @@ def __process(args, loop, mc):
             print("SHORT KEY: " + key_enc[:32])
             print("FULL KEY: " + key_enc)
 
-        yield from\
+        store_cnt, link_cnt = yield from\
             multipart.store_data(mc.engine, data, key_callback=key_callback)
 
         return
