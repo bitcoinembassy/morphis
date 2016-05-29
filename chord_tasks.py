@@ -2240,6 +2240,9 @@ class ChordTasks(object):
         if log.isEnabledFor(logging.DEBUG):
             log.debug("Datastore is full, checking if proposed block is"\
                 " closer than enough stored blocks to fit with a purge.")
+        elif log2.isEnabledFor(logging.INFO):
+            log2.info("Datastore is full, checking if proposed block is"\
+                " closer than enough stored blocks to fit with a purge.")
 
         distance = mutil.calc_raw_distance(self.engine.node_id, data_id)
 

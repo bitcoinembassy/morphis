@@ -701,7 +701,8 @@ def _store_block(engine, i, block_data, key_callback, task_semaphore,\
             continue
 
         if log.isEnabledFor(logging.WARNING):
-            log.warn("Failed to upload block #{} enough (storing_nodes=[{}])."\
-                .format(i, storing_nodes))
+            log.warn("Failed to upload block #{} enough (data_key=[{}],"\
+                " storing_nodes=[{}])."\
+                    .format(i, mbase32.encode(data_key), storing_nodes))
 
         return False
