@@ -176,6 +176,11 @@ def __process(args, loop, mc):
             return
 
 #    data_rw = yield from mc.send_get_data(key)
+
+    #TODO: Find out why on some platforms this is needed.
+    if type(key) is bytearray:
+        key = bytes(key)
+
     r = yield from multipart.get_data_buffered(mc.engine, key)
 
     data = r.data
