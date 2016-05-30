@@ -68,27 +68,25 @@ class TargetedBlock(MorphisBlock):
         i += consts.NODE_ID_BYTES
 
 class Synapse():
+    NOONCE_SIZE = 8 #FIXME: This was suppose to be 64 bits, not bytes.
+
     def __init__(self, buf=None):
-        assert len(target_key) == consts.NODE_ID_BYTES
-        assert len(dest_key) == consts.NODE_ID_BYTES
-        assert not ext_key or len(ext_key) == consts.NODE_ID_BYTES
-        self.target_key = None
-        self.dest_key = None
-        self.ext_key = None
+        #ntargets = len(self.target_keys).
+        self.target_keys = None
+        self.source_key = None
         self.timestamp = None
         self.signature = None
         self.nonce = None
+        self.stamps = None
 
     def encode(self):
         nbuf = bytearray()
 
         nbuf += self.target_key
-        nbuf += self.dest_key
-        nbuf += self.ext_key if self.ext_key else consts.NULL_KEY
+        nbuf += self.source_key
 
         if not self.timestamp:
             self.timestamp = int(time.time() * 1000)
-
         nbuf += sshtype.encodeMpint(self.timestamp)
 
-        #TODO: YOU_ARE_HERE: signature?
+        nbuf += self.signature
