@@ -3,6 +3,7 @@
 
 import llog
 
+import asyncio
 import logging
 
 import consts
@@ -88,7 +89,7 @@ class Synapse():
     def target_key(self):
         return self.target_keys[0]
 
-    @setter.target_key
+    @target_key.setter
     def target_key(self, value):
         nkeys = len(self.target_keys)
         if nkeys == 0:
