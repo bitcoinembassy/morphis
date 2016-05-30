@@ -20,9 +20,9 @@ WORKERS = os.cpu_count()
 HASH_BITS = enc.ID_BITS
 HASH_BYTES = HASH_BITS >> 3
 
-def generate_targeted_block(prefix, nbits, data, nonce_offset, nonce_size):
+def generate_targeted_block(target, nbits, data, nonce_offset, nonce_size):
     "Brute force finds a nonce for the passed data which allows the data to"
-    " hash to the desired prefix with nbits matching. This is the first hash"
+    " hash to the desired target with nbits matching. This is the first hash"
     " of the block being targetd, thus the key, the id is not what is bruted."
 
     if type(data) is bytes:
@@ -50,7 +50,7 @@ def generate_targeted_block(prefix, nbits, data, nonce_offset, nonce_size):
             pipes.append(lp)
             refs.append(rp)
 
-            lp.send((i, prefix, nbits, data, nonce_offset, nonce_size))
+            lp.send((i, target, nbits, data, nonce_offset, nonce_size))
 
         ready = mp.connection.wait(pipes)
         block = ready[0].recv()
@@ -107,7 +107,7 @@ def _find_nonce(rp):
 def __find_nonce(rp):
 #    log.debug("Worker running.")
 
-    wid, prefix, nbits, data, nonce_offset, nonce_size = rp.recv()
+    wid, target, nbits, data, nonce_offset, nonce_size = rp.recv()
 
     max_dist = HASH_BITS - nbits
     nbytes = int(nbits / 8)
@@ -125,10 +125,10 @@ def __find_nonce(rp):
         h = enc.generate_ID(data)
 
         try:
-            dist, direction = mutil.calc_log_distance(h, prefix)
+            dist, direction = mutil.calc_log_distance(h, target)
             match = dist <= max_dist and direction == -1
         except IndexError:
-#            log.debug("Exactly matched prefix.")
+#            log.debug("Exactly matched target.")
             match = True
 
         if match:
