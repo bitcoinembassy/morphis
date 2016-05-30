@@ -109,6 +109,8 @@ def __find_nonce(rp):
 
     wid, target, nbits, data, nonce_offset, nonce_size = rp.recv()
 
+    assert type(data) is bytearray, type(data)
+
     max_dist = HASH_BITS - nbits
     nbytes = int(nbits / 8)
     nbytes += 4 # Extra bytes to increase probability of enough possibilities.
