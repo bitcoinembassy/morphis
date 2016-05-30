@@ -106,24 +106,20 @@ class RsaKey(asymkey.AsymKey):
         return self.d is not None
 
     def calc_rsassa_pss_sig(self, data):
-        h = enc._generate_ID(data)
+        return self._rsassa_pss_signer().sign(enc._generate_ID(data))
 
-        privkey = self._private_key()
-
-        signer = self._rsassa_pss_signer()
-
-        return signer.sign(h)
-
-    def sign_ssh_data(self, data):
+    def sign_ssh_data(self, data, output=None):
         digest = sha1(data).digest()
         rsa = self._private_key()
         sig = util.deflate_long(\
             rsa.sign(self._pkcs1imify(digest), bytes())[0], 0)
 
-        m = bytearray()
-        m += sshtype.encodeString('ssh-rsa')
-        m += sshtype.encodeBinary(sig)
-        return m
+        if not output:
+            output = bytearray()
+        output += sshtype.encodeString('ssh-rsa')
+        output += sshtype.encodeBinary(sig)
+
+        return output
 
     def verify_rsassa_pss_sig(self, data, signature):
         h = enc._generate_ID(data)
