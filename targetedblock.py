@@ -71,22 +71,85 @@ class Synapse():
     NOONCE_SIZE = 8 #FIXME: This was suppose to be 64 bits, not bytes.
 
     def __init__(self, buf=None):
+        self.buf = buf
+        if buf:
+            self.parse()
+            return
+
         #ntargets = len(self.target_keys).
-        self.target_keys = None
+        self.target_keys = []
         self.source_key = None
         self.timestamp = None
-        self.signature = None
+        #signature
         self.nonce = None
         self.stamps = None
 
-    def encode(self):
-        nbuf = bytearray()
+    @property
+    def target_key(self):
+        return self.target_keys[0]
 
-        nbuf += self.target_key
+    @setter.target_key
+    def target_key(self, value):
+        nkeys = len(self.target_keys)
+        if nkeys == 0:
+            self.target_keys.append(value)
+        else:
+            self.target_keys[0] = value
+
+    @asyncio.coroutine
+    def encode(self, key, difficulty):
+        self.buf = nbuf = bytearray()
+
+        # 0 is reserved; also, spec requires at least one target_key anyways.
+        assert len(self.target_keys) > 0 and len(self.target_keys) < 256
+        nbuf += struct.pack("B", len(self.target_keys) & 0xff)
+        for tkey in self.target_keys:
+            assert len(tkey) == consts.NODE_ID_BYTES
+            nbuf += tkey
+
+        assert len(self.source_key) == consts.NODE_ID_BYTES
         nbuf += self.source_key
 
         if not self.timestamp:
             self.timestamp = int(time.time() * 1000)
         nbuf += sshtype.encodeMpint(self.timestamp)
 
-        nbuf += self.signature
+        nbuf += key.asbytes()
+        nbuf += key.calc_rsassa_pss_sig(nbuf)
+
+        nonce_offset = len(nbuf)
+        nbuf += b' ' * TargetedBlock.NOONCE_SIZE
+        nonce_bytes =\
+            yield from self._calculate_nonce(nbuf, nonce_offset, difficulty)
+        self.set_nonce(nbuf, nonce_bytes, nonce_offset)
+
+        #TODO: YOU_ARE_HERE: Keyspace/stamps.
+
+    def set_nonce(data, nonce_bytes, offset):
+        assert type(nonce_bytes) in (bytes, bytearray)
+        lenn = len(nonce_bytes)
+        end = offset + NOONCE_SIZE
+        start = end - lenn
+        data[start:end] = nonce_bytes
+
+    @asyncio.coroutine
+    def _calculate_nonce(self, buf, offset, difficulty):
+        if log.isEnabledFor(logging.INFO):
+            log.info(\
+                "Attempting work on Synapse"\
+                    " (target=[{}], difficulty=[{}])."\
+                        .format(mbase32.encode(self.target_key), difficulty))
+
+        def threadcall():
+            return brute.generate_targeted_block(\
+                self.target_key, difficulty, buf,\
+                offset,\
+                NOONCE_SIZE)
+
+        nonce_bytes = yield from self.loop.run_in_executor(None, threadcall)
+
+        if log.isEnabledFor(logging.INFO):
+            log.info(\
+                "Work found nonce [{}].".format(mbase32.encode(nonce_bytes)))
+
+        return nonce_bytes
