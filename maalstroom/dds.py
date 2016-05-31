@@ -138,7 +138,7 @@ def _process_create_axon_post(dispatcher):
         return
 
     content = fia(dd["content"])
-    content2 = fia(dd["content2"])
+    content2 = fia(dd.get("content2"))
 
     if not content:
         content = content2
