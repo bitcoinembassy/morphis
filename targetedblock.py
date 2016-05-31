@@ -81,9 +81,12 @@ class Synapse():
         self.target_keys = []
         self.source_key = None
         self.timestamp = None
-        #signature
+        self.signature = None
         self.nonce = None
         self.stamps = None
+
+        self.key = None
+        self.difficulty = 20
 
     @property
     def target_key(self):
@@ -98,7 +101,7 @@ class Synapse():
             self.target_keys[0] = value
 
     @asyncio.coroutine
-    def encode(self, key, difficulty):
+    def encode(self):
         self.buf = nbuf = bytearray()
 
         # 0 is reserved; also, spec requires at least one target_key anyways.
@@ -115,16 +118,57 @@ class Synapse():
             self.timestamp = int(time.time() * 1000)
         nbuf += sshtype.encodeMpint(self.timestamp)
 
-        nbuf += key.asbytes()
-        nbuf += key.calc_rsassa_pss_sig(nbuf)
+        if self.signature:
+            nbuf += sshtype.encodeBinary(self.signature)
+        else:
+            nbuf += sshtype.encodeBinary(self.key.calc_rsassa_pss_sig(nbuf))
+
+        if self.pubkey:
+            nbuf += sshtype.encodeBinary(self.pubkey)
+        else:
+            nbuf += sshtype.encodeBinary(self.key.asbytes())
 
         nonce_offset = len(nbuf)
-        nbuf += b' ' * TargetedBlock.NOONCE_SIZE
-        nonce_bytes =\
-            yield from self._calculate_nonce(nbuf, nonce_offset, difficulty)
+        nbuf += b' ' * NOONCE_SIZE
+
+        nonce_bytes = yield from\
+            self._calculate_nonce(nbuf, nonce_offset, self.difficulty)
+
         self.set_nonce(nbuf, nonce_bytes, nonce_offset)
 
-        #TODO: YOU_ARE_HERE: Keyspace/stamps.
+        if self.stamps:
+            nbuf += self.stamps
+
+        return nbuf
+
+    def parse(self):
+        ntarget_keys = struct.unpack_from("B", self.buf, 0)[0]
+        i += 1
+
+        if not ntarget_keys:
+            raise Exception("ntarget_keys=0 is reserved.")
+
+        for idx in range(ntarget_keys):
+            end = i + consts.NODE_ID_BYTES
+            self.target_keys.append(self.buf[i:end])
+            i = end
+
+        end = i + consts.NODE_ID_BYTES
+        self.source_key = self.buf[i:end]
+        i = end
+
+        i, self.timestamp = sshtype.parse_mpint_from(self.buf, i)
+
+        # For now we only support rsassa_pss.
+        i, self.signature = sshtype.parse_binary_from(self.buf, i)
+        i, self.key_bytes = sshtype.parse_binary_from(self.buf, i)
+
+        end = i + NOONCE_SIZE
+        self.nonce = self.buf[i:end]
+        i = end
+
+        if i < len(self.buf):
+            self.stamps = self.buf[i:]
 
     def set_nonce(data, nonce_bytes, offset):
         assert type(nonce_bytes) in (bytes, bytearray)
@@ -143,9 +187,7 @@ class Synapse():
 
         def threadcall():
             return brute.generate_targeted_block(\
-                self.target_key, difficulty, buf,\
-                offset,\
-                NOONCE_SIZE)
+                self.target_key, difficulty, buf, offset, NOONCE_SIZE)
 
         nonce_bytes = yield from self.loop.run_in_executor(None, threadcall)
 
