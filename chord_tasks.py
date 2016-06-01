@@ -445,6 +445,36 @@ class ChordTasks(object):
         return storing_nodes
 
     @asyncio.coroutine
+    def send_store_synapse(\
+            self, data, nonce_offset, store_key=True, key_callback=None,\
+            retry_factor=20):
+        "Sends a StoreData request for a Synapse, returning the count of"\
+        " nodes that claim to have stored it."
+
+        synapse_header = data[:nonce_offset]
+
+        # data_id is a double hash due to the anti-entrapment feature.
+        data_key = enc.generate_ID(synapse_header)
+        if key_callback:
+            key_callback(data_key)
+        data_id = enc.generate_ID(data_key)
+
+        sdmsg = cp.ChordStoreData()
+        sdmsg.data = data
+        sdmsg.targeted = True
+
+        storing_nodes =\
+            yield from self.send_find_node(\
+                data_id, for_data=True, data_msg=sdmsg,\
+                retry_factor=retry_factor)
+
+        if store_key:
+            yield from self.send_store_key(\
+                data, data_key, targeted=True, retry_factor=retry_factor)
+
+        return storing_nodes
+
+    @asyncio.coroutine
     def send_store_updateable_key(\
             self, data, privatekey, path=None, version=None, store_key=None,\
             key_callback=None, retry_factor=5):

@@ -44,7 +44,7 @@ class DdsEngine(object):
         while True:
 
             storing_nodes = yield from\
-                self.core.tasks.send_store_targeted_data(\
+                self.core.tasks.send_store_synapse(\
                     synapse.encode(), store_key=True, key_callback=key_cb,
                     retry_factor=retry*10)
 
