@@ -18,16 +18,17 @@
     <input type="hidden" name="csrf_token" id="csrf_token" value="{csrf_token}"/>
     <input type="hidden" name="owner_if_anon" value="{owner_if_anon}"/>
     <label for="sender">From</label> 
-    <select name="sender" class="from-address">
+    <select name="sender" id= "sender" class="from-address">
       {from_addr_options}
     </select>
     <li>
         <label class="to" for="destination">To</label> <!-- Please rename classes to match names. -->
-        <input type="text" name="destination" value="{dest_addr}" required{dest_addr_autofocus}/>&nbsp;&nbsp;<button class="addressbook-icon" type="submit"></button>
+        <input type="text" name="destination" id="destination" value="{dest_addr}" required{dest_addr_autofocus}/>&nbsp;&nbsp;
+        <div class="staticWidth"><a class="addressbook-icon" href="morphis://.dmail/addressbook/create_contact/{dest_addr}"><button type="button" class="addressbook-icon"></button></a></div>
     </li>
     <li>
 	<label for="subject">Subject</label>
-	<input type="text" name="subject" value="{subject}"{subject_autofocus}/>
+	<input type="text" name="subject" id= "subject" value="{subject}"{subject_autofocus}/>
     </li>
      <li style="height:100%">
 	<textarea name="content"{message_text_autofocus}>{message_text}</textarea>

@@ -394,6 +394,7 @@ if not initialized_template:
     dmail_logo = load("dmail/logo.html", True)
     dmail_nav = load("dmail/nav.html", True)
     dmail_aside = load("dmail/aside.html", True)
+
     dmail_msg_list = load("dmail/msg_list.html", True)
     dmail_msg_list_list_start = load("dmail/msg_list_list_start.html", True)
     dmail_msg_list_list_row = load("dmail/msg_list_list_row.html", True)
@@ -406,6 +407,17 @@ if not initialized_template:
 
     dmail_create_address = load("dmail/create_address.html", True)
     dmail_address_config = load("dmail/address_config.html", True)
+
+    dmail_addressbook_create_contact =\
+        load("dmail/addressbook_create_contact.html", True)
+    dmail_addressbook_list_start =\
+        load("dmail/addressbook_list_start.html", True)
+    dmail_addressbook_list_row = load("dmail/addressbook_list_row.html", True)
+    dmail_addressbook_list_end = load("dmail/addressbook_list_end.html", True)
+    dmail_addressbook_rename_contact =\
+        load("dmail/addressbook_rename_contact.html",True)
+
+    dmail_post_msg_and_link = load("dmail/post_msg_and_link.html", True)
 
     load_resources(dmail_imgs, "images/dmail")
 

@@ -15,3 +15,5 @@ node_key-rsa*.mnk
 
 *.sqlite
 *.sqlite-journal
+
+.idea/
