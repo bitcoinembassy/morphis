@@ -465,9 +465,11 @@ def serve_get(dispatcher, rpath):
             else:
                 sender_addr_enc = ""
 
-            message_text = eparams.get("message")
-            if message_text:
-                message_text = message_text[0]
+            dmail_id = eparams.get("msg_id")
+            if dmail_id:
+                dmail_id = dmail_id[0]
+                dm = yield from _load_dmail(dispatcher, dmail_id, fetch_parts=True)
+                message_text = _format_dmail_content(dm.parts)
             else:
                 message_text = ""
         else:
