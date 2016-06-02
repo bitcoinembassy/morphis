@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+<base target="_top" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/style.css">
+</head>
+<body class="iframe">
+<span class="inbox-head nowrap">Create New Contact</span>
+<form class="message nowrap" style="height: calc(100% - 2em);" action="morphis://.dmail/addressbook/create_contact/make_it_so" method="post" accept-charset="UTF-8 ISO-8859-1">
+    <ul>
+    <input type="hidden" name="csrf_token" id="csrf_token" value="{csrf_token}"/>
+        <li>
+        <label class="to" for="name">Contact Name:</label> <!-- Please rename classes to match names. -->
+        <input type="text" name="name" id="name" value="" autofocus/>
+        </li>
+        <li>
+        <label class="to" for="addr">Dmail Address:</label> <!-- Please rename classes to match names. -->
+        <input type="text" name="addr" id= addr value="{to}" autofocus/>
+        </li>
+        <li>
+	<button class="submit" type="submit" formtarget="_self" name="submit" value="send">CREATE CONTACT</button>
+        </li>
+    </ul>
+</form>
+
+</div>
+</body></html>
