@@ -347,7 +347,10 @@ def serve_get(dispatcher, rpath):
         addr_enc = params[:p0]
         tag = params[p0+1:p1]
         msg_dbid = params[p1+1:]
-
+        if tag == "Outbox" or tag == "Sent" or tag == "Drafts":
+            reload_msg_button_class = "link-button"
+        else:
+            reload_msg_button_class= "display_none"
         def processor(sess, dm):
             dm.read = True
             return True
@@ -361,7 +364,7 @@ def serve_get(dispatcher, rpath):
             trash_msg = "MOVE TO TRASH"
 
         m32_reply_subject = generate_safe_reply_subject(dm, True)
-
+        subject= dm.subject
         if dm.sender_dmail_key:
             sender_addr = mbase32.encode(dm.sender_dmail_key)
             if dm.sender_valid:
@@ -395,7 +398,8 @@ def serve_get(dispatcher, rpath):
                     .format(\
                         selected=selected,\
                         tag_id=etag.id,\
-                        tag_name=etag.name)
+                        tag_name=etag.name,
+                        )
                 existing_tag_rows.append(row)
         else:
             remove_tag_class = "display_none"
@@ -415,7 +419,9 @@ def serve_get(dispatcher, rpath):
             available_tag_rows.append(row)
 
         template = templates.dmail_read[0]
-        template = template.format(\
+        template = template.format( \
+            subject= subject,\
+            reload_msg_button_class=reload_msg_button_class,\
             csrf_token=dispatcher.client_engine.csrf_token,\
             addr=addr_enc,\
             tag=tag,\
