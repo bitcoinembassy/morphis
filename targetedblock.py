@@ -88,6 +88,8 @@ class Synapse():
         self.key = None
         self.difficulty = 20
 
+        self.nonce_offset = None
+
     @property
     def target_key(self):
         return self.target_keys[0]
@@ -128,7 +130,7 @@ class Synapse():
         else:
             nbuf += sshtype.encodeBinary(self.key.asbytes())
 
-        nonce_offset = len(nbuf)
+        self.nonce_offset = nonce_offset = len(nbuf)
         nbuf += b' ' * NOONCE_SIZE
 
         nonce_bytes = yield from\

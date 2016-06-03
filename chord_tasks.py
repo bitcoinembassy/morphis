@@ -26,7 +26,7 @@ import node as mnnode
 import peer as mnpeer
 import rsakey
 import sshtype
-from targetedblock import TargetedBlock
+from targetedblock import TargetedBlock, Synapse
 
 log = logging.getLogger(__name__)
 log2 = logging.getLogger(__name__ + ".datastore")
@@ -446,12 +446,14 @@ class ChordTasks(object):
 
     @asyncio.coroutine
     def send_store_synapse(\
-            self, data, nonce_offset, store_key=True, key_callback=None,\
-            retry_factor=20):
+            self, synapse, store_key=True, key_callback=None, retry_factor=20):
         "Sends a StoreData request for a Synapse, returning the count of"\
         " nodes that claim to have stored it."
+        assert type(synapse) is Synapse
 
-        synapse_header = data[:nonce_offset]
+        data = synapse.encode()
+
+        synapse_header = data[:synapse.nonce_offset]
 
         # data_id is a double hash due to the anti-entrapment feature.
         data_key = enc.generate_ID(synapse_header)
@@ -463,9 +465,21 @@ class ChordTasks(object):
         sdmsg.data = data
         sdmsg.targeted = True
 
+        # Store for axon_id (natural id of synapse).
         storing_nodes =\
             yield from self.send_find_node(\
                 data_id, for_data=True, data_msg=sdmsg,\
+                retry_factor=retry_factor)
+        # Store for target_key.
+        for target_key in synapse.target_keys:
+            storing_nodes +=\
+                yield from self.send_find_node(\
+                    synapse.target_key for_data=True, data_msg=sdmsg,\
+                    retry_factor=retry_factor)
+        # Store for source_key.
+        storing_nodes +=\
+            yield from self.send_find_node(\
+                synapse.source_key for_data=True, data_msg=sdmsg,\
                 retry_factor=retry_factor)
 
         if store_key:
