@@ -279,6 +279,7 @@ def serve_get(dispatcher, rpath):
         
         p0 = params.index('/')
         addr_enc = params[:p0]
+        tag = params[p0 + 1:]
         user = yield from _get_users_name(dispatcher, addr_enc)
 
         if dispatcher.handle_cache(req):
@@ -993,13 +994,15 @@ def serve_post(dispatcher, rpath):
 
     if req == "/compose/make_it_so":
         dm, submit = yield from _read_dmail_post(dispatcher)
-
         if not dm:
             # Invalid csrf_token.
             return
 
         if submit:
-            if submit == "send":
+            if submit == "contact":
+                yield from _process_create_contact(dispatcher, mbase32.encode(dm.destination_dmail_key))
+                return
+            elif submit == "send":
                 tag = "Outbox"
             else:
                 assert submit == "draft"
@@ -1818,7 +1821,7 @@ def generate_safe_reply_subject(dm, m32=False):
 
 @asyncio.coroutine
 def _process_create_contact(dispatcher,ref):
-    if ref=="/create_contact":ref=""
+    if ref=="/create_contact": ref = " "
     template = templates.dmail_addressbook_create_contact[0]
     template =\
         template.format(csrf_token=dispatcher.client_engine.csrf_token, to=ref)
