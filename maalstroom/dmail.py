@@ -213,6 +213,37 @@ def serve_get(dispatcher, rpath):
         acharset = dispatcher.get_accept_charset()
 
         dispatcher.send_content(template)
+    elif req.startswith("/addressbook"):
+        req = req[12:]
+
+        if req == "/list":
+            user= (yield from _load_default_dmail_address(dispatcher)).site_key
+            ab = yield from _load_AddressBook_list(dispatcher, user)
+            yield from _process_AddressBook_list(dispatcher, ab)
+            return
+        elif req.startswith("/create_contact"):
+            req= req[req.find("/",2)+1:]
+            yield from _process_create_contact(dispatcher, req)
+
+            return
+        elif req == "/delete_all":
+            user = (yield from _load_default_dmail_address(dispatcher)).site_key
+            yield from _process_clear_AddressBook(dispatcher, user)
+            ab = yield from _load_AddressBook_list(dispatcher, user)
+            yield from _process_AddressBook_list(dispatcher, ab)
+
+            return
+        elif req.startswith("/delete_contact"):
+            todel = req[req.find("/", 2) + 1:]
+            user = (yield from _load_default_dmail_address(dispatcher)).site_key
+            yield from _process_delete_contact(dispatcher, todel)
+            ab = yield from _load_AddressBook_list(dispatcher, user)
+            yield from _process_AddressBook_list(dispatcher, ab)
+            return
+        elif req.startswith("/rename_contact"):
+            id_key = req[req.find("/", 2) + 1:]
+            yield from _process_rename_contact(dispatcher, id_key)
+            return
     elif req.startswith("/msg_list/list/"):
         params = req[15:]
         p0 = params.index('/')
@@ -245,7 +276,7 @@ def serve_get(dispatcher, rpath):
         dispatcher.end_partial_content()
     elif req.startswith("/msg_list/"):
         params = req[10:]
-
+        
         p0 = params.index('/')
         addr_enc = params[:p0]
         user = yield from _get_users_name(dispatcher, addr_enc)
@@ -878,8 +909,6 @@ def serve_get(dispatcher, rpath):
         dmail_key_enc = mbase32.encode(dmail_key)
         yield from _process_create_contact_create(\
             dispatcher, user, dmail_key, dmail_key)
-        #yield from _process_create_contact_create(\
-            dispatcher, dmail_key_enc , user, dmail_key_enc)
 
         dispatcher.send_partial_content(templates.dmail_frame_start, True)
         if storing_nodes:
