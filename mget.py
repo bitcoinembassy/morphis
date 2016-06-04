@@ -80,6 +80,9 @@ def __main():
         "-o",\
         help="Send output to specified file.",
         type=str)
+    parser.add_argument(\
+        "-O", action="store_true",\
+        help="Send output to specified file.")
 
     parser.add_argument(\
         "--stat",\
@@ -193,6 +196,10 @@ def __process(args, loop, mc):
     if args.o:
         # Write to a file instead of stdout.
         f = open(args.o, "wb")
+        f.write(data)
+    elif args.O:
+        # Write to a file instead of stdout.
+        f = open(mbase32.encode(key)[:32], "wb")
         f.write(data)
     else:
         # Write the response to stdout.
