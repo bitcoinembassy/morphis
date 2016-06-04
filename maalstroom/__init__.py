@@ -29,6 +29,7 @@ node = None
 server = None
 client_engine = None
 
+disable_csrf_check = False
 dmail_enabled = True
 dds_enabled = True
 upload_enabled = True

@@ -823,6 +823,9 @@ class MaalstroomDispatcher(object):
         self.finish_response()
 
     def check_csrf_token(self, req_token):
+        if maalstroom.disable_csrf_check:
+            return True
+
         if self.client_engine.csrf_token == req_token:
             return True
 

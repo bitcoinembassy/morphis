@@ -316,6 +316,8 @@ def __main():
         help="Disable Dmail auto-publish check/publish mechanism.")
     parser.add_argument("--disableautoscan", action="store_true",\
         help="Disable Dmail auto-scan scanning.")
+    parser.add_argument("--disable-csrf-check", action="store_true",\
+        help="Disable CSRF token check (ONLY FOR DEVELOPMENT).")
     parser.add_argument("--disableshell", action="store_true",\
         help="Disable MORPHiS from allowing ssh shell connections from"\
             " localhost.")
@@ -422,6 +424,8 @@ def __main():
             if maalstroom_enabled:
                 import maalstroom
 
+                if args.disable_csrf_check:
+                    maalstroom.disable_csrf_check = True
                 if args.dmdmail:
                     maalstroom.dmail_enabled = False
                 if args.dmupload:
