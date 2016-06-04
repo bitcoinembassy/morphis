@@ -38,9 +38,9 @@ DmailTag = None
 ##FIXME: NEW
 User = None
 Axon = None
-AxonKey = None
-Synapse = None
-Neuron = None
+#AxonKey = None
+#Synapse = None
+#Neuron = None
 ##.
 
 class UtcDateTime(TypeDecorator):
@@ -207,39 +207,39 @@ def _init_daos(Base, d):
 
     d.Axon = Axon
 
-    class AxonKey(Base):
-        __tablename__ = "axonkey"
-
-        id = Column(Integer, primary_key=True)
-        synapse_id = Column(Integer, ForeignKey("synapse.id"))
-        x = Column(LargeBinary, nullable=False)
-
-    d.AxonKey = AxonKey
-
-    class Synapse(Base):
-        __tablename__ = "synapse"
-
-        id = Column(Integer, primary_key=True)
-        neuron_id = Column(Integer, ForeignKey("neuron.id"))
-        axon_addr = Column(LargeBinary, nullable=False)
-        axon_keys = relationship(AxonKey)
-        disabled = Column(Boolean, nullable=False, default=False)
-
-    Index("synapse__axon_addr", Synapse.axon_addr)
-
-    d.Synapse = Synapse
-
-    class Neuron(Base):
-        __tablename__ = "neuron"
-
-        id = Column(Integer, primary_key=True)
-
-        user = relationship(User)
-        user_id = Column(Integer, ForeignKey("user.id"))
-        name = Column(String, nullable=True)
-        synapses = relationship(Synapse)
-
-    d.Neuron = Neuron
+#    class AxonKey(Base):
+#        __tablename__ = "axonkey"
+#
+#        id = Column(Integer, primary_key=True)
+#        synapse_id = Column(Integer, ForeignKey("synapse.id"))
+#        x = Column(LargeBinary, nullable=False)
+#
+#    d.AxonKey = AxonKey
+#
+#    class Synapse(Base):
+#        __tablename__ = "synapse"
+#
+#        id = Column(Integer, primary_key=True)
+#        neuron_id = Column(Integer, ForeignKey("neuron.id"))
+#        axon_addr = Column(LargeBinary, nullable=False)
+#        axon_keys = relationship(AxonKey)
+#        disabled = Column(Boolean, nullable=False, default=False)
+#
+#    Index("synapse__axon_addr", Synapse.axon_addr)
+#
+#    d.Synapse = Synapse
+#
+#    class Neuron(Base):
+#        __tablename__ = "neuron"
+#
+#        id = Column(Integer, primary_key=True)
+#
+#        user = relationship(User)
+#        user_id = Column(Integer, ForeignKey("user.id"))
+#        name = Column(String, nullable=True)
+#        synapses = relationship(Synapse)
+#
+#    d.Neuron = Neuron
 
     return d
 
@@ -446,9 +446,9 @@ if Peer is None:
 
     User = d.User
     Axon = d.Axon
-    AxonKey = d.AxonKey
-    Synapse = d.Synapse
-    Neuron = d.Neuron
+#    AxonKey = d.AxonKey
+#    Synapse = d.Synapse
+#    Neuron = d.Neuron
 
 def _update_node_state(sess, version):
     "Caller must call commit."
@@ -555,24 +555,20 @@ def _upgrade_4_to_5(db):
 
     with db.open_session() as sess:
         default = "0" if db.is_sqlite else "false"
-        st = "ALTER TABLE synapse ADD COLUMN disabled BOOLEAN not null"\
-            " default " + default
 
+        st = "select * from synapse where neuron_id is null"
         try:
             sess.execute(st)
+            st = "drop table synapse"
+            sess.execute(st)
+            st = "drop table neuron"
+            sess.execute(st)
+            st = "drop table axonkey"
+            sess.execute(st)
         except:
-            pass
+            sess.rollback()
 
         _update_node_state(sess, 5)
-
-        f = sess.query(DmailKey).first()
-
-        if f:
-            k = AxonKey()
-            k.synapse_id = 1
-            k.x = f.x
-
-            sess.add(k)
 
         sess.commit()
 

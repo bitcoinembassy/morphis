@@ -474,12 +474,12 @@ class ChordTasks(object):
         for target_key in synapse.target_keys:
             storing_nodes +=\
                 yield from self.send_find_node(\
-                    synapse.target_key for_data=True, data_msg=sdmsg,\
+                    synapse.target_key, for_data=True, data_msg=sdmsg,\
                     retry_factor=retry_factor)
         # Store for source_key.
         storing_nodes +=\
             yield from self.send_find_node(\
-                synapse.source_key for_data=True, data_msg=sdmsg,\
+                synapse.source_key, for_data=True, data_msg=sdmsg,\
                 retry_factor=retry_factor)
 
         if store_key:

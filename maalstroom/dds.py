@@ -7,7 +7,7 @@ import asyncio
 from datetime import datetime
 import logging
 
-from db import User, Neuron, Synapse, Axon, AxonKey
+from db import User, Axon
 from dmail import DmailEngine
 import dpush
 import enc
@@ -190,36 +190,36 @@ def _process_create_axon_post(dispatcher):
 
     dispatcher.send_content(resp)
 
-@asyncio.coroutine
-def _process_neuron(dispatcher):
-    def dbcall():
-        with dispatcher.node.db.open_session() as sess:
-            q = sess.query(Synapse).filter(Synapse.disabled == False)
-
-            return q.all()
-
-    synapses = yield from dispatcher.loop.run_in_executor(None, dbcall)
-
-    dp = dpush.DpushEngine(dispatcher.node)
-
-    dispatcher.send_partial_content("<p>Signals</p>", True)
-
-    for synapse in synapses:
-        dispatcher.send_partial_content(\
-            "Address:&nbsp;[{}]<br/><br/>"\
-                .format(mbase32.encode(synapse.axon_addr)))
-
-        @asyncio.coroutine
-        def cb(key):
-            msg = "<iframe src='morphis://.dds/axon/read/{key}/{target_key}' style='height: 10em; width: 100%; border: 0;' seamless='seamless'></iframe>"\
-                .format(key=mbase32.encode(key),\
-                    target_key=mbase32.encode(synapse.axon_addr))
-
-            dispatcher.send_partial_content(msg)
-
-        yield from dp.scan_targeted_blocks(synapse.axon_addr, 20, cb)
-
-    dispatcher.end_partial_content()
+#@asyncio.coroutine
+#def _process_neuron(dispatcher):
+#    def dbcall():
+#        with dispatcher.node.db.open_session() as sess:
+#            q = sess.query(Synapse).filter(Synapse.disabled == False)
+#
+#            return q.all()
+#
+#    synapses = yield from dispatcher.loop.run_in_executor(None, dbcall)
+#
+#    dp = dpush.DpushEngine(dispatcher.node)
+#
+#    dispatcher.send_partial_content("<p>Signals</p>", True)
+#
+#    for synapse in synapses:
+#        dispatcher.send_partial_content(\
+#            "Address:&nbsp;[{}]<br/><br/>"\
+#                .format(mbase32.encode(synapse.axon_addr)))
+#
+#        @asyncio.coroutine
+#        def cb(key):
+#            msg = "<iframe src='morphis://.dds/axon/read/{key}/{target_key}' style='height: 10em; width: 100%; border: 0;' seamless='seamless'></iframe>"\
+#                .format(key=mbase32.encode(key),\
+#                    target_key=mbase32.encode(synapse.axon_addr))
+#
+#            dispatcher.send_partial_content(msg)
+#
+#        yield from dp.scan_targeted_blocks(synapse.axon_addr, 20, cb)
+#
+#    dispatcher.end_partial_content()
 
 @asyncio.coroutine
 def _process_axon(dispatcher, req):
@@ -459,40 +459,40 @@ def __format_post(data):
             .format(\
                 data[:end].decode(), make_safe_for_html_content(data[start:]))
 
-@asyncio.coroutine
-def __load_axon_key(dispatcher, axon_addr):
-    def dbcall():
-        with dispatcher.node.db.open_session() as sess:
-            q = sess.query(Neuron)\
-                .filter(Neuron.synapses.any(Synapse.axon_addr == axon_addr))
-
-            sess.expunge_all()
-
-            neuron = q.first()
-
-            if not neuron:
-                return None
-
-            found = False
-            for synapse in neuron.synapses:
-                if synapse.axon_addr == axon_addr:
-                    found = True
-                    break
-
-            assert found
-
-            axon_key = synapse.axon_keys[0]
-
-            if log.isEnabledFor(logging.INFO):
-                log.info(\
-                    "Found AxonKey (x=[{}])!"\
-                        .format(mbase32.encode(axon_key.x)))
-
-            sess.expunge_all()
-
-            return axon_key
-
-    return (yield from dispatcher.loop.run_in_executor(None, dbcall))
+#@asyncio.coroutine
+#def __load_axon_key(dispatcher, axon_addr):
+#    def dbcall():
+#        with dispatcher.node.db.open_session() as sess:
+#            q = sess.query(Neuron)\
+#                .filter(Neuron.synapses.any(Synapse.axon_addr == axon_addr))
+#
+#            sess.expunge_all()
+#
+#            neuron = q.first()
+#
+#            if not neuron:
+#                return None
+#
+#            found = False
+#            for synapse in neuron.synapses:
+#                if synapse.axon_addr == axon_addr:
+#                    found = True
+#                    break
+#
+#            assert found
+#
+#            axon_key = synapse.axon_keys[0]
+#
+#            if log.isEnabledFor(logging.INFO):
+#                log.info(\
+#                    "Found AxonKey (x=[{}])!"\
+#                        .format(mbase32.encode(axon_key.x)))
+#
+#            sess.expunge_all()
+#
+#            return axon_key
+#
+#    return (yield from dispatcher.loop.run_in_executor(None, dbcall))
 
 @asyncio.coroutine
 def _process_create_synapse(dispatcher, target_addr):
