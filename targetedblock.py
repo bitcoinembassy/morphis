@@ -69,7 +69,7 @@ class TargetedBlock(MorphisBlock):
         i += consts.NODE_ID_BYTES
 
 class Synapse():
-    NOONCE_SIZE = 8 #FIXME: This was suppose to be 64 bits, not bytes.
+    NONCE_SIZE = 8
 
     def __init__(self, buf=None):
         self.buf = buf
@@ -131,7 +131,7 @@ class Synapse():
             nbuf += sshtype.encodeBinary(self.key.asbytes())
 
         self.nonce_offset = nonce_offset = len(nbuf)
-        nbuf += b' ' * NOONCE_SIZE
+        nbuf += b' ' * NONCE_SIZE
 
         nonce_bytes = yield from\
             self._calculate_nonce(nbuf, nonce_offset, self.difficulty)
@@ -165,7 +165,7 @@ class Synapse():
         i, self.signature = sshtype.parse_binary_from(self.buf, i)
         i, self.key_bytes = sshtype.parse_binary_from(self.buf, i)
 
-        end = i + NOONCE_SIZE
+        end = i + NONCE_SIZE
         self.nonce = self.buf[i:end]
         i = end
 
@@ -175,7 +175,7 @@ class Synapse():
     def set_nonce(data, nonce_bytes, offset):
         assert type(nonce_bytes) in (bytes, bytearray)
         lenn = len(nonce_bytes)
-        end = offset + NOONCE_SIZE
+        end = offset + NONCE_SIZE
         start = end - lenn
         data[start:end] = nonce_bytes
 
@@ -189,7 +189,7 @@ class Synapse():
 
         def threadcall():
             return brute.generate_targeted_block(\
-                self.target_key, difficulty, buf, offset, NOONCE_SIZE)
+                self.target_key, difficulty, buf, offset, NONCE_SIZE)
 
         nonce_bytes = yield from self.loop.run_in_executor(None, threadcall)
 

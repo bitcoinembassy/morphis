@@ -465,7 +465,7 @@ class ChordTasks(object):
         sdmsg.data = data
         sdmsg.targeted = True
 
-        # Store for axon_id (natural id of synapse).
+        # Store for synapse_id (natural id of synapse).
         storing_nodes =\
             yield from self.send_find_node(\
                 data_id, for_data=True, data_msg=sdmsg,\
@@ -546,6 +546,8 @@ class ChordTasks(object):
         " is None than it is get_data and the data is returned. Store data"\
         " currently returns the count of nodes that claim to have stored the"\
         " data."
+
+        #NOTE: I think targeted parameter is only for fetches.
 
         assert len(node_id) == chord.NODE_ID_BYTES
         # data_key needs to be bytes for PyCrypto usage later on.
