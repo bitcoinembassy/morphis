@@ -77,6 +77,8 @@ class Synapse():
             self.parse()
             return
 
+        self.synapse_key = None
+
         #ntargets = len(self.target_keys).
         self.target_keys = []
         self.source_key = None
@@ -89,6 +91,19 @@ class Synapse():
         self.difficulty = 20
 
         self.nonce_offset = None
+
+    @property
+    def synapse_key(self):
+        if self.synapse_key:
+            return self.synapse_key
+
+        if not self.buf:
+            self.encode()
+
+        self.synapse_key =\
+            enc.generate_ID(self.buf[:self.nonce_offset + NONCE_SIZE])
+
+        return self.synapse_key
 
     @property
     def target_key(self):
