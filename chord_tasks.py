@@ -622,6 +622,7 @@ class ChordTasks(object):
                 data_rw.targeted = True
                 data_rw.target_key = target_key
 
+        #######################################################################
         # Open the tunnels with upto max_initial_queries immediate PeerS.
         for peer in input_trie:
             key = bittrie.XorKey(node_id, peer.node_id)
@@ -684,6 +685,7 @@ class ChordTasks(object):
             self._close_channels(used_tunnels)
             return self._generate_fail_response(data_mode, data_key)
 
+        #######################################################################
         # Instruct our tunnels to relay the FindNode message out further, also
         # processing the responses and using that data to build further tunnels
         # and send out the FindNode even deeper. After this loop, we have
@@ -823,6 +825,7 @@ class ChordTasks(object):
                 log.info("All tasks (tunnels) exited.")
                 break
 
+        #######################################################################
         # Proceed to the second stage of the request.
         # FIXME: Write this whole stuff to merge these two so it can be async.
         if data_mode.value and not scan_only:
@@ -1129,6 +1132,7 @@ class ChordTasks(object):
             except asyncio.TimeoutError:
                 pass
 
+        #######################################################################
         # Close everything now that we are done.
         for task in tasks:
             task.cancel()
@@ -1767,6 +1771,9 @@ class ChordTasks(object):
             done_one.set()
             if not query_cntr.value:
                 done_all.set()
+
+    ###########################################################################
+    # Start of incoming request processing.
 
     @asyncio.coroutine
     def process_find_node_request(self, fnmsg, fndata, peer, queue, local_cid):
