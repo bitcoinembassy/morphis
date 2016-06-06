@@ -2873,6 +2873,30 @@ class ChordTasks(object):
 
             return False
 
+    def _check_synapse(self, data):
+        "Checks if the passed Synapse data is valid; returning the Synapse or"\
+        " None if the data was invalid."
+        try:
+            synapse = Synapse(data)
+        except:
+            return None
+
+        if synapse.signature is None:
+            # Then it is required to be a POW Synapse.
+            dist =\
+                mutil.calc_log_distance(\
+                    synapse.synapse_key, synapse.target_key)
+
+            if dist > consts.NODE_ID_BITS - 20:
+                return None
+
+            return True
+        else:
+            # Signed Synapse.
+            pass #TODO:YOU_ARE_HERE
+
+        return synapse
+
     def _check_targeted_block(self, data, data_key=None, data_id=None):
         # Check that the hash(header) matches the data_key we expect.
         header_hash =\
