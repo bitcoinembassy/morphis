@@ -1,16 +1,39 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <base target="_top"/><link rel="stylesheet" type="text/css" href="morphis://.dmail/style.css">
-    <span class="inbox-head nowrap">Address Book</span>
-
-            <a class="" id="new-address" href="morphis://.dmail/addressbook/create_contact">NEW CONTACT</a>
-
-</head>
 <body>
-<table class="msg_list" style="width:100%">
+	<base target="_top"/><link rel="stylesheet" type="text/css" href="morphis://.dmail/style.css"></head>
+	<span class="inbox-head nowrap">Address Book</span>
+	<a class="" id="new-address" href="morphis://.dmail/addressbook/create_contact">NEW CONTACT</a>
+<br/><br/>
+
+<div class="edit-contact">
+
+<form style="height: calc(100% - 2em);" action="morphis://.dmail/addressbook/create_contact/make_it_so" method="post" accept-charset="UTF-8 ISO-8859-1">
+	<h1 class="contacts-title">Edit Contact</h1>
+	<fieldset id="contacthead">
+		<div class="contact-input contact-field">
+		    <input type="hidden" name="csrf_token" id="csrf_token" value="{csrf_token}"/>
+			<label for="name">Contact Name</label>
+			<input type="text" name="name" id="name" value="" autofocus placeholder="Contact Name" title="Name" size="32" maxlength="50" />
+		</div>
+		<div class="contact-input contact-field">
+		<label class="to" for="addr">Dmail Address:</label> <!-- Please rename classes to match names. -->
+        <input type="text" name="addr" id= addr value="" autofocus placeholder="Dmail Address" title="Dmail" size="40" maxlength="254" /></div>
+		<button class="submit" type="submit" formtarget="_self" name="submit" value="send">CREATE CONTACT</button>
+		<button class="submit" type="submit" formtarget="_self" name="submit" value="send">CANCEL</button>
+	</fieldset>
+</form>
+
+<!--<iframe src="morphis://.dmail/addressbook_edit_contacts.html" height="100%" width="100%" frameBorder="0"></iframe>-->
+</div>
+
+<div class="contacts">
+<!--<iframe src="morphis://.dmail/addressbook_contacts.html" height="100%" width="100%" frameBorder="0"></iframe>-->
+<h1 class="contacts-title">Contacts</h1>
+<table class="listing">
  <tr class="table-head">
-    <td style="width: 25%; min-width: 10em"><div class="inbox-pad">First</div></td>
+<!--    <td style="width: 25%; min-width: 10em"><div class="inbox-pad">First</div></td>
     <td style="width: 25%; min-width: 8em"><div class="inbox-pad">Last</div></td>
-    <td style="min-width: 14em; width: 50%"><div class="inbox-pad">Identity Key</div></td>
+    <td style="min-width: 14em; width: 50%"><div class="inbox-pad">Dmail Address</div></td>-->
   </tr>

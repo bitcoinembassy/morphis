@@ -185,6 +185,7 @@ div.panel span {
 .tag {
     background-color: #EEEEFF;
 }
+
 """, None]
 
 dmail_page_wrapper =\

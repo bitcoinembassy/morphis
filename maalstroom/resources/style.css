@@ -980,6 +980,103 @@ button.tag-footer-btn:active {
 .aside-wrapper {
     height: calc(100% - 1em);
 }
+/*Addressbook*/
+.contacts {
+	float: left;
+	background-color: #f1f1f1;
+	width: 30%;
+	border: 1px solid #a3a3a3;
+	border-radius: 4px;
+	overflow: hidden;
+	box-shadow: 0 0 2px #999;
+	-o-box-shadow: 0 0 2px #999;
+	-webkit-box-shadow: 0 0 2px #999;
+	-moz-box-shadow: 0 0 2px #999;
+}
+
+.edit-contact {
+	float: right;
+	width: 69%;
+	border: 1px solid #a3a3a3;
+	border-radius: 4px;
+	overflow: hidden;
+	box-shadow: 0 0 2px #999;
+	-o-box-shadow: 0 0 2px #999;
+	-webkit-box-shadow: 0 0 2px #999;
+	-moz-box-shadow: 0 0 2px #999;
+	background: #fff;
+}
+
+.contacts-title {
+	color: #777;
+	background: #eee;
+	background: -moz-linear-gradient(top, #eee 0%, #dfdfdf 100%);
+	background: -webkit-gradient(linear, left top, left bottom, color-stop(0%,#eee), color-stop(100%,#dfdfdf));
+	background: -o-linear-gradient(top, #eee 0%, #dfdfdf 100%);
+	background: -ms-linear-gradient(top, #eee 0%, #dfdfdf 100%);
+	background: linear-gradient(top, #eee 0%, #dfdfdf 100%);
+	border-bottom: 1px solid #ccc;
+	font-size: 12px;
+	font-weight: bold;
+	padding: 10px 8px 3px 8px;
+	height: 30px;
+	margin: 0;
+	text-shadow: 0px 1px 1px #fff;
+	border-bottom: 1px solid #bbd3da;
+	white-space: nowrap;
+}
+.contact-field label {
+	float: left;
+	text-align: left;
+	padding-top: .3em;
+	font-size: .9em;
+	letter-spacing: 0;
+	width: 8em;
+}
+	
+#contacthead {
+border: 0;
+padding: 15px 0 15px 10px;
+}
+#contactfooter {
+border: 0;
+padding: 15px 0 15px 10px;
+bottom: 0;
+
+}
+.contact-input {
+	padding: 8px;
+}
+.contact-field input {
+	height: 2em;
+	width: 70%;
+	min-width: 20em;
+	border: 1px solid #b2b2b2;
+	box-shadow: 0px 0px 2px 1px rgba(0, 0, 0, 0.1) inset;
+	border-radius: 4px;
+	font-size: .85em;
+}
+.listing tbody td {
+	display: table-cell;
+	padding-bottom: 5px;
+	padding-top: 5px;
+	height: auto;
+}
+
+table.listing {
+	border: 0;
+	width: 100%;
+	border-spacing: 0;
+	background: #f1f1f1;
+	table-layout: fixed;
+}
+table.listing tr:hover, table.listing tr:hover a {
+	background-color: #38a3af;
+	color: #ffffff;
+}
+td.name {
+	padding-left: 10px;
+}
 iframe.subject-txt {
     display: inline;
     height: 1.9em;
@@ -1008,3 +1105,5 @@ input.subject-field:focus {
     outline: 0;
     box-shadow: none;
 }
+
+
