@@ -519,8 +519,12 @@ def serve_get(dispatcher, rpath):
         from_addr_options = ''.join(from_addr_options)
 
         template = templates.dmail_compose[0]
-
+        if subject.startswith("Re:"):
+            quote_button_class="{button}"
+        else:
+            quote_button_class="{display_none}"
         template = template.format(\
+            quote_button_class=quote_button_class,\
             csrf_token=dispatcher.client_engine.csrf_token,\
             delete_class="display_none",\
             owner_if_anon=owner_if_anon_id,\
