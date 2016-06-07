@@ -189,7 +189,7 @@ class ChordFindNode(ChordMessage):
         self.data_mode = DataMode.none
         self.version = None
         self.significant_bits = None
-        self.target_key = None
+        self.target_key = None # I believe this is only for get (not put).
 
         super().__init__(CHORD_MSG_FIND_NODE, buf)
 

@@ -2646,10 +2646,16 @@ class ChordTasks(object):
                 raise ChordException(errmsg)
         else:
             if targeted:
-                tb = self._check_targeted_block(data, data_id=data_id)
-                if tb:
-                    valid = True
-                    data_key = bytes(tb.target_key)
+                if data[:16] == MorphisBlock.UUID:
+                    tb = self._check_targeted_block(data, data_id=data_id)
+                    if tb:
+                        valid = True
+                        data_key = bytes(tb.target_key)
+                else:
+                    synapse = self._check_synapse(data)
+                    if synapse:
+                        valid = True
+                        data_key = bytes(synapse.synapse_key)
             else:
                 data_key = enc.generate_ID(data)
                 valid = data_id == enc.generate_ID(data_key)
