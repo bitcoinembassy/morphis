@@ -2903,10 +2903,11 @@ class ChordTasks(object):
             if dist > consts.NODE_ID_BITS - 20:
                 return None
 
-            return True
+            return synapse
         else:
             # Signed Synapse.
-            pass #TODO:YOU_ARE_HERE
+            raise Exception()
+            #TODO:YOU_ARE_HERE
 
         return synapse
 
