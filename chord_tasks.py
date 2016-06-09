@@ -453,38 +453,39 @@ class ChordTasks(object):
 
         data = synapse.encode()
 
-        synapse_header = data[:synapse.nonce_offset]
-
-        # data_id is a double hash due to the anti-entrapment feature.
-        data_key = enc.generate_ID(synapse_header)
         if key_callback:
-            key_callback(data_key)
-        data_id = enc.generate_ID(data_key)
+            key_callback(synapse.synapse_key)
 
         sdmsg = cp.ChordStoreData()
         sdmsg.data = data
         sdmsg.targeted = True
 
-        # Store for synapse_id (natural id of synapse).
+        #NOTE: We use the hashes of the keys as the IDs (DHT Key) due to the
+        # DHT anti-entrapment feature.
+
+        # Store for synapse_key (natural key of synapse).
         storing_nodes =\
             yield from self.send_find_node(\
-                data_id, for_data=True, data_msg=sdmsg,\
+                enc.generate_ID(synapse_key), for_data=True, data_msg=sdmsg,\
                 retry_factor=retry_factor)
+
         # Store for target_key.
         for target_key in synapse.target_keys:
             storing_nodes +=\
                 yield from self.send_find_node(\
-                    synapse.target_key, for_data=True, data_msg=sdmsg,\
-                    retry_factor=retry_factor)
+                    enc.generate_ID(target_key), for_data=True,
+                    data_msg=sdmsg, retry_factor=retry_factor)
+
         # Store for source_key.
         storing_nodes +=\
             yield from self.send_find_node(\
-                synapse.source_key, for_data=True, data_msg=sdmsg,\
-                retry_factor=retry_factor)
+                generate_ID(synapse.source_key), for_data=True,
+                data_msg=sdmsg, retry_factor=retry_factor)
 
+        # Store the synapse_key itself (for find_key operations).
         if store_key:
             yield from self.send_store_key(\
-                data, data_key, targeted=True, retry_factor=retry_factor)
+                data, synapse_key, targeted=True, retry_factor=retry_factor)
 
         return storing_nodes
 
@@ -2738,7 +2739,7 @@ class ChordTasks(object):
                     data_block.epubkey = a + b
                     data_block.pubkeylen = len(dmsg.pubkey)
 
-                if targeted:
+                if tb: # Could check targeted still but saving indent :(
                     if log.isEnabledFor(logging.DEBUG):
                         log.debug("Storing TargetedBlock (target_key=[{}])."\
                             .format(mbase32.encode(tb.target_key)))
@@ -2747,6 +2748,12 @@ class ChordTasks(object):
                     # targeted blocks as we may want to have code purge them
                     # with more pressure than normal blocks.
                     data_block.target_key = tb.target_key
+                elif synapse:
+                    if log.isEnabledFor(logging.DEBUG):
+                        log.debug("Storing Synapse (target_key=[{}],"\
+                            " target_key=[{}])."\
+                            .format(mbase32.encode(synapse.target_key)))
+                    data_block.target_key = synapse.target_key
 
                 data_block.original_size = original_size
                 data_block.insert_timestamp = mutil.utc_datetime()
@@ -2892,6 +2899,10 @@ class ChordTasks(object):
         try:
             synapse = Synapse(data)
         except:
+            return None
+
+        if synapse.timestamp > mutil.utc_timestamp():
+            # Refuse to store stuff from the future. :)
             return None
 
         if synapse.signature is None:

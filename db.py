@@ -101,6 +101,7 @@ def _init_daos(Base, d):
 
     Index("data_id", DataBlock.data_id)
     Index("datablock__distance", DataBlock.distance.desc())
+    Index("datablock__target_key", DataBlock.target_key)
 
     d.DataBlock = DataBlock
 
