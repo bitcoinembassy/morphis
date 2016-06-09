@@ -364,7 +364,7 @@ def serve_get(dispatcher, rpath):
             trash_msg = "MOVE TO TRASH"
 
         m32_reply_subject = generate_safe_reply_subject(dm, True)
-        subject= dm.subject
+       
         if dm.sender_dmail_key:
             sender_addr = mbase32.encode(dm.sender_dmail_key)
             if dm.sender_valid:
@@ -398,8 +398,7 @@ def serve_get(dispatcher, rpath):
                     .format(\
                         selected=selected,\
                         tag_id=etag.id,\
-                        tag_name=etag.name,
-                        )
+                        tag_name=etag.name)
                 existing_tag_rows.append(row)
         else:
             remove_tag_class = "display_none"
@@ -419,8 +418,7 @@ def serve_get(dispatcher, rpath):
             available_tag_rows.append(row)
 
         template = templates.dmail_read[0]
-        template = template.format( \
-            subject= subject,\
+        template = template.format(\
             reload_msg_button_class=reload_msg_button_class,\
             csrf_token=dispatcher.client_engine.csrf_token,\
             addr=addr_enc,\
@@ -527,12 +525,7 @@ def serve_get(dispatcher, rpath):
         from_addr_options = ''.join(from_addr_options)
 
         template = templates.dmail_compose[0]
-        if subject.startswith("Re:"):
-            quote_button_class="{button}"
-        else:
-            quote_button_class="{display_none}"
         template = template.format(\
-            quote_button_class=quote_button_class,\
             csrf_token=dispatcher.client_engine.csrf_token,\
             delete_class="display_none",\
             owner_if_anon=owner_if_anon_id,\
