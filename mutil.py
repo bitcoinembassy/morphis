@@ -183,6 +183,10 @@ UTC_TZINFO = UtcTzInfo()
 def utc_datetime():
     return datetime.now(UTC_TZINFO)
 
+def utc_timestamp():
+    #FIXME: Maybe there is a more efficient way to get this (guaranteed still)?
+    return datetime.now(UTC_TZINFO).timestamp()
+
 ISO_FMT_UTC = "%Y-%m-%dT%H:%M:%S.%fZ"
 ISO_FMT = "%Y-%m-%dT%H:%M:%S.%f"
 

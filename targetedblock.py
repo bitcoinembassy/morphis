@@ -9,6 +9,7 @@ import logging
 import consts
 import enc
 from morphisblock import MorphisBlock
+import mutil
 
 log = logging.getLogger(__name__)
 
@@ -78,14 +79,17 @@ class Synapse():
             return
 
         self.synapse_key = None
+        self.synapse_pow = None
 
+        ## Encoded fields.
         #ntargets = len(self.target_keys).
         self.target_keys = []
         self.source_key = None
         self.timestamp = None
         self.signature = None
         self.nonce = None
-        self.stamps = None
+        self.stamps = []
+        ##.
 
         self.key = None
         self.difficulty = 20
@@ -101,9 +105,22 @@ class Synapse():
             self.encode()
 
         self.synapse_key =\
-            enc.generate_ID(self.buf[:self.nonce_offset + NONCE_SIZE])
+            enc.generate_ID(self.buf[:self.nonce_offset])
 
         return self.synapse_key
+
+    @property
+    def synapse_pow(self):
+        if self.synapse_pow:
+            return self.synapse_pow
+
+        if not self.buf:
+            self.encode()
+
+        self.synapse_pow =\
+            enc.generate_ID(self.buf[:self.nonce_offset + NONCE_SIZE])
+
+        return self.synapse_pow
 
     @property
     def target_key(self):
@@ -132,7 +149,7 @@ class Synapse():
         nbuf += self.source_key
 
         if not self.timestamp:
-            self.timestamp = int(time.time() * 1000)
+            self.timestamp = int(mutil.utc_timestamp() * 1000)
         nbuf += sshtype.encodeMpint(self.timestamp)
 
         if self.signature:
