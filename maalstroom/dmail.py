@@ -466,10 +466,22 @@ def serve_get(dispatcher, rpath):
 
             msg_id = fia(eparams.get("msg_id"))
             if msg_id:
-                dm = yield from _load_dmail(\
-                    dispatcher, msg_id, fetch_parts=True)
+                if msg_id.startswith("reply"):
+                    msg_id = msg_id.strip("reply")
 
-                message_text = _format_dmail_content(dm.parts)
+                    dm = yield from _load_dmail(\
+                        dispatcher, msg_id, fetch_parts=True)
+
+                    message_text =\
+                        "--------Quoted Text Below--------\n "\
+                        + _format_dmail_content(dm.parts)
+                else:
+                    dm = yield from _load_dmail(\
+                        dispatcher, msg_id, fetch_parts=True)
+
+                    message_text = _format_dmail_content(dm.parts)
+
+                    subject = subject.replace("Re:", "")
             else:
                 message_text = fia(eparams.get("message"))
                 if not message_text:

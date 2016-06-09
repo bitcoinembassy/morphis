@@ -7,8 +7,8 @@
 <span class="inbox-head nowrap">View Message</span>
 <div class="right-icons-inner">
     <ul>
-        <a class="{reload_msg_button_class}" target="_top" href="morphis://.dmail/wrapper/{addr}/{tag}?msg_list=morphis%3A%2F%2F.dmail%2Fcompose%2F{dest_addr}%3fsender={addr}%26esubject={m32_reply_subject}&msg_id={msg_id}"><div style="display:inline"><li class="nav-reply-icon">Edit Message</li></div></a>
-        <a target="_top" href="morphis://.dmail/wrapper/{addr}/{tag}?msg_list=morphis%3A%2F%2F.dmail%2Fcompose%2F{sender}%3fsender={addr}%26esubject={m32_reply_subject}"><div style="display:inline"><li class="nav-reply-icon">REPLY</li></div></a>
+        <a class="{reload_msg_button_class}" target="_top" href="morphis://.dmail/wrapper/{addr}/{tag}?msg_list=morphis%3A%2F%2F.dmail%2Fcompose%2F{dest_addr}%3fsender={addr}%26esubject={m32_reply_subject}%26msg_id={msg_id}"><div style="display:inline"><li class="nav-reply-icon">Edit Message</li></div></a>
+        <a target="_top" href="morphis://.dmail/wrapper/{addr}/{tag}?msg_list=morphis%3A%2F%2F.dmail%2Fcompose%2F{sender}%3fsender={addr}%26esubject={m32_reply_subject}%26msg_id=reply{msg_id}"><div style="display:inline"><li class="nav-reply-icon">REPLY</li></div></a>
         <a target="_self" href="morphis://.dmail/toggle_trashed/{csrf_token}/{msg_id}?redirect=morphis%3A%2F%2F.dmail%2Fmsg_list%2F{addr}%2F{tag}"><div style="display:inline"><li class="nav-delete-icon">{trash_msg}</li></div></a>
     </ul>
 </div><br/><br/>
