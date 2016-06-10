@@ -1,4 +1,5 @@
-# Copyright (c) 2014-2015  Sam Maloney.
+#!/usr/bin/python3
+# Copyright (c) 2014-2016  Sam Maloney.
 # License: GPL v2.
 
 import llog
