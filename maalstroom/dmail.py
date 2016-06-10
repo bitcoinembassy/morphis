@@ -364,7 +364,7 @@ def serve_get(dispatcher, rpath):
             trash_msg = "MOVE TO TRASH"
 
         m32_reply_subject = generate_safe_reply_subject(dm, True)
-       
+
         if dm.sender_dmail_key:
             sender_addr = mbase32.encode(dm.sender_dmail_key)
             if dm.sender_valid:
