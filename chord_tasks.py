@@ -2243,10 +2243,33 @@ class ChordTasks(object):
         return (yield from self.loop.run_in_executor(None, dbcall))
 
     @asyncio.coroutine
-    def _check_do_want_data(self, data_id, version):
+    def _check_do_want_data(self, data_ids, version):
         "Checks if we have space to store, and if not if we have enough data"\
         " that is further in distance thus having enough space to free."\
         "returns: will_store, need_pruning"
+
+        # If there are multiple IDs passed in, then for now we will just check
+        # the closest ID to our node_id.
+        if type(data_ids) is list:
+            if len(data_ids) == 2:
+                back = data_ids[0]
+                foward = data_ids[1]
+            else:
+                keys = bittrie.BitTrie()
+                for key in data_ids:
+                    input_trie[key] = True
+                back = input_trie.find(self.engine.node_id, forward=False)
+                forward = input_trie.find(self.engine.node_id, forward=True)
+
+            fdist = mutil.calc_raw_distance(self.engine.node_id, forward)
+            bdisk = mutil.calc_raw_distance(self.engine.node_id, back)
+
+            if fdist <= bdist:
+                data_id = forward
+            else:
+                data_id = back
+        else:
+            data_id = data_ids
 
         if self.engine.node.datastore_size\
                 < self.engine.node.datastore_max_size:
