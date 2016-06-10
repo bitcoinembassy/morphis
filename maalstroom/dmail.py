@@ -1907,6 +1907,8 @@ def _load_AddressBook_list(dispatcher, user):
 
 @asyncio.coroutine
 def _process_AddressBook_list(dispatcher, ls, req):
+    if req == "/list": req = ""
+
     template=templates.dmail_addressbook_list_start[0].format(csrf_token=dispatcher.client_engine.csrf_token, to=req)
     dispatcher.send_partial_content(\
         template, True)
