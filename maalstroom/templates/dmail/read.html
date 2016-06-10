@@ -17,7 +17,8 @@
         <table class="field" style="margin-left: -0.5px; margin-bottom: -0.25em;" width="100%"><tr><td class="nopadding nomargin">Subject:</td><td width="100%"><iframe class="subject-txt" src="morphis://.dmail/read/subject/{msg_id}"></iframe></td></tr></table>
         <div class="dynamicWidth">
             <div class="address-trunc nowrap"><span class="reader_field">From:&nbsp;</span><span class="{sender_class}">{addr}</span></div>
-            <div class="staticWidth"><!--<a class="addressbook-icon" href="morphis://.dmail/addressbook/create_contact/{dest_addr}"><button class="addressbook-icon"></button></a>-->
+
+            <div class="staticWidth"><a class="addressbook-icon" href="href=morphis://.dmail/wrapper/{addr}/{tag}?msg_list=morphis%3A%2F%2F.dmail%2Faddressbook/list/{contact}"><button class="addressbook-icon"></button></a>
             <a  class="addressbook-icon" href="#openModal" target="_self"><button class="addressbook-icon"></button></a>
 <div id="openModal" class="modalDialog">
     <div>
@@ -26,6 +27,7 @@
     </div>
 </div>
 </div>
+
         </div>
         <div class="dynamicWidth{dest_class}">
             <div class="address-trunc nowrap"><span class="reader_field">To:&nbsp;</span><span class="valid_sender">{dest_addr}</span></div>
