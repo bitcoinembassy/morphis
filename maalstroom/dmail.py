@@ -435,6 +435,11 @@ def serve_get(dispatcher, rpath):
                 existing_tag_rows.append(row)
         else:
             remove_tag_class = "display_none"
+        
+        if tag == "Inbox":
+            contact_addr=addr_enc
+        else:
+            contact_addr=dest_addr_enc
 
         current_tag_names = [x.name for x in dm.tags]
         current_tag_names.extend(top_tags)
@@ -459,6 +464,7 @@ def serve_get(dispatcher, rpath):
             trash_msg=trash_msg,\
             msg_id=msg_dbid,\
             sender_class=sender_class,\
+            contact=contact_addr,\
             sender=sender_addr,\
             dest_class=dest_class,\
             dest_addr=dest_addr_enc,\
