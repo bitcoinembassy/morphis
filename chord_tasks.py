@@ -2762,7 +2762,8 @@ class ChordTasks(object):
                     data_block.epubkey = a + b
                     data_block.pubkeylen = len(dmsg.pubkey)
 
-                if tb: # Could check targeted still but saving indent :(
+                if hasattr(locals(), "tb"):
+                    # Could check targeted still but saving indent :(
                     if log.isEnabledFor(logging.DEBUG):
                         log.debug("Storing TargetedBlock (target_key=[{}])."\
                             .format(mbase32.encode(tb.target_key)))
@@ -2771,7 +2772,7 @@ class ChordTasks(object):
                     # targeted blocks as we may want to have code purge them
                     # with more pressure than normal blocks.
                     data_block.target_key = tb.target_key
-                elif synapse:
+                elif hasattr(locals(), "synapse"):
                     if log.isEnabledFor(logging.DEBUG):
                         log.debug("Storing Synapse (target_key=[{}],"\
                             " target_key=[{}])."\
