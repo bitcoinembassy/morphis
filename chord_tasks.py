@@ -2952,8 +2952,9 @@ class ChordTasks(object):
                     "TargetedData response is invalid (data/header mismatch)!")
             return False
 
-        log.warning("DISTANCE=[{}]."\
-            .format(mutil.calc_log_distance(data_key, tb.target_key)))
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("DISTANCE=[{}]."\
+                .format(mutil.calc_log_distance(data_key, tb.target_key)))
 
         return tb
 
