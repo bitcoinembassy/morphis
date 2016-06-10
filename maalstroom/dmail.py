@@ -99,9 +99,18 @@ def serve_get(dispatcher, rpath):
         if not msg_list:
             msg_list = "morphis://.dmail/msg_list/" + addr_enc + '/' + tag
 
+        unread_count = yield from _count_unread_dmails(dispatcher)
+        if unread_count:
+            title_prefix = "({}) ".format(unread_count)
+        else:
+            title_prefix = ""
+
         template = templates.dmail_page_wrapper[0]
-        template = template.format(\
-            tag=tag, addr=addr_enc, msg_list_iframe_url=msg_list)
+        template = template.format(
+            title_prefix=title_prefix,\
+            tag=tag,\
+            addr=addr_enc,\
+            msg_list_iframe_url=msg_list)
 
         if cacheable:
             dispatcher.send_content([template, req])
