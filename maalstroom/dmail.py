@@ -20,6 +20,7 @@ import enc
 import dmail
 import mbase32
 import mutil
+from mutil import fia
 import maalstroom.templates as templates
 import rsakey
 import sshtype
@@ -347,7 +348,7 @@ def serve_get(dispatcher, rpath):
         addr_enc = params[:p0]
         tag = params[p0+1:p1]
         msg_dbid = params[p1+1:]
-        if tag == "Outbox" or tag == "Sent" or tag == "Drafts":
+        if tag in ("Outbox", "Sent", "Drafts"):
             reload_msg_button_class = "link-button"
         else:
             reload_msg_button_class= "display_none"
@@ -463,13 +464,16 @@ def serve_get(dispatcher, rpath):
             else:
                 sender_addr_enc = ""
 
-            dmail_id = eparams.get("msg_id")
-            if dmail_id:
-                dmail_id = dmail_id[0]
-                dm = yield from _load_dmail(dispatcher, dmail_id, fetch_parts=True)
+            msg_id = fia(eparams.get("msg_id"))
+            if msg_id:
+                dm = yield from _load_dmail(\
+                    dispatcher, msg_id, fetch_parts=True)
+
                 message_text = _format_dmail_content(dm.parts)
             else:
-                message_text = ""
+                message_text = fia(eparams.get("message"))
+                if not message_text:
+                    message_text = ""
         else:
             subject = ""
             sender_addr_enc = ""
