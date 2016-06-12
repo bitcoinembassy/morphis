@@ -20,6 +20,7 @@ import chord_packet as cp
 from chordexception import ChordException
 from db import Peer, DataBlock, NodeState
 import mbase32
+from morphisblock import MorphisBlock
 import mutil
 import enc
 import node as mnnode
