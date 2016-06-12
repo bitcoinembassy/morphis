@@ -6,7 +6,9 @@ import llog
 import asyncio
 from datetime import datetime
 import logging
+import os
 
+import consts
 from db import User, Axon
 from dmail import DmailEngine
 import dpush
@@ -31,7 +33,11 @@ def serve_get(dispatcher, rpath):
     req = rpath[s_dds_len:]
 
     if req == "" or req == "/":
+        random_id_enc = mbase32.encode(os.urandom(consts.NODE_ID_BYTES))
+
         template = templates.dds_main[0]
+
+        template = template.format(random_id_enc=random_id_enc)
 
         dispatcher.send_content(template)
         return
@@ -227,7 +233,7 @@ def _process_axon(dispatcher, req):
     template = template.format(\
         message_text="",
         csrf_token=dispatcher.client_engine.csrf_token,
-        delete_class="")
+        delete_class="display_none")
 
     dispatcher.send_content([template, req])
 
