@@ -99,42 +99,42 @@ def serve_post(dispatcher, rpath):
     req = rpath[s_dds_len:]
 
     if req == "/synapse/create/make_it_so":
-        yield from _process_create_synapse(dispatcher)
-        return
+#        yield from _process_create_synapse(dispatcher)
+#        return
     elif req == "/synapse/create":
         yield from _process_create_axon_post(dispatcher)
         return
 
     dispatcher.send_error("request: {}".format(req), errcode=400)
 
-@asyncio.coroutine
-def _process_create_synapse(dispatcher):
-    dd = yield from dispatcher.read_post()
-    if not dd: return # Invalid csrf_token.
-
-    axon_addr = fia(dd["axon_addr"])
-
-    if not axon_addr:
-        return
-
-    def dbcall():
-        with dispatcher.node.db.open_session() as sess:
-            s = Synapse()
-            s.axon_addr = mbase32.decode(axon_addr)
-
-            sess.add(s)
-
-            sess.commit()
-
-            return True
-
-    r = yield from dispatcher.loop.run_in_executor(None, dbcall)
-
-    dispatcher.send_content(\
-        "SYNAPSE CREATED!<br/>"\
-        "<p>axon_addr [{}] successfully synapsed."\
-            "</p>"\
-            .format(axon_addr))
+#@asyncio.coroutine
+#def _process_create_synapse(dispatcher):
+#    dd = yield from dispatcher.read_post()
+#    if not dd: return # Invalid csrf_token.
+#
+#    axon_addr = fia(dd["axon_addr"])
+#
+#    if not axon_addr:
+#        return
+#
+#    def dbcall():
+#        with dispatcher.node.db.open_session() as sess:
+#            s = Synapse()
+#            s.axon_addr = mbase32.decode(axon_addr)
+#
+#            sess.add(s)
+#
+#            sess.commit()
+#
+#            return True
+#
+#    r = yield from dispatcher.loop.run_in_executor(None, dbcall)
+#
+#    dispatcher.send_content(\
+#        "SYNAPSE CREATED!<br/>"\
+#        "<p>axon_addr [{}] successfully synapsed."\
+#            "</p>"\
+#            .format(axon_addr))
 
 @asyncio.coroutine
 def _process_create_axon_post(dispatcher):
