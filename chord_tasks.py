@@ -452,10 +452,11 @@ class ChordTasks(object):
         " nodes that claim to have stored it."
         assert type(synapse) is Synapse
 
-        data = synapse.encode()
+        data = yield from synapse.encode()
 
         if key_callback:
-            key_callback(synapse.synapse_key)
+            synapse_key = yield from synapse.synapse_key
+            key_callback(synapse_key)
 
         sdmsg = cp.ChordStoreData()
         sdmsg.data = data
@@ -480,7 +481,7 @@ class ChordTasks(object):
         # Store for source_key.
         storing_nodes +=\
             yield from self.send_find_node(\
-                generate_ID(synapse.source_key), for_data=True,
+                enc.generate_ID(synapse.source_key), for_data=True,
                 data_msg=sdmsg, retry_factor=retry_factor)
 
         # Store the synapse_key itself (for find_key operations).
@@ -2671,6 +2672,8 @@ class ChordTasks(object):
                 raise ChordException(errmsg)
         else:
             if targeted:
+                valid = False
+
                 if data[:16] == MorphisBlock.UUID:
                     tb = self._check_targeted_block(data, data_id=data_id)
                     if tb:
@@ -2921,13 +2924,14 @@ class ChordTasks(object):
     def _check_synapse(self, data):
         "Checks if the passed Synapse data is valid; returning the Synapse or"\
         " None if the data was invalid."
-        try:
-            synapse = Synapse(data)
-        except:
-            return None
+        synapse = Synapse(data)
 
-        if synapse.timestamp > mutil.utc_timestamp():
+        now = int(mutil.utc_timestamp()*1000)
+        if synapse.timestamp > now:
             # Refuse to store stuff from the future. :)
+            log.warning(\
+                "Invalid Synapse; timestamp ([{}]) is in the future (now=[{}]"\
+                    ").".format(synapse.timestamp, now))
             return None
 
         if synapse.signature is None:
@@ -2937,6 +2941,7 @@ class ChordTasks(object):
                     synapse.synapse_key, synapse.target_key)
 
             if dist > consts.NODE_ID_BITS - 20:
+                log.warning("Invalid Synapse; PoW is insufficient.")
                 return None
 
             return synapse

@@ -17,7 +17,7 @@ import maalstroom.dmail as dmail
 import maalstroom.templates as templates
 import mbase32
 from morphisblock import MorphisBlock
-from targetedblock import TargetedBlock
+from targetedblock import TargetedBlock, Synapse
 from mutil import fia, hex_dump, make_safe_for_html_content, utc_datetime
 import sshtype
 
@@ -101,6 +101,7 @@ def serve_post(dispatcher, rpath):
     if req == "/synapse/create/make_it_so":
 #        yield from _process_create_synapse(dispatcher)
 #        return
+        pass
     elif req == "/synapse/create":
         yield from _process_create_axon_post(dispatcher)
         return
@@ -156,43 +157,40 @@ def _process_create_axon_post(dispatcher):
         return
 
     key = None
+
     def key_callback(akey):
         nonlocal key
         key = akey
 
-    content = content.encode()
+    yield from\
+        dispatcher.node.chord_engine.tasks.send_store_data(\
+            content.encode(), store_key=True, key_callback=key_callback)
 
     target_addr = fia(dd["target_addr"])
 
-    if target_addr:
-        target_addr = mbase32.decode(target_addr)
-
-        de =\
-            DmailEngine(\
-                dispatcher.node.chord_engine.tasks, dispatcher.node.db)
-
-        tb, tb_data =\
-            yield from de.generate_targeted_block(target_addr, 20, content)
-
-        yield from\
-            dispatcher.node.chord_engine.tasks.send_store_targeted_data(\
-                tb_data, store_key=True, key_callback=key_callback)
-
-        resp =\
-            "Resulting&nbsp;<a href='morphis://.dds/axon/read/{axon_addr}/"\
-                "{target_addr}'>Axon</a>&nbsp;Address:<br/>{axon_addr}"\
-                     .format(\
-                        axon_addr=mbase32.encode(key),\
-                        target_addr=mbase32.encode(target_addr))
-    else:
-        yield from\
-            dispatcher.node.chord_engine.tasks.send_store_data(\
-                content, store_key=True, key_callback=key_callback)
-
+    if not target_addr:
         resp =\
             "Resulting&nbsp;<a href='morphis://.dds/axon/read/{axon_addr}'>"\
                 "Axon</a>&nbsp;Address:<br/>{axon_addr}"\
                      .format(axon_addr=mbase32.encode(key))
+
+        dispatcher.send_content(resp)
+        return
+
+    target_addr = mbase32.decode(target_addr)
+
+    synapse = Synapse.for_target(target_addr, key)
+
+    yield from\
+        dispatcher.node.chord_engine.tasks.send_store_synapse(\
+            synapse, store_key=True, key_callback=key_callback)
+
+    resp =\
+        "Resulting&nbsp;<a href='morphis://.dds/axon/read/{synapse_addr}/"\
+            "{target_addr}'>Synapse</a>&nbsp;Address:<br/>{synapse_addr}"\
+                 .format(\
+                    synapse_addr=mbase32.encode(key),\
+                    target_addr=mbase32.encode(target_addr))
 
     dispatcher.send_content(resp)
 

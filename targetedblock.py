@@ -5,11 +5,14 @@ import llog
 
 import asyncio
 import logging
+import struct
 
+import brute
 import consts
 import enc
 from morphisblock import MorphisBlock
 import mutil
+import sshtype
 
 log = logging.getLogger(__name__)
 
@@ -69,58 +72,66 @@ class TargetedBlock(MorphisBlock):
         self.block_hash = self.buf[i:i+consts.NODE_ID_BYTES]
         i += consts.NODE_ID_BYTES
 
-class Synapse():
+class Synapse(object):
     NONCE_SIZE = 8
 
-    def __init__(self, buf=None):
-        self.buf = buf
-        if buf:
-            self.parse()
-            return
+    @staticmethod
+    def for_target(target_key, source_key):
+        return Synapse(None, target_key, source_key)
 
-        self.synapse_key = None
-        self.synapse_pow = None
+    def __init__(self, buf=None, target_key=None, source_key=None):
+        self.buf = buf
 
         ## Encoded fields.
         #ntargets = len(self.target_keys).
         self.target_keys = []
-        self.source_key = None
+        if target_key:
+            self.target_keys.append(target_key)
+        self.source_key = source_key
         self.timestamp = None
+        self.key = None
+        self.pubkey = None
         self.signature = None
         self.nonce = None
         self.stamps = []
         ##.
 
-        self.key = None
         self.difficulty = 20
 
         self.nonce_offset = None
 
+        self._synapse_key = None
+        self._synapse_pow = None
+
+        if buf:
+            self.parse()
+
     @property
+    @asyncio.coroutine
     def synapse_key(self):
-        if self.synapse_key:
-            return self.synapse_key
+        if self._synapse_key:
+            return self._synapse_key
 
         if not self.buf:
-            self.encode()
+            yield from self.encode()
 
-        self.synapse_key =\
+        self._synapse_key =\
             enc.generate_ID(self.buf[:self.nonce_offset])
 
-        return self.synapse_key
+        return self._synapse_key
 
     @property
     def synapse_pow(self):
-        if self.synapse_pow:
-            return self.synapse_pow
+        if self._synapse_pow:
+            return self._synapse_pow
 
         if not self.buf:
             self.encode()
 
-        self.synapse_pow =\
-            enc.generate_ID(self.buf[:self.nonce_offset + NONCE_SIZE])
+        self._synapse_pow =\
+            enc.generate_ID(self.buf[:self.nonce_offset + Synapse.NONCE_SIZE])
 
-        return self.synapse_pow
+        return self._synapse_pow
 
     @property
     def target_key(self):
@@ -136,7 +147,12 @@ class Synapse():
 
     @asyncio.coroutine
     def encode(self):
-        self.buf = nbuf = bytearray()
+        "Encode the packet fields into the self.buf bytearray and return it."
+        if not self.buf:
+            self.buf = nbuf = bytearray()
+        else:
+            nbuf = self.buf
+            nbuf.clear()
 
         # 0 is reserved; also, spec requires at least one target_key anyways.
         assert len(self.target_keys) > 0 and len(self.target_keys) < 256
@@ -154,21 +170,25 @@ class Synapse():
 
         if self.signature:
             nbuf += sshtype.encodeBinary(self.signature)
-        else:
+        elif self.key:
             nbuf += sshtype.encodeBinary(self.key.calc_rsassa_pss_sig(nbuf))
+        else:
+            nbuf += sshtype.encodeBinary(b'')
 
         if self.pubkey:
             nbuf += sshtype.encodeBinary(self.pubkey)
-        else:
+        elif self.key:
             nbuf += sshtype.encodeBinary(self.key.asbytes())
+        else:
+            nbuf += sshtype.encodeBinary(b'')
 
         self.nonce_offset = nonce_offset = len(nbuf)
-        nbuf += b' ' * NONCE_SIZE
+        nbuf += b' ' * Synapse.NONCE_SIZE
 
         nonce_bytes = yield from\
             self._calculate_nonce(nbuf, nonce_offset, self.difficulty)
 
-        self.set_nonce(nbuf, nonce_bytes, nonce_offset)
+        Synapse._store_nonce(nbuf, nonce_bytes, nonce_offset)
 
         if self.stamps:
             nbuf += self.stamps
@@ -177,7 +197,7 @@ class Synapse():
 
     def parse(self):
         ntarget_keys = struct.unpack_from("B", self.buf, 0)[0]
-        i += 1
+        i = 1
 
         if not ntarget_keys:
             raise Exception("ntarget_keys=0 is reserved.")
@@ -197,19 +217,12 @@ class Synapse():
         i, self.signature = sshtype.parse_binary_from(self.buf, i)
         i, self.key_bytes = sshtype.parse_binary_from(self.buf, i)
 
-        end = i + NONCE_SIZE
+        end = i + Synapse.NONCE_SIZE
         self.nonce = self.buf[i:end]
         i = end
 
         if i < len(self.buf):
             self.stamps = self.buf[i:]
-
-    def set_nonce(data, nonce_bytes, offset):
-        assert type(nonce_bytes) in (bytes, bytearray)
-        lenn = len(nonce_bytes)
-        end = offset + NONCE_SIZE
-        start = end - lenn
-        data[start:end] = nonce_bytes
 
     @asyncio.coroutine
     def _calculate_nonce(self, buf, offset, difficulty):
@@ -221,12 +234,21 @@ class Synapse():
 
         def threadcall():
             return brute.generate_targeted_block(\
-                self.target_key, difficulty, buf, offset, NONCE_SIZE)
+                self.target_key, difficulty, buf, offset, Synapse.NONCE_SIZE)
 
-        nonce_bytes = yield from self.loop.run_in_executor(None, threadcall)
+        nonce_bytes = yield from\
+            asyncio.get_event_loop().run_in_executor(None, threadcall)
 
         if log.isEnabledFor(logging.INFO):
             log.info(\
                 "Work found nonce [{}].".format(mbase32.encode(nonce_bytes)))
 
         return nonce_bytes
+
+    @staticmethod
+    def _store_nonce(data, nonce_bytes, offset):
+        assert type(nonce_bytes) in (bytes, bytearray)
+        lenn = len(nonce_bytes)
+        end = offset + Synapse.NONCE_SIZE
+        start = end - lenn
+        data[start:end] = nonce_bytes
