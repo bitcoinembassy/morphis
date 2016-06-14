@@ -18,6 +18,7 @@ import bittrie
 import chord
 import chord_packet as cp
 from chordexception import ChordException
+import consts
 from db import Peer, DataBlock, NodeState
 import mbase32
 from morphisblock import MorphisBlock
@@ -455,8 +456,7 @@ class ChordTasks(object):
         data = yield from synapse.encode()
 
         if key_callback:
-            synapse_key = yield from synapse.synapse_key
-            key_callback(synapse_key)
+            key_callback(synapse.synapse_key)
 
         sdmsg = cp.ChordStoreData()
         sdmsg.data = data
@@ -468,8 +468,8 @@ class ChordTasks(object):
         # Store for synapse_key (natural key of synapse).
         storing_nodes =\
             yield from self.send_find_node(\
-                enc.generate_ID(synapse_key), for_data=True, data_msg=sdmsg,\
-                retry_factor=retry_factor)
+                enc.generate_ID(synapse.synapse_key), for_data=True,
+                data_msg=sdmsg, retry_factor=retry_factor)
 
         # Store for target_key.
         for target_key in synapse.target_keys:
@@ -487,7 +487,8 @@ class ChordTasks(object):
         # Store the synapse_key itself (for find_key operations).
         if store_key:
             yield from self.send_store_key(\
-                data, synapse_key, targeted=True, retry_factor=retry_factor)
+                data, synapse.synapse_key, targeted=True,\
+                retry_factor=retry_factor)
 
         return storing_nodes
 
@@ -2257,14 +2258,14 @@ class ChordTasks(object):
                 back = data_ids[0]
                 foward = data_ids[1]
             else:
-                keys = bittrie.BitTrie()
+                input_trie = bittrie.BitTrie()
                 for key in data_ids:
                     input_trie[key] = True
                 back = input_trie.find(self.engine.node_id, forward=False)
                 forward = input_trie.find(self.engine.node_id, forward=True)
 
             fdist = mutil.calc_raw_distance(self.engine.node_id, forward)
-            bdisk = mutil.calc_raw_distance(self.engine.node_id, back)
+            bdist = mutil.calc_raw_distance(self.engine.node_id, back)
 
             if fdist <= bdist:
                 data_id = forward
@@ -2556,14 +2557,17 @@ class ChordTasks(object):
     @asyncio.coroutine
     def _store_key(self, peer, data_id, dmsg):
         if dmsg.targeted:
-            valid = self._check_targeted_block(dmsg.data, data_id)
+            valid = False
+            if dmsg.data[:16] == MorphisBlock.UUID:
+                valid = self._check_targeted_block(dmsg.data, data_id)
+            else:
+                valid = self._check_synapse(dmsg.data, data_id)
         else:
             data_key = enc.generate_ID(dmsg.data)
             valid = data_id == data_key
 
         if not valid:
-            errmsg = "Peer (dbid=[{}]) sent a data that didn't match the"\
-                "data_id."
+            errmsg = "Peer (dbid=[{}]) sent an invalid data."
             log.warning(errmsg)
             raise ChordException(errmsg)
 
@@ -2921,10 +2925,14 @@ class ChordTasks(object):
 
             return False
 
-    def _check_synapse(self, data):
+    def _check_synapse(self, data, data_key=None):
         "Checks if the passed Synapse data is valid; returning the Synapse or"\
         " None if the data was invalid."
         synapse = Synapse(data)
+
+        if data_key and data_key != synapse.synapse_key:
+            log.warning("Invalid Synapse; synapse_key != data_key.")
+            return None
 
         now = int(mutil.utc_timestamp()*1000)
         if synapse.timestamp > now:
@@ -2934,7 +2942,7 @@ class ChordTasks(object):
                     ").".format(synapse.timestamp, now))
             return None
 
-        if synapse.signature is None:
+        if not synapse.signature:
             # Then it is required to be a POW Synapse.
             dist =\
                 mutil.calc_log_distance(\
@@ -2945,12 +2953,11 @@ class ChordTasks(object):
                 return None
 
             return synapse
-        else:
-            # Signed Synapse.
-            raise Exception()
-            #TODO:YOU_ARE_HERE
 
-        return synapse
+        # Signed Synapse.
+        raise Exception()
+        #TODO:YOU_ARE_HERE
+        #return synapse
 
     def _check_targeted_block(self, data, data_key=None, data_id=None):
         # Check that the hash(header) matches the data_key we expect.

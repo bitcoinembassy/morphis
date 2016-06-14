@@ -62,8 +62,9 @@ def serve_get(dispatcher, rpath):
         dispatcher.send_content([template, req])
         return
     elif req == "/neuron":
-        yield from _process_neuron(dispatcher)
-        return
+#        yield from _process_neuron(dispatcher)
+#        return
+        pass
     elif req == "/axon":
         yield from _process_axon(dispatcher, req[5:])
         return
@@ -103,7 +104,7 @@ def serve_post(dispatcher, rpath):
 #        return
         pass
     elif req == "/synapse/create":
-        yield from _process_create_axon_post(dispatcher)
+        yield from _process_create_axon_post(dispatcher, req)
         return
 
     dispatcher.send_error("request: {}".format(req), errcode=400)
@@ -138,7 +139,7 @@ def serve_post(dispatcher, rpath):
 #            .format(axon_addr))
 
 @asyncio.coroutine
-def _process_create_axon_post(dispatcher):
+def _process_create_axon_post(dispatcher, req):
     dd = yield from dispatcher.read_post()
     if not dd:
         dispatcher.send_error("request: {}".format(req), errcode=400)
@@ -402,38 +403,39 @@ def _process_read_axon(dispatcher, req):
         return
 
     # We assume it is a Dmail if it is a MorphisBlock.
-    de =\
-        DmailEngine(\
-            dispatcher.node.chord_engine.tasks, dispatcher.node.db)
-
-    axon_key = yield from __load_axon_key(\
-            dispatcher,\
-            target_key if target_key else key)
-
-    if not axon_key:
-        # If we can't decrypt it, send a hexdump.
-        msg = hexdump(data)
-
-        acharset = dispatcher.get_accept_charset()
-        dispatcher.send_content(\
-            msg, content_type="text/plain; charset={}".format(acharset))
-        return
-
-    l, x = sshtype.parseMpint(axon_key.x)
-
-    dm, sender_auth_valid = yield from\
-        de.fetch_dmail(bytes(key), x, data_rw)
-
-    msg_txt = ""
-    if not sender_auth_valid:
-        msg_txt += "[WARNING: SENDER ADDRESS IS FORGED]\n"
-
-    msg_txt = dmail._format_dmail_content(dm.parts)
-
-    #FIXME: Move this into dmail._format_dmail_content(..) above.
-    msg_txt = make_safe_for_html_content(msg_txt)
-
-    dispatcher.send_content(msg_txt)
+    dispatcher.send_content(hex_dump(data))
+#    de =\
+#        DmailEngine(\
+#            dispatcher.node.chord_engine.tasks, dispatcher.node.db)
+#
+#    axon_key = yield from __load_axon_key(\
+#            dispatcher,\
+#            target_key if target_key else key)
+#
+#    if not axon_key:
+#        # If we can't decrypt it, send a hexdump.
+#        msg = hexdump(data)
+#
+#        acharset = dispatcher.get_accept_charset()
+#        dispatcher.send_content(\
+#            msg, content_type="text/plain; charset={}".format(acharset))
+#        return
+#
+#    l, x = sshtype.parseMpint(axon_key.x)
+#
+#    dm, sender_auth_valid = yield from\
+#        de.fetch_dmail(bytes(key), x, data_rw)
+#
+#    msg_txt = ""
+#    if not sender_auth_valid:
+#        msg_txt += "[WARNING: SENDER ADDRESS IS FORGED]\n"
+#
+#    msg_txt = dmail._format_dmail_content(dm.parts)
+#
+#    #FIXME: Move this into dmail._format_dmail_content(..) above.
+#    msg_txt = make_safe_for_html_content(msg_txt)
+#
+#    dispatcher.send_content(msg_txt)
 
 def _format_axon(data, key, key_enc):
     return __format_post(data)\

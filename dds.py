@@ -6,9 +6,12 @@ import llog
 import asyncio
 import logging
 
+import enc
 import mbase32
 import mutil
 from targetedblock import Synapse
+
+log = logging.getLogger(__name__)
 
 class DdsEngine(object):
     def __init__(self, node):
@@ -44,7 +47,7 @@ class DdsEngine(object):
         while True:
             storing_nodes = yield from\
                 self.core.tasks.send_store_synapse(\
-                    synapse, store_key=True, key_callback=key_cb,
+                    synapse, store_key=True, key_callback=key_callback,
                     retry_factor=retry*10)
 
             total_storing += storing_nodes
