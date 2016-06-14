@@ -69,6 +69,9 @@ def __main():
         "--dburl",\
         help="Specify the database url to use.")
     parser.add_argument(\
+        "--dmail-target",\
+        help="Specify the dmail target to validate dmail against.")
+    parser.add_argument(\
         "--fetch-dmail",
         help="Fetch dmail for specified key_id.")
     parser.add_argument(\
@@ -95,9 +98,6 @@ def __main():
     parser.add_argument("-l", dest="logconf",\
         help="Specify alternate logging.ini [IF SPECIFIED, THIS MUST BE THE"\
             " FIRST PARAMETER!].")
-    parser.add_argument(\
-        "--dmail-target",\
-        help="Specify the dmail target to validate dmail against.")
     parser.add_argument(\
         "-x",\
         help="Specify the x (Diffie-Hellman private secret) to use.")
