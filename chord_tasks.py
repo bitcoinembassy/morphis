@@ -2944,12 +2944,16 @@ class ChordTasks(object):
 
         if not synapse.signature:
             # Then it is required to be a POW Synapse.
-            dist =\
+            dist, direction =\
                 mutil.calc_log_distance(\
-                    synapse.synapse_key, synapse.target_key)
+                    synapse.target_key, synapse.synapse_key)
 
-            if dist > consts.NODE_ID_BITS - 20:
-                log.warning("Invalid Synapse; PoW is insufficient.")
+            if direction < 0 or dist > consts.NODE_ID_BITS - 20:
+                log.warning(\
+                    "Invalid Synapse; PoW is insufficient ({}/{}/{}/{})."\
+                        .format(\
+                            direction, dist, mbase32.enc(synapse.synapse_key),\
+                            mbase32.enc(synapse.target_key)))
                 return None
 
             return synapse
