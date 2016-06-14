@@ -10,6 +10,7 @@ import struct
 import brute
 import consts
 import enc
+import mbase32
 from morphisblock import MorphisBlock
 import mutil
 import sshtype
@@ -107,13 +108,12 @@ class Synapse(object):
             self.parse()
 
     @property
-    @asyncio.coroutine
     def synapse_key(self):
         if self._synapse_key:
             return self._synapse_key
 
         if not self.buf:
-            yield from self.encode()
+            raise Exception("_synapse_key is not set and self.buf is empty.")
 
         self._synapse_key =\
             enc.generate_ID(self.buf[:self.nonce_offset])
@@ -126,7 +126,7 @@ class Synapse(object):
             return self._synapse_pow
 
         if not self.buf:
-            self.encode()
+            raise Exception("_synapse_pow is not set and self.buf is empty.")
 
         self._synapse_pow =\
             enc.generate_ID(self.buf[:self.nonce_offset + Synapse.NONCE_SIZE])
