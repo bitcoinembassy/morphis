@@ -23,10 +23,13 @@ import sshtype
 
 log = logging.getLogger(__name__)
 
-UP_ARROW = bytearray([0x1b, 0x5b, 0x41])
-DOWN_ARROW = bytearray([0x1b, 0x5b, 0x42])
-RIGHT_ARROW = bytearray([0x1b, 0x5b, 0x43])
-LEFT_ARROW = bytearray([0x1b, 0x5b, 0x44])
+ESCAPE = bytearray((0x1b, 0x5b))
+UP_ARROW = bytearray((0x1b, 0x5b, 0x41))
+DOWN_ARROW = bytearray((0x1b, 0x5b, 0x42))
+RIGHT_ARROW = bytearray((0x1b, 0x5b, 0x43))
+LEFT_ARROW = bytearray((0x1b, 0x5b, 0x44))
+END = bytearray((0x1b, 0x5b, 0x46))
+HOME = bytearray((0x1b, 0x5b, 0x48))
 
 class Shell(cmd.Cmd):
     intro = "Welcome to the Morphis Shell Socket."\
@@ -214,10 +217,32 @@ class Shell(cmd.Cmd):
                     self.write(RIGHT_ARROW)
                     self.flush()
                     continue
-#                else:
-#                    log.warning(\
-#                        "UNHANDLED CHAR SEQUENCE: [{}]:[{}]."\
-#                            .format(hex_string(msg), msg))
+                elif msg.startswith(END):
+                    msg = msg[len(END):]
+
+                    if pos == len(buf):
+                        continue
+                    move = len(buf) - pos
+                    pos += move
+                    self.write(RIGHT_ARROW * move)
+                    self.flush()
+                    continue
+                elif msg.startswith(HOME):
+                    msg = msg[len(HOME):]
+
+                    if pos == 0:
+                        continue
+                    self.write(LEFT_ARROW * pos)
+                    self.flush()
+                    pos = 0
+                    continue
+                elif msg.startswith(ESCAPE):
+                    if log.isEnabledFor(logging.WARNING):
+                        log.warning(\
+                            "UNHANDLED CHAR SEQUENCE: [{}]."\
+                                .format(hex_string(msg[:3])))
+                    msg = msg[3:]
+                    continue
 
             if char == 0x7f:
                 msg = msg[1:]
@@ -253,8 +278,8 @@ class Shell(cmd.Cmd):
             else:
                 msg = msg[1:]
                 log.warning(\
-                    "UNHANDLED CHAR: [{:02x}]:[{}], buf=[{}]."\
-                        .format(char, chr(char), buf))
+                    "UNHANDLED CHAR: [{:02x}]; buf=[{}]."\
+                        .format(char, hex_string(buf)))
 
             if enter_pressed:
                 buf += b'\r'
