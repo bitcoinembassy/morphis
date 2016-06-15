@@ -206,14 +206,12 @@ class Shell(cmd.Cmd):
                         savedcmd = buf.copy()
 
                     last_cmd = self.lastcmd.encode("UTF-8")
-                    self._replace_line(buf, last_cmd)
-                    pos = len(last_cmd)
+                    pos = self._replace_line(buf, pos, last_cmd)
 
                     continue
                 elif msg.value == DOWN_ARROW:
                     if savedcmd != None:
-                        self._replace_line(buf, savedcmd)
-                        pos = len(savedcmd)
+                        pos = self._replace_line(buf, pos, savedcmd)
                         savedcmd = None
                     continue
                 elif msg.value == LEFT_ARROW:
@@ -283,24 +281,31 @@ class Shell(cmd.Cmd):
                 outer_continue = False
                 continue
 
-    def _replace_line(self, buf, newline):
-        lenbuf = len(buf)
-        for i in range(lenbuf):
-            self.write(LEFT_ARROW)
+    def _replace_line(self, buf, pos, newline):
+        self.write(LEFT_ARROW * pos)
 
         self.write(newline)
 
-        diff = lenbuf - len(newline)
+        len_buf = len(buf)
+        len_newline = len(newline)
+
+        diff = len_buf - len_newline
+
         if diff > 0:
-            for j in range(diff):
-                self.write(' ')
-            for j in range(diff):
-                self.write(LEFT_ARROW)
+            self.write(b' ' * diff)
+            self.write(LEFT_ARROW * diff)
+
+        if pos == len_buf or pos > len_newline:
+            pos = len_newline
+        else:
+            self.write(LEFT_ARROW * (len_newline - pos))
 
         self.flush()
 
         buf.clear()
         buf += newline
+
+        return pos
 
     def writeln(self, val):
         self.write(val)
