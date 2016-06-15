@@ -172,13 +172,23 @@ class Shell(cmd.Cmd):
                     if not buf or not pos:
                         continue
 
-                    self.write(LEFT_ARROW)
-                    self.write(b' ')
-                    self.write(LEFT_ARROW)
-                    self.flush()
+                    if pos == len(buf):
+                        self.write(LEFT_ARROW)
+                        self.write(b' ')
+                        self.write(LEFT_ARROW)
+                        self.flush()
 
-                    buf = buf[:-1]
-                    pos -= 1
+                        buf = buf[:-1]
+                        pos -= 1
+                    else:
+                        self.write(LEFT_ARROW)
+                        self.write(buf[pos:])
+                        self.write(b' ')
+                        self.write(LEFT_ARROW*(len(buf)-pos+1))
+                        self.flush()
+
+                        buf = buf[:pos-1] + buf[pos:]
+                        pos -= 1
                     continue
                 elif char == 0x04:
                     self.writeln("quit")
