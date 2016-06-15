@@ -2,6 +2,7 @@ import llog
 
 import asyncio
 import cgi
+from enum import Enum
 import importlib
 import io
 import logging
@@ -118,7 +119,6 @@ class MaalstroomDispatcher(object):
                 b"${MORPHIS_VERSION}", version_str.encode())
 
             self.send_content([content, None])
-            return
 
         if log.isEnabledFor(logging.DEBUG):
             log.debug("rpath=[{}].".format(rpath))
@@ -130,15 +130,12 @@ class MaalstroomDispatcher(object):
                 log.exception(\
                     "Exception serving GET: rpath=[{}]".format(rpath))
                 self.send_exception(e)
-
-            return
         elif rpath == "favicon.ico":
             self.send_content(\
                 templates.favicon_content, content_type="image/png")
-            return
-
-        # At this point we assume it is a key URL.
-        yield from self.dispatch_get_data(rpath)
+        else:
+            # At this point we assume it is a key URL.
+            yield from self.dispatch_get_data(rpath)
 
         if not self.finished_request:
             log.warning("Request (rpath=[{}]) finished without calling"\
@@ -151,7 +148,6 @@ class MaalstroomDispatcher(object):
         if rpath.startswith(".aiwj"):
             self.send_content(\
                 b"AIWJ - Asynchronous IFrames Without Javascript!")
-            return
         elif rpath.startswith(".main/"):
             rpath = rpath[6:]
             if rpath == "style.css":
@@ -162,11 +158,9 @@ class MaalstroomDispatcher(object):
 #                self.send_content(self.client_engine.csrf_token)
             else:
                 self.send_error(errcode=400)
-            return
         elif rpath == ".images/favicon.ico":
             self.send_content(\
                 templates.favicon_content, content_type="image/png")
-            return
         elif rpath.startswith(".upload") and maalstroom.upload_enabled:
             if rpath.startswith(".upload/generate"):
                 priv_key =\
@@ -207,22 +201,26 @@ class MaalstroomDispatcher(object):
 
                 self.send_content(template)
 
-            return
         elif rpath.startswith(".dmail") and maalstroom.dmail_enabled:
             yield from maalstroom.dmail.serve_get(self, rpath)
-            return
         elif rpath.startswith(".dds") and maalstroom.dds_enabled:
             yield from maalstroom.dds.serve_get(self, rpath)
-            return
         elif rpath.startswith(".grok"):
             self.send_301(self.handler.maalstroom_url_prefix_str\
                 + ".dds/axon/" + rpath[1:])
-            return
+        elif rpath.startswith(MaalstroomDispatcher.ForceMode.HEX_DUMP.value):
+            yield from self.dispatch_get_data(\
+                rpath[len(MaalstroomDispatcher.ForceMode.HEX_DUMP.value):],\
+                MaalstroomDispatcher.ForceMode.HEX_DUMP)
+        elif rpath.startswith(MaalstroomDispatcher.ForceMode.PLAIN_TEXT.value):
+            yield from self.dispatch_get_data(\
+                rpath[len(MaalstroomDispatcher.ForceMode.PLAIN_TEXT.value):],\
+                MaalstroomDispatcher.ForceMode.PLAIN_TEXT)
         else:
             self.send_error(errcode=400)
 
     @asyncio.coroutine
-    def dispatch_get_data(self, rpath):
+    def dispatch_get_data(self, rpath, force_mode=None):
         orig_etag = etag = self.handler.headers["If-None-Match"]
         if etag:
             updateable_key = etag.startswith("updateablekey-")
@@ -291,16 +289,20 @@ class MaalstroomDispatcher(object):
 
             key_enc = mbase32.encode(key)
 
+            url_prefix = self.handler.maalstroom_url_prefix_str
+            if force_mode:
+                url_prefix = url_prefix + force_mode.value
+
             if path:
                 url = "{}{}/{}"\
                     .format(\
-                        self.handler.maalstroom_url_prefix_str,\
+                        url_prefix,\
                         key_enc,\
                         path.decode("UTF-8"))
             else:
                 url = "{}{}"\
                     .format(\
-                        self.handler.maalstroom_url_prefix_str,\
+                        url_prefix,\
                         key_enc)
 
             message = "<html><head><title>Redirecting to Full Key</title>"\
@@ -359,7 +361,14 @@ class MaalstroomDispatcher(object):
 
             rewrite_urls = False
 
-            if data_callback.mime_type:
+            if force_mode:
+                if force_mode is MaalstroomDispatcher.ForceMode.HEX_DUMP\
+                        or force_mode\
+                            is MaalstroomDispatcher.ForceMode.PLAIN_TEXT:
+                    self.send_header("Content-Type", "text/plain")
+                else:
+                    assert False, force_mode
+            elif data_callback.mime_type:
                 self.send_header("Content-Type", data_callback.mime_type)
                 if data_callback.mime_type\
                         in ("text/html", "text/css", "application/javascript"):
@@ -410,7 +419,8 @@ class MaalstroomDispatcher(object):
             if rewrite_urls:
                 self.send_header("Transfer-Encoding", "chunked")
             else:
-                self.send_header("Content-Length", data_callback.size)
+                if force_mode is not MaalstroomDispatcher.ForceMode.HEX_DUMP:
+                    self.send_header("Content-Length", data_callback.size)
 
             if data_callback.version is not None:
                 self.send_header(\
@@ -425,13 +435,18 @@ class MaalstroomDispatcher(object):
                 self.send_header("Cache-Control", "public,max-age=315360000")
                 self.send_header("ETag", rpath)
 
-            self.end_headers()
+            if force_mode is not MaalstroomDispatcher.ForceMode.HEX_DUMP:
+                self.end_headers()
 
+            hex_dump_buffer = bytearray()
             while True:
                 if rewrite_urls:
                     self.send_partial_content(data)
                 else:
-                    self.write(data)
+                    if force_mode is MaalstroomDispatcher.ForceMode.HEX_DUMP:
+                        hex_dump_buffer += data
+                    else:
+                        self.write(data)
 
                 data = yield from queue.get()
 
@@ -439,6 +454,12 @@ class MaalstroomDispatcher(object):
                     if rewrite_urls:
                         self.end_partial_content()
                     else:
+                        if force_mode\
+                                is MaalstroomDispatcher.ForceMode.HEX_DUMP:
+                            dump = mutil.hex_dump(hex_dump_buffer).encode()
+                            self.send_header("Content-Length", len(dump))
+                            self.end_headers()
+                            self.write(dump)
                         self.finish_response()
                     break
                 elif data is Error:
@@ -1030,6 +1051,10 @@ class MaalstroomDispatcher(object):
         self.end_headers()
         self.write(errmsg)
         self.finish_response()
+
+    class ForceMode(Enum):
+        HEX_DUMP = ".hexdump/"
+        PLAIN_TEXT = ".text/"
 
 class KeyCallback(multipart.KeyCallback):
     def __init__(self):
