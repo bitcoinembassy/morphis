@@ -47,6 +47,8 @@ class Shell(cmd.Cmd):
         self.shell_locals = {}
         self.shell_locals["self"] = self
 
+        self._savedcmd = None
+
     @asyncio.coroutine
     def cmdloop(self):
         self.preloop()
@@ -128,28 +130,10 @@ class Shell(cmd.Cmd):
 
     @asyncio.coroutine
     def readline(self):
-        r = None
+        buf = pos = None
 
         while True:
-            try:
-                r = yield from self._readline()
-                break
-            except Exception as e:
-                log.exception("self._readline()")
-                self.write("\nException: [{}].".format(e))
-                self.flush()
-                return ""
-
-        return r
-
-    @asyncio.coroutine
-    def _readline(self):
-        buf = bytearray()
-        savedcmd = None
-        pos = 0
-        enter_pressed = False
-
-        while True:
+            # Grab next incoming packet.
             packet = yield from self.queue.get()
             if not packet:
                 log.info("Shell shutting down.")
@@ -165,93 +149,132 @@ class Shell(cmd.Cmd):
                     log.log(logging.DEBUG+1, "Received text [{}]."\
                         .format(msg.value))
 
-            lenval = len(msg.value)
-            if lenval == 1:
-                char = msg.value[0]
-                if char == 0x7f:
-                    if not buf or not pos:
-                        continue
+            log.warning("R=[{}].".format(hex_string(msg.value)))
 
-                    if pos == len(buf):
-                        self.write(LEFT_ARROW)
-                        self.write(b' ')
-                        self.write(LEFT_ARROW)
-                        self.flush()
+            # Process the packet.
+            try:
+                line, buf, pos = yield from self._readline(msg.value, buf, pos)
+                if line is not None:
+                    if buf:
+                        #FIXME: We need to redo how we even call this readline.
+                        log.warning("Extra data not processed.")
+                    return line
+            except Exception as e:
+                log.exception("self._readline()")
+                self.write("\nException: [{}].".format(e))
+                self.flush()
+                return ""
 
-                        buf = buf[:-1]
-                        pos -= 1
-                    else:
-                        self.write(LEFT_ARROW)
-                        self.write(buf[pos:])
-                        self.write(b' ')
-                        self.write(LEFT_ARROW*(len(buf)-pos+1))
-                        self.flush()
+    @asyncio.coroutine
+    def _readline(self, msg, buf=None, pos=None):
+        if buf is None:
+            buf = bytearray()
+        if pos is None:
+            pos = 0
+        enter_pressed = False
 
-                        buf = buf[:pos-1] + buf[pos:]
-                        pos -= 1
-                    continue
-                elif char == 0x04:
-                    self.writeln("quit")
-                    self.flush()
-                    return "quit"
-                elif char == 0x0d:
-                    enter_pressed = True
-                else:
-                    log.warning(\
-                        "UNHANDLED CHAR: [{:02x}]:[{}]."\
-                            .format(char, chr(char)))
-            elif lenval == 3:
-                if msg.value == UP_ARROW:
-                    if savedcmd == None:
-                        savedcmd = buf.copy()
+        while True:
+            lenval = len(msg)
+            if not lenval:
+                return None, buf, pos
+            char = msg[0]
+
+            if lenval >= 3 and char == 0x1b:
+                if msg.startswith(UP_ARROW):
+                    msg = msg[len(UP_ARROW):]
+
+                    if self._savedcmd == None:
+                        self._savedcmd = buf.copy()
 
                     last_cmd = self.lastcmd.encode("UTF-8")
                     pos = self._replace_line(buf, pos, last_cmd)
+                    continue
+                elif msg.startswith(DOWN_ARROW):
+                    msg = msg[len(DOWN_ARROW):]
 
+                    if self._savedcmd != None:
+                        pos = self._replace_line(buf, pos, self._savedcmd)
+                        self._savedcmd = None
                     continue
-                elif msg.value == DOWN_ARROW:
-                    if savedcmd != None:
-                        pos = self._replace_line(buf, pos, savedcmd)
-                        savedcmd = None
-                    continue
-                elif msg.value == LEFT_ARROW:
+                elif msg.startswith(LEFT_ARROW):
+                    msg = msg[len(LEFT_ARROW):]
+
                     if pos == 0:
                         continue
                     pos -= 1
                     self.write(LEFT_ARROW)
                     self.flush()
                     continue
-                elif msg.value == RIGHT_ARROW:
+                elif msg.startswith(RIGHT_ARROW):
+                    msg = msg[len(RIGHT_ARROW):]
+
                     if pos == len(buf):
                         continue
                     pos += 1
                     self.write(RIGHT_ARROW)
                     self.flush()
                     continue
+#                else:
+#                    log.warning(\
+#                        "UNHANDLED CHAR SEQUENCE: [{}]:[{}]."\
+#                            .format(hex_string(msg), msg))
+
+            if char == 0x7f:
+                msg = msg[1:]
+                if not buf or not pos:
+                    continue
+
+                if pos == len(buf):
+                    self.write(LEFT_ARROW)
+                    self.write(b' ')
+                    self.write(LEFT_ARROW)
+                    self.flush()
+
+                    buf = buf[:-1]
+                    pos -= 1
                 else:
-                    log.warning(\
-                        "UNHANDLED CHAR SEQUENCE: [{}]:[{}]."\
-                            .format(hex_string(msg.value), msg.value))
+                    self.write(LEFT_ARROW)
+                    self.write(buf[pos:])
+                    self.write(b' ')
+                    self.write(LEFT_ARROW*(len(buf)-pos+1))
+                    self.flush()
+
+                    buf = buf[:pos-1] + buf[pos:]
+                    pos -= 1
+                continue
+            elif char == 0x04:
+                msg = msg[1:]
+                self.writeln("quit")
+                self.flush()
+                return "quit", msg, pos
+            elif char == 0x0d:
+                msg = msg[1:]
+                enter_pressed = True
+            else:
+                msg = msg[1:]
+                log.warning(\
+                    "UNHANDLED CHAR: [{:02x}]:[{}], buf=[{}]."\
+                        .format(char, chr(char), buf))
 
             if enter_pressed:
                 buf += b'\r'
             else:
-                msg_value_len = len(msg.value)
+                char_len = 1
 
                 if pos == len(buf):
-                    buf += msg.value
-                    pos += msg_value_len
+                    buf.append(char)
+                    pos += char_len
                     # Echo back their input.
                     rmsg = BinaryMessage()
-                    rmsg.value = msg.value.replace(b'\n', b"\r\n")
+                    rmsg.value = bytes([char]) if char != b'\n' else b"\r\n"
                     self.peer.protocol.write_channel_data(\
                         self.local_cid, rmsg.encode())
                 else:
-                    rest = msg.value + buf[pos:]
+                    rest = bytes((char,)) + buf[pos:]
                     buf = buf[:pos] + rest
                     pos += 1
                     self.write(rest)
-                    self.write(LEFT_ARROW*(len(rest)-msg_value_len))
+                    self.write(LEFT_ARROW*(len(rest)-char_len))
                     self.flush()
 
             #TODO: Replace this hacky code that handle multibyte characters
@@ -271,11 +294,9 @@ class Shell(cmd.Cmd):
                     i += 1
                     continue
 
-                buf = buf[i+1:]
-
                 log.warning("line=[{}].".format(hex_string(line.encode())))
 
-                return line
+                return line, msg, pos
 
             if outer_continue:
                 outer_continue = False
