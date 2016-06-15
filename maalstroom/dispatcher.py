@@ -23,6 +23,8 @@ import rsakey
 log = logging.getLogger(__name__)
 
 class MaalstroomDispatcher(object):
+    NO_DATA_MESSAGE = b"Data not found on network."
+
     def __init__(self, handler, inq, outq, abort_event):
         self.node = handler.node
         self.handler = handler
@@ -353,7 +355,10 @@ class MaalstroomDispatcher(object):
 
         if data:
             if data is Error:
-                self.send_exception(data_callback.exception)
+                if data_callback.success is None:
+                    self.send_error(MaalstroomDispatcher.NO_DATA_MESSAGE, 404)
+                else:
+                    self.send_exception(data_callback.exception)
                 return
 
             self.send_response(200)
@@ -466,7 +471,11 @@ class MaalstroomDispatcher(object):
                     if rewrite_urls:
                         self._fail_partial_content()
                     else:
-                        self.close()
+                        if data_callback.success is None:
+                            self.send_error(\
+                                MaalstroomDispatcher.NO_DATA_MESSAGE, 404)
+                        else:
+                            self.close()
                     break
 
                 if self._abort_event.is_set():
@@ -477,7 +486,7 @@ class MaalstroomDispatcher(object):
                     data_callback.abort = True
                     break
         else:
-            self.send_error(b"Data not found on network.", 404)
+            self.send_error(MaalstroomDispatcher.NO_DATA_MESSAGE, 404)
 
     def decode_key(self, rpath):
         try:
@@ -1024,7 +1033,7 @@ class MaalstroomDispatcher(object):
             str("{}: {}".format(type(exception).__name__, exception)),\
             errcode=errcode)
 
-    def send_error(self, msg=None, errcode=500):
+    def send_error(self, msg=None, errcode=500, content_type=None):
         assert type(errcode) is int
 
         if errcode == 400:
@@ -1042,12 +1051,21 @@ class MaalstroomDispatcher(object):
 
         if msg:
             self.send_default_headers()
+
             if type(msg) is str:
                 msg = msg.encode()
 
-            errmsg += b"\n\n" + msg
+            if content_type:
+                errmsg = msg
+            else:
+                content_type = "text/plain"
+                errmsg += b"\n\n" + msg + b"\n"
+        else:
+            content_type = "text/plain"
+            errmsg += b"\n"
 
         self.send_header("Content-Length", len(errmsg))
+        self.send_header("Content-Type", content_type)
         self.end_headers()
         self.write(errmsg)
         self.finish_response()
@@ -1101,6 +1119,7 @@ class Downloader(multipart.DataCallback):
         self.abort = False
 
         self.exception = None
+        self.success = None
 
     def notify_version(self, version):
         self.version = version
@@ -1124,6 +1143,8 @@ class Downloader(multipart.DataCallback):
         return True
 
     def notify_finished(self, success):
+        self.success = success
+
         if success:
             self.queue.put_nowait(None)
         else:

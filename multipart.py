@@ -413,6 +413,7 @@ def get_data(engine, data_key, data_callback, path=None, ordered=False,\
         data = data_rw.data
 
         if data is None:
+            data_callback.notify_finished(None)
             return None
 
     if data_rw.version:
@@ -447,6 +448,7 @@ def get_data(engine, data_key, data_callback, path=None, ordered=False,\
                     log.warning(\
                         "Exceeded maximum link depth [{}] for key [{}]."\
                             .format(max_link_depth, mbase32.encode(data_key)))
+                data_callback.notify_finished(False)
                 return False
 
             block = LinkBlock(data)
@@ -463,6 +465,7 @@ def get_data(engine, data_key, data_callback, path=None, ordered=False,\
                 data = data_rw.data
 
                 if data is None:
+                    data_callback.notify_finished(None)
                     return None
 
             continue
