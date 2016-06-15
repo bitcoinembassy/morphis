@@ -946,27 +946,7 @@ class ChordTasks(object):
                         if not data_present:
                             continue
 
-                        log.info("We have the data; fetching.")
-
-                        enc_data, data_l, version, signature, epubkey,\
-                            pubkeylen =\
-                                yield from self._retrieve_data(node_id)
-
-                        if enc_data is None:
-                            continue
-
-                        drmsg = cp.ChordDataResponse()
-                        drmsg.data = enc_data
-                        drmsg.original_size = data_l
-                        if version is not None:
-                            drmsg.version = version
-                            drmsg.signature = signature
-                            if epubkey:
-                                drmsg.epubkey = epubkey
-                                drmsg.pubkeylen = pubkeylen
-
-                        r = yield from self._process_data_response(\
-                            drmsg, None, None, data_rw)
+                        r = yield from self._process_own_data(node_id, data_rw)
 
                         if not r:
                             # Data was invalid somehow!
@@ -1162,6 +1142,17 @@ class ChordTasks(object):
                 return data_rw.storing_nodes
             else:
                 assert data_mode is cp.DataMode.get
+
+                if data_rw.data is None:
+                    # Give one last try to find locally. I think we don't
+                    # check locally always?
+                    data_present = yield from\
+                        self._check_has_data(\
+                            node_id, significant_bits, target_key)
+
+                    if data_present:
+                        log.warning("FOUND LOCALLY AFTER PROOF TRIGGERD.")
+                        yield from self._process_own_data(node_id, data_rw)
 
                 if data_rw.data is None\
                         and (not significant_bits or not data_rw.data_key):
@@ -2380,6 +2371,32 @@ class ChordTasks(object):
                 return False
 
         return (yield from self.loop.run_in_executor(None, dbcall)), True
+
+    @asyncio.coroutine
+    def _process_own_data(self, data_id, data_rw):
+        enc_data, data_l, version, signature, epubkey,\
+            pubkeylen =\
+                yield from self._retrieve_data(data_id)
+
+        if enc_data is None:
+            return False
+
+        log.info("We had the data; fetching.")
+
+        drmsg = cp.ChordDataResponse()
+        drmsg.data = enc_data
+        drmsg.original_size = data_l
+        if version is not None:
+            drmsg.version = version
+            drmsg.signature = signature
+            if epubkey:
+                drmsg.epubkey = epubkey
+                drmsg.pubkeylen = pubkeylen
+
+        r = yield from\
+            self._process_data_response(drmsg, None, None, data_rw)
+
+        return r
 
     @asyncio.coroutine
     def _process_data_response(self, drmsg, tun_meta, path, data_rw):
