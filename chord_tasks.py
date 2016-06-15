@@ -455,6 +455,15 @@ class ChordTasks(object):
 
         data = yield from synapse.encode()
 
+        if log.isEnabledFor(logging.INFO):
+            log.info(\
+                "Sending Store{{Data/Key}} for Synapse (synapse_key=[{}],"\
+                    " target_key=[{}], source_key=[{}])."\
+                        .format(\
+                            mbase32.encode(synapse.synapse_key),
+                            mbase32.encode(synapse.target_key),
+                            mbase32.encode(synapse.source_key)))
+
         if key_callback:
             key_callback(synapse.synapse_key)
 
@@ -2931,7 +2940,10 @@ class ChordTasks(object):
         synapse = Synapse(data)
 
         if data_key and data_key != synapse.synapse_key:
-            log.warning("Invalid Synapse; synapse_key != data_key.")
+            log.warning("Invalid Synapse; data_key != synapse_key ({}/{})."\
+                .format(\
+                    mbase32.encode(data_key),\
+                    mbase32.encode(synapse.synapse_key)))
             return None
 
         now = int(mutil.utc_timestamp()*1000)
@@ -2948,7 +2960,8 @@ class ChordTasks(object):
                 mutil.calc_log_distance(\
                     synapse.target_key, synapse.synapse_key)
 
-            if direction < 0 or dist > consts.NODE_ID_BITS - 20:
+            if direction < 0\
+                    or dist > (consts.NODE_ID_BITS - Synapse.MIN_DIFFICULTY):
                 log.warning(\
                     "Invalid Synapse; PoW is insufficient ({}/{}/{}/{})."\
                         .format(\

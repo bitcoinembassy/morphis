@@ -75,6 +75,7 @@ class TargetedBlock(MorphisBlock):
 
 class Synapse(object):
     NONCE_SIZE = 8
+    MIN_DIFFICULTY = 8 # bits.
 
     @staticmethod
     def for_target(target_key, source_key):
@@ -97,7 +98,7 @@ class Synapse(object):
         self.stamps = []
         ##.
 
-        self.difficulty = 20
+        self.difficulty = Synapse.MIN_DIFFICULTY
 
         self.nonce_offset = None
 
@@ -117,6 +118,10 @@ class Synapse(object):
 
         self._synapse_key =\
             enc.generate_ID(self.buf[:self.nonce_offset])
+
+        if log.isEnabledFor(logging.INFO):
+            log.info(\
+                "synapse_key=[{}].".format(mbase32.encode(self._synapse_key)))
 
         return self._synapse_key
 
@@ -217,6 +222,7 @@ class Synapse(object):
         i, self.signature = sshtype.parse_binary_from(self.buf, i)
         i, self.key_bytes = sshtype.parse_binary_from(self.buf, i)
 
+        self.nonce_offset = i
         end = i + Synapse.NONCE_SIZE
         self.nonce = self.buf[i:end]
         i = end
