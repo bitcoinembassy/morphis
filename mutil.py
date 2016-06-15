@@ -77,7 +77,7 @@ def log_base2_8bit(val):
     return r
 
 def hex_string(val):
-    if not val:
+    if val is None:
         return None
 
     buf = ""
