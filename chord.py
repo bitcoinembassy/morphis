@@ -51,6 +51,7 @@ class ChordEngine():
         self.server_protocol = None
 
         self.shells = {}
+        self.shell_reload_flag = False
 
         self.forced_connects = {} # {id, Peer}
         self.pending_connections = {} # {Task, Peer->dbid}
@@ -882,6 +883,12 @@ class ChordEngine():
                 loop=self.loop)
             return
         elif channel_type == "session":
+            if self.shell_reload_flag:
+                self.shell_reload_flag = False
+                import importlib
+                log.warning("Reloading shell.py due to reload flag.")
+                importlib.reload(shell)
+
             self.shells[local_cid] =\
                 shell.Shell(self.loop, peer, local_cid, queue)
             return

@@ -305,6 +305,15 @@ class Shell(cmd.Cmd):
             log.exception("eval")
             self.writeln("Exception: [{}].".format(e))
 
+    def do_reload(self, arg):
+        "Reload the shell (requires relogin)."
+
+        if not self.peer.engine.node.eval_enabled:
+            self.writeln("Eval is disabled.")
+            return
+
+        self.peer.engine.shell_reload_flag = True
+
     def do_shell(self, arg):
         "Execute python code."
 
