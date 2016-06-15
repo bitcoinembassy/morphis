@@ -64,7 +64,7 @@ class Shell(cmd.Cmd):
 
             line = yield from self.readline()
 
-            if line == None:
+            if line is None:
                 line = "EOF"
                 exit = True
 
@@ -128,8 +128,26 @@ class Shell(cmd.Cmd):
 
     @asyncio.coroutine
     def readline(self):
+        r = None
+
+        while True:
+            try:
+                r = yield from self._readline()
+                break
+            except Exception as e:
+                log.exception("self._readline()")
+                self.write("\nException: [{}].".format(e))
+                self.flush()
+                return ""
+
+        return r
+
+    @asyncio.coroutine
+    def _readline(self):
         buf = bytearray()
         savedcmd = None
+        pos = 0
+        enter_pressed = False
 
         while True:
             packet = yield from self.queue.get()
@@ -160,31 +178,64 @@ class Shell(cmd.Cmd):
                     self.flush()
 
                     buf = buf[:-1]
+                    pos -= 1
                     continue
                 elif char == 0x04:
                     self.writeln("quit")
                     self.flush()
                     return "quit"
+                elif char == 0x0d:
+                    enter_pressed = True
+                else:
+                    log.warning(\
+                        "UNHANDLED CHAR: [{:02x}]:[{}]."\
+                            .format(char, chr(char)))
             elif lenval == 3:
                 if msg.value == UP_ARROW:
                     if savedcmd == None:
                         savedcmd = buf.copy()
 
-                    self._replace_line(buf, self.lastcmd.encode("UTF-8"))
+                    last_cmd = self.lastcmd.encode("UTF-8")
+                    self._replace_line(buf, last_cmd)
+                    pos = len(last_cmd)
 
                     continue
                 elif msg.value == DOWN_ARROW:
                     if savedcmd != None:
                         self._replace_line(buf, savedcmd)
+                        pos = len(savedcmd)
                         savedcmd = None
                     continue
+                elif msg.value == LEFT_ARROW:
+                    pos -= 1
+                    self.write(LEFT_ARROW)
+                    self.flush()
+                    continue
+                else:
+                    log.warning(\
+                        "UNHANDLED CHAR SEQUENCE: [{}]:[{}]."\
+                            .format(hex_string(msg.value), msg.value))
 
-            buf += msg.value
+            if enter_pressed:
+                buf += b'\r'
+            else:
+                msg_value_len = len(msg.value)
 
-            # Echo back their input.
-            rmsg = BinaryMessage()
-            rmsg.value = msg.value.replace(b'\n', b"\r\n")
-            self.peer.protocol.write_channel_data(self.local_cid, rmsg.encode())
+                if pos == len(buf):
+                    buf += msg.value
+                    pos += msg_value_len
+                    # Echo back their input.
+                    rmsg = BinaryMessage()
+                    rmsg.value = msg.value.replace(b'\n', b"\r\n")
+                    self.peer.protocol.write_channel_data(\
+                        self.local_cid, rmsg.encode())
+                else:
+                    rest = msg.value + buf[pos:]
+                    buf = buf[:pos] + rest
+                    pos += 1
+                    self.write(rest)
+                    self.write(LEFT_ARROW*(len(rest)-msg_value_len))
+                    self.flush()
 
             #TODO: Replace this hacky code that handle multibyte characters
             # with something better. This lets you type one and hit enter
@@ -204,6 +255,8 @@ class Shell(cmd.Cmd):
                     continue
 
                 buf = buf[i+1:]
+
+                log.warning("line=[{}].".format(hex_string(line.encode())))
 
                 return line
 
