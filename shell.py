@@ -169,7 +169,7 @@ class Shell(cmd.Cmd):
             if lenval == 1:
                 char = msg.value[0]
                 if char == 0x7f:
-                    if not buf:
+                    if not buf or not pos:
                         continue
 
                     self.write(LEFT_ARROW)
@@ -207,8 +207,17 @@ class Shell(cmd.Cmd):
                         savedcmd = None
                     continue
                 elif msg.value == LEFT_ARROW:
+                    if pos == 0:
+                        continue
                     pos -= 1
                     self.write(LEFT_ARROW)
+                    self.flush()
+                    continue
+                elif msg.value == RIGHT_ARROW:
+                    if pos == len(buf):
+                        continue
+                    pos += 1
+                    self.write(RIGHT_ARROW)
                     self.flush()
                     continue
                 else:
