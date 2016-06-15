@@ -94,6 +94,9 @@ class Shell(cmd.Cmd):
     def _onecmd(self, line):
         log.info("Processing command line: [{}].".format(line))
 
+        if line.startswith('@'):
+            line = "eval " + line[1:]
+
         cmd, arg, line = self.parseline(line)
 
         if not line:
