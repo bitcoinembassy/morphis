@@ -53,6 +53,8 @@ class Shell(cmd.Cmd):
 
         self.shell_locals = {"self": self}
 
+        self._shell_history = []
+        self._shell_history_idx = -1
         self._savedcmd = None
 
     @asyncio.coroutine
@@ -114,9 +116,9 @@ class Shell(cmd.Cmd):
         if cmd is None:
             return self.default(line)
         if line == "EOF":
-            self.lastcmd = ""
+            self.lastcmd("")
         else:
-            self.lastcmd = line
+            self.lastcmd(line)
 
         if cmd == "":
             return self.default(line)
@@ -135,6 +137,11 @@ class Shell(cmd.Cmd):
         except Exception as e:
             self.writeln("Exception [{}] executing command.".format(e))
             log.exception("func(arg)")
+
+    def lastcmd(self, cmd):
+        if self._shell_history and cmd == self._shell_history[-1]:
+            return
+        self._shell_history.append(cmd)
 
     @asyncio.coroutine
     def readline(self):
@@ -214,18 +221,38 @@ class Shell(cmd.Cmd):
                 if msg.startswith(UP_ARROW):
                     msg = msg[len(UP_ARROW):]
 
-                    if self._savedcmd == None:
+                    if not self._shell_history or self._shell_history_idx == 0:
+                        continue
+
+                    if self._shell_history_idx == -1:
                         self._savedcmd = buf.copy()
 
-                    last_cmd = self.lastcmd.encode("UTF-8")
+                    self._shell_history_idx =\
+                        len(self._shell_history) - 1\
+                            if self._shell_history_idx == -1\
+                            else self._shell_history_idx - 1
+
+                    last_cmd = self._shell_history[self._shell_history_idx]\
+                        .encode("UTF-8")
                     pos = self._replace_line(buf, pos, last_cmd)
                     continue
                 elif msg.startswith(DOWN_ARROW):
                     msg = msg[len(DOWN_ARROW):]
 
-                    if self._savedcmd != None:
-                        pos = self._replace_line(buf, pos, self._savedcmd)
-                        self._savedcmd = None
+                    if self._shell_history_idx == -1:
+                        continue
+
+                    if self._shell_history_idx == len(self._shell_history) - 1:
+                        self._shell_history_idx = -1
+                        if self._savedcmd is not None:
+                            pos = self._replace_line(buf, pos, self._savedcmd)
+                            self._savedcmd is None
+                        continue
+
+                    self._shell_history_idx += 1
+                    rline = self._shell_history[self._shell_history_idx]\
+                        .encode("UTF-8")
+                    pos = self._replace_line(buf, pos, rline)
                     continue
                 elif msg.startswith(LEFT_ARROW):
                     msg = msg[len(LEFT_ARROW):]
@@ -303,6 +330,7 @@ class Shell(cmd.Cmd):
             elif char == 0x0d:
                 msg = msg[1:]
                 enter_pressed = True
+                self._shell_history_idx = -1
             else:
                 msg = msg[1:]
 #                log.warning(\
@@ -852,7 +880,7 @@ class Shell(cmd.Cmd):
 
         self.writeln("Timed command took: {}.".format(diff))
 
-        self.lastcmd = "time " + arg
+        self.lastcmd("time " + arg)
 
     def emptyline(self):
         pass
