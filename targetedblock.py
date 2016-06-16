@@ -247,7 +247,7 @@ class Synapse(object):
 
         if log.isEnabledFor(logging.INFO):
             log.info(\
-                "Work found nonce [{}].".format(mbase32.encode(nonce_bytes)))
+                "Work found nonce [{}].".format(mutil.hex_string(nonce_bytes)))
 
         return nonce_bytes
 
