@@ -2982,8 +2982,9 @@ class ChordTasks(object):
                 log.warning(\
                     "Invalid Synapse; PoW is insufficient ({}/{}/{}/{})."\
                         .format(\
-                            direction, dist, mbase32.enc(synapse.synapse_key),\
-                            mbase32.enc(synapse.target_key)))
+                            direction, dist,\
+                            mbase32.encode(synapse.synapse_key),\
+                            mbase32.encode(synapse.target_key)))
                 return None
 
             return synapse
