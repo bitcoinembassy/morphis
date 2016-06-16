@@ -51,8 +51,7 @@ class Shell(cmd.Cmd):
 
         self.out_buffer = bytearray()
 
-        self.shell_locals = {}
-        self.shell_locals["self"] = self
+        self.shell_locals = {"self": self}
 
         self._savedcmd = None
 
