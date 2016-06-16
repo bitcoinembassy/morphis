@@ -471,7 +471,7 @@ class Shell(cmd.Cmd):
         return True
 
     def do_eval(self, arg):
-        "Execute python code."
+        "Evaluate python code."
 
         if not self.peer.engine.node.eval_enabled:
             self.writeln("Eval is disabled.")
@@ -494,6 +494,7 @@ class Shell(cmd.Cmd):
         self.peer.engine.shell_reload_flag = True
 
     def do_shell(self, arg):
+        "Execute python code."
         self.do_exec(arg)
 
     def do_exec(self, arg):
