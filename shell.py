@@ -104,6 +104,8 @@ class Shell(cmd.Cmd):
 
         if line.startswith('@'):
             line = "eval " + line[1:]
+        elif line.startswith('+'):
+            line = "dbcall " + line[1:]
 
         cmd, arg, line = self.parseline(line)
 
@@ -478,6 +480,18 @@ class Shell(cmd.Cmd):
         except Exception as e:
             log.exception("exec")
             self.writeln("Exception: [{}].".format(e))
+
+    def do_dbcall(self, arg):
+        "Execute python code within a Db Session."
+
+        if not self.peer.engine.node.eval_enabled:
+            self.writeln("Eval is disabled.")
+            return
+
+        with self.peer.engine.node.db.open_session() as sess:
+            self.shell_locals["sess"] = sess
+            exec(arg, globals(), self.shell_locals)
+            del self.shell_locals["sess"]
 
     def do_lp(self, arg):
         "listpeers alias."
