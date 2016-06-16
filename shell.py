@@ -156,7 +156,7 @@ class Shell(cmd.Cmd):
                     log.log(logging.DEBUG+1, "Received text [{}]."\
                         .format(msg.value))
 
-            log.warning("R=[{}].".format(hex_string(msg.value)))
+#            log.warning("R=[{}].".format(hex_string(msg.value)))
 
             # Process the packet.
             try:
@@ -304,9 +304,9 @@ class Shell(cmd.Cmd):
                 enter_pressed = True
             else:
                 msg = msg[1:]
-                log.warning(\
-                    "UNHANDLED CHAR: [{:02x}]; buf=[{}]."\
-                        .format(char, hex_string(buf)))
+#                log.warning(\
+#                    "UNHANDLED CHAR: [{:02x}]; buf=[{}]."\
+#                        .format(char, hex_string(buf)))
 
             if enter_pressed:
                 buf += b'\r'
@@ -346,7 +346,7 @@ class Shell(cmd.Cmd):
                     i += 1
                     continue
 
-                log.warning("line=[{}].".format(hex_string(line.encode())))
+#                log.warning("line=[{}].".format(hex_string(line.encode())))
 
                 return line, msg, pos
 
