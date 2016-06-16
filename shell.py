@@ -30,6 +30,10 @@ RIGHT_ARROW = bytearray((0x1b, 0x5b, 0x43))
 LEFT_ARROW = bytearray((0x1b, 0x5b, 0x44))
 END = bytearray((0x1b, 0x5b, 0x46))
 HOME = bytearray((0x1b, 0x5b, 0x48))
+INSERT = bytearray((0x1b, 0x5b, 0x32, 0x7e))
+DELETE = bytearray((0x1b, 0x5b, 0x33, 0x7e))
+PAGE_UP = bytearray((0x1b, 0x5b, 0x35, 0x7e))
+PAGE_DOWN = bytearray((0x1b, 0x5b, 0x36, 0x7e))
 
 class Shell(cmd.Cmd):
     intro = "Welcome to the Morphis Shell Socket."\
@@ -182,6 +186,29 @@ class Shell(cmd.Cmd):
                 return None, buf, pos
             char = msg[0]
 
+            if lenval >= 4 and char == 0x1b:
+                if msg.startswith(DELETE):
+                    msg = msg[len(DELETE):]
+
+                    if not buf or pos == len(buf):
+                        continue
+
+                    self.write(buf[pos+1:])
+                    self.write(b' ')
+                    self.write(LEFT_ARROW*(len(buf)-pos))
+                    self.flush()
+
+                    buf = buf[:pos] + buf[pos+1:]
+                    continue
+                elif msg.startswith(INSERT):
+                    msg = msg[len(INSERT):]
+                    continue
+                elif msg.startswith(PAGE_UP):
+                    msg = msg[len(PAGE_UP):]
+                    continue
+                elif msg.startswith(PAGE_DOWN):
+                    msg = msg[len(PAGE_DOWN):]
+                    continue
             if lenval >= 3 and char == 0x1b:
                 if msg.startswith(UP_ARROW):
                     msg = msg[len(UP_ARROW):]
