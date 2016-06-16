@@ -2975,7 +2975,7 @@ class ChordTasks(object):
             # Then it is required to be a POW Synapse.
             dist, direction =\
                 mutil.calc_log_distance(\
-                    synapse.target_key, synapse.synapse_key)
+                    synapse.target_key, synapse.synapse_pow)
 
             if direction < 0\
                     or dist > (consts.NODE_ID_BITS - Synapse.MIN_DIFFICULTY):
@@ -2983,8 +2983,8 @@ class ChordTasks(object):
                     "Invalid Synapse; PoW is insufficient ({}/{}/{}/{})."\
                         .format(\
                             direction, dist,\
-                            mbase32.encode(synapse.synapse_key),\
-                            mbase32.encode(synapse.target_key)))
+                            mbase32.encode(synapse.target_key),\
+                            mbase32.encode(synapse.synapse_pow)))
                 return None
 
             return synapse
