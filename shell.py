@@ -464,6 +464,9 @@ class Shell(cmd.Cmd):
         self.peer.engine.shell_reload_flag = True
 
     def do_shell(self, arg):
+        self.do_exec(arg)
+
+    def do_exec(self, arg):
         "Execute python code."
 
         if not self.peer.engine.node.eval_enabled:
@@ -473,7 +476,7 @@ class Shell(cmd.Cmd):
         try:
             exec(arg, globals(), self.shell_locals)
         except Exception as e:
-            log.exception("eval")
+            log.exception("exec")
             self.writeln("Exception: [{}].".format(e))
 
     def do_lp(self, arg):
