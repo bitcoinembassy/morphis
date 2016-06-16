@@ -598,11 +598,14 @@ class Shell(cmd.Cmd):
         diff = datetime.today() - start
 
         self.writeln("send_get_data(..) took: {}.".format(diff))
-        self.writeln("version=[{}].".format(data_rw.version))
-        self.writeln("data:")
-        if data_rw.data is not None:
-            self.write_raw(data_rw.data)
-            self.writeln("")
+        if data_rw:
+            self.writeln("version=[{}].".format(data_rw.version))
+            self.writeln("data:")
+            if data_rw.data is not None:
+                self.write_raw(data_rw.data)
+                self.writeln("")
+            else:
+                self.writeln("Not found.")
         else:
             self.writeln("Not found.")
 
