@@ -17,7 +17,7 @@ import maalstroom.dmail as dmail
 import maalstroom.templates as templates
 import mbase32
 from morphisblock import MorphisBlock
-from targetedblock import TargetedBlock, Synapse
+import targetedblock as tb
 from mutil import fia, hex_dump, make_safe_for_html_content, utc_datetime
 import sshtype
 
@@ -180,7 +180,7 @@ def _process_create_axon_post(dispatcher, req):
 
     target_addr = mbase32.decode(target_addr)
 
-    synapse = Synapse.for_target(target_addr, key)
+    synapse = tb.Synapse.for_target(target_addr, key)
 
     yield from\
         dispatcher.node.chord_engine.tasks.send_store_synapse(\
@@ -300,12 +300,15 @@ def _process_axon_synapses(dispatcher, axon_addr_enc):
 #        msg = "<div style='height: 5.5em; width: 100%; overflow: hidden;'>"\
 #            "{}</div>\n".format(_format_axon(axon.data, axon.key))
 
+        content =\
+            yield from _format_axon(\
+                dispatcher.node, axon.data, axon.key, mbase32.encode(axon.key))
+
         template = templates.dds_synapse_view[0]
 
         template = template.format(\
             key=axon_addr_enc,\
-            content=_format_axon(\
-                axon.data, axon.key, mbase32.encode(axon.key)))
+            content=content)
 
         dispatcher.send_partial_content(template, first)
 
@@ -390,10 +393,12 @@ def _process_read_axon(dispatcher, req):
         # Plain data, return it!
         key_enc = mbase32.encode(key)
 
+        content = yield from _format_axon(dispatcher.node, data, key, key_enc)
+
         template = templates.dds_synapse_view[0]
 
         template = template.format(\
-            key=key_enc, content=_format_axon(data, key, key_enc))
+            key=key_enc, content=content)
 
         msg = "<head><link rel='stylesheet' href='morphis://.dds/axon/grok/style.css'></link></head><body style='height: 90%; padding:0;margin:0;'>{}</body>".format(template)
 
@@ -437,8 +442,22 @@ def _process_read_axon(dispatcher, req):
 #
 #    dispatcher.send_content(msg_txt)
 
-def _format_axon(data, key, key_enc):
-    return __format_post(data)\
+@asyncio.coroutine
+def _format_axon(node, data, key, key_enc):
+    try:
+        result = __format_post(data)
+    except UnicodeDecodeError:
+        synapse = tb.Synapse(data)
+
+        data_rw = yield from\
+                node.chord_engine.tasks.send_get_data(synapse.source_key)
+
+        if not data_rw or data_rw.data is None:
+            return "<NOT FOUND>"
+
+        result = __format_post(data_rw.data)
+
+    return result\
         + "<div style='font-family: monospace; font-size: 8pt;"\
             "color: #a0a0ff; position: absolute; bottom: 0.3em;"\
             "right: 0.3em;'>{}</div>".format(key_enc[:32])
