@@ -612,6 +612,11 @@ class Shell(cmd.Cmd):
             self.writeln("Not found.")
 
     @asyncio.coroutine
+    def do_gtd(self, arg):
+        "gettargeteddata alias."
+        yield from self.do_gettargeteddata(arg)
+
+    @asyncio.coroutine
     def do_gettargeteddata(self, arg):
         "<DATA_KEY> retrieve targeted data for DATA_KEY from the network."
 
@@ -629,6 +634,7 @@ class Shell(cmd.Cmd):
         self.writeln("send_get_targeted_data(..) took: {}.".format(diff))
 
         if data_rw.data is not None:
+            self.writeln("len(data): {}".format(len(data_rw.data)))
             self.writeln("data:")
             self.write_raw(data_rw.data)
             self.writeln("")
