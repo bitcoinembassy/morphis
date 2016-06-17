@@ -121,6 +121,7 @@ class MaalstroomDispatcher(object):
                 b"${MORPHIS_VERSION}", version_str.encode())
 
             self.send_content([content, None])
+            return
 
         if log.isEnabledFor(logging.DEBUG):
             log.debug("rpath=[{}].".format(rpath))
