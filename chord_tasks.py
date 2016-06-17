@@ -1843,9 +1843,12 @@ class ChordTasks(object):
                     pmsg.data_present = data_present
 
                 if log.isEnabledFor(logging.INFO):
-                    log.info("Writing DataPresence (data_present=[{}])"\
-                        " response."\
-                            .format(data_present))
+                    log.info(\
+                        "Writing DataPresence (data_id=[{}], data_present="\
+                            "[{}]) response."\
+                                .format(\
+                                    mbase32.encode(fnmsg.node_id),\
+                                    data_present))
 
                 peer.protocol.write_channel_data(local_cid, pmsg.encode())
             elif fnmsg.data_mode is cp.DataMode.store:
@@ -1856,8 +1859,13 @@ class ChordTasks(object):
                 imsg = cp.ChordStorageInterest()
                 imsg.will_store = will_store
 
-                log.info("Writing StorageInterest (will_store=[{}]) response."\
-                    .format(will_store))
+                if log.isEnabledFor(logging.INFO):
+                    log.info(\
+                        "Writing StorageInterest (data_id=[{}], will_store="\
+                            "[{}]) response."\
+                                .format(\
+                                    mbase32.encode(fnmsg.node_id),\
+                                    will_store))
 
                 peer.protocol.write_channel_data(local_cid, imsg.encode())
             else:
@@ -2714,6 +2722,9 @@ class ChordTasks(object):
                         valid = True
                         data_key = bytes(tb.target_key)
                 else:
+                    #TODO: YOU_ARE_HERE: Right now we store into any indexes
+                    # without checking. By this I mean we do not even verify
+                    # that data_id is even in this Synapse at all!
                     synapse = self._check_synapse(data)
                     if synapse:
                         valid = True
