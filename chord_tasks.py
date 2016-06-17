@@ -2200,7 +2200,7 @@ class ChordTasks(object):
 
         distance = mutil.calc_raw_distance(self.engine.node_id, data_id)
 
-        min_sig_bits = 20 if target_key is not None else 32
+        min_sig_bits = 8 if target_key is not None else 32
 
         if significant_bits and significant_bits >= min_sig_bits:
             mask = ((1 << (chord.NODE_ID_BITS - significant_bits)) - 1)\
