@@ -2406,8 +2406,9 @@ class ChordTasks(object):
 
         if log.isEnabledFor(logging.INFO):
             peer_dbid = tun_meta.peer.dbid if tun_meta else "<self>"
-            log.info("Received DataResponse from Peer [{}] and path [{}]."\
-                .format(peer_dbid, path))
+            log.info("Received DataResponse (targeted=[{}]) from Peer [{}]"\
+                " and path [{}]."\
+                    .format(data_rw.targeted, peer_dbid, path))
 
         if len(drmsg.data) == 0:
             # This can happen if a node had an error, it sends an empty one so
@@ -2426,30 +2427,33 @@ class ChordTasks(object):
                 if drmsg.version is not None:
                     #TODO: Implement updateable TargetedBlock at this level?
                     log.warning("Received versioned (version=[{}])"\
-                        " DataResponse when we requested a TargetedBlock,"\
+                        " DataResponse when we requested a TargetedBlock;"\
                         " that is invalid.".format(drmsg.version))
                     return None
 
-                tb = self._check_targeted_block(data, data_rw.data_key)
+                if data[:16] == MorphisBlock.UUID:
+                    valid =\
+                        self._check_targeted_block(data, data_rw.data_key)
 
-                if not tb:
+                    # We do not return the TargetedBlock header. (We use to
+                    # before this commit. NOTE: These lines got moved now.)
+                    data = data[TargetedBlock.BLOCK_OFFSET:]
+                else:
+                    valid = self._check_synapse(data, data_rw.data_key)
+
+                if not valid:
                     if log.isEnabledFor(logging.INFO):
                         log.info("DataResponse is invalid!")
                     return None
 
                 if data_rw.target_key is not None and\
-                        data_rw.target_key != tb.target_key :
+                        data_rw.target_key != valid.target_key:
                     if log.isEnabledFor(logging.INFO):
                         log.info("Unexpected target_key in header;"\
                             " DataResponse is invalid!")
                     return None
 
-                # We do not return the TargetedBlock header. (We use to before
-                # this commit.)
-                data = data[TargetedBlock.BLOCK_OFFSET:]
-
-                # Everything checks out.
-                valid = True
+                # Everything checks out for targeted.
             elif drmsg.version is not None:
                 # Updateable key mode.
                 data_hash = enc.generate_ID(data)
@@ -2473,8 +2477,8 @@ class ChordTasks(object):
                             enc.generate_ID(data_key + data_rw.path_hash)
 
                     if data_key != data_rw.data_key:
-                        if log.isEnabledFor(logging.DEBUG):
-                            log.debug("DataResponse is invalid!")
+                        if log.isEnabledFor(logging.INFO):
+                            log.info("DataResponse is invalid!")
                         return None
 
                 # Return the signature to the original caller.
@@ -2494,8 +2498,8 @@ class ChordTasks(object):
                 valid = data_hash == data_rw.data_key
 
             if not valid:
-                if log.isEnabledFor(logging.DEBUG):
-                    log.debug("DataResponse is invalid!")
+                if log.isEnabledFor(logging.INFO):
+                    log.info("DataResponse is invalid!")
                 return None
 
             if log.isEnabledFor(logging.DEBUG):
@@ -2505,7 +2509,7 @@ class ChordTasks(object):
 
         r = yield from self.loop.run_in_executor(None, threadcall)
 
-        if r:
+        if r is not None:
             data_rw.data = r
             data_rw.data_done.set()
             return True
@@ -3009,7 +3013,7 @@ class ChordTasks(object):
         if not valid_header_hash:
             if log.isEnabledFor(logging.WARNING):
                 log.warning(\
-                    "TargetedData response is invalid (header/hash mismatch!")
+                    "TargetedData response is invalid (header/hash mismatch)!")
             return False
 
         tb = TargetedBlock(data)
