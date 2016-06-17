@@ -338,7 +338,7 @@ def _process_axon_synapses(dispatcher, axon_addr_enc):
 
     dp = dpush.DpushEngine(dispatcher.node)
 
-    yield from dp.scan_targeted_blocks(axon_addr, 20, cb)
+    yield from dp.scan_targeted_blocks(axon_addr, 8, cb)
 
     if first:
         dispatcher.send_partial_content("Nothing found yet.</body>")
