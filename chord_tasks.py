@@ -2190,10 +2190,10 @@ class ChordTasks(object):
 
     @asyncio.coroutine
     def _check_has_data(self, data_id, significant_bits, target_key):
-        if log.isEnabledFor(logging.DEBUG):
+        if log.isEnabledFor(logging.INFO):
             target_key_enc =\
                 mbase32.encode(target_key) if target_key is not None else None
-            log.debug("Checking for data_id=[{}], significant_bits=[{}],"\
+            log.info("Checking for data_id=[{}], significant_bits=[{}],"\
                 " target_key=[{}]."\
                     .format(mbase32.encode(data_id), significant_bits,\
                         target_key_enc))
