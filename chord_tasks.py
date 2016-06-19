@@ -1143,7 +1143,7 @@ class ChordTasks(object):
             else:
                 assert data_mode is cp.DataMode.get
 
-                if data_rw.data is None:
+                if not significant_bits and data_rw.data is None:
                     # Give one last try to find locally. I think we don't
                     # check locally always?
                     data_present = yield from\
