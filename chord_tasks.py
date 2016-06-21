@@ -480,6 +480,16 @@ class ChordTasks(object):
                 enc.generate_ID(synapse.synapse_key), for_data=True,
                 data_msg=sdmsg, retry_factor=retry_factor)
 
+        if synapse.nonce:
+            storing_nodes +=\
+                yield from self.send_find_node(\
+                    enc.generate_ID(synapse.synapse_pow), for_data=True,
+                    data_msg=sdmsg, retry_factor=retry_factor)
+            if store_key:
+                yield from self.send_store_key(\
+                    data, synapse.synapse_pow, targeted=True,\
+                    retry_factor=retry_factor)
+
         # Store for target_key.
         for target_key in synapse.target_keys:
             storing_nodes +=\
