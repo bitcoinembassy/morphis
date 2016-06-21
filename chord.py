@@ -28,7 +28,7 @@ import peer as mnpeer
 import shell
 import enc
 from db import Peer
-from mutil import hex_dump, log_base2_8bit, hex_string, calc_log_distance
+from mutil import hex_dump, hex_string, calc_log_distance
 
 BUCKET_SIZE = 16
 
