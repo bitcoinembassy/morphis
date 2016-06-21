@@ -11,7 +11,7 @@ from contextlib import contextmanager
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.schema import Index
 from sqlalchemy import create_engine, text, event, MetaData, func, Table,\
-    Column, ForeignKey, Integer, String, DateTime, TypeDecorator
+    Column, ForeignKey, Integer, String, DateTime, TypeDecorator, update
 from sqlalchemy.exc import ProgrammingError, OperationalError
 from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.pool import Pool
@@ -568,6 +568,10 @@ def _upgrade_4_to_5(db):
             sess.execute(st)
         except:
             sess.rollback()
+
+        # Our calc_log_distance calculation was broken in older versions! Code
+        # in node.py will reset these if they were blank.
+        sess.execute(update(Peer, bind=db.engine).values(distance=None))
 
         _update_node_state(sess, 5)
 

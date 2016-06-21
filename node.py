@@ -199,6 +199,16 @@ class Node():
                 sess.execute(update(db.Peer, bind=self.db.engine)\
                     .values(connected=False, last_connect_attempt=None))
 
+                # Our calc_log_distance calculation was broken in older
+                # versions! Code in db.py clears out this column if the db was
+                # the older version to signal this code to execute..
+                peer = sess.query(db.Peer).first()
+                if peer.distance is None:
+                    for peer in sess.query(db.Peer).all():
+                        peer.distance, direction =\
+                            mutil.calc_log_distance(\
+                                self.engine.node_id, peer.node_id)
+
                 sess.commit()
 
                 return peer_cnt
