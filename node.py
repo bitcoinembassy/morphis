@@ -86,6 +86,10 @@ class Node():
         global nodes
         return nodes
 
+    @property
+    def engine(self):
+        return self.chord_engine
+
     @asyncio.coroutine
     def init_db(self):
         if self._db_initialized:
