@@ -14,7 +14,7 @@ from sqlalchemy import update, func
 import packet as mnetpacket
 import rsakey
 import mn1
-from mutil import hex_dump, hex_string
+import mutil
 import chord
 import peer
 import db
@@ -167,7 +167,7 @@ class Node():
 
                     if log.isEnabledFor(logging.INFO):
                         log.info("max_distance=[{}]."\
-                            .format(hex_string(max_distance)))
+                            .format(mutil.hex_string(max_distance)))
 
                     return datastore_size, max_distance
 
