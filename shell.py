@@ -544,8 +544,14 @@ class Shell(cmd.Cmd):
         
         for peer in peers:
             self.writeln(\
-                "Peer: (id={} addr={}, distance={})."\
-                    .format(peer.dbid, peer.address, peer.distance))
+                "Peer: (\n\tdbid: {},\n\tnode_id: {},\n\taddr: {},\n\t"\
+                "distance: {})."\
+                    .format(\
+                        peer.dbid,
+                        mbase32.encode(peer.node_id),
+                        peer.address,
+                        peer.distance))
+
         self.writeln("Count: {}.".format(len(peers)))
 
     @asyncio.coroutine
