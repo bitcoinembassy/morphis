@@ -76,6 +76,16 @@ def log_base2_8bit(val):
 
     return r
 
+def highest_bit_8bit(val):
+    r = 0
+
+    for i in range(2, -1, -1):
+        if val & bc_masks[i]:
+            val >>= bc_shifts[i]
+            r |= bc_shifts[i]
+
+    return r + val
+
 def hex_string(val):
     if val is None:
         return None
@@ -86,6 +96,21 @@ def hex_string(val):
         if b <= 0x0F:
             buf += '0'
         buf += hex(b)[2:]
+
+    return buf
+
+def bin_string(val):
+    if val is None:
+        return None
+
+    buf = ""
+
+    for b in val:
+        for i in range(7, -1, -1):
+            if b & 1 << i:
+                buf += '1'
+            else:
+                buf += '0'
 
     return buf
 
