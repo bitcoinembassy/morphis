@@ -203,7 +203,7 @@ class Node():
                 # versions! Code in db.py clears out this column if the db was
                 # the older version to signal this code to execute..
                 peer = sess.query(db.Peer).first()
-                if peer.distance is None:
+                if peer and peer.distance is None:
                     for peer in sess.query(db.Peer).all():
                         peer.distance, direction =\
                             mutil.calc_log_distance(\
