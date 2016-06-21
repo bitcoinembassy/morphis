@@ -183,7 +183,7 @@ def calc_log_distance(nid, pid):
             direction = 1 if pid[i] > nid[i] else -1
 
             xv = pid[i] ^ nid[i]
-            xv = log_base2_8bit(xv) + 1
+            xv = highest_bit_8bit(xv)
 
             # (byte * 8) + bit.
             dist = ((id_size - 1 - i) << 3) + xv
