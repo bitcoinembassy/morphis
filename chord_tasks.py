@@ -1162,6 +1162,7 @@ class ChordTasks(object):
 
                     if data_present:
                         log.warning("FOUND LOCALLY AFTER PROOF TRIGGERD.")
+                        data_rw.data_done = asyncio.Event(loop=self.loop)
                         yield from self._process_own_data(node_id, data_rw)
 
                 if data_rw.data is None\
