@@ -193,7 +193,7 @@ class Synapse(object):
         nonce_bytes = yield from\
             self._calculate_nonce(nbuf, nonce_offset, self.difficulty)
 
-        Synapse._store_nonce(nbuf, nonce_bytes, nonce_offset)
+        self._store_nonce(nbuf, nonce_bytes, nonce_offset)
 
         if self.stamps:
             nbuf += self.stamps
@@ -251,10 +251,9 @@ class Synapse(object):
 
         return nonce_bytes
 
-    @staticmethod
-    def _store_nonce(data, nonce_bytes, offset):
+    def _store_nonce(self, data, nonce_bytes, offset):
         assert type(nonce_bytes) in (bytes, bytearray)
         lenn = len(nonce_bytes)
         end = offset + Synapse.NONCE_SIZE
         start = end - lenn
-        data[start:end] = nonce_bytes
+        self.nonce = data[start:end] = nonce_bytes
