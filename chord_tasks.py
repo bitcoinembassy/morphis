@@ -2441,6 +2441,11 @@ class ChordTasks(object):
             # Truncate the data to exclude the cipher padding.
             data = data[:drmsg.original_size]
 
+#TODO: Debug stuff, delete.
+#            log.warning(\
+#                "before=[\n{}], after=[\n{}]."\
+#                    .format(mutil.hex_dump(data), mutil.hex_dump(drmsg.data)))
+
             if data_rw.targeted:
                 # TargetedBlock mode.
                 if drmsg.version is not None:
@@ -2616,7 +2621,7 @@ class ChordTasks(object):
             valid = data_id == data_key
 
         if not valid:
-            errmsg = "Peer (dbid=[{}]) sent an invalid data."
+            errmsg = "Peer (dbid=[{}]) sent an invalid data.".format(peer.dbid)
             log.warning(errmsg)
             raise ChordException(errmsg)
 
@@ -2739,7 +2744,12 @@ class ChordTasks(object):
                     synapse = self._check_synapse(data)
                     if synapse:
                         valid = True
-                        data_key = bytes(synapse.synapse_key)
+                        if enc.generate_ID(synapse.synapse_key) == data_id:
+                            data_key = synapse.synapse_key
+                        else:
+                            assert\
+                                enc.generate_ID(synapse.synapse_pow) == data_id
+                            data_key = synapse.synapse_pow
             else:
                 data_key = enc.generate_ID(data)
                 valid = data_id == enc.generate_ID(data_key)
@@ -2749,6 +2759,11 @@ class ChordTasks(object):
                     " the data!".format(peer_dbid)
                 log.warning(errmsg)
                 raise ChordException(errmsg)
+
+#TODO: Debug stuff, delete.
+#        log.warning(\
+#            "Storing data for ID=[{}] encrypted with key [{}]."\
+#                .format(mbase32.encode(data_id), mbase32.encode(data_key)))
 
         distance = mutil.calc_raw_distance(self.engine.node_id, data_id)
         original_size = len(data)
@@ -2980,13 +2995,23 @@ class ChordTasks(object):
     def _check_synapse(self, data, data_key=None):
         "Checks if the passed Synapse data is valid; returning the Synapse or"\
         " None if the data was invalid."
-        synapse = Synapse(data)
+        try:
+            synapse = Synapse(data)
+        except:
+            log.exception(\
+                "Invalid Synapse; data=[\n{}]."\
+                    .format(mutil.hex_dump(data)))
+            return None
 
-        if data_key and data_key != synapse.synapse_key:
-            log.warning("Invalid Synapse; data_key != synapse_key ({}/{})."\
-                .format(\
-                    mbase32.encode(data_key),\
-                    mbase32.encode(synapse.synapse_key)))
+        if data_key and data_key != synapse.synapse_key\
+                and data_key != synapse.synapse_pow:
+            log.warning(\
+                "Invalid Synapse; data_key != {synapse_key,synapse_pow}"\
+                    " ({}/{}/{})."\
+                        .format(\
+                            mbase32.encode(data_key),\
+                            mbase32.encode(synapse.synapse_key),\
+                            mbase32.encode(synapse.synapse_pow)))
             return None
 
         now = int(mutil.utc_timestamp()*1000)
