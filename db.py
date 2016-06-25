@@ -105,6 +105,16 @@ def _init_daos(Base, d):
 
     d.DataBlock = DataBlock
 
+    class Synapse(Base):
+        __tablename__ = "synapse"
+
+        id = Column(Integer, primary_key=True)
+        key = Column(LargeBinary, nullable=False)
+
+    Index("synapse__key", Synapse.key)
+
+    d.Synapse = Synapse
+
     class NodeState(Base):
         __tablename__ = "nodestate"
 
