@@ -2746,10 +2746,26 @@ class ChordTasks(object):
                         valid = True
                         if enc.generate_ID(synapse.synapse_key) == data_id:
                             data_key = synapse.synapse_key
-                        else:
-                            assert\
-                                enc.generate_ID(synapse.synapse_pow) == data_id
+                        elif enc.generate_ID(synapse.synapse_pow) == data_id:
+#TODO: Debug stuff, delete.
+#                            assert\
+#                                enc.generate_ID(synapse.synapse_pow)\
+#                                    == data_id,\
+#                                "[{}], [{}], [{}], [{}], [{}]."\
+#                                    .format(\
+#                                        mbase32.encode(synapse.synapse_key),
+#                                        mbase32.encode(\
+#                                            enc.generate_ID(\
+#                                                synapse.synapse_key)),
+#                                        mbase32.encode(synapse.synapse_pow),
+#                                        mbase32.encode(\
+#                                            enc.generate_ID(\
+#                                                synapse.synapse_pow)),
+#                                        mbase32.encode(data_id))
                             data_key = synapse.synapse_pow
+                        else:
+                            log.warning("NOT IMPLEMENTED YET.")
+                            valid = False
             else:
                 data_key = enc.generate_ID(data)
                 valid = data_id == enc.generate_ID(data_key)
