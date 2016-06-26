@@ -109,11 +109,26 @@ def _init_daos(Base, d):
         __tablename__ = "synapse"
 
         id = Column(Integer, primary_key=True)
-        key = Column(LargeBinary, nullable=False)
-
-    Index("synapse__key", Synapse.key)
+        data = Column(LargeBinary, primary_key=True)
+        original_size = Column(Integer, nullable=False)
+        insert_timestamp = Column(UtcDateTime, nullable=False)
+        last_access = Column(UtcDateTime, nullable=True)
 
     d.Synapse = Synapse
+
+    class SynapseKey(Base):
+        __tablename__ = "synapsekey"
+
+        data_id = Column(LargeBinary, nullable=False)
+        distance = Column(LargeBinary, nullable=False)
+        synapse = relationship(Synapse)
+        synapse_id = Column(Integer, ForeignKey("synapse.id"))
+        key = Column(LargeBinary, nullable=False)
+        last_access = Column(UtcDateTime, nullable=True)
+
+    Index("synapsekey__data_id", SynapseKey.data_id)
+
+    d.SynapseKey = SynapseKey
 
     class NodeState(Base):
         __tablename__ = "nodestate"

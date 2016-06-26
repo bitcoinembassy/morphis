@@ -19,7 +19,7 @@ import chord
 import chord_packet as cp
 from chordexception import ChordException
 import consts
-from db import Peer, DataBlock, NodeState
+from db import Peer, DataBlock, NodeState, Synapse, SynapseKey
 import mbase32
 from morphisblock import MorphisBlock
 import mutil
@@ -28,7 +28,8 @@ import node as mnnode
 import peer as mnpeer
 import rsakey
 import sshtype
-from targetedblock import TargetedBlock, Synapse
+from targetedblock import TargetedBlock
+from targetedblock import Synapse as tb.Synapse
 
 log = logging.getLogger(__name__)
 log2 = logging.getLogger(__name__ + ".datastore")
@@ -451,7 +452,7 @@ class ChordTasks(object):
             self, synapse, store_key=True, key_callback=None, retry_factor=20):
         "Sends a StoreData request for a Synapse, returning the count of"\
         " nodes that claim to have stored it."
-        assert type(synapse) is Synapse
+        assert type(synapse) is tb.Synapse
 
         data = yield from synapse.encode()
 
@@ -481,6 +482,7 @@ class ChordTasks(object):
                 data_msg=sdmsg, retry_factor=retry_factor)
 
         if synapse.nonce:
+            # Store for synapse_pow (PoW key of synapse).
             storing_nodes +=\
                 yield from self.send_find_node(\
                     enc.generate_ID(synapse.synapse_pow), for_data=True,
@@ -1652,7 +1654,7 @@ class ChordTasks(object):
 
         return True
 
-    def unwrap_relay_packets(self, pkt, data_mode):
+    def PoW(self, pkt, data_mode):
         "Returns the inner most packet and the path stored in the relay"\
         " packets."
 
@@ -1922,8 +1924,11 @@ class ChordTasks(object):
 
                     rmsg = cp.ChordStoreData(pkt)
 
-                    r = yield from\
-                        self._store_data(\
+                    if rmsg.targeted and rmsg.data[:16] == MorphisBlock.UUID:
+                        r = yield from self._store_synapse(\
+                            peer, fnmsg.node_id, rmsg, need_pruning)
+                    else:
+                        r = yield from self._store_data(\
                             peer, fnmsg.node_id, rmsg, need_pruning)
 
                     dsmsg = cp.ChordDataStored()
@@ -2673,6 +2678,85 @@ class ChordTasks(object):
         return True
 
     @asyncio.coroutine
+    def _store_synapse(self, peer, data_id, dmsg, need_pruning):
+        "Store the Synapse in our local database. Returns True if the data"\
+        " was stored, False otherwise."
+
+        peer_dbid = peer.dbid if peer else "<self>"
+
+        synapse = self._check_synapse(data)
+
+        if synapse:
+            valid = True
+        else:
+            errmsg = "Peer dbid=[{}] sent an invalid Synapse!"\
+                .format(peer_dbid)
+            log.warning(errmsg)
+            raise ChordException(errmsg)
+
+        # We make up a random encryption key, encrypt the Synapse data with
+        # that key and store in the Synapse table, encrypt that key with each
+        # Synapse key that we are storing and store together in SynapseKey.
+        enc_key = os.urandom(64)
+        enc_data, b = enc.encrypt_data_block(dmsg.data, enc_key)
+        enc_data += b
+
+        def dbcall():
+            with self.engine.node.db.open_session() as sess:
+                s = Synapse()
+                s.data = enc_data
+                s.original_size = len(dmsg.data)
+                s.insert_timestamp = mutil.utc_datetime()
+
+                sess.add(s)
+
+                def store_key(key):
+                    sk = SynapseKey()
+                    sk.data_id = enc.generate_ID(key)
+                    sk.distance = mutil.calc_raw_distance(\
+                            self.engine.node_id, sk.data_id)
+                    sk.synapse_id = s.id
+                    sk.key, b = enc.encrypt_data_block(enc_key, key)
+
+                    # Because len(key) is multiple of AES blocksize.
+                    assert not b
+
+                    if sk.distance > self.engine.furthest_data_block:
+                        self.engine.furthest_data_block = sk.distance
+
+                    sess.add(sk)
+
+                store_key(synapse.synapse_key)
+                store_key(synapse.synapse_pow)
+                for target_key in synapse.target_keys:
+                    store_key(target_key)
+                store_key(synapse.source_key)
+
+                sess.commit()
+
+        yield from self.loop.run_in_executor(None, dbcall)
+
+        if log.isEnabledFor(logging.INFO):
+            log.info("Stored Synapse (synapse_id=[{}])."\
+                .format(mbase32.encode(enc.generate_ID(synapse.synapse_key))))
+
+#TODO: Debug stuff, delete.
+#                            assert\
+#                                enc.generate_ID(synapse.synapse_pow)\
+#                                    == data_id,\
+#                                "[{}], [{}], [{}], [{}], [{}]."\
+#                                    .format(\
+#                                        mbase32.encode(synapse.synapse_key),
+#                                        mbase32.encode(\
+#                                            enc.generate_ID(\
+#                                                synapse.synapse_key)),
+#                                        mbase32.encode(synapse.synapse_pow),
+#                                        mbase32.encode(\
+#                                            enc.generate_ID(\
+#                                                synapse.synapse_pow)),
+#                                        mbase32.encode(data_id))
+
+    @asyncio.coroutine
     def _store_data(self, peer, data_id, dmsg, need_pruning):
         "Store the data block on disk and meta in the database. Returns True"
         " if the data was stored, False otherwise."
@@ -2738,34 +2822,7 @@ class ChordTasks(object):
                         valid = True
                         data_key = bytes(tb.target_key)
                 else:
-                    #TODO: YOU_ARE_HERE: Right now we store into any indexes
-                    # without checking. By this I mean we do not even verify
-                    # that data_id is even in this Synapse at all!
-                    synapse = self._check_synapse(data)
-                    if synapse:
-                        valid = True
-                        if enc.generate_ID(synapse.synapse_key) == data_id:
-                            data_key = synapse.synapse_key
-                        elif enc.generate_ID(synapse.synapse_pow) == data_id:
-#TODO: Debug stuff, delete.
-#                            assert\
-#                                enc.generate_ID(synapse.synapse_pow)\
-#                                    == data_id,\
-#                                "[{}], [{}], [{}], [{}], [{}]."\
-#                                    .format(\
-#                                        mbase32.encode(synapse.synapse_key),
-#                                        mbase32.encode(\
-#                                            enc.generate_ID(\
-#                                                synapse.synapse_key)),
-#                                        mbase32.encode(synapse.synapse_pow),
-#                                        mbase32.encode(\
-#                                            enc.generate_ID(\
-#                                                synapse.synapse_pow)),
-#                                        mbase32.encode(data_id))
-                            data_key = synapse.synapse_pow
-                        else:
-                            log.warning("NOT IMPLEMENTED YET.")
-                            valid = False
+                    assert False, "SynapseS should not get here."
             else:
                 data_key = enc.generate_ID(data)
                 valid = data_id == enc.generate_ID(data_key)
@@ -3012,7 +3069,7 @@ class ChordTasks(object):
         "Checks if the passed Synapse data is valid; returning the Synapse or"\
         " None if the data was invalid."
         try:
-            synapse = Synapse(data)
+            synapse = tb.Synapse(data)
         except:
             log.exception(\
                 "Invalid Synapse; data=[\n{}]."\
@@ -3045,7 +3102,8 @@ class ChordTasks(object):
                     synapse.target_key, synapse.synapse_pow)
 
             if direction < 0\
-                    or dist > (consts.NODE_ID_BITS - Synapse.MIN_DIFFICULTY):
+                    or dist\
+                        > (consts.NODE_ID_BITS - tb.Synapse.MIN_DIFFICULTY):
                 log.warning(\
                     "Invalid Synapse; PoW is insufficient ({}/{}/{}/{})."\
                         .format(\
