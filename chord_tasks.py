@@ -28,8 +28,7 @@ import node as mnnode
 import peer as mnpeer
 import rsakey
 import sshtype
-from targetedblock import TargetedBlock
-from targetedblock import Synapse as tb.Synapse
+import targetedblock as tb
 
 log = logging.getLogger(__name__)
 log2 = logging.getLogger(__name__ + ".datastore")
@@ -424,7 +423,7 @@ class ChordTasks(object):
         "Sends a StoreData request for a TargetedBlock, returning the count"\
         " of nodes that claim to have stored it."
 
-        tb_header = data[:TargetedBlock.BLOCK_OFFSET]
+        tb_header = data[:tb.TargetedBlock.BLOCK_OFFSET]
 
         # data_id is a double hash due to the anti-entrapment feature.
         data_key = enc.generate_ID(tb_header)
@@ -2466,7 +2465,7 @@ class ChordTasks(object):
 
                     # We do not return the TargetedBlock header. (We use to
                     # before this commit. NOTE: These lines got moved now.)
-                    data = data[TargetedBlock.BLOCK_OFFSET:]
+                    data = data[tb.TargetedBlock.BLOCK_OFFSET:]
                 else:
                     valid = self._check_synapse(data, data_rw.data_key)
 
@@ -2684,7 +2683,7 @@ class ChordTasks(object):
 
         peer_dbid = peer.dbid if peer else "<self>"
 
-        synapse = self._check_synapse(data)
+        synapse = self._check_synapse(dmsg.data)
 
         if synapse:
             valid = True
@@ -2736,9 +2735,24 @@ class ChordTasks(object):
 
         yield from self.loop.run_in_executor(None, dbcall)
 
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("Storing Synapse (target_key=[{}],"\
+                " target_key=[{}])."\
+                .format(mbase32.encode(synapse.target_key)))
+
         if log.isEnabledFor(logging.INFO):
-            log.info("Stored Synapse (synapse_id=[{}])."\
-                .format(mbase32.encode(enc.generate_ID(synapse.synapse_key))))
+            #NOTE: We only print IDs not KEYs; so as to prevent entrapment in
+            # the log file.
+            log.info(\
+                "Stored Synapse (synapse_id=[{}], target_id=[{}],"\
+                    " source_id=[{}])."\
+                        .format(\
+                            mbase32.encode(\
+                                enc.generate_ID(synapse.synapse_key)),\
+                            mbase32.encode(\
+                                enc.generate_ID(synapse.target_key)),\
+                            mbase32.encode(\
+                                enc.generate_ID(synapse.source_key))))
 
 #TODO: Debug stuff, delete.
 #                            assert\
@@ -2817,10 +2831,10 @@ class ChordTasks(object):
                 valid = False
 
                 if data[:16] == MorphisBlock.UUID:
-                    tb = self._check_targeted_block(data, data_id=data_id)
-                    if tb:
+                    tblock = self._check_targeted_block(data, data_id=data_id)
+                    if tblock:
                         valid = True
-                        data_key = bytes(tb.target_key)
+                        data_key = bytes(tblock.target_key)
                 else:
                     assert False, "SynapseS should not get here."
             else:
@@ -2910,22 +2924,15 @@ class ChordTasks(object):
                     data_block.epubkey = a + b
                     data_block.pubkeylen = len(dmsg.pubkey)
 
-                if hasattr(locals(), "tb"):
-                    # Could check targeted still but saving indent :(
+                if targeted:
                     if log.isEnabledFor(logging.DEBUG):
                         log.debug("Storing TargetedBlock (target_key=[{}])."\
-                            .format(mbase32.encode(tb.target_key)))
+                            .format(mbase32.encode(tblock.target_key)))
                     # We don't need the following for anything coded yet, but
                     # doing it for now because then we can tell which are
                     # targeted blocks as we may want to have code purge them
                     # with more pressure than normal blocks.
-                    data_block.target_key = tb.target_key
-                elif hasattr(locals(), "synapse"):
-                    if log.isEnabledFor(logging.DEBUG):
-                        log.debug("Storing Synapse (target_key=[{}],"\
-                            " target_key=[{}])."\
-                            .format(mbase32.encode(synapse.target_key)))
-                    data_block.target_key = synapse.target_key
+                    data_block.target_key = tblock.target_key
 
                 data_block.original_size = original_size
                 data_block.insert_timestamp = mutil.utc_datetime()
@@ -3122,7 +3129,7 @@ class ChordTasks(object):
     def _check_targeted_block(self, data, data_key=None, data_id=None):
         # Check that the hash(header) matches the data_key we expect.
         header_hash =\
-            enc.generate_ID(data[:TargetedBlock.BLOCK_OFFSET])
+            enc.generate_ID(data[:tb.TargetedBlock.BLOCK_OFFSET])
 
         if data_key is not None:
             valid_header_hash = header_hash == data_key
@@ -3137,13 +3144,13 @@ class ChordTasks(object):
                     "TargetedData response is invalid (header/hash mismatch)!")
             return False
 
-        tb = TargetedBlock(data)
+        tblock = tb.TargetedBlock(data)
 
         # Check that the hash(data) matches the value in the header.
         block_hash = enc.generate_ID(\
-            data[TargetedBlock.BLOCK_OFFSET:])
+            data[tb.TargetedBlock.BLOCK_OFFSET:])
 
-        if block_hash != tb.block_hash:
+        if block_hash != tblock.block_hash:
             if log.isEnabledFor(logging.WARNING):
                 log.warning(\
                     "TargetedData response is invalid (data/header mismatch)!")
@@ -3151,9 +3158,9 @@ class ChordTasks(object):
 
         if log.isEnabledFor(logging.DEBUG):
             log.debug("DISTANCE=[{}]."\
-                .format(mutil.calc_log_distance(data_key, tb.target_key)))
+                .format(mutil.calc_log_distance(data_key, tblock.target_key)))
 
-        return tb
+        return tblock
 
     def _update_nodestate(self, sess, size_diff):
         # Rule: only update this NodeState row when holding a lock on
