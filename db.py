@@ -39,7 +39,8 @@ DmailTag = None
 User = None
 Axon = None
 #AxonKey = None
-#Synapse = None
+Synapse = None
+SynapseKey = None
 #Neuron = None
 ##.
 
@@ -119,6 +120,7 @@ def _init_daos(Base, d):
     class SynapseKey(Base):
         __tablename__ = "synapsekey"
 
+        id = Column(Integer, primary_key=True)
         data_id = Column(LargeBinary, nullable=False)
         distance = Column(LargeBinary, nullable=False)
         synapse = relationship(Synapse)
@@ -473,7 +475,8 @@ if Peer is None:
     User = d.User
     Axon = d.Axon
 #    AxonKey = d.AxonKey
-#    Synapse = d.Synapse
+    Synapse = d.Synapse
+    SynapseKey = d.SynapseKey
 #    Neuron = d.Neuron
 
 def _update_node_state(sess, version):
@@ -577,11 +580,14 @@ def _upgrade_3_to_4(db):
 def _upgrade_4_to_5(db):
     log.warning("NOTE: Upgrading database schema from version 4 to 5.")
 
+    rebuild = False
+
     db._update_schema()
 
     with db.open_session() as sess:
         default = "0" if db.is_sqlite else "false"
 
+        ## Clean up DEV mess (REMOVE FOR FINAL).
         st = "select * from synapse where neuron_id is null"
         try:
             sess.execute(st)
@@ -591,8 +597,22 @@ def _upgrade_4_to_5(db):
             sess.execute(st)
             st = "drop table axonkey"
             sess.execute(st)
+            rebuild = True
         except:
             sess.rollback()
+
+        st = "select * from synapse where last_access is null"
+        try:
+            sess.execute(st)
+        except:
+            sess.rollback()
+            try:
+                st = "drop table synapse"
+                sess.execute(st)
+                rebuild = True
+            except:
+                sess.rollback()
+        ##.
 
         # Our calc_log_distance calculation was broken in older versions! Code
         # in node.py will reset these if they were blank.
@@ -601,5 +621,8 @@ def _upgrade_4_to_5(db):
         _update_node_state(sess, 5)
 
         sess.commit()
+
+    if rebuild:
+        db._update_schema()
 
     log.warning("NOTE: Database schema upgraded.")
