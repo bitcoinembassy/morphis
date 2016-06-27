@@ -4,6 +4,7 @@
 import llog
 
 import asyncio
+from enum import Enum
 import threading
 import logging
 from contextlib import contextmanager
@@ -114,6 +115,7 @@ def _init_daos(Base, d):
         original_size = Column(Integer, nullable=False)
         insert_timestamp = Column(UtcDateTime, nullable=False)
         last_access = Column(UtcDateTime, nullable=True)
+        keys = relationship("SynapseKey", cascade="all, delete-orphan")
 
     d.Synapse = Synapse
 
@@ -125,8 +127,15 @@ def _init_daos(Base, d):
         synapse = relationship(Synapse)
         synapse_id =\
             Column(Integer, ForeignKey("synapse.id"), primary_key=True)
-        key = Column(LargeBinary, nullable=False)
+        key_type = Column(Integer, nullable=False)
+        ekey = Column(LargeBinary, nullable=False)
         last_access = Column(UtcDateTime, nullable=True)
+
+        class KeyType(Enum):
+            synapse_key = 1
+            synapse_pow = 2
+            target_key = 3
+            source_key = 4
 
     Index("synapsekey__data_id", SynapseKey.data_id)
 
@@ -590,6 +599,7 @@ def _upgrade_4_to_5(db):
         ## Clean up DEV mess (REMOVE FOR FINAL).
         st = "select * from synapse where neuron_id is null"
         try:
+            rebuild = True
             sess.execute(st)
             st = "drop table synapse"
             sess.execute(st)
@@ -597,19 +607,20 @@ def _upgrade_4_to_5(db):
             sess.execute(st)
             st = "drop table axonkey"
             sess.execute(st)
-            rebuild = True
         except:
             sess.rollback()
 
-        st = "select * from synapse where last_access is null"
+        st = "select * from synapsekey where ekey is null"
         try:
             sess.execute(st)
         except:
             sess.rollback()
             try:
+                rebuild = True
                 st = "drop table synapse"
                 sess.execute(st)
-                rebuild = True
+                st = "drop table synapsekey"
+                sess.execute(st)
             except:
                 sess.rollback()
         ##.

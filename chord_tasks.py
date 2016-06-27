@@ -12,7 +12,7 @@ import math
 import os
 import random
 
-from sqlalchemy import func
+from sqlalchemy import func, and_
 
 import bittrie
 import chord
@@ -981,7 +981,12 @@ class ChordTasks(object):
                             " data locally.")
 
                         if data_msg_type is cp.ChordStoreData:
-                            r = yield from self._store_data(\
+                            if data_msg.targeted and data_msg.data[:16]\
+                                    != MorphisBlock.UUID:
+                                r = yield from self._store_synapse(\
+                                    None, node_id, data_msg, need_pruning)
+                            else:
+                                r = yield from self._store_data(\
                                     None, node_id, data_msg, need_pruning)
                         else:
                             assert data_msg_type is cp.ChordStoreKey
@@ -1923,7 +1928,7 @@ class ChordTasks(object):
 
                     rmsg = cp.ChordStoreData(pkt)
 
-                    if rmsg.targeted and rmsg.data[:16] == MorphisBlock.UUID:
+                    if rmsg.targeted and rmsg.data[:16] != MorphisBlock.UUID:
                         r = yield from self._store_synapse(\
                             peer, fnmsg.node_id, rmsg, need_pruning)
                     else:
@@ -2693,6 +2698,55 @@ class ChordTasks(object):
             log.warning(errmsg)
             raise ChordException(errmsg)
 
+        synapse_id = enc.generate_ID(synapse.synapse_key)
+
+        def dbcall_chk():
+            with self.engine.node.db.open_session() as sess:
+                q = sess.query(Synapse)\
+                    .filter(\
+                        Synapse.keys.any(\
+                            and_(\
+                                SynapseKey.data_id == synapse_id,\
+                                SynapseKey.key_type\
+                                    == SynapseKey.KeyType.synapse_key.value)))
+
+                return q.first()
+
+        existing = yield from self.loop.run_in_executor(None, dbcall_chk)
+
+        if not existing:
+            return (\
+                yield from self.__store_new_synapse(peer_dbid, dmsg, synapse))
+
+        if log.isEnabledFor(logging.INFO):
+            log.info(\
+                "We already have Synapse (synapse_id=[{}]); adding additional"\
+                    " keys -- if applicable."\
+                        .format(synapse_id))
+
+        #TODO: YOU_ARE_HERE: As of yet there cannot be keys we didn't store;
+        # so we are done here.
+        return True
+
+        enc_key = None
+
+        for key in synapse.keys:
+            if key.key_type is SynapseKey.KeyType.synapse_key:
+                enc_key = enc.decrypt_data_block(key.ekey, synapse.synapse_key)
+
+        if not enc_key:
+            errmsg = "Invalid database state; we had this Synapse but not the"\
+                " synapse_key in SynapseKey?"
+            log.warning(errmsg)
+            raise ChordException(errmsg)
+
+        #TODO: YOU_ARE_HERE: Since we store all keys for a Synapse, the only
+        # ones that we wouldn't have are synapse_pow possibly and signatures/
+        # stamps. So this is to be done when we get to doing that stuff.
+        raise ChordException("TODO: YOU_ARE_HERE")
+
+    @asyncio.coroutine
+    def __store_new_synapse(self, peer_dbid, dmsg, synapse):
         # We make up a random encryption key, encrypt the Synapse data with
         # that key and store in the Synapse table, encrypt that key with each
         # Synapse key that we are storing and store together in SynapseKey.
@@ -2708,14 +2762,18 @@ class ChordTasks(object):
                 s.insert_timestamp = mutil.utc_datetime()
 
                 sess.add(s)
+                sess.flush()
 
-                def store_key(key):
+                def store_key(key, key_type):
                     sk = SynapseKey()
                     sk.data_id = enc.generate_ID(key)
                     sk.distance = mutil.calc_raw_distance(\
                             self.engine.node_id, sk.data_id)
                     sk.synapse_id = s.id
-                    sk.key, b = enc.encrypt_data_block(enc_key, key)
+                    sk.key_type = key_type.value
+                    if type(key) is not bytes:
+                        key = bytes(key)
+                    sk.ekey, b = enc.encrypt_data_block(enc_key, key)
 
                     # Because len(key) is multiple of AES blocksize.
                     assert not b
@@ -2725,11 +2783,11 @@ class ChordTasks(object):
 
                     sess.add(sk)
 
-                store_key(synapse.synapse_key)
-                store_key(synapse.synapse_pow)
+                store_key(synapse.synapse_key, SynapseKey.KeyType.synapse_key)
+                store_key(synapse.synapse_pow, SynapseKey.KeyType.synapse_pow)
                 for target_key in synapse.target_keys:
-                    store_key(target_key)
-                store_key(synapse.source_key)
+                    store_key(target_key, SynapseKey.KeyType.target_key)
+                store_key(synapse.source_key, SynapseKey.KeyType.source_key)
 
                 sess.commit()
 
