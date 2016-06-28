@@ -447,6 +447,13 @@ class ChordTasks(object):
         return storing_nodes
 
     @asyncio.coroutine
+    def send_get_synapses(\
+            self, targetKey=None, sourceKey=None, startTimestamp=None,\
+            endTimestamp=None, startKey=None, endKey=None, minimumPow=8):
+        #TODO: YOU_ARE_HERE: Finish.
+        pass
+
+    @asyncio.coroutine
     def send_store_synapse(\
             self, synapse, store_key=True, key_callback=None, retry_factor=20):
         "Sends a StoreData request for a Synapse, returning the count of"\
