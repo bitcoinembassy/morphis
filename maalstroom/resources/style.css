@@ -731,6 +731,10 @@ a.normal:visited, a.normal:link {
     height:2em;
     width: calc(100% - 12em);
     min-width: 10em;
+	border: 1px solid #b2b2b2;
+    box-shadow: 0px 0px 2px 1px rgba(0, 0, 0, 0.1) inset;
+    border-radius: 4px;
+    font-size: .85em;
 }
 .message textarea {
     padding:8px;
@@ -750,12 +754,6 @@ input[type="text"]:focus, textarea:focus {
     outline: medium none;
     border-color: #39a3af;
     box-shadow: 0px 0px 5px 2px rgba(56, 163, 175, 0.9);
-}
-.message input {
-    border: 1px solid #b2b2b2;
-    box-shadow: 0px 0px 2px 1px rgba(0, 0, 0, 0.1) inset;
-    border-radius: 4px;
-    font-size: .85em;
 }
 .message li {
     padding-top: 1em;
@@ -981,22 +979,52 @@ button.tag-footer-btn:active {
     height: calc(100% - 1em);
 }
 /*Addressbook*/
-.contacts {
+.message_adr label {
 	float: left;
-	background-color: #f1f1f1;
-	width: 30%;
-	border: 1px solid #a3a3a3;
+	text-align: left;
+	width: 8em;
+	padding-top: .3em;
+	margin-left: 1em;
+	font-size: .9em;
+	letter-spacing: 0;
+	color: #666666;
+}
+.message_adr input {
+	height:2em;
+	width: 20em;
+	border: 1px solid #b2b2b2;
+	box-shadow: 0px 0px 2px 1px rgba(0, 0, 0, 0.1) inset;
 	border-radius: 4px;
+	font-size: .85em;
+	padding-top: 5px;
+}
+aside.adr_contacts {
+	border: 0;
+	margin-top: 0;
+	float: left;
+	position: relative;
+	text-align: left;
+	width: 28em;
+	background-color: #ffffff;
+	height: calc(100% - 5.9em);
+}
+.adr_wrapper {
+	background: url("morphis://.dmail/images/stripe.png") repeat top left;
+	border: 0;
+	margin-top: 0;
+	padding-top: .8em;
+	padding-left: 1.6em;
+	padding-right: 1.6em;
+	position: relative;
+	margin-left: 28em;
+	height: calc(100% - 5em);
+}
+
+.contacts {
 	overflow: hidden;
-	box-shadow: 0 0 2px #999;
-	-o-box-shadow: 0 0 2px #999;
-	-webkit-box-shadow: 0 0 2px #999;
-	-moz-box-shadow: 0 0 2px #999;
 }
 
 .edit-contact {
-	float: right;
-	width: 69%;
 	border: 1px solid #a3a3a3;
 	border-radius: 4px;
 	overflow: hidden;
@@ -1008,7 +1036,6 @@ button.tag-footer-btn:active {
 }
 
 .contacts-title {
-	color: #777;
 	background: #eee;
 	background: -moz-linear-gradient(top, #eee 0%, #dfdfdf 100%);
 	background: -webkit-gradient(linear, left top, left bottom, color-stop(0%,#eee), color-stop(100%,#dfdfdf));
@@ -1018,8 +1045,8 @@ button.tag-footer-btn:active {
 	border-bottom: 1px solid #ccc;
 	font-size: 12px;
 	font-weight: bold;
-	padding: 10px 8px 3px 8px;
-	height: 30px;
+	padding: 15px 8px 8px 20px;
+	height: 40px;
 	margin: 0;
 	text-shadow: 0px 1px 1px #fff;
 	border-bottom: 1px solid #bbd3da;
@@ -1040,9 +1067,12 @@ padding: 15px 0 15px 10px;
 }
 #contactfooter {
 border: 0;
-padding: 15px 0 15px 10px;
+padding: 10px 0 10px 10px;
 bottom: 0;
-
+background: #f1f1f1;
+}
+#contactfooter:hover {
+background: #d1cfd1;
 }
 .contact-input {
 	padding: 8px;
@@ -1067,9 +1097,10 @@ table.listing {
 	border: 0;
 	width: 100%;
 	border-spacing: 0;
-	background: #f1f1f1;
+/*	background: #f1f1f1;*/
 	table-layout: fixed;
 }
+
 table.listing tr:hover, table.listing tr:hover a {
 	background-color: #38a3af;
 	color: #ffffff;
@@ -1084,6 +1115,133 @@ iframe.subject-txt {
     vertical-align: top;
     width: 100%;
 }
+
+/*modal*/
+
+.modalDialog {
+	position: fixed;
+	font-family: Arial, Helvetica, sans-serif;
+	top: 0;
+	right: 0;
+	bottom: 0;
+	left: 0;
+/*	background: rgba(0, 0, 0, 0.8);*/
+	z-index: 99999;
+	opacity:0;
+	-webkit-transition: opacity 400ms ease-in;
+	-moz-transition: opacity 400ms ease-in;
+	transition: opacity 400ms ease-in;
+	pointer-events: none;
+}
+.modalDialog:target {
+	opacity:1;
+	pointer-events: auto;
+}
+.modalDialog > div {
+	width: 80%;
+	height: 200px;
+	position: relative;
+	margin: 10% auto;
+	padding: 20px 20px 10px 20px;
+	border: 1px solid #a3a3a3;
+	border-radius: 4px;
+	box-shadow: 0 0 2px #999;
+	-o-box-shadow: 0 0 2px #999;
+	-webkit-box-shadow: 0 0 2px #999;
+	-moz-box-shadow: 0 0 2px #999;
+	background: #fff;
+}
+.close {
+	background: #606061;
+	color: #fff;
+	line-height: 25px;
+	position: absolute;
+	right: -12px;
+	text-align: center;
+	top: -10px;
+	width: 24px;
+	text-decoration: none;
+	font-weight: bold;
+	-webkit-border-radius: 12px;
+	-moz-border-radius: 12px;
+	border-radius: 12px;
+	-moz-box-shadow: 1px 1px 3px #000;
+	-webkit-box-shadow: 1px 1px 3px #000;
+	box-shadow: 1px 1px 3px #000;
+}
+.close:hover {
+	background: #38a3af;
+}
+.close:visited {
+	color: #fff;
+}
+.modalDialog_delete:target {
+	opacity:1;
+	pointer-events: auto;
+}
+.modalDialog_delete {
+	position: fixed;
+	font-family: Arial, Helvetica, sans-serif;
+	top: 0;
+	right: 0;
+	bottom: 0;
+	left: 0;
+	background: rgba(0, 0, 0, 0.8);
+	z-index: 99999;
+	opacity:0;
+	-webkit-transition: opacity 400ms ease-in;
+	-moz-transition: opacity 400ms ease-in;
+	transition: opacity 400ms ease-in;
+	pointer-events: none;
+}
+.modalDialog_delete > div {
+	width: 80%;
+	height: 120px;
+	position: relative;
+	margin: 10% auto;
+	padding: 20px 20px 10px 20px;
+	border: 1px solid #000;
+	border-radius: 4px;
+	box-shadow: 0 0 2px #000;
+	-o-box-shadow: 0 0 2px #000;
+	-webkit-box-shadow: 0 0 2px #000;
+	-moz-box-shadow: 0 0 2px #000;
+	background: #fff;
+}
+.modalDialog_delete_all:target {
+	opacity:1;
+	pointer-events: auto;
+}
+.modalDialog_delete_all {
+	position: fixed;
+	font-family: Arial, Helvetica, sans-serif;
+	top: 0;
+	right: 0;
+	bottom: 0;
+	left: 0;
+	background: rgba(0, 0, 0, 0.8);
+	z-index: 99999;
+	opacity:0;
+	-webkit-transition: opacity 400ms ease-in;
+	-moz-transition: opacity 400ms ease-in;
+	transition: opacity 400ms ease-in;
+	pointer-events: none;
+}
+.modalDialog_delete_all > div {
+	width: 80%;
+	height: 130px;
+	position: relative;
+	margin: 10% auto;
+	padding: 20px 20px 10px 20px;
+	border: 1px solid #000;
+	border-radius: 4px;
+	box-shadow: 0 0 2px #000;
+	-o-box-shadow: 0 0 2px #000;
+	-webkit-box-shadow: 0 0 2px #000;
+	-moz-box-shadow: 0 0 2px #000;
+	background: #fff;
+}
+
 @media screen and (-ms-high-contrast: active), (-ms-high-contrast: none) {
     iframe.subject-txt { height: 3.2em; max-height: 3.2em;}
 }
@@ -1105,5 +1263,3 @@ input.subject-field:focus {
     outline: 0;
     box-shadow: none;
 }
-
-
