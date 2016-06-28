@@ -1665,7 +1665,7 @@ class ChordTasks(object):
 
         return True
 
-    def PoW(self, pkt, data_mode):
+    def unwrap_relay_packets(self, pkt, data_mode):
         "Returns the inner most packet and the path stored in the relay"\
         " packets."
 
