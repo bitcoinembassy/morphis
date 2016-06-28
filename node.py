@@ -202,9 +202,11 @@ class Node():
                 # Our calc_log_distance calculation was broken in older
                 # versions! Code in db.py clears out this column if the db was
                 # the older version to signal this code to execute..
-                peer = sess.query(db.Peer).first()
+                peer = sess.query(db.Peer).filter(db.Peer.node_id != None)\
+                    .first()
                 if peer and peer.distance is None:
-                    for peer in sess.query(db.Peer).all():
+                    for peer in sess.query(db.Peer)\
+                            .filter(db.Peer.node_id != None).all():
                         peer.distance, direction =\
                             mutil.calc_log_distance(\
                                 self.engine.node_id, peer.node_id)
