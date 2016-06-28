@@ -853,9 +853,10 @@ class DmailEngine(object):
                 dmail_message_key, x_mpint, address_key.target_key)
 
         if not dmobj:
+            errmsg = "Dmail was not found on the network."
             if log.isEnabledFor(logging.INFO):
-                log.info("Dmail was not found on the network.")
-            return False
+                log.info(errmsg)
+            raise Exception(errmsg)
 
         if dmobj.version > 1:
             if dmobj.destination_addr != dmail_address.site_key:
