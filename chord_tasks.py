@@ -450,6 +450,8 @@ class ChordTasks(object):
     def send_get_synapses(\
             self, targetKey=None, sourceKey=None, startTimestamp=None,\
             endTimestamp=None, startKey=None, endKey=None, minimumPow=8):
+
+
         #TODO: YOU_ARE_HERE: Finish.
         pass
 
@@ -2729,7 +2731,7 @@ class ChordTasks(object):
             log.info(\
                 "We already have Synapse (synapse_id=[{}]); adding additional"\
                     " keys -- if applicable."\
-                        .format(synapse_id))
+                        .format(mbase32.encode(synapse_id)))
 
         #TODO: YOU_ARE_HERE: As of yet there cannot be keys we didn't store;
         # so we are done here.
