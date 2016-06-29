@@ -2819,6 +2819,8 @@ class ChordTasks(object):
                             mbase32.encode(\
                                 enc.generate_ID(synapse.source_key))))
 
+        return True
+
 #TODO: Debug stuff, delete.
 #                            assert\
 #                                enc.generate_ID(synapse.synapse_pow)\
