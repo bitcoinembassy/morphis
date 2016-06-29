@@ -2763,6 +2763,8 @@ class ChordTasks(object):
         enc_data, b = enc.encrypt_data_block(dmsg.data, enc_key)
         enc_data += b
 
+        distances = []
+
         def dbcall():
             with self.engine.node.db.open_session() as sess:
                 s = Synapse()
@@ -2774,6 +2776,8 @@ class ChordTasks(object):
                 sess.flush()
 
                 def store_key(key, key_type):
+                    nonlocal distances
+
                     sk = SynapseKey()
                     sk.data_id = enc.generate_ID(key)
                     sk.distance = mutil.calc_raw_distance(\
@@ -2787,10 +2791,9 @@ class ChordTasks(object):
                     # Because len(key) is multiple of AES blocksize.
                     assert not b
 
-                    if sk.distance > self.engine.furthest_data_block:
-                        self.engine.furthest_data_block = sk.distance
-
                     sess.add(sk)
+
+                    distances.append(sk.distance)
 
                 store_key(synapse.synapse_key, SynapseKey.KeyType.synapse_key)
                 store_key(synapse.synapse_pow, SynapseKey.KeyType.synapse_pow)
@@ -2802,10 +2805,9 @@ class ChordTasks(object):
 
         yield from self.loop.run_in_executor(None, dbcall)
 
-        if log.isEnabledFor(logging.DEBUG):
-            log.debug("Storing Synapse (target_key=[{}],"\
-                " target_key=[{}])."\
-                .format(mbase32.encode(synapse.target_key)))
+        for distance in distances:
+            if distance > self.engine.furthest_data_block:
+                self.engine.furthest_data_block = distance
 
         if log.isEnabledFor(logging.INFO):
             #NOTE: We only print IDs not KEYs; so as to prevent entrapment in
