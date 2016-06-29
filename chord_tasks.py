@@ -465,11 +465,17 @@ class ChordTasks(object):
         data = yield from synapse.encode()
 
         if log.isEnabledFor(logging.INFO):
+            if synapse.synapse_pow:
+                thepow = mbase32.encode(synapse.synapse_pow)
+            else:
+                thepow = "<NONE>"
+
             log.info(\
                 "Sending Store{{Data/Key}} for Synapse (synapse_key=[{}],"\
-                    " target_key=[{}], source_key=[{}])."\
+                    " synapse_pow=[{}], target_key=[{}], source_key=[{}])."\
                         .format(\
                             mbase32.encode(synapse.synapse_key),
+                            thepow,
                             mbase32.encode(synapse.target_key),
                             mbase32.encode(synapse.source_key)))
 
