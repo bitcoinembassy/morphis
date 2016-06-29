@@ -136,6 +136,10 @@ class Synapse(object):
         self._synapse_pow =\
             enc.generate_ID(self.buf[:self.nonce_offset + Synapse.NONCE_SIZE])
 
+        if log.isEnabledFor(logging.INFO):
+            log.info(\
+                "synapse_pow=[{}].".format(mbase32.encode(self._synapse_pow)))
+
         return self._synapse_pow
 
     @property
