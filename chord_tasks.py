@@ -2491,7 +2491,7 @@ class ChordTasks(object):
                     return None
 
                 if data[:16] == MorphisBlock.UUID:
-                    valid =\
+                    valid, data_key =\
                         self._check_targeted_block(data, data_rw.data_key)
 
                     # We do not return the TargetedBlock header. (We use to
@@ -2668,7 +2668,8 @@ class ChordTasks(object):
         if dmsg.targeted:
             valid = False
             if dmsg.data[:16] == MorphisBlock.UUID:
-                valid = self._check_targeted_block(dmsg.data, data_id)
+                valid, data_key =\
+                    self._check_targeted_block(dmsg.data, data_id)
             else:
                 valid = self._check_synapse(dmsg.data, data_id)
         else:
@@ -2939,13 +2940,15 @@ class ChordTasks(object):
                 valid = False
 
                 if data[:16] == MorphisBlock.UUID:
-                    tblock = self._check_targeted_block(data, data_id=data_id)
+                    tblock, data_key =\
+                        self._check_targeted_block(data, data_id=data_id)
+
                     if tblock:
                         valid = True
-                        data_key = bytes(tblock.target_key)
                 else:
                     assert False, "SynapseS should not get here."
             else:
+                # Normal static key uploads get here.
                 data_key = enc.generate_ID(data)
                 valid = data_id == enc.generate_ID(data_key)
 
@@ -3250,7 +3253,7 @@ class ChordTasks(object):
             if log.isEnabledFor(logging.WARNING):
                 log.warning(\
                     "TargetedData response is invalid (header/hash mismatch)!")
-            return False
+            return False, None
 
         tblock = tb.TargetedBlock(data)
 
@@ -3262,13 +3265,13 @@ class ChordTasks(object):
             if log.isEnabledFor(logging.WARNING):
                 log.warning(\
                     "TargetedData response is invalid (data/header mismatch)!")
-            return False
+            return False, None
 
         if log.isEnabledFor(logging.DEBUG):
             log.debug("DISTANCE=[{}]."\
                 .format(mutil.calc_log_distance(data_key, tblock.target_key)))
 
-        return tblock
+        return tblock, data_key
 
     def _update_nodestate(self, sess, size_diff):
         # Rule: only update this NodeState row when holding a lock on
