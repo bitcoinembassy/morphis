@@ -7,26 +7,8 @@
 <div class="contacts">
 <h1 class="contacts-title">Contacts</h1>
 <table class="listing">
-<tr>
-    <td style="width: 40%" class="name">
-		<div class="inbox-pad">{first}</div>
-	</td>
-    <td style="width: 20%" class="name">
-		<div class="trunc">{idkey}</div>
-	</td>
-	<td style="width: 5%">
-		<a style="display:block"  href="morphis://.dmail/addressbook/rename_contact/{idkey}"><div class=mail-icon></div></a><!--Clicking this should load the rename_contact page in the right iframe, keeping the contacts iframe at the left-->
-	</td>
-	<td style="width: 5%">
-		<a style="display:block" href="morphis://.dmail/addressbook/delete_contact/{idkey}"><div class="trash-icon-new"></div></a>
-	</td>
-	<td style="width: 5%">
-		<a style="display:block" href="morphis://.dmail/wrapper/{addr}/{tag}?msg_list=morphis%3A%2F%2F.dmail%2Fcompose%2F{sender}%3fsender={addr}%26esubject={m32_reply_subject}"><div class="reply-icon-new"></div>
-			</a> <!--Clicking this should go to the regular compose message view with the inbox etc in the left iframe-->
-	</td>
-<!--  Not sure what this is, let me know if we need it  <td style="width: 25%; min-width: 20em"><div class="inbox-pad">{userstar}</div></td>-->
-</tr>
-</div>
+	<iframe src="delete_all_popup.html" height="100%" width="100%"></iframe>
+
 </div>
 </table>
 <a style="display:block" name="submit" href="#openModal" target="_self"><div id ="contactfooter">Empty Address Book</div></a>
