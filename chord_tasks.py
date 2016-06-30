@@ -2284,9 +2284,9 @@ class ChordTasks(object):
                         .filter(\
                             or_(\
                                 SynapseKey.key_type\
-                                    == SynapseKey.KeyType.synapse_pow,
+                                    == SynapseKey.KeyType.synapse_pow.value,
                                 SynapseKey.key_type\
-                                    == SynapseKey.KeyType.synapse_key))
+                                    == SynapseKey.KeyType.synapse_key.value))
 
                     q3 = q1.union(q2).filter_by(data_id = data_id)
 
@@ -2599,9 +2599,9 @@ class ChordTasks(object):
                     .filter(\
                         or_(\
                             SynapseKey.key_type\
-                                == SynapseKey.KeyType.synapse_pow,
+                                == SynapseKey.KeyType.synapse_pow.value,
                             SynapseKey.key_type\
-                                == SynapseKey.KeyType.synapse_key))\
+                                == SynapseKey.KeyType.synapse_key.value))\
                         .filter(SynapseKey.data_id == data_id).first()
 
                 if synapse:
