@@ -22,7 +22,7 @@
             <a  class="addressbook-icon" href="#openModal" target="_self"><button class="addressbook-icon"></button></a>
 <div id="openModal" class="modalDialog">
     <div>
-<a target="_parent" href="morphis://.dmail/read/{addr}/{tag}/{msg_id}" title="Close" class="close" target="_top">X<input class="subject-field" type="text" name="subject" value="{m32_reply_subject}" readonly>  </a><!--this needs to link to the window before the popup opened-->
+<a target="_self" href="morphis://.dmail/read/{addr}/{tag}/{msg_id}" title="Close" class="close">X </a><!--this needs to link to the window before the popup opened-->
 <iframe id="popup" src="morphis://.dmail/addressbook/edit_contact/{dest_addr}" height="100%" width="100%"></iframe>
     </div>
 </div>
