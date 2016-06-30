@@ -11,6 +11,15 @@
     </ul>
 </div><br/><br/>
 <div class="compose-bkg">
+    <div class="staticWidth"><a class="addressbook-icon" href="morphis://.dmail/addressbook/create_contact/{dest_addr}"><button class="addressbook-icon"></button></a>
+            <a  class="addressbook-icon" href="#openModal" target="_self"><button class="addressbook-icon"></button></a>
+<div id="openModal" class="modalDialog">
+    <div>
+<a target="_self" href="{dest_addr}" title="Close" class="close">X </a><!--this needs to link to the window before the popup opened-->
+<iframe id="popup" src="morphis://.dmail/addressbook/edit_contact/{dest_addr}" height="100%" width="100%"></iframe>
+    </div>
+</div>
+</div>
 <form class="message nowrap" style="height: calc(100% - 2em);" action="morphis://.dmail/compose/make_it_so" method="post" accept-charset="UTF-8 ISO-8859-1">
 <ul style="height: calc(100% - 10em);">
     <input type="hidden" name="csrf_token" id="csrf_token" value="{csrf_token}"/>
@@ -19,10 +28,11 @@
     <select name="sender" id= "sender" class="from-address">
       {from_addr_options}
     </select>
+
     <li>
         <label class="to" for="destination">To</label> <!-- Please rename classes to match names. -->
         <input type="text" name="destination" id="destination" value="{dest_addr}" required{dest_addr_autofocus}/>&nbsp;&nbsp;
-       <button class= "addressbook-icon" class="submit" type="submit" formtarget="_self" name="submit" value="contact"></button> <!--This needs to work like the popup in read.html-->
+
     </li>
     <li>
 	<label for="subject">Subject</label>
