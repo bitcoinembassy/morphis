@@ -13,6 +13,7 @@ import os
 import random
 
 from sqlalchemy import func, and_, or_
+from sqlalchemy.orm import joinedload
 
 import bittrie
 import chord
@@ -2471,26 +2472,12 @@ class ChordTasks(object):
             return False
 
         def threadcall():
-            data = enc.decrypt_data_block(drmsg.data, data_rw.data_key)
-
-            # Truncate the data to exclude the cipher padding.
-            data = data[:drmsg.original_size]
-
-#TODO: Debug stuff, delete.
-#            log.warning(\
-#                "before=[\n{}], after=[\n{}]."\
-#                    .format(mutil.hex_dump(data), mutil.hex_dump(drmsg.data)))
-
             if data_rw.targeted:
-                # TargetedBlock mode.
-                if drmsg.version is not None:
-                    #TODO: Implement updateable TargetedBlock at this level?
-                    log.warning("Received versioned (version=[{}])"\
-                        " DataResponse when we requested a TargetedBlock;"\
-                        " that is invalid.".format(drmsg.version))
-                    return None
+                # TargetedBlock/Synapse mode.
+                if drmsg.version is None:
+                    # TargetedBlock mode.
+                    data = self._decrypt_data_response(drmsg, data_rw.data_key)
 
-                if data[:16] == MorphisBlock.UUID:
                     valid, data_key =\
                         self._check_targeted_block(data, data_rw.data_key)
 
@@ -2498,6 +2485,27 @@ class ChordTasks(object):
                     # before this commit. NOTE: These lines got moved now.)
                     data = data[tb.TargetedBlock.BLOCK_OFFSET:]
                 else:
+                    assert drmsg.version == -1
+                    # Synapse mode.
+                    data = self._decrypt_data_response(drmsg, data_rw.data_key)
+
+                    # SynapseS are encrypted with random key of storing PeerS
+                    # creation. The storing Peer then stores the random key
+                    # encrypted with the request key. The storing node then
+                    # returns that encrypted random key to us in the data
+                    # response. We just decrypt the random key with the request
+                    # key and then use that result to decrypt the data!
+                    # The above is all due to anti-entrapment functionality.
+
+                    # We repurposed the signature field to store the encrypted
+                    # random key, and the version field of -1 signified such.
+                    # This was to maintain backwards net compatability for now.
+
+                    data_key = enc.decrypt_data_block(\
+                        drmsg.signature, data_rw.data_key)
+
+                    data = self._decrypt_data_response(drmsg, data_key)
+
                     valid = self._check_synapse(data, data_rw.data_key)
 
                 if not valid:
@@ -2515,6 +2523,8 @@ class ChordTasks(object):
                 # Everything checks out for targeted.
             elif drmsg.version is not None:
                 # Updateable key mode.
+                data = self._decrypt_data_response(drmsg, data_rw.data_key)
+
                 data_hash = enc.generate_ID(data)
 
                 data_rw.version = drmsg.version
@@ -2551,8 +2561,11 @@ class ChordTasks(object):
                 valid =\
                     rsakey.RsaKey(pubkey).verify_ssh_sig(hm, drmsg.signature)
             else:
-                # Verify that the decrypted data matches the original hash of
-                # it.
+                # Static key mode.
+                data = self._decrypt_data_response(drmsg, data_rw.data_key)
+
+                # Verify that the decrypted data matches the original hash we
+                # requested.
                 data_hash = enc.generate_ID(data)
                 valid = data_hash == data_rw.data_key
 
@@ -2576,6 +2589,20 @@ class ChordTasks(object):
             data_rw.data_done.set()
             return False
 
+    def _decrypt_data_response(self, drmsg, data_key):
+        # Decrypt the data we received.
+        data = enc.decrypt_data_block(drmsg.data, data_key)
+
+        # Truncate the data to exclude the cipher padding.
+        data = data[:drmsg.original_size]
+
+#TODO: Debug stuff, delete.
+#            log.warning(\
+#                "before=[\n{}], after=[\n{}]."\
+#                    .format(mutil.hex_dump(data), mutil.hex_dump(drmsg.data)))
+
+        return data
+
     @asyncio.coroutine
     def _retrieve_data(self, data_id):
         "Retrieve data for data_id from the file system (and meta data from"\
@@ -2595,8 +2622,8 @@ class ChordTasks(object):
                     return data_block
 
                 # Otherwise, check the SynapseKey table for a matching Synapse.
-                synapse = sess.query(Synapse).join(Synapse.keys)\
-                    .filter(\
+                synapse = sess.query(Synapse).options(joinedload("keys"))\
+                    .join(Synapse.keys).filter(\
                         or_(\
                             SynapseKey.key_type\
                                 == SynapseKey.KeyType.synapse_pow.value,
@@ -2616,7 +2643,14 @@ class ChordTasks(object):
             return None, None, None, None, None, None
 
         if type(result) is Synapse:
-            return result.data, result.original_size, None, None, None, None
+            for key in result.keys:
+                if key.data_id == data_id:
+                    found = True
+                    break
+
+            assert found
+
+            return result.data, result.original_size, -1, key.ekey, None, None
 
         assert type(result) is DataBlock, type(result)
 
