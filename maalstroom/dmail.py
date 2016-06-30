@@ -208,10 +208,13 @@ def serve_get(dispatcher, rpath):
                         tag=ctag.name)
             tag_rows.append(row)
 
+        username= yield from _get_users_name(dispatcher,addr_enc)
+
         template = template.format(\
             csrf_token=dispatcher.client_engine.csrf_token,\
             addr=addr_enc,\
             tag=tag,\
+            user=username,\
             tag_rows=''.join(tag_rows),\
             **fmt)
 
