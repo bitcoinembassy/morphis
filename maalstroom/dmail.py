@@ -105,7 +105,7 @@ def serve_get(dispatcher, rpath):
         else:
             title_prefix = ""
 
-        if "/addressbook" in req:
+        if "addressbook" in req:
             template = templates.dmail_addressbook_wrapper[0]
             template = template.format( \
                 tag=tag, addr=addr_enc)
@@ -1099,8 +1099,7 @@ def serve_post(dispatcher, rpath):
         if not entry:
             yield from _process_rename_contact_create(dispatcher, name, addr)
 
-        ls = yield from _load_addressbook_list(dispatcher, "")
-        yield from _process_addressbook_list(dispatcher, ls, "")
+        yield from _process_create_contact(dispatcher, "")
         return
     elif req == "/addressbook/rename_contact/make_it_so":
         dd= yield from dispatcher.read_post()
@@ -1858,7 +1857,7 @@ def generate_safe_reply_subject(dm, m32=False):
 
 @asyncio.coroutine
 def _process_create_contact(dispatcher,ref):
-    if ref=="/create_contact": ref = ""
+    if ref=="/edit_contacts": ref = ""
     template = templates.dmail_addressbook_edit_contact[0]
     template =\
         template.format(csrf_token=dispatcher.client_engine.csrf_token, addr=ref)
@@ -1905,11 +1904,13 @@ def _load_addressbook_list(dispatcher, user):
 @asyncio.coroutine
 def _process_addressbook_list(dispatcher, ls, req):
     if req == "/list": req = ""
-    template=templates.dmail_addressbook_list_start[0].format(csrf_token=dispatcher.client_engine.csrf_token, to=req)
-    dispatcher.send_partial_content(\
-        template, True)
 
     for ab in ls:
+        template = templates.dmail_addressbook_contacts[0].format(\
+            csrf_token=dispatcher.client_engine.csrf_token, to=req)
+        dispatcher.send_partial_content( \
+            template, True)
+
         if ab.user == ab.identity_key:
             # Indicator that this address belongs to the users node.
             symbol = "*self*"
@@ -1917,12 +1918,12 @@ def _process_addressbook_list(dispatcher, ls, req):
             symbol = ""
         if not ab.first or not ab.last:
             dispatcher.send_partial_content(\
-                templates.dmail_addressbook_contacts[0].format(\
+                templates.dmail_addressbook_contacts_row[0].format(\
                     userstar=symbol, first=ab.name, last="",\
                     idkey=mbase32.encode(ab.identity_key)))
         else:
             dispatcher.send_partial_content(\
-                templates.dmail_addressbook_contacts[0].format(\
+                templates.dmail_addressbook_contacts_row[0].format(\
                     userstar=symbol,first=ab.first, last=ab.last,\
                     idkey=mbase32.encode(ab.identity_key)))
     dispatcher.send_partial_content(templates.dmail_addressbook_list_end[0])
