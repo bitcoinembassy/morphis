@@ -12,7 +12,7 @@ import math
 import os
 import random
 
-from sqlalchemy import func, and_
+from sqlalchemy import func, and_, or_
 
 import bittrie
 import chord
@@ -2257,6 +2257,7 @@ class ChordTasks(object):
         def dbcall():
             with self.engine.node.db.open_session() as sess:
                 if significant_bits and significant_bits >= min_sig_bits:
+                    # Wildcard key search mode.
                     q = sess.query(DataBlock.data_id)
 
                     q = q.filter(DataBlock.data_id > data_id)
@@ -2278,8 +2279,18 @@ class ChordTasks(object):
                     else:
                         return False
                 else:
-                    q = sess.query(func.count("*")).select_from(DataBlock)
-                    q = q.filter(DataBlock.data_id == data_id)
+                    q1 = sess.query(DataBlock.data_id)
+                    q2 = sess.query(SynapseKey.data_id)\
+                        .filter(\
+                            or_(\
+                                SynapseKey.key_type\
+                                    == SynapseKey.KeyType.synapse_pow,
+                                SynapseKey.key_type\
+                                    == SynapseKey.KeyType.synapse_key))
+
+                    q3 = q1.union(q2).filter_by(data_id = data_id)
+
+                    q = sess.query(func.count("*")).select_from(q3.subquery())
 
                     if q.scalar() > 0:
                         return True
@@ -2579,17 +2590,35 @@ class ChordTasks(object):
                 data_block = sess.query(DataBlock).filter(\
                     DataBlock.data_id == data_id).first()
 
-                if not data_block:
-                    return None
+                if data_block:
+                    sess.expunge(data_block)
+                    return data_block
 
-                sess.expunge(data_block)
+                # Otherwise, check the SynapseKey table for a matching Synapse.
+                synapse = sess.query(Synapse).join(Synapse.keys)\
+                    .filter(\
+                        or_(\
+                            SynapseKey.key_type\
+                                == SynapseKey.KeyType.synapse_pow,
+                            SynapseKey.key_type\
+                                == SynapseKey.KeyType.synapse_key))\
+                        .filter(SynapseKey.data_id == data_id).first()
 
-                return data_block
+                if synapse:
+                    sess.expunge(synapse)
+                    return synapse
 
-        data_block = yield from self.loop.run_in_executor(None, dbcall)
+                return None
 
-        if not data_block:
+        result = yield from self.loop.run_in_executor(None, dbcall)
+
+        if not result:
             return None, None, None, None, None, None
+
+        if type(result) is Synapse:
+            return result.data, result.original_size, None, None, None, None
+
+        assert type(result) is DataBlock, type(result)
 
         if log.isEnabledFor(logging.INFO):
             log.info("Loading data id=[{}] to respond to data request."\
@@ -2600,7 +2629,7 @@ class ChordTasks(object):
 
         def iocall():
             filename = self.engine.node.data_block_file_path.format(\
-                self.engine.node.instance, data_block.id)
+                self.engine.node.instance, result.id)
 
             try:
                 with open(filename, "rb") as data_file:
@@ -2613,24 +2642,26 @@ class ChordTasks(object):
 
         if enc_data is None:
             log.warning("Block id=[{}] was missing; Removing DB entry."\
-                .format(data_block.id))
+                .format(result.id))
 
             def dbcall_prune():
                 with self.engine.node.db.open_session() as sess:
                     sess.query(DataBlock)\
-                        .filter(DataBlock.id == data_block.id)\
-                        .delete(synchronize_session=False)
+                        .filter(DataBlock.id == result.id)\
+                            .delete(synchronize_session=False)
                     sess.commit()
 
             yield from self.loop.run_in_executor(None, dbcall_prune)
 
             return None, None, None, None, None, None
 
+        # This next line is because we use a String in the database as SQLite
+        # does not support any bigint.
         version =\
-            int(data_block.version) if data_block.version is not None else None
+            int(result.version) if result.version is not None else None
 
-        return enc_data, data_block.original_size, version,\
-            data_block.signature, data_block.epubkey, data_block.pubkeylen
+        return enc_data, result.original_size, version,\
+            result.signature, result.epubkey, result.pubkeylen
 
     @asyncio.coroutine
     def _store_key(self, peer, data_id, dmsg):
