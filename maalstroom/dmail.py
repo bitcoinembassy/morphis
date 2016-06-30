@@ -83,7 +83,7 @@ def serve_get(dispatcher, rpath):
             tag = "Inbox"
             addr_enc = ""
             qline = None
-        #put name here so that it shows the mailboxes being for {username}
+
         if not addr_enc:
             dmail_address = yield from _load_default_dmail_address(dispatcher)
             if dmail_address:
@@ -105,12 +105,15 @@ def serve_get(dispatcher, rpath):
         else:
             title_prefix = ""
 
-        template = templates.dmail_page_wrapper[0]
-        template = template.format(
-            title_prefix=title_prefix,\
-            tag=tag,\
-            addr=addr_enc,\
-            msg_list_iframe_url=msg_list)
+        if "/addressbook" in req:
+            template = templates.dmail_addressbook_wrapper[0]
+            template = template.format( \
+                tag=tag, addr=addr_enc)
+        else:
+            template = templates.dmail_page_wrapper[0]
+            template = template.format(\
+                title_prefix=title_prefix,\
+                tag=tag, addr=addr_enc, msg_list_iframe_url=msg_list)
 
         if cacheable:
             dispatcher.send_content([template, req])
@@ -224,37 +227,22 @@ def serve_get(dispatcher, rpath):
         dispatcher.send_content(template)
     elif req.startswith("/addressbook"):
         req = req[12:]
-
+        user = (yield from _load_default_dmail_address(dispatcher)).site_key
         if req == "/list":
-            user= (yield from _load_default_dmail_address(dispatcher)).site_key
-            ab = yield from _load_AddressBook_list(dispatcher, user)
-            yield from _process_AddressBook_list(dispatcher, ab, "")
-            return
-        elif req.startswith("/create_contact"):
-            req= req[req.find("/",2)+1:]
-            user = (yield from _load_default_dmail_address(dispatcher)).site_key
-            ab = yield from _load_AddressBook_list(dispatcher, user)
-            yield from _process_AddressBook_list(dispatcher, ab, req)
-
-            return
-        elif req == "/delete_all":
-            user = (yield from _load_default_dmail_address(dispatcher)).site_key
-            yield from _process_clear_AddressBook(dispatcher, user)
-            ab = yield from _load_AddressBook_list(dispatcher, user)
-            yield from _process_AddressBook_list(dispatcher, ab, "")
-
-            return
+            ab = yield from _load_addressbook_list(dispatcher, user)
+            yield from _process_addressbook_list(dispatcher, ab, "")
+        elif req.startswith("/edit_contact"):
+            p0 = req.find("/",2)
+            idkey = req[p0+1:]
+            yield from _process_create_contact(dispatcher, idkey)
         elif req.startswith("/delete_contact"):
-            todel = req[req.find("/", 2) + 1:]
-            user = (yield from _load_default_dmail_address(dispatcher)).site_key
-            yield from _process_delete_contact(dispatcher, todel)
-            ab = yield from _load_AddressBook_list(dispatcher, user)
-            yield from _process_AddressBook_list(dispatcher, ab,"")
-            return
-        elif req.startswith("/rename_contact"):
-            id_key = req[req.find("/", 2) + 1:]
-            yield from _process_rename_contact(dispatcher, id_key)
-            return
+            p0 = req.find("/", 2)
+            idkey = mbase32.encode(req[p0:])
+            yield from _process_delete_contact(dispatcher,idkey)
+        elif req == "/clear_contacts":
+            yield from _process_clear_addressbook(dispatcher,user)
+
+
     elif req.startswith("/msg_list/list/"):
         params = req[15:]
         p0 = params.index('/')
@@ -1108,8 +1096,8 @@ def serve_post(dispatcher, rpath):
         if not entry:
             yield from _process_rename_contact_create(dispatcher, name, addr)
 
-        ls = yield from _load_AddressBook_list(dispatcher, "")
-        yield from _process_AddressBook_list(dispatcher, ls, "")
+        ls = yield from _load_addressbook_list(dispatcher, "")
+        yield from _process_addressbook_list(dispatcher, ls, "")
         return
     elif req == "/addressbook/rename_contact/make_it_so":
         dd= yield from dispatcher.read_post()
@@ -1117,8 +1105,8 @@ def serve_post(dispatcher, rpath):
         id_key = mbase32.decode(fia(dd["idkey"]))
         newName = fia(dd["name"])
         yield from _process_rename_contact_create(dispatcher, newName, id_key)
-        ls =yield from _load_AddressBook_list(dispatcher, "")
-        yield from _process_AddressBook_list(dispatcher, ls, "")
+        ls =yield from _load_addressbook_list(dispatcher, "")
+        yield from _process_addressbook_list(dispatcher, ls, "")
     else:
         dispatcher.send_error(errcode=400)
 
@@ -1867,10 +1855,10 @@ def generate_safe_reply_subject(dm, m32=False):
 
 @asyncio.coroutine
 def _process_create_contact(dispatcher,ref):
-    if ref=="/create_contact": ref = " "
-    template = templates.dmail_addressbook_create_contact[0]
+    if ref=="/create_contact": ref = ""
+    template = templates.dmail_addressbook_edit_contact[0]
     template =\
-        template.format(csrf_token=dispatcher.client_engine.csrf_token, to=ref)
+        template.format(csrf_token=dispatcher.client_engine.csrf_token, addr=ref)
     dispatcher.send_content(template)
 
 @asyncio.coroutine
@@ -1905,16 +1893,15 @@ def _process_create_contact_create(dispatcher, name , addr, user):
     return (yield from dispatcher.node.loop.run_in_executor(None, dbcall))
 
 @asyncio.coroutine
-def _load_AddressBook_list(dispatcher, user):
+def _load_addressbook_list(dispatcher, user):
     def dbcall():
         with dispatcher.node.db.open_session() as sess:
             return sess.query(AddressBook).all()
     return (yield from dispatcher.node.loop.run_in_executor(None, dbcall))
 
 @asyncio.coroutine
-def _process_AddressBook_list(dispatcher, ls, req):
+def _process_addressbook_list(dispatcher, ls, req):
     if req == "/list": req = ""
-
     template=templates.dmail_addressbook_list_start[0].format(csrf_token=dispatcher.client_engine.csrf_token, to=req)
     dispatcher.send_partial_content(\
         template, True)
@@ -1927,19 +1914,19 @@ def _process_AddressBook_list(dispatcher, ls, req):
             symbol = ""
         if not ab.first or not ab.last:
             dispatcher.send_partial_content(\
-                templates.dmail_addressbook_list_row[0].format(\
-                    userstar=symbol, first=ab.name, last=" ",\
+                templates.dmail_addressbook_contacts[0].format(\
+                    userstar=symbol, first=ab.name, last="",\
                     idkey=mbase32.encode(ab.identity_key)))
         else:
             dispatcher.send_partial_content(\
-                templates.dmail_addressbook_list_row[0].format(\
+                templates.dmail_addressbook_contacts[0].format(\
                     userstar=symbol,first=ab.first, last=ab.last,\
                     idkey=mbase32.encode(ab.identity_key)))
     dispatcher.send_partial_content(templates.dmail_addressbook_list_end[0])
     dispatcher.end_partial_content()
 
 @asyncio.coroutine
-def _process_clear_AddressBook(dispatcher, user):
+def _process_clear_addressbook(dispatcher, user):
     def dbcall():
         with dispatcher.node.db.open_session() as sess:
             contacts = sess.query(AddressBook).all()

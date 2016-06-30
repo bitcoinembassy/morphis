@@ -21,7 +21,7 @@
 		<a style="display:block" href="morphis://.dmail/addressbook/delete_contact/{idkey}"><div class="trash-icon-new"></div></a>
 	</td>
 	<td style="width: 5%">
-		<a style="display:block" href="morphis://.dmail/compose/{idkey}"><div class="reply-icon-new"></div>
+		<a style="display:block" href="morphis://.dmail/wrapper/{addr}/{tag}?msg_list=morphis%3A%2F%2F.dmail%2Fcompose%2F{sender}%3fsender={addr}%26esubject={m32_reply_subject}"><div class="reply-icon-new"></div>
 			</a> <!--Clicking this should go to the regular compose message view with the inbox etc in the left iframe-->
 	</td>
 <!--  Not sure what this is, let me know if we need it  <td style="width: 25%; min-width: 20em"><div class="inbox-pad">{userstar}</div></td>-->
@@ -32,7 +32,7 @@
 <a style="display:block" name="submit" href="#openModal" target="_self"><div id ="contactfooter">Empty Address Book</div></a>
 <div id="openModal" class="modalDialog_delete_all">
     <div>
-<a href="addressbook_contacts.html"  title="Close" class="close" target="_self">X</a>
+<a href="morphis://.dmail/addressbook/list"  title="Close" class="close" target="_self">X</a>
 <iframe id="popup" src="delete_all_popup.html" height="100%" width="100%"></iframe>
     </div>
 </div>

@@ -409,14 +409,15 @@ if not initialized_template:
     dmail_create_address = load("dmail/create_address.html", True)
     dmail_address_config = load("dmail/address_config.html", True)
 
-    dmail_addressbook_create_contact =\
-        load("dmail/addressbook_create_contact.html", True)
-    dmail_addressbook_list_start =\
-        load("dmail/addressbook_list_start.html", True)
-    dmail_addressbook_list_row = load("dmail/addressbook_list_row.html", True)
-    dmail_addressbook_list_end = load("dmail/addressbook_list_end.html", True)
-    dmail_addressbook_rename_contact =\
-        load("dmail/addressbook_rename_contact.html",True)
+    dmail_addressbook_wrapper =\
+        load("dmail/addressbook_wrapper.html", True)
+    dmail_addressbook_edit_contact =\
+        load("dmail/addressbook_edit_contacts.html", True)
+    dmail_addressbook_contacts = \
+        load("dmail/addressbook_contacts.html", True)
+    dmail_addressbook_rename_contact = \
+        load("dmail/addressbook_contacts.html", True)
+
 
     dmail_post_msg_and_link = load("dmail/post_msg_and_link.html", True)
 
