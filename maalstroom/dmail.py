@@ -98,7 +98,6 @@ def serve_get(dispatcher, rpath):
 
         if not msg_list:
             msg_list = "morphis://.dmail/msg_list/" + addr_enc + '/' + tag
-
         if "addressbook" in req:
             template = templates.dmail_addressbook_wrapper[0]
             template = template.format( \
@@ -227,10 +226,11 @@ def serve_get(dispatcher, rpath):
         if req == "/list":
             ab = yield from _load_addressbook_list(dispatcher, user)
             yield from _process_addressbook_list(dispatcher, ab, "")
-        elif req.startswith("/edit_contact"):
+        elif req.startswith("/edit_contacts"):
             p0 = req.find("/",2)
             idkey = req[p0+1:]
             yield from _process_create_contact(dispatcher, idkey)
+
         elif req.startswith("/delete_contact"):
             p0 = req.find("/", 2)
             idkey = req[p0+1:]
@@ -240,10 +240,14 @@ def serve_get(dispatcher, rpath):
                 tag="", \
                 addr=user)
             dispatcher.send_content(template)
+
+        elif req.startswith("/rename_contact"):
+            p0 = req.find("/", 2)
+            idkey = req[p0 + 1:]
+            yield from _process_create_contact(dispatcher, idkey, rename=True)
+
         elif req == "/clear_contacts":
             yield from _process_clear_addressbook(dispatcher,user)
-
-
 
     elif req.startswith("/msg_list/list/"):
         params = req[15:]
@@ -1087,7 +1091,6 @@ def serve_post(dispatcher, rpath):
 
     elif req == "/addressbook/create_contact/make_it_so":
         user = (yield from _load_default_dmail_address(dispatcher)).site_key
-
         dd = yield from dispatcher.read_post()
         if not dd: return  # Invalid csrf_token.
         name = fia(dd["name"])
@@ -1097,6 +1100,7 @@ def serve_post(dispatcher, rpath):
 
         if not entry:
             yield from _process_rename_contact_create(dispatcher, name, addr)
+        yield from _process_create_contact(dispatcher,"")
 
         return
 
@@ -1817,11 +1821,17 @@ def generate_safe_reply_subject(dm, m32=False):
         return quote_plus(reply_subject)
 
 @asyncio.coroutine
-def _process_create_contact(dispatcher,ref):
+def _process_create_contact(dispatcher,ref, rename=False):
     if ref=="/edit_contacts": ref = ""
+    if rename:
+        button_class="RENAME CONTACT"
+    else:
+        button_class="ADD CONTACT"
     template = templates.dmail_addressbook_edit_contact[0]
     template =\
-        template.format(csrf_token=dispatcher.client_engine.csrf_token, addr=ref)
+        template.format(csrf_token=dispatcher.client_engine.csrf_token,\
+                addr=ref,\
+                button_class=button_class)
     dispatcher.send_content(template)
 
 @asyncio.coroutine

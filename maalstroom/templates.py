@@ -422,7 +422,10 @@ if not initialized_template:
     dmail_addressbook_contacts_end = \
         load("dmail/addressbook_contacts_end.html", True)
 
-
+    dmail_delete_popup = \
+        load("dmail/delete_popup.html", True)
+    dmail_delete_all_popup = \
+        load("dmail/delete_all_popup.html", True)
 
     dmail_post_msg_and_link = load("dmail/post_msg_and_link.html", True)
 
