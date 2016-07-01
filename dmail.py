@@ -495,12 +495,14 @@ class DmailEngine(object):
         data_rw =\
             yield from self.task_engine.send_get_targeted_data(key, target_key)
 
-        data = data_rw.data
-
-        if not data:
+        if not data_rw.data:
             return None, None
         if not x:
-            return data, None
+            return data_rw.data, None
+
+        # The _process_dmail(..) method expects Dmail object data, without the
+        # TargetedBlock wrapper.
+        data_rw.data = data_rw.data[TargetedBlock.BLOCK_OFFSET:]
 
         return (yield from self._process_dmail(key, x, data_rw))
 

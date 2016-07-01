@@ -38,7 +38,7 @@ DmailTag = None
 
 ##FIXME: NEW
 User = None
-Axon = None
+DdsPost = None
 Synapse = None
 SynapseKey = None
 ##.
@@ -229,18 +229,22 @@ def _init_daos(Base, d):
 
     d.User = User
 
-    class Axon(Base):
-        __tablename__ = "axon"
+    class DdsPost(Base):
+        __tablename__ = "ddspost"
 
         id = Column(Integer, primary_key=True)
-        key = Column(LargeBinary, nullable=False)
+        data_key = Column(LargeBinary, nullable=False)
+        data_pow = Column(LargeBinary, nullable=False)
         target_key = Column(LargeBinary, nullable=True)
         data = Column(LargeBinary, nullable=True)
+        timestamp = Column(UtcDateTime, nullable=False)
         first_seen = Column(UtcDateTime, nullable=False)
 
-    Index("axon__target_key", Axon.target_key)
+    Index("ddspost__data_key", DdsPost.data_key)
+    Index("ddspost__data_pow", DdsPost.data_pow)
+    Index("ddspost__target_key", DdsPost.target_key)
 
-    d.Axon = Axon
+    d.DdsPost = DdsPost
 
     return d
 
@@ -445,12 +449,11 @@ if Peer is None:
     DmailPart = d.DmailPart
     DmailTag = d.DmailTag
 
+    #FIXME: New stuff (sort properly later).
     User = d.User
-    Axon = d.Axon
-#    AxonKey = d.AxonKey
+    DdsPost = d.DdsPost
     Synapse = d.Synapse
     SynapseKey = d.SynapseKey
-#    Neuron = d.Neuron
 
 def _update_node_state(sess, version):
     "Caller must call commit."
@@ -563,8 +566,9 @@ def _upgrade_4_to_5(db):
         ## Clean up DEV mess (REMOVE FOR FINAL).
         st = "select * from synapse where neuron_id is null"
         try:
-            rebuild = True
             sess.execute(st)
+
+            rebuild = True
             st = "drop table synapse"
             sess.execute(st)
             st = "drop table neuron"
@@ -587,6 +591,26 @@ def _upgrade_4_to_5(db):
                 sess.execute(st)
             except:
                 sess.rollback()
+
+        st = "select * from axon"
+        try:
+            sess.execute(st)
+
+            rebuild = True
+            st = "drop table axon"
+            sess.execute(st)
+        except:
+            sess.rollback()
+
+        st = "select * from axonkey"
+        try:
+            sess.execute(st)
+
+            rebuild = True
+            st = "drop table axonkey"
+            sess.execute(st)
+        except:
+            sess.rollback()
         ##.
 
         # Our calc_log_distance calculation was broken in older versions! Code

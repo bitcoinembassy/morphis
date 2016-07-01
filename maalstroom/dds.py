@@ -8,8 +8,10 @@ from datetime import datetime
 import logging
 import os
 
+from sqlalchemy import or_
+
 import consts
-from db import User, Axon
+from db import User, DdsPost
 from dmail import DmailEngine
 import dpush
 import enc
@@ -18,7 +20,8 @@ import maalstroom.templates as templates
 import mbase32
 from morphisblock import MorphisBlock
 import targetedblock as tb
-from mutil import fia, hex_dump, make_safe_for_html_content, utc_datetime
+from mutil import fia, hex_dump, make_safe_for_html_content
+import mutil
 import sshtype
 
 log = logging.getLogger(__name__)
@@ -146,52 +149,59 @@ def _process_axon_read(dispatcher, req):
         key = mbase32.decode(req)
         target_key = None
 
-    axon = yield from _load_axon(dispatcher, key, target_key)
+    post = yield from _load_dds_post(dispatcher, key, target_key)
 
-    axon_id = axon.id if axon else None
+    if post:
+        data = post.data
+    else:
+        if not target_key:
+            # Plain static data.
+            data_rw = yield from\
+                dispatcher.node.chord_engine.tasks.send_get_data(bytes(key))
 
-    if not axon or axon.data is None:
-        if target_key:
-            data_rw =\
-                yield from\
-                    dispatcher.node.chord_engine.tasks.send_get_targeted_data(\
-                        bytes(key), target_key=target_key)
+            obj = None
         else:
-            data_rw =\
-                yield from\
+            # TargetedBlock or Synapse.
+            data_rw = yield from\
+                dispatcher.node.chord_engine.tasks.send_get_targeted_data(\
+                    bytes(key), target_key=target_key)
+
+            obj = data_rw.object
+
+            if type(obj) is tb.Synapse:
+                data_rw = yield from\
                     dispatcher.node.chord_engine.tasks.send_get_data(\
-                        bytes(key))
+                        obj.source_key)
+            else:
+                assert type(obj) is tb.TargetedBlock, type(obj)
+                data_rw.data = data_rw.data[tb.TargetedBlock.BLOCK_OFFSET:]
+
+        if not data_rw.data:
+            dispatcher.send_content("Not found on the network at the moment.")
+            return
 
         data = data_rw.data
-    else:
-        data = axon.data
 
-    if not data:
-        dispatcher.send_content("Not found on the network at the moment.")
-        return
+        # Cache the 'post' locally.
+        yield from _save_dds_post(dispatcher, key, target_key, obj, data)
 
-    yield from _save_axon(dispatcher, key, target_key, data, axon_id)
+    key_enc = mbase32.encode(key)
 
-    if not data.startswith(MorphisBlock.UUID):
-        # Plain data, return it!
-        key_enc = mbase32.encode(key)
+    content = yield from _format_axon(dispatcher.node, data, key, key_enc)
 
-        content = yield from _format_axon(dispatcher.node, data, key, key_enc)
+    template = templates.dds_synapse_view[0]
+    template = template.format(key=key_enc, content=content)
 
-        template = templates.dds_synapse_view[0]
+    msg = "<head><link rel='stylesheet' href='morphis://.dds/style.css'>"\
+        "</link></head><body style='height: 90%; padding:0;margin:0;'>{}"\
+        "</body>"\
+            .format(template)
 
-        template = template.format(\
-            key=key_enc, content=content)
+    content_type = "text/html; charset={}"\
+        .format(dispatcher.get_accept_charset())
 
-        msg = "<head><link rel='stylesheet' href='morphis://.dds/style.css'></link></head><body style='height: 90%; padding:0;margin:0;'>{}</body>".format(template)
-
-        acharset = dispatcher.get_accept_charset()
-        dispatcher.send_content(\
-            msg, content_type="text/html; charset={}".format(acharset))
-        return
-
-    # We assume it is a Dmail if it is a MorphisBlock.
-    dispatcher.send_content(hex_dump(data))
+    dispatcher.send_content(msg, content_type=content_type)
+    return
 
 @asyncio.coroutine
 def _process_axon_synapses(dispatcher, axon_addr_enc):
@@ -206,34 +216,32 @@ def _process_axon_synapses(dispatcher, axon_addr_enc):
 
     def dbcall():
         with dispatcher.node.db.open_session() as sess:
-            q = sess.query(Axon)\
-                .filter(Axon.target_key == axon_addr)\
-                .order_by(Axon.first_seen)
+            q = sess.query(DdsPost)\
+                .filter(DdsPost.target_key == axon_addr)\
+                .order_by(DdsPost.timestamp)
 
             return q.all()
 
-    axons = yield from dispatcher.loop.run_in_executor(None, dbcall)
+    posts = yield from dispatcher.loop.run_in_executor(None, dbcall)
 
     loaded = {}
 
-    for axon in axons:
+    for post in posts:
 #        msg = "<div style='height: 5.5em; width: 100%; overflow: hidden;'>"\
-#            "{}</div>\n".format(_format_axon(axon.data, axon.key))
+#            "{}</div>\n".format(_format_axon(post.data, post.data_key))
 
         content =\
-            yield from _format_axon(\
-                dispatcher.node, axon.data, axon.key, mbase32.encode(axon.key))
+            yield from _format_axon(dispatcher.node, post.data, post.data_key)
 
         template = templates.dds_synapse_view[0]
-
-        template = template.format(\
-            key=axon_addr_enc,\
-            content=content)
+        template = template.format(key=axon_addr_enc, content=content)
 
         dispatcher.send_partial_content(template, first)
 
         first = False
-        loaded[axon.key] = True
+
+        loaded[post.data_key] = True
+        loaded[post.data_pow] = True
 
     dispatcher.send_partial_content("<hr id='new'/>", first)
 
@@ -248,9 +256,10 @@ def _process_axon_synapses(dispatcher, axon_addr_enc):
                 .format(key_enc))
             return
 
-        msg = "<iframe src='morphis://.dds/axon/read/{key}/{target_key}' style='height: 15em; width: 100%; border: 0;' seamless='seamless'></iframe>\n"\
-            .format(key=key_enc,\
-                target_key=axon_addr_enc)
+        msg = "<iframe src='morphis://.dds/axon/read/{key}/{target_key}'"\
+            " style='height: 15em; width: 100%; border: 0;'"\
+            " seamless='seamless'></iframe>\n"\
+                .format(key=key_enc, target_key=axon_addr_enc)
 
         dispatcher.send_partial_content(msg)
 
@@ -266,7 +275,7 @@ def _process_axon_synapses(dispatcher, axon_addr_enc):
     dispatcher.send_partial_content(\
         "<div>Last refreshed: {}</div><span id='end' style='color: gray'/>"\
         "</body></html>"\
-            .format(utc_datetime()))
+            .format(mutil.utc_datetime()))
 
     dispatcher.end_partial_content()
 
@@ -342,7 +351,7 @@ def _process_synapse_create_post(dispatcher, req):
     dispatcher.send_content(resp)
 
 @asyncio.coroutine
-def _format_axon(node, data, key, key_enc):
+def _format_axon(node, data, key, key_enc=None):
     try:
         result = __format_post(data)
     except UnicodeDecodeError:
@@ -355,6 +364,9 @@ def _format_axon(node, data, key, key_enc):
             return "<NOT FOUND>"
 
         result = __format_post(data_rw.data)
+
+    if not key_enc:
+        key_enc = mbase32.encode(key)
 
     return result\
         + "<div style='font-family: monospace; font-size: 8pt;"\
@@ -384,39 +396,45 @@ def __format_post(data):
                 data[:end].decode(), make_safe_for_html_content(data[start:]))
 
 @asyncio.coroutine
-def _load_axon(dispatcher, key, target_key):
+def _load_dds_post(dispatcher, key, target_key):
     def dbcall():
         with dispatcher.node.db.open_session() as sess:
-            q = sess.query(Axon).filter(Axon.key == key)
+            q = sess.query(DdsPost).filter(\
+                or_(DdsPost.data_key == key, DdsPost.data_pow == key))
 
             return q.first()
 
     return (yield from dispatcher.loop.run_in_executor(None, dbcall))
 
 @asyncio.coroutine
-def _save_axon(dispatcher, key, target_key=None, data=None, dbid=None):
+def _save_dds_post(dispatcher, key, target_key, obj, data):
     def dbcall():
         with dispatcher.node.db.open_session() as sess:
-            axon = None
+            post = DdsPost()
 
-            if dbid:
-                axon = sess.query(Axon).get(dbid)
+            post.first_seen = mutil.utc_datetime()
+            post.data = data
 
-            if not axon:
-                axon = Axon()
-                axon.key = key
-                axon.first_seen = utc_datetime()
+            if obj:
+                if type(obj) is tb.Synapse:
+                    post.data_key = obj.synapse_key
+                    post.data_pow = obj.synapse_pow
+                    post.timestamp = mutil.utc_datetime(obj.timestamp/1000)
+                else:
+                    assert type(obj) is tb.TargetedBlock, type(obj)
+                    post.data_key = post.data_pow = key
+                    post.timestamp = post.first_seen
 
-                if target_key:
-                    axon.target_key = target_key
+                assert target_key
+                post.target_key = target_key
+            else:
+                post.data_key = key
+                post.timestamp = obj.first_seen
 
-                sess.add(axon)
-
-            if data:
-                axon.data = data
+            sess.add(post)
 
             sess.commit()
 
-            return axon
+            return post
 
     return (yield from dispatcher.loop.run_in_executor(None, dbcall))

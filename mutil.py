@@ -205,11 +205,14 @@ class UtcTzInfo(tzinfo):
 
 UTC_TZINFO = UtcTzInfo()
 
-def utc_datetime():
-    return datetime.now(UTC_TZINFO)
+def utc_datetime(val=None):
+    if val is None:
+        return datetime.now(UTC_TZINFO)
+    else:
+        return datetime.fromtimestamp(val, UTC_TZINFO)
 
 def utc_timestamp():
-    #FIXME: Maybe there is a more efficient way to get this (guaranteed still)?
+    #TODO: Maybe there is a more efficient way to get this (guaranteed still)?
     return datetime.now(UTC_TZINFO).timestamp()
 
 ISO_FMT_UTC = "%Y-%m-%dT%H:%M:%S.%fZ"

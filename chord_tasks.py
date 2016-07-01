@@ -45,6 +45,7 @@ class DataResponseWrapper(object):
     def __init__(self, data_key):
         self.data_key = data_key
         self.data = None
+        self.object = None
         self.pubkey = None
         self.signature = None
         self.path_hash = b""
@@ -2480,10 +2481,6 @@ class ChordTasks(object):
 
                     valid, data_key =\
                         self._check_targeted_block(data, data_rw.data_key)
-
-                    # We do not return the TargetedBlock header. (We use to
-                    # before this commit. NOTE: These lines got moved now.)
-                    data = data[tb.TargetedBlock.BLOCK_OFFSET:]
                 else:
                     assert drmsg.version == -1
                     # Synapse mode.
@@ -2512,6 +2509,9 @@ class ChordTasks(object):
                     if log.isEnabledFor(logging.INFO):
                         log.info("DataResponse is invalid!")
                     return None
+                else:
+                    # valid holds a TargetedBlock or Synapse.
+                    data_rw.object = valid
 
                 if data_rw.target_key is not None and\
                         data_rw.target_key != valid.target_key:
