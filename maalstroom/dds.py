@@ -36,38 +36,20 @@ def serve_get(dispatcher, rpath):
         random_id_enc = mbase32.encode(os.urandom(consts.NODE_ID_BYTES))
 
         template = templates.dds_main[0]
-
         template = template.format(random_id_enc=random_id_enc)
 
         dispatcher.send_content(template)
         return
-    elif req == "/test":
-        dmail_address =\
-            yield from dmail._load_default_dmail_address(dispatcher)
+    elif req == "/style.css":
+        template = templates.dds_css[0]
 
-        if dmail_address:
-            addr_enc = mbase32.encode(dmail_address.site_key)
-
-        dispatcher.send_content(addr_enc)
+        dispatcher.send_content(template, content_type="text/css")
         return
-    elif req == "/synapse":
-        if dispatcher.handle_cache(req):
-            return
-
-        template = templates.dds_neuron[0]
-        template = template.format(\
-            csrf_token=dispatcher.client_engine.csrf_token,
-            delete_class="")
-
-        dispatcher.send_content([template, req])
+    elif req.startswith("/images/"):
+        dispatcher.send_content(templates.dds_imgs[req[8:]])
         return
     elif req == "/axon":
         yield from _process_axon(dispatcher, req[5:])
-        return
-    elif req == "/axon/grok/style.css":
-        template = templates.dds_grok_css[0]
-
-        dispatcher.send_content(template, content_type="text/css")
         return
     elif req.startswith("/axon/grok/"):
         yield from _process_view_axon(dispatcher, req[11:])
@@ -80,9 +62,6 @@ def serve_get(dispatcher, rpath):
         return
     elif req.startswith("/synapse/create/"):
         yield from _process_create_synapse(dispatcher, req[16:])
-        return
-    elif req.startswith("/images/"):
-        dispatcher.send_content(templates.dds_imgs[req[8:]])
         return
 
     dispatcher.send_error("request: {}".format(req), errcode=400)
@@ -332,7 +311,7 @@ def _process_read_axon(dispatcher, req):
         template = template.format(\
             key=key_enc, content=content)
 
-        msg = "<head><link rel='stylesheet' href='morphis://.dds/axon/grok/style.css'></link></head><body style='height: 90%; padding:0;margin:0;'>{}</body>".format(template)
+        msg = "<head><link rel='stylesheet' href='morphis://.dds/style.css'></link></head><body style='height: 90%; padding:0;margin:0;'>{}</body>".format(template)
 
         acharset = dispatcher.get_accept_charset()
         dispatcher.send_content(\
@@ -386,6 +365,9 @@ def __format_post(data):
 
 @asyncio.coroutine
 def _process_create_synapse(dispatcher, target_addr):
+    if dispatcher.handle_cache(target_addr):
+        return
+
     template = templates.dds_create_synapse[0]
 
     template = template.format(\

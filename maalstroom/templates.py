@@ -410,12 +410,12 @@ if not initialized_template:
     load_resources(dmail_imgs, "images/dmail")
 
     # dds.
+    dds_css = load("dds/style.css", True)
+
     dds_main = load("dds/main.html", True)
-    dds_neuron = load("dds/neuron.html", True)
     dds_axon = load("dds/axon.html", True)
     dds_create_synapse = load("dds/create_synapse.html", True)
     dds_axon_synapses_start = load("dds/axon_synapses_start.html", True)
-    dds_grok_css = load("dds/style.css", True)
     dds_synapse_view = load("dds/synapse_view.html", True)
 
     load_resources(dds_imgs, "images/dds")
