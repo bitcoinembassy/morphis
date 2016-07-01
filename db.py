@@ -234,7 +234,7 @@ def _init_daos(Base, d):
 
         id = Column(Integer, primary_key=True)
         data_key = Column(LargeBinary, nullable=False)
-        data_pow = Column(LargeBinary, nullable=False)
+        data_pow = Column(LargeBinary, nullable=True)
         target_key = Column(LargeBinary, nullable=True)
         data = Column(LargeBinary, nullable=True)
         timestamp = Column(UtcDateTime, nullable=False)
