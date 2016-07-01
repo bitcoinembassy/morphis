@@ -98,7 +98,7 @@ def serve_get(dispatcher, rpath):
 
         if not msg_list:
             msg_list = "morphis://.dmail/msg_list/" + addr_enc + '/' + tag
-        print(req)
+
         if "addressbook" in req:
             template = templates.dmail_addressbook_wrapper[0]
             template = template.format( \
@@ -233,10 +233,16 @@ def serve_get(dispatcher, rpath):
             yield from _process_create_contact(dispatcher, idkey)
         elif req.startswith("/delete_contact"):
             p0 = req.find("/", 2)
-            idkey = mbase32.encode(req[p0:])
+            idkey = req[p0+1:]
             yield from _process_delete_contact(dispatcher,idkey)
+            template = templates.dmail_addressbook_wrapper[0]
+            template = template.format( \
+                tag="", \
+                addr=user)
+            dispatcher.send_content(template)
         elif req == "/clear_contacts":
             yield from _process_clear_addressbook(dispatcher,user)
+
 
 
     elif req.startswith("/msg_list/list/"):
@@ -1084,7 +1090,6 @@ def serve_post(dispatcher, rpath):
 
         dd = yield from dispatcher.read_post()
         if not dd: return  # Invalid csrf_token.
-
         name = fia(dd["name"])
         addr = mbase32.decode(fia(dd["addr"]).lower())
         entry = yield from\
@@ -1093,16 +1098,8 @@ def serve_post(dispatcher, rpath):
         if not entry:
             yield from _process_rename_contact_create(dispatcher, name, addr)
 
-        yield from _process_create_contact(dispatcher, "")
         return
-    elif req == "/addressbook/rename_contact/make_it_so":
-        dd= yield from dispatcher.read_post()
-        if not dd: return
-        id_key = mbase32.decode(fia(dd["idkey"]))
-        newName = fia(dd["name"])
-        yield from _process_rename_contact_create(dispatcher, newName, id_key)
-        ls =yield from _load_addressbook_list(dispatcher, "")
-        yield from _process_addressbook_list(dispatcher, ls, "")
+
     else:
         dispatcher.send_error(errcode=400)
 
@@ -1868,13 +1865,11 @@ def _load_addressbook_list(dispatcher, user):
 @asyncio.coroutine
 def _process_addressbook_list(dispatcher, ls, req):
     if req == "/list": req = ""
-
+    template = templates.dmail_addressbook_contacts[0].format( \
+        csrf_token=dispatcher.client_engine.csrf_token, to=req)
+    dispatcher.send_partial_content( \
+        template, True)
     for ab in ls:
-        template = templates.dmail_addressbook_contacts[0].format(\
-            csrf_token=dispatcher.client_engine.csrf_token, to=req)
-        dispatcher.send_partial_content( \
-            template, True)
-
         if ab.user == ab.identity_key:
             # Indicator that this address belongs to the users node.
             symbol = "*self*"
@@ -1890,7 +1885,7 @@ def _process_addressbook_list(dispatcher, ls, req):
                 templates.dmail_addressbook_contacts_row[0].format(\
                     userstar=symbol,first=ab.first, last=ab.last,\
                     idkey=mbase32.encode(ab.identity_key)))
-    dispatcher.send_partial_content(templates.dmail_addressbook_list_end[0])
+    dispatcher.send_partial_content(templates.dmail_addressbook_contacts_end[0])
     dispatcher.end_partial_content()
 
 @asyncio.coroutine
@@ -1907,12 +1902,12 @@ def _process_clear_addressbook(dispatcher, user):
 
 @asyncio.coroutine
 def _process_delete_contact(dispatcher, todel):
-    target = mbase32.decode(todel)
+    todel = mbase32.decode(todel)
 
     def dbcall():
         with dispatcher.node.db.open_session() as sess:
             q = sess.query(AddressBook)
-            q = q.filter(AddressBook.identity_key == target).first()
+            q = q.filter(AddressBook.identity_key == todel).first()
             if q.identity_key !=q.user:
                 sess.delete(q)
                 sess.commit()

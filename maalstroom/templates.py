@@ -419,6 +419,8 @@ if not initialized_template:
         load("dmail/addressbook_rename_contact.html", True)
     dmail_addressbook_contacts_row = \
         load("dmail/addressbook_contacts_row.html", True)
+    dmail_addressbook_contacts_end = \
+        load("dmail/addressbook_contacts_end.html", True)
 
 
 
