@@ -2472,7 +2472,7 @@ class ChordTasks(object):
             return False
 
         def threadcall():
-            if data_rw.targeted:
+            if data_rw.targeted or drmsg.version == -1:
                 # TargetedBlock/Synapse mode.
                 if drmsg.version is None:
                     # TargetedBlock mode.
