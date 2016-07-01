@@ -429,7 +429,7 @@ def _save_dds_post(dispatcher, key, target_key, obj, data):
                 post.target_key = target_key
             else:
                 post.data_key = key
-                post.timestamp = obj.first_seen
+                post.timestamp = post.first_seen
 
             sess.add(post)
 
