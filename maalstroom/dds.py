@@ -61,10 +61,6 @@ def serve_get(dispatcher, rpath):
 
         dispatcher.send_content([template, req])
         return
-    elif req == "/neuron":
-#        yield from _process_neuron(dispatcher)
-#        return
-        pass
     elif req == "/axon":
         yield from _process_axon(dispatcher, req[5:])
         return
@@ -99,44 +95,11 @@ def serve_post(dispatcher, rpath):
 
     req = rpath[s_dds_len:]
 
-    if req == "/synapse/create/make_it_so":
-#        yield from _process_create_synapse(dispatcher)
-#        return
-        pass
-    elif req == "/synapse/create":
+    if req == "/synapse/create":
         yield from _process_create_axon_post(dispatcher, req)
         return
 
     dispatcher.send_error("request: {}".format(req), errcode=400)
-
-#@asyncio.coroutine
-#def _process_create_synapse(dispatcher):
-#    dd = yield from dispatcher.read_post()
-#    if not dd: return # Invalid csrf_token.
-#
-#    axon_addr = fia(dd["axon_addr"])
-#
-#    if not axon_addr:
-#        return
-#
-#    def dbcall():
-#        with dispatcher.node.db.open_session() as sess:
-#            s = Synapse()
-#            s.axon_addr = mbase32.decode(axon_addr)
-#
-#            sess.add(s)
-#
-#            sess.commit()
-#
-#            return True
-#
-#    r = yield from dispatcher.loop.run_in_executor(None, dbcall)
-#
-#    dispatcher.send_content(\
-#        "SYNAPSE CREATED!<br/>"\
-#        "<p>axon_addr [{}] successfully synapsed."\
-#            "</p>"\
-#            .format(axon_addr))
 
 @asyncio.coroutine
 def _process_create_axon_post(dispatcher, req):
@@ -194,37 +157,6 @@ def _process_create_axon_post(dispatcher, req):
                     target_addr=mbase32.encode(target_addr))
 
     dispatcher.send_content(resp)
-
-#@asyncio.coroutine
-#def _process_neuron(dispatcher):
-#    def dbcall():
-#        with dispatcher.node.db.open_session() as sess:
-#            q = sess.query(Synapse).filter(Synapse.disabled == False)
-#
-#            return q.all()
-#
-#    synapses = yield from dispatcher.loop.run_in_executor(None, dbcall)
-#
-#    dp = dpush.DpushEngine(dispatcher.node)
-#
-#    dispatcher.send_partial_content("<p>Signals</p>", True)
-#
-#    for synapse in synapses:
-#        dispatcher.send_partial_content(\
-#            "Address:&nbsp;[{}]<br/><br/>"\
-#                .format(mbase32.encode(synapse.axon_addr)))
-#
-#        @asyncio.coroutine
-#        def cb(key):
-#            msg = "<iframe src='morphis://.dds/axon/read/{key}/{target_key}' style='height: 10em; width: 100%; border: 0;' seamless='seamless'></iframe>"\
-#                .format(key=mbase32.encode(key),\
-#                    target_key=mbase32.encode(synapse.axon_addr))
-#
-#            dispatcher.send_partial_content(msg)
-#
-#        yield from dp.scan_targeted_blocks(synapse.axon_addr, 20, cb)
-#
-#    dispatcher.end_partial_content()
 
 @asyncio.coroutine
 def _process_axon(dispatcher, req):
@@ -409,38 +341,6 @@ def _process_read_axon(dispatcher, req):
 
     # We assume it is a Dmail if it is a MorphisBlock.
     dispatcher.send_content(hex_dump(data))
-#    de =\
-#        DmailEngine(\
-#            dispatcher.node.chord_engine.tasks, dispatcher.node.db)
-#
-#    axon_key = yield from __load_axon_key(\
-#            dispatcher,\
-#            target_key if target_key else key)
-#
-#    if not axon_key:
-#        # If we can't decrypt it, send a hexdump.
-#        msg = hexdump(data)
-#
-#        acharset = dispatcher.get_accept_charset()
-#        dispatcher.send_content(\
-#            msg, content_type="text/plain; charset={}".format(acharset))
-#        return
-#
-#    l, x = sshtype.parseMpint(axon_key.x)
-#
-#    dm, sender_auth_valid = yield from\
-#        de.fetch_dmail(bytes(key), x, data_rw)
-#
-#    msg_txt = ""
-#    if not sender_auth_valid:
-#        msg_txt += "[WARNING: SENDER ADDRESS IS FORGED]\n"
-#
-#    msg_txt = dmail._format_dmail_content(dm.parts)
-#
-#    #FIXME: Move this into dmail._format_dmail_content(..) above.
-#    msg_txt = make_safe_for_html_content(msg_txt)
-#
-#    dispatcher.send_content(msg_txt)
 
 @asyncio.coroutine
 def _format_axon(node, data, key, key_enc):
@@ -483,41 +383,6 @@ def __format_post(data):
         "<pre style='color: gray; padding:0;margin:0;'>{}</pre>"\
             .format(\
                 data[:end].decode(), make_safe_for_html_content(data[start:]))
-
-#@asyncio.coroutine
-#def __load_axon_key(dispatcher, axon_addr):
-#    def dbcall():
-#        with dispatcher.node.db.open_session() as sess:
-#            q = sess.query(Neuron)\
-#                .filter(Neuron.synapses.any(Synapse.axon_addr == axon_addr))
-#
-#            sess.expunge_all()
-#
-#            neuron = q.first()
-#
-#            if not neuron:
-#                return None
-#
-#            found = False
-#            for synapse in neuron.synapses:
-#                if synapse.axon_addr == axon_addr:
-#                    found = True
-#                    break
-#
-#            assert found
-#
-#            axon_key = synapse.axon_keys[0]
-#
-#            if log.isEnabledFor(logging.INFO):
-#                log.info(\
-#                    "Found AxonKey (x=[{}])!"\
-#                        .format(mbase32.encode(axon_key.x)))
-#
-#            sess.expunge_all()
-#
-#            return axon_key
-#
-#    return (yield from dispatcher.loop.run_in_executor(None, dbcall))
 
 @asyncio.coroutine
 def _process_create_synapse(dispatcher, target_addr):

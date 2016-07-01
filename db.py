@@ -39,10 +39,8 @@ DmailTag = None
 ##FIXME: NEW
 User = None
 Axon = None
-#AxonKey = None
 Synapse = None
 SynapseKey = None
-#Neuron = None
 ##.
 
 class UtcDateTime(TypeDecorator):
@@ -243,40 +241,6 @@ def _init_daos(Base, d):
     Index("axon__target_key", Axon.target_key)
 
     d.Axon = Axon
-
-#    class AxonKey(Base):
-#        __tablename__ = "axonkey"
-#
-#        id = Column(Integer, primary_key=True)
-#        synapse_id = Column(Integer, ForeignKey("synapse.id"))
-#        x = Column(LargeBinary, nullable=False)
-#
-#    d.AxonKey = AxonKey
-#
-#    class Synapse(Base):
-#        __tablename__ = "synapse"
-#
-#        id = Column(Integer, primary_key=True)
-#        neuron_id = Column(Integer, ForeignKey("neuron.id"))
-#        axon_addr = Column(LargeBinary, nullable=False)
-#        axon_keys = relationship(AxonKey)
-#        disabled = Column(Boolean, nullable=False, default=False)
-#
-#    Index("synapse__axon_addr", Synapse.axon_addr)
-#
-#    d.Synapse = Synapse
-#
-#    class Neuron(Base):
-#        __tablename__ = "neuron"
-#
-#        id = Column(Integer, primary_key=True)
-#
-#        user = relationship(User)
-#        user_id = Column(Integer, ForeignKey("user.id"))
-#        name = Column(String, nullable=True)
-#        synapses = relationship(Synapse)
-#
-#    d.Neuron = Neuron
 
     return d
 
