@@ -450,8 +450,8 @@ class ChordTasks(object):
 
     @asyncio.coroutine
     def send_get_synapses(\
-            self, targetKey=None, sourceKey=None, startTimestamp=None,\
-            endTimestamp=None, startKey=None, endKey=None, minimumPow=8):
+            self, target_key=None, source_key=None, start_timestamp=None,\
+            end_timestamp=None, start_key=None, end_key=None, minimum_pow=8):
 
 
         #TODO: YOU_ARE_HERE: Finish.
