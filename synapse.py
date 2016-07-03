@@ -209,13 +209,18 @@ class Synapse(object):
 
 # DHT API Objects.
 class SynapseRequest(object):
-    def __init__(self):
+    def __init__(self, buf=None):
+        self.buf = buf
+
         self.start_timestamp = None
         self.end_timestamp = None
         self.start_key = None
         self.end_key = None
         self.minimum_pow = None
         self.query = None
+
+        if buf:
+            self.parse_from(buf, 0)
 
     def encode(self):
         if not self.buf:
@@ -234,18 +239,23 @@ class SynapseRequest(object):
         return nbuf
 
     def parse(self):
-        i, tsms = sshtype.parse_mpint_from(self.buf, 0)
+        self.parse_from(self.buf, 0)
+
+    def parse_from(self, buf, i):
+        i, tsms = sshtype.parse_mpint_from(buf, 0)
         self.start_timestamp = tsms/1000
-        i, tsms = sshtype.parse_mpint_from(self.buf, i)
+        i, tsms = sshtype.parse_mpint_from(buf, i)
         self.end_timestamp = tsms/1000
 
-        i, self.start_key = sshtype.parse_binary_from(self.buf, i)
-        i, self.end_key = sshtype.parse_binary_from(self.buf, i)
+        i, self.start_key = sshtype.parse_binary_from(buf, i)
+        i, self.end_key = sshtype.parse_binary_from(buf, i)
 
-        self.minimum_pow = struct.unpack_from(">S", self.buf, i)[0]
+        self.minimum_pow = struct.unpack_from(">S", buf, i)[0]
         i += 2
 
-        i, self.query = SynapseRequest.Query().parse_from(self.buf, i)
+        i, self.query = SynapseRequest.Query().parse_from(buf, i)
+
+        return i, self
 
     class Query(object):
         class Type(Enum):

@@ -703,6 +703,8 @@ class ChordTasks(object):
             fnmsg.significant_bits = significant_bits
             if target_key:
                 fnmsg.target_key = target_key
+        if synapse_request:
+            fnmsg.query = synapse_request
 
         # Setup the DataResponseWrapper which is returned from this function
         # but also is used to pass around some info to helper functions this

@@ -191,12 +191,21 @@ class ChordFindNode(ChordMessage):
         self.significant_bits = None
         self.target_key = None # I believe this is only for get (not put).
 
+        self.query = None
+
         super().__init__(CHORD_MSG_FIND_NODE, buf)
 
     def encode(self):
         nbuf = super().encode()
         nbuf += sshtype.encodeBinary(self.node_id)
         nbuf += struct.pack("B", self.data_mode.value)
+
+        if self.query:
+            assert not self.version
+            # Synapse Multi-index/Shared-keyspace Request Mode.
+            self.version = -1
+            self.significant_bits = 1
+            self.target_key = self.query.encode()
 
         nbuf += struct.pack("?", self.version is not None)
         if self.version is not None:
@@ -231,7 +240,11 @@ class ChordFindNode(ChordMessage):
         if i == len(self.buf):
             return
 
-        i, self.target_key = sshtype.parse_binary_from(self.buf, i)
+        if self.version == -1:
+            # Synapse Multi-index/Shared-keyspace Request Mode.
+            i, self.query = syn.SynapseRequest().parse_from(self.buf, i)
+        else:
+            i, self.target_key = sshtype.parse_binary_from(self.buf, i)
 
 class ChordGetData(ChordMessage):
     def __init__(self, buf = None):
