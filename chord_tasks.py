@@ -451,10 +451,44 @@ class ChordTasks(object):
 
     @asyncio.coroutine
     def send_get_synapses(\
-            self, target_key=None, source_key=None, start_timestamp=None,\
+            self, target_keys=None, source_key=None, start_timestamp=None,\
             end_timestamp=None, start_key=None, end_key=None, minimum_pow=8):
 
+        req = syn.SynapseRequest()
+        req.start_timestamp = start_timestamp
+        req.end_timestamp = end_timestamp
+        req.start_key = start_key
+        req.end_key = end_key
+        req.minimum_pow = minimum_pow
 
+        if target_keys:
+            if type(target_keys) in (list, tuple):
+                assert not source_key
+                keys = []
+                for key in target_keys:
+                    keys.append([syn.SynapseRequest.Query(key)])
+                query = syn.SynapseRequest.Query(\
+                    keys, syn.SynapseRequest.Query.Type.and_)
+            elif source_key:
+                query = syn.SynapseRequest.Query(\
+                    [syn.SynapseRequest.Query(target_keys),\
+                        syn.SynapseRequest.Query(source_key)],
+                    syn.SynapseRequest.Query.Type.or_)
+            else:
+                query = syn.SynapseRequest.Query(target_keys)
+        else:
+            query = syn.SynapseRequest.Query(source_key)
+
+        req.query = query
+
+
+        #TODO: YOU_ARE_HERE: What id do we search for?? multiple at once?.
+#        data_id = enc.generate_ID(data_key)
+#
+#        data_rw = yield from\
+#            self.send_find_node(data_id, for_data=True, data_key=data_key,\
+#                path_hash=path_hash, scan_only=scan_only,\
+#                retry_factor=retry_factor)
         #TODO: YOU_ARE_HERE: Finish.
         pass
 
@@ -582,7 +616,8 @@ class ChordTasks(object):
     @asyncio.coroutine
     def send_find_node(self, node_id, significant_bits=None, input_trie=None,\
             for_data=False, data_msg=None, data_key=None, path_hash=None,\
-            targeted=False, target_key=None, scan_only=False, retry_factor=1):
+            targeted=False, target_key=None, scan_only=False,\
+            synapse_request=None, retry_factor=1):
         "Returns found nodes sorted by closets. If for_data is True then"\
         " this is really {get/store}_data instead of find_node. If data_msg"\
         " is None than it is get_data and the data is returned. Store data"\

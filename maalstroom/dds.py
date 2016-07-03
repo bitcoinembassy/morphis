@@ -19,6 +19,7 @@ import maalstroom.dmail as dmail
 import maalstroom.templates as templates
 import mbase32
 from morphisblock import MorphisBlock
+import synapse as syn
 import targetedblock as tb
 from mutil import fia, hex_dump, make_safe_for_html_content
 import mutil
@@ -168,7 +169,7 @@ def _process_axon_read(dispatcher, req):
 
             obj = data_rw.object
 
-            if type(obj) is tb.Synapse:
+            if type(obj) is syn.Synapse:
                 data_rw = yield from\
                     dispatcher.node.chord_engine.tasks.send_get_data(\
                         obj.source_key)
@@ -335,7 +336,7 @@ def _process_synapse_create_post(dispatcher, req):
 
     target_addr = mbase32.decode(target_addr)
 
-    synapse = tb.Synapse.for_target(target_addr, key)
+    synapse = syn.Synapse.for_target(target_addr, key)
 
     yield from\
         dispatcher.node.chord_engine.tasks.send_store_synapse(\
@@ -355,7 +356,7 @@ def _format_axon(node, data, key, key_enc=None):
     try:
         result = __format_post(data)
     except UnicodeDecodeError:
-        synapse = tb.Synapse(data)
+        synapse = syn.Synapse(data)
 
         data_rw = yield from\
                 node.chord_engine.tasks.send_get_data(synapse.source_key)
@@ -416,7 +417,7 @@ def _save_dds_post(dispatcher, key, target_key, obj, data):
             post.data = data
 
             if obj:
-                if type(obj) is tb.Synapse:
+                if type(obj) is syn.Synapse:
                     post.data_key = obj.synapse_key
                     post.data_pow = obj.synapse_pow
                     post.timestamp = mutil.utc_datetime(obj.timestamp/1000)
