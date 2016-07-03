@@ -29,6 +29,7 @@ import node as mnnode
 import peer as mnpeer
 import rsakey
 import sshtype
+import synapse as syn
 import targetedblock as tb
 
 log = logging.getLogger(__name__)
@@ -462,7 +463,7 @@ class ChordTasks(object):
             self, synapse, store_key=True, key_callback=None, retry_factor=20):
         "Sends a StoreData request for a Synapse, returning the count of"\
         " nodes that claim to have stored it."
-        assert type(synapse) is tb.Synapse
+        assert type(synapse) is syn.Synapse
 
         data = yield from synapse.encode()
 
@@ -3221,7 +3222,7 @@ class ChordTasks(object):
         "Checks if the passed Synapse data is valid; returning the Synapse or"\
         " None if the data was invalid."
         try:
-            synapse = tb.Synapse(data)
+            synapse = syn.Synapse(data)
         except:
             log.exception(\
                 "Invalid Synapse; data=[\n{}]."\
@@ -3255,7 +3256,7 @@ class ChordTasks(object):
 
             if direction < 0\
                     or dist\
-                        > (consts.NODE_ID_BITS - tb.Synapse.MIN_DIFFICULTY):
+                        > (consts.NODE_ID_BITS - syn.Synapse.MIN_DIFFICULTY):
                 log.warning(\
                     "Invalid Synapse; PoW is insufficient ({}/{}/{}/{})."\
                         .format(\
