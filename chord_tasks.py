@@ -452,7 +452,8 @@ class ChordTasks(object):
     @asyncio.coroutine
     def send_get_synapses(\
             self, target_keys=None, source_key=None, start_timestamp=None,\
-            end_timestamp=None, start_key=None, end_key=None, minimum_pow=8):
+            end_timestamp=None, start_key=None, end_key=None, minimum_pow=8,\
+            retry_factor=1):
 
         req = syn.SynapseRequest()
         req.start_timestamp = start_timestamp
@@ -461,12 +462,15 @@ class ChordTasks(object):
         req.end_key = end_key
         req.minimum_pow = minimum_pow
 
+        all_keys = []
+
         if target_keys:
             if type(target_keys) in (list, tuple):
                 assert not source_key
                 keys = []
                 for key in target_keys:
                     keys.append([syn.SynapseRequest.Query(key)])
+                    all_keys.append(key)
                 query = syn.SynapseRequest.Query(\
                     keys, syn.SynapseRequest.Query.Type.and_)
             elif source_key:
@@ -474,23 +478,41 @@ class ChordTasks(object):
                     [syn.SynapseRequest.Query(target_keys),\
                         syn.SynapseRequest.Query(source_key)],
                     syn.SynapseRequest.Query.Type.or_)
+                all_keys.append(target_keys)
+                all_keys.append(source_key)
             else:
                 query = syn.SynapseRequest.Query(target_keys)
+                all_keys.append(target_keys)
         else:
             query = syn.SynapseRequest.Query(source_key)
+            all_keys.append(source_key)
 
         req.query = query
 
+        for key in all_keys:
+            data_id = enc.generate_ID(key)
 
-        #TODO: YOU_ARE_HERE: What id do we search for?? multiple at once?.
-#        data_id = enc.generate_ID(data_key)
-#
-#        data_rw = yield from\
-#            self.send_find_node(data_id, for_data=True, data_key=data_key,\
-#                path_hash=path_hash, scan_only=scan_only,\
-#                retry_factor=retry_factor)
-        #TODO: YOU_ARE_HERE: Finish.
-        pass
+            tasks.append(self.send_find_node(\
+                data_id, for_data=True, data_key=key, synapse_request=req,\
+                retry_factor=retry_factor))
+
+        data_rw = None
+
+        while True:
+            done, pending = yield from asyncio.wait(\
+                tasks, loop=self.loop, return_when=futures.FIRST_COMPLETED)
+
+            for ele in done:
+                data_rw = ele.result()
+                if data_rw.data:
+                    break
+
+            if not pending:
+                break
+
+            tasks = list(pending)
+
+        return data_rw
 
     @asyncio.coroutine
     def send_store_synapse(\
