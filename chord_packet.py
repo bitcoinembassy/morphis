@@ -187,7 +187,7 @@ class ChordFindNode(ChordMessage):
     def __init__(self, buf = None):
         self.node_id = None
         self.data_mode = DataMode.none
-        self.version = None
+        self.version = None # Currently seems only used for StoreData.
         self.significant_bits = None
         self.target_key = None # I believe this is only for get (not put).
 
