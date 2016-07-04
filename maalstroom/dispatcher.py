@@ -503,16 +503,6 @@ class MaalstroomDispatcher(object):
         # method doing that.
 
         # Resolve key via send_find_key.
-        if significant_bits < 32:
-            log.warning("Request supplied key with too few bits [{}]."\
-                .format(significant_bits))
-
-            self.send_error(\
-                "Key must have at least 32 bits or 7 characters,"\
-                " key_bits=[{}].".format(significant_bits), 400)
-
-            return None
-
         try:
             data_rw =\
                 yield from asyncio.wait_for(\

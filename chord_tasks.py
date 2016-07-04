@@ -2298,9 +2298,7 @@ class ChordTasks(object):
 
         distance = mutil.calc_raw_distance(self.engine.node_id, data_id)
 
-        min_sig_bits = 8 if target_key is not None else 32
-
-        if significant_bits and significant_bits >= min_sig_bits:
+        if significant_bits:
             mask = ((1 << (chord.NODE_ID_BITS - significant_bits)) - 1)\
                 .to_bytes(chord.NODE_ID_BYTES, "big")
 
@@ -2319,7 +2317,7 @@ class ChordTasks(object):
 
         def dbcall():
             with self.engine.node.db.open_session() as sess:
-                if significant_bits and significant_bits >= min_sig_bits:
+                if significant_bits:
                     # Wildcard key search mode.
                     q = sess.query(DataBlock.data_id)
 
