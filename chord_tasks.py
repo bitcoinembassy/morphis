@@ -942,9 +942,8 @@ class ChordTasks(object):
 
                     #FIXME: Ahh! If we have it why did we do the above! :)
                     # Move this up to the top and save us a send_find_node!
-                    data_present = yield from\
-                        self._check_has_data(\
-                            node_id, significant_bits, target_key)
+                    data_present = yield from self._check_has_data(\
+                        node_id, significant_bits, target_key, synapse_request)
                     #NOTE: Regarding FIXME above: we didn't 'have' it, we have
                     # something close, but we want closest we can find overall,
                     # so we don't even care what we have until after we see
@@ -1029,7 +1028,7 @@ class ChordTasks(object):
 
                         data_present =\
                             yield from self._check_has_data(\
-                                node_id, significant_bits, None)
+                                node_id, None, None, None)
 
                         if not data_present:
                             continue
@@ -1239,9 +1238,8 @@ class ChordTasks(object):
                 if not significant_bits and data_rw.data is None:
                     # Give one last try to find locally. I think we don't
                     # check locally always?
-                    data_present = yield from\
-                        self._check_has_data(\
-                            node_id, significant_bits, target_key)
+                    data_present = yield from self._check_has_data(\
+                        node_id, significant_bits, target_key, synapse_request)
 
                     if data_present:
                         log.warning("FOUND LOCALLY AFTER PROOF TRIGGERD.")
@@ -1927,8 +1925,8 @@ class ChordTasks(object):
             # In for_data mode we respond with two packets.
             if fnmsg.data_mode is cp.DataMode.get:
                 data_present = yield from self._check_has_data(\
-                    fnmsg.node_id, fnmsg.significant_bits,\
-                    fnmsg.target_key)
+                    fnmsg.node_id, fnmsg.significant_bits, fnmsg.target_key,\
+                    fnmsg.query)
 
                 pmsg = cp.ChordDataPresence()
                 if fnmsg.significant_bits and data_present:
@@ -2286,7 +2284,10 @@ class ChordTasks(object):
                 tun_meta.peer.protocol.close_channel(tun_meta.local_cid)
 
     @asyncio.coroutine
-    def _check_has_data(self, data_id, significant_bits, target_key):
+    def _check_has_data(self, data_id, significant_bits, target_key, sreq):
+        if sreq:
+            return (yield from self._check_synapse_request(sreq))
+
         if log.isEnabledFor(logging.INFO):
             target_key_enc =\
                 mbase32.encode(target_key) if target_key is not None else None
@@ -2360,6 +2361,10 @@ class ChordTasks(object):
                         return False
 
         return (yield from self.loop.run_in_executor(None, dbcall))
+
+    @asyncio.coroutine
+    def _check_synapse_request(self, sreq):
+        pass
 
     @asyncio.coroutine
     def _check_do_want_data(self, data_ids, version):
