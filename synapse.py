@@ -23,10 +23,11 @@ class Synapse(object):
     MIN_DIFFICULTY = 8 # bits.
 
     @staticmethod
-    def for_target(target_key, source_key):
-        return Synapse(None, target_key, source_key)
+    def for_target(target_key, source_key, difficulty=MIN_DIFFICULTY):
+        return Synapse(None, target_key, source_key, difficulty)
 
-    def __init__(self, buf=None, target_key=None, source_key=None):
+    def __init__(self, buf=None, target_key=None, source_key=None,\
+            difficulty=MIN_DIFFICULTY):
         self.buf = buf
 
         ## Encoded fields.
@@ -43,7 +44,7 @@ class Synapse(object):
         self.stamps = []
         ##.
 
-        self.difficulty = Synapse.MIN_DIFFICULTY
+        self.difficulty = difficulty
 
         self.nonce_offset = None
 
