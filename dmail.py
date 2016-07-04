@@ -654,8 +654,8 @@ class DmailEngine(object):
         dw.data_enc = m
 
         # Upload the DmailWrapper itself as static key, and then Synapse!
-        r = yield from\
-            self._send_dmail_as_synapse(dw.encode(), target_key, difficulty)
+#        r = yield from\
+#            self._send_dmail_as_synapse(dw.encode(), target_key, difficulty)
 
         # Store the DmailWrapper in a TargetedBlock.
         tb, tb_data =\
