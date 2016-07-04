@@ -49,6 +49,7 @@ class Synapse(object):
 
         self._synapse_key = None
         self._synapse_pow = None
+        self._log_distance = None
 
         if buf:
             self.parse()
@@ -86,6 +87,19 @@ class Synapse(object):
                 "synapse_pow=[{}].".format(mbase32.encode(self._synapse_pow)))
 
         return self._synapse_pow
+
+    @property
+    def log_distance(self):
+        if self._log_distance:
+            return self._log_distance
+
+        self._log_distance =\
+            mutil.calc_log_distance(self.target_key, self.synapse_pow)
+
+        if log.isEnabledFor(logging.INFO):
+            log.info("log_distance=[{}].".format(self._log_distance))
+
+        return self._log_distance
 
     @property
     def target_key(self):

@@ -3309,9 +3309,7 @@ class ChordTasks(object):
 
         if not synapse.signature:
             # Then it is required to be a POW Synapse.
-            dist, direction =\
-                mutil.calc_log_distance(\
-                    synapse.target_key, synapse.synapse_pow)
+            dist, direction = synapse.log_distance
 
             if direction < 0\
                     or dist\
