@@ -2909,7 +2909,7 @@ class ChordTasks(object):
                 s.original_size = len(dmsg.data)
                 s.insert_timestamp = mutil.utc_datetime()
 
-                s.timestamp = mutil.utc_datetime(synapse.timestamp/1000)
+                s.timestamp = mutil.utc_datetime(synapse.timestamp)
                 s.pow_difficulty, direction = synapse.log_distance
                 assert direction == 1
 

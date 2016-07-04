@@ -421,7 +421,7 @@ def _save_dds_post(dispatcher, key, target_key, obj, data):
                 if type(obj) is syn.Synapse:
                     post.data_key = obj.synapse_key
                     post.data_pow = obj.synapse_pow
-                    post.timestamp = mutil.utc_datetime(obj.timestamp/1000)
+                    post.timestamp = mutil.utc_datetime(obj.timestamp)
                 else:
                     assert type(obj) is tb.TargetedBlock, type(obj)
                     post.data_key = post.data_pow = key

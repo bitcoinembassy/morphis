@@ -133,8 +133,8 @@ class Synapse(object):
         nbuf += self.source_key
 
         if not self.timestamp:
-            self.timestamp = int(mutil.utc_timestamp() * 1000)
-        nbuf += sshtype.encodeMpint(self.timestamp)
+            self.timestamp = mutil.utc_timestamp()
+        nbuf += sshtype.encodeMpint(int(self.timestamp*1000))
 
         if self.signature:
             nbuf += sshtype.encodeBinary(self.signature)
@@ -179,7 +179,8 @@ class Synapse(object):
         self.source_key = self.buf[i:end]
         i = end
 
-        i, self.timestamp = sshtype.parse_mpint_from(self.buf, i)
+        i, tsms = sshtype.parse_mpint_from(self.buf, i)
+        self.timestamp = tsms/1000
 
         # For now we only support rsassa_pss.
         i, self.signature = sshtype.parse_binary_from(self.buf, i)
