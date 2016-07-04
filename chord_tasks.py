@@ -3311,7 +3311,7 @@ class ChordTasks(object):
                             mbase32.encode(synapse.synapse_pow)))
             return None
 
-        now = int(mutil.utc_timestamp()*1000)
+        now = mutil.utc_timestamp()
         if synapse.timestamp > now:
             # Refuse to store stuff from the future. :)
             log.warning(\
