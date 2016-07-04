@@ -169,13 +169,14 @@ def _process_axon_read(dispatcher, req):
 
             obj = data_rw.object
 
-            if type(obj) is syn.Synapse:
-                data_rw = yield from\
-                    dispatcher.node.chord_engine.tasks.send_get_data(\
-                        obj.source_key)
-            else:
-                assert type(obj) is tb.TargetedBlock, type(obj)
-                data_rw.data = data_rw.data[tb.TargetedBlock.BLOCK_OFFSET:]
+            if obj:
+                if type(obj) is syn.Synapse:
+                    data_rw = yield from\
+                        dispatcher.node.chord_engine.tasks.send_get_data(\
+                            obj.source_key)
+                else:
+                    assert type(obj) is tb.TargetedBlock, type(obj)
+                    data_rw.data = data_rw.data[tb.TargetedBlock.BLOCK_OFFSET:]
 
         if not data_rw.data:
             dispatcher.send_content("Not found on the network at the moment.")
