@@ -2,8 +2,8 @@
 <html>
 <head><base target="_top" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/style.css"></head>
 <body>
-<div style="padding-bottom: 10px">Are you sure you want to delete {contact} from the Address Book?</div>
-	<button class="submit" type="submit" formtarget="_self" name="submit" value="send" href="morphis://.dmail/addressbook/delete_contact/{idkey}">DELETE</button>
-	<button class="submit" type="submit" formtarget="_self" name="submit" value="cancel">CANCEL</button>
+<div style="padding-bottom: 10px">Are you sure you want to delete {contact} ({idkey_disp}) from the Address Book?</div>
+    <a href="morphis://.dmail/addressbook/delete_contact/{idkey}">DELETE</a><!--style these like buttons-->
+    <a href="morphis://.dmail/wrapper/{idkey}/msg_list=morphis%3A%2F%2F.dmail%2Faddressbook/">CANCEL</a>
 </body>
 </html>
