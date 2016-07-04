@@ -2904,6 +2904,10 @@ class ChordTasks(object):
                 s.original_size = len(dmsg.data)
                 s.insert_timestamp = mutil.utc_datetime()
 
+                s.timestamp = mutil.utc_datetime(synapse.timestamp/1000)
+                s.pow_difficulty, direction = synapse.log_distance
+                assert direction == 1
+
                 sess.add(s)
                 sess.flush()
 
@@ -2919,6 +2923,9 @@ class ChordTasks(object):
                     if type(key) is not bytes:
                         key = bytes(key)
                     sk.ekey, b = enc.encrypt_data_block(enc_key, key)
+
+                    sk.timestamp = s.timestamp
+                    sk.pow_difficulty = s.pow_difficulty
 
                     # Because len(key) is multiple of AES blocksize.
                     assert not b

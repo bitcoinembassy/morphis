@@ -115,6 +115,9 @@ def _init_daos(Base, d):
         last_access = Column(UtcDateTime, nullable=True)
         keys = relationship("SynapseKey", cascade="all, delete-orphan")
 
+        timestamp = Column(UtcDateTime, nullable=False)
+        pow_difficulty = Column(Integer, nullable=True)
+
     d.Synapse = Synapse
 
     class SynapseKey(Base):
@@ -128,6 +131,10 @@ def _init_daos(Base, d):
         key_type = Column(Integer, nullable=False)
         ekey = Column(LargeBinary, nullable=False)
         last_access = Column(UtcDateTime, nullable=True)
+
+        # Logically in Synapse, but instead here for hopefully faster queries.
+        timestamp = Column(UtcDateTime, nullable=False)
+        pow_difficulty = Column(Integer, nullable=True)
 
         class KeyType(Enum):
             synapse_key = 1
