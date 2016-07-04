@@ -21,6 +21,7 @@ import db
 import dpush
 import mbase32
 import multipart as mp
+import synapse as syn
 from targetedblock import TargetedBlock
 import mutil
 import dhgroup14
@@ -123,6 +124,8 @@ class DmailWrapper(object):
 
         buf += struct.pack(">L", self.data_len)
         buf += self.data_enc
+
+        return buf
 
     def parse_from(self, buf, idx):
         self.version = struct.unpack_from(">L", buf, idx)[0]
@@ -650,6 +653,10 @@ class DmailEngine(object):
         dw.data_len = len(dmail_bytes)
         dw.data_enc = m
 
+        # Upload the DmailWrapper itself as static key, and then Synapse!
+        r = yield from\
+            self._send_dmail_as_synapse(dw.encode(), target_key, difficulty)
+
         # Store the DmailWrapper in a TargetedBlock.
         tb, tb_data =\
             yield from self.generate_targeted_block(target_key, difficulty, dw)
@@ -695,6 +702,31 @@ class DmailEngine(object):
                 .format(key_enc, id_enc, total_storing))
 
         return total_storing
+
+    @asyncio.coroutine
+    def _send_dmail_as_synapse(self, data, target_addr, difficulty):
+        if log.isEnabledFor(logging.INFO):
+            log.info("Sending Dmail via Synapse.")
+
+        key = None
+
+        def key_callback(akey):
+            nonlocal key
+            key = akey
+
+        r1 = yield from self.task_engine.send_store_data(\
+            data, store_key=True, key_callback=key_callback)
+
+        synapse = syn.Synapse.for_target(target_addr, key, difficulty)
+
+        r2 = yield from self.task_engine.send_store_synapse(\
+            synapse, store_key=True, key_callback=key_callback)
+
+        if log.isEnabledFor(logging.INFO):
+            log.info("Sent Dmail via Synapse (storing_nodes=([], [])."\
+                .format(r1, r2))
+
+        return min(r1, r1)
 
     @asyncio.coroutine
     def generate_targeted_block(self, target_key, difficulty, data_or_wrapper):
