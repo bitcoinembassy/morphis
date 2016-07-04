@@ -244,10 +244,31 @@ def serve_get(dispatcher, rpath):
         elif req.startswith("/rename_contact"):
             p0 = req.find("/", 2)
             idkey = req[p0 + 1:]
+
             yield from _process_create_contact(dispatcher, idkey, rename=True)
 
         elif req == "/clear_contacts":
             yield from _process_clear_addressbook(dispatcher,user)
+            template = templates.dmail_addressbook_wrapper[0]
+            template = template.format( \
+                tag="", \
+                addr=user)
+            dispatcher.send_content(template)
+
+        elif req.startswith("/delete_confirmation"):
+            p0 = req.find("/", 2)
+            idkey = req[p0+1:]
+
+            if idkey == "all":
+                dispatcher.send_content(templates.dmail_delete_all_popup)
+            else:
+                contact = yield from _get_users_name(dispatcher, idkey)
+                idkey_disp = idkey[0:8]+"..."
+                template = fia(templates.dmail_delete_popup)
+                template = template.format(contact = contact,\
+                    idkey_disp=idkey_disp,\
+                    idkey=idkey)
+                dispatcher.send_content(template)
 
     elif req.startswith("/msg_list/list/"):
         params = req[15:]
