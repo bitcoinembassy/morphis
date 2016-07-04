@@ -11,6 +11,7 @@ from chordexception import ChordException
 from db import Peer
 import peer as mnpeer
 import sshtype
+import synapse as syn
 
 # Chord Message Types.
 CHORD_MSG_RELAY = 100
