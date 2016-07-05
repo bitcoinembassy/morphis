@@ -203,19 +203,21 @@ class ChordFindNode(ChordMessage):
 
         if self.query:
             assert not self.version
+            assert not self.target_key
             # Synapse Multi-index/Shared-keyspace Request Mode.
             self.version = -1
-            self.significant_bits = 1
-            self.target_key = self.query.encode()
+            self.significant_bits = 0
 
         nbuf += struct.pack("?", self.version is not None)
         if self.version is not None:
             nbuf += sshtype.encodeMpint(self.version)
 
-        if self.significant_bits:
+        if self.significant_bits is not None:
             nbuf += struct.pack(">H", self.significant_bits)
             if self.target_key:
                 nbuf += sshtype.encodeBinary(self.target_key)
+            elif self.query:
+                self.query.encode_onto(nbuf)
 
         return nbuf
 

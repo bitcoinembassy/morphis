@@ -228,11 +228,11 @@ class SynapseRequest(object):
     def __init__(self, buf=None):
         self.buf = buf
 
-        self.start_timestamp = None
-        self.end_timestamp = None
-        self.start_key = None
-        self.end_key = None
-        self.minimum_pow = None
+        self.start_timestamp = 0
+        self.end_timestamp = 0
+        self.start_key = b''
+        self.end_key = b''
+        self.minimum_pow = 0
         self.query = None
 
         if buf:
@@ -245,6 +245,11 @@ class SynapseRequest(object):
             nbuf = self.buf
             nbuf.clear()
 
+        self.encode_onto(nbuf)
+
+        return nbuf
+
+    def encode_onto(self, nbuf):
         nbuf += sshtype.encodeMpint(int(self.start_timestamp*1000))
         nbuf += sshtype.encodeMpint(int(self.end_timestamp*1000))
         nbuf += sshtype.encodeBinary(self.start_key)
@@ -252,13 +257,11 @@ class SynapseRequest(object):
         nbuf += struct.pack(">H", self.minimum_pow)
         self.query.encode_onto(nbuf)
 
-        return nbuf
-
     def parse(self):
         self.parse_from(self.buf, 0)
 
     def parse_from(self, buf, i):
-        i, tsms = sshtype.parse_mpint_from(buf, 0)
+        i, tsms = sshtype.parse_mpint_from(buf, i)
         self.start_timestamp = tsms/1000
         i, tsms = sshtype.parse_mpint_from(buf, i)
         self.end_timestamp = tsms/1000
@@ -266,7 +269,7 @@ class SynapseRequest(object):
         i, self.start_key = sshtype.parse_binary_from(buf, i)
         i, self.end_key = sshtype.parse_binary_from(buf, i)
 
-        self.minimum_pow = struct.unpack_from(">S", buf, i)[0]
+        self.minimum_pow = struct.unpack_from(">H", buf, i)[0]
         i += 2
 
         i, self.query = SynapseRequest.Query().parse_from(buf, i)
@@ -279,23 +282,23 @@ class SynapseRequest(object):
             and_ = 2
             or_ = 3
 
-        def __init__(self, entries=None, type_=None):
-            if type(entries) in (bytes, bytearray):
+        def __init__(self, type_=None, entries=None):
+            if type(entries) is SynapseRequest.Query.Key:
                 self.type = SynapseRequest.Query.Type.key
-                self.entries = SynapseRequest.Query.Key(entries)
             else:
                 assert not entries or entries in type(list, tuple)
                 self.type = type_
-                if not entries:
-                    entries = []
-                self.entries = entries
+
+            if not entries:
+                entries = []
+            self.entries = entries
 
         def encode_onto(self, buf):
-            buf += struct.pack("B", self.type)
+            buf += struct.pack("B", self.type.value)
             if self.type is SynapseRequest.Query.Type.key:
                 self.entries.encode_onto(buf)
             else:
-                buf += struct.pack(">S", len(self.entries))
+                buf += struct.pack(">H", len(self.entries))
                 for entry in self.entries:
                     entry.encode_onto(buf)
 
@@ -308,7 +311,7 @@ class SynapseRequest(object):
                 i, self.entries = SynapseRequest.Query.Key().parse_from(buf, i)
             else:
                 self.entries = []
-                cnt = struct.unpack_from(">S", buf, i)[0]
+                cnt = struct.unpack_from(">H", buf, i)[0]
                 i += 2
                 for n in range(cnt):
                     i, entry = SynapseRequest.Query().parse_from(buf, i)
@@ -321,7 +324,7 @@ class SynapseRequest(object):
                 target = 1
                 source = 2
 
-            def __init__(self, type_, value):
+            def __init__(self, type_=None, value=None):
                 self.type = type_
                 self.value = value
 

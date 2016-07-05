@@ -581,6 +581,31 @@ class Shell(cmd.Cmd):
                         calc_raw_distance(\
                             r.node_id, node_id))))
 
+    def do_dataid(self, arg):
+        "<KEY> hash the passed key, showing the result -- the data_id."
+
+        self.writeln("data_id: ")
+        self.writeln(mbase32.encode(enc.generate_ID(mbase32.decode(arg))))
+
+    @asyncio.coroutine
+    def do_getsynapses(self, arg):
+        "<TARGET_KEY> retrieve data for Syanpse target_key=TARGET_KEY."
+
+        start = datetime.today()
+        data_rw = yield from self.peer.engine.tasks.send_get_synapses(\
+            mbase32.decode(arg))
+        diff = datetime.today() - start
+
+        self.writeln("send_get_targeted_data(..) took: {}.".format(diff))
+
+        if data_rw and data_rw.data is not None:
+            self.writeln("len(data): {}".format(len(data_rw.data)))
+            self.writeln("data:")
+            self.write_raw(data_rw.data)
+            self.writeln("")
+        else:
+            self.writeln("Not found.")
+
     @asyncio.coroutine
     def do_gd(self, arg):
         "getdata alias."

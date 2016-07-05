@@ -456,11 +456,16 @@ class ChordTasks(object):
             retry_factor=1):
 
         req = syn.SynapseRequest()
-        req.start_timestamp = start_timestamp
-        req.end_timestamp = end_timestamp
-        req.start_key = start_key
-        req.end_key = end_key
-        req.minimum_pow = minimum_pow
+        if start_timestamp:
+            req.start_timestamp = start_timestamp
+        if end_timestamp:
+            req.end_timestamp = end_timestamp
+        if start_key:
+            req.start_key = start_key
+        if end_key:
+            req.end_key = end_key
+        if minimum_pow:
+            req.minimum_pow = minimum_pow
 
         all_keys = []
 
@@ -468,32 +473,67 @@ class ChordTasks(object):
             if type(target_keys) in (list, tuple):
                 assert not source_key
                 keys = []
+
                 for key in target_keys:
-                    keys.append([syn.SynapseRequest.Query(key)])
-                    all_keys.append(key)
+                    data_id = enc.generate_ID(key)
+
+                    keys.append(\
+                        syn.SynapseRequest.Query(\
+                            syn.SynapseRequest.Query.Key(\
+                                syn.SynapseRequest.Query.Key.Type.target,\
+                                data_id)))
+
+                    all_keys.append((key, data_id))
+
                 query = syn.SynapseRequest.Query(\
-                    keys, syn.SynapseRequest.Query.Type.and_)
+                    syn.SynapseRequest.Query.Type.and_,
+                    keys)
             elif source_key:
-                query = syn.SynapseRequest.Query(\
-                    [syn.SynapseRequest.Query(target_keys),\
-                        syn.SynapseRequest.Query(source_key)],
-                    syn.SynapseRequest.Query.Type.or_)
-                all_keys.append(target_keys)
-                all_keys.append(source_key)
+                target_id = enc.generate_ID(target_keys)
+                source_id = enc.generate_ID(source_key)
+
+                query = syn.SynapseRequest.Query(
+                    syn.SynapseRequest.Query.Type.or_,\
+                    [
+                        syn.SynapseRequest.Query(\
+                            syn.SynapseRequest.Query.Key(\
+                                syn.SynapseRequest.Query.Key.Type.target,\
+                                target_id)),\
+                        syn.SynapseRequest.Query(\
+                            syn.SynapseRequest.Query.Key(\
+                                syn.SynapseRequest.Query.Key.Type.source,\
+                                source_id))])
+
+                all_keys.append((target_keys, target_id))
+                all_keys.append((source_key, source_id))
             else:
-                query = syn.SynapseRequest.Query(target_keys)
-                all_keys.append(target_keys)
+                target_id = enc.generate_ID(target_keys)
+
+                query = syn.SynapseRequest.Query(\
+                    entries=syn.SynapseRequest.Query.Key(\
+                        syn.SynapseRequest.Query.Key.Type.target,\
+                        target_id))
+
+                all_keys.append((target_keys, target_id))
         else:
-            query = syn.SynapseRequest.Query(source_key)
-            all_keys.append(source_key)
+            source_id = enc.generate_ID(source_key)
+
+            query = syn.SynapseRequest.Query(\
+                syn.SynapseRequest.Query.Key(\
+                    syn.SynapseRequest.Query.Key.Type.source,\
+                    source_id))
+
+            all_keys.append((source_key, source_id))
 
         req.query = query
 
+        tasks = []
+
         for key in all_keys:
-            data_id = enc.generate_ID(key)
+            data_key = key[0] if type(key[0]) is bytes else bytes(key[0])
 
             tasks.append(self.send_find_node(\
-                data_id, for_data=True, data_key=key, synapse_request=req,\
+                key[1], for_data=True, data_key=data_key, synapse_request=req,\
                 retry_factor=retry_factor))
 
         data_rw = None
@@ -505,14 +545,14 @@ class ChordTasks(object):
             for ele in done:
                 data_rw = ele.result()
                 if data_rw.data:
-                    break
+                    for running in pending:
+                        running.cancel()
+                    return data_rw
 
             if not pending:
-                break
+                return None
 
             tasks = list(pending)
-
-        return data_rw
 
     @asyncio.coroutine
     def send_store_synapse(\
@@ -2362,7 +2402,53 @@ class ChordTasks(object):
 
     @asyncio.coroutine
     def _check_synapse_request(self, sreq):
-        pass
+        def dbcall():
+            with self.engine.node.db.open_session() as sess:
+                q = sess.query(SynapseKey.data_id)
+
+                q = self._build_synapse_db_query(sess, q, sreq)
+
+                q = sess.query(func.count("*")).select_from(q.subquery())
+
+                if q.scalar() > 0:
+                    return True
+                else:
+                    return False
+
+        return (yield from self.loop.run_in_executor(None, dbcall))
+
+    def _build_synapse_db_query(self, sess, q, sreq):
+        if sreq.start_timestamp:
+            q = q.filter(SynapseKey.timestamp >= sreq.start_timestamp)
+        if sreq.end_timestamp:
+            q = q.filter(SynapseKey.timestamp < sreq.end_timestamp)
+        if sreq.start_key:
+            q = q.filter(SynapseKey.data_id >= sreq.start_key)
+        if sreq.end_key:
+            q = q.filter(SynapseKey.data_id <= sreq.end_key)
+        if sreq.minimum_pow:
+            q = q.filter(SynapseKey.pow_difficulty >= sreq.minimum_pow)
+
+        synapse_query = sreq.query
+
+        type_ = synapse_query.type
+
+        if type_ is syn.SynapseRequest.Query.Type.and_\
+                or type_ is syn.SynapseRequest.Query.Type.or_:
+            assert len(synapse_query.entries) == 2
+
+            #TODO: YOU_ARE_HERE
+            raise ChordException("TODO.")
+        elif type_ is syn.SynapseRequest.Query.Type.key:
+            kq = synapse_query.entries
+            assert len(kq.value) == 64
+            q = q.filter(SynapseKey.key_type == kq.type.value + 2)\
+                .filter(SynapseKey.data_id == kq.value)
+        else:
+            log.warning("Ignoring unsupported SynapseRequest.Query.Type [{}]."\
+                .format(type_))
+
+        return q
 
     @asyncio.coroutine
     def _check_do_want_data(self, data_ids, version):
@@ -2525,9 +2611,9 @@ class ChordTasks(object):
 
         if log.isEnabledFor(logging.INFO):
             peer_dbid = tun_meta.peer.dbid if tun_meta else "<self>"
-            log.info("Received DataResponse (targeted=[{}]) from Peer [{}]"\
-                " and path [{}]."\
-                    .format(data_rw.targeted, peer_dbid, path))
+            log.info("Received DataResponse (version=[{}]) from Peer [{}]"\
+                " and path [{}] (targeted=[{}])."\
+                    .format(drmsg.version, peer_dbid, path, data_rw.targeted))
 
         if len(drmsg.data) == 0:
             # This can happen if a node had an error, it sends an empty one so
@@ -2703,6 +2789,11 @@ class ChordTasks(object):
         result = yield from self.loop.run_in_executor(None, dbcall)
 
         if not result:
+            if log.isEnabledFor(logging.DEBUG):
+                log.debug(\
+                    "Requested data was not found in the database!"\
+                    " (data_id=[{}]."\
+                        .format(mbase32.encode(data_id)))
             return None, None, None, None, None, None
 
         if type(result) is Synapse:
