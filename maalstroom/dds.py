@@ -152,6 +152,8 @@ def _process_axon_read(dispatcher, req):
 
     post = yield from _load_dds_post(dispatcher, key, target_key)
 
+    timestr = "<unspecified>"
+
     if post:
         data = post.data
     else:
@@ -174,6 +176,8 @@ def _process_axon_read(dispatcher, req):
                     data_rw = yield from\
                         dispatcher.node.chord_engine.tasks.send_get_data(\
                             obj.source_key)
+                    timestr = mutil.format_human_no_ms_datetime(\
+                        mutil.utc_datetime(obj.timestamp))
                 else:
                     assert type(obj) is tb.TargetedBlock, type(obj)
                     data_rw.data = data_rw.data[tb.TargetedBlock.BLOCK_OFFSET:]
@@ -192,7 +196,8 @@ def _process_axon_read(dispatcher, req):
     content = yield from _format_axon(dispatcher.node, data, key, key_enc)
 
     template = templates.dds_synapse_view[0]
-    template = template.format(key=key_enc, content=content)
+    template = template.format(\
+        key=key_enc, content=content, timestamp=timestr)
 
     msg = "<head><link rel='stylesheet' href='morphis://.dds/style.css'>"\
         "</link></head><body style='height: 90%; padding:0;margin:0;'>{}"\
@@ -232,11 +237,14 @@ def _process_axon_synapses(dispatcher, axon_addr_enc):
 #        msg = "<div style='height: 5.5em; width: 100%; overflow: hidden;'>"\
 #            "{}</div>\n".format(_format_axon(post.data, post.data_key))
 
+        timestr = mutil.format_human_no_ms_datetime(post.timestamp)
+
         content =\
             yield from _format_axon(dispatcher.node, post.data, post.data_key)
 
         template = templates.dds_synapse_view[0]
-        template = template.format(key=axon_addr_enc, content=content)
+        template = template.format(\
+            key=axon_addr_enc, content=content, timestamp=timestr)
 
         dispatcher.send_partial_content(template, first)
 
