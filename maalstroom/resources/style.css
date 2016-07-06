@@ -488,7 +488,7 @@ margin-right: 1em;
 background: url("morphis://.dmail/images/addressbook.png") no-repeat top left;
 display: inline-block;
 height: 20px;
-width: 16px;
+width: 19px;
 margin-top: 1.4em;
 margin-right: 1em;
 }
@@ -1217,7 +1217,7 @@ iframe.subject-txt {
 }
 .modalDialog > div {
 	width: 80%;
-	height: 200px;
+	height: 260px;
 	position: relative;
 	margin: 10% auto;
 	padding: 20px 20px 10px 20px;
