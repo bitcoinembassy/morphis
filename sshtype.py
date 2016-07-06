@@ -79,3 +79,7 @@ def encodeString(val):
 def encodeBinary(buf):
     length = struct.pack(">L", len(buf))
     return length + buf
+
+def encode_binary_onto(output, inputb):
+    output += struct.pack(">L", len(inputb))
+    output += inputb

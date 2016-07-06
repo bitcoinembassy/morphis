@@ -1068,12 +1068,13 @@ class ChordTasks(object):
 
                         data_present =\
                             yield from self._check_has_data(\
-                                node_id, None, None, None)
+                                node_id, None, None, synapse_request)
 
                         if not data_present:
                             continue
 
-                        r = yield from self._process_own_data(node_id, data_rw)
+                        r = yield from self._process_own_data(\
+                            node_id, data_rw, synapse_request)
 
                         if not r:
                             # Data was invalid somehow!
@@ -1284,7 +1285,8 @@ class ChordTasks(object):
                     if data_present:
                         log.warning("FOUND LOCALLY AFTER PROOF TRIGGERD.")
                         data_rw.data_done = asyncio.Event(loop=self.loop)
-                        yield from self._process_own_data(node_id, data_rw)
+                        yield from self._process_own_data(\
+                            node_id, data_rw, synapse_request)
 
                 if data_rw.data is None\
                         and (not significant_bits or not data_rw.data_key):
@@ -2081,7 +2083,7 @@ class ChordTasks(object):
                     data_id = fnmsg.node_id
 
                 data, data_l, version, signature, epubkey, pubkeylen =\
-                    yield from self._retrieve_data(data_id)
+                    yield from self._retrieve_data(data_id, fnmsg.query)
 
 #                assert data is not None
 
@@ -2578,10 +2580,10 @@ class ChordTasks(object):
         return (yield from self.loop.run_in_executor(None, dbcall)), True
 
     @asyncio.coroutine
-    def _process_own_data(self, data_id, data_rw):
+    def _process_own_data(self, data_id, data_rw, sreq):
         enc_data, data_l, version, signature, epubkey,\
             pubkeylen =\
-                yield from self._retrieve_data(data_id)
+                yield from self._retrieve_data(data_id, sreq)
 
         if enc_data is None:
             return False
@@ -2614,12 +2616,6 @@ class ChordTasks(object):
             log.info("Received DataResponse (version=[{}]) from Peer [{}]"\
                 " and path [{}] (targeted=[{}])."\
                     .format(drmsg.version, peer_dbid, path, data_rw.targeted))
-
-        if len(drmsg.data) == 0:
-            # This can happen if a node had an error, it sends an empty one so
-            # we aren't waiting.
-            log.info("DataReponse is empty.")
-            return False
 
         def threadcall():
             if data_rw.targeted or drmsg.version == -1:
@@ -2728,7 +2724,16 @@ class ChordTasks(object):
 
             return data
 
-        r = yield from self.loop.run_in_executor(None, threadcall)
+        if type(drmsg.data) is list:
+            r = self._process_synapse_data_response(drmsg.data, data_rw)
+        elif len(drmsg.data) == 0:
+            # This can happen if a node had an error, it sends an empty one so
+            # we aren't waiting.
+            log.info("DataReponse is empty.")
+            return False
+        else:
+            # Normal non-Syanpse response handling.
+            r = yield from self.loop.run_in_executor(None, threadcall)
 
         if r is not None:
             data_rw.data = r
@@ -2737,6 +2742,30 @@ class ChordTasks(object):
         else:
             data_rw.data_done.set()
             return False
+
+    def _process_synapse_data_response(self, rows, data_rw):
+        synapses = []
+
+        if log.isEnabledFor(logging.INFO):
+            log.info("Processing SyanpseRequest response.")
+
+        for eekey, edata, osize in rows:
+            ekey = enc.decrypt_data_block(eekey, data_rw.data_key)
+            data = enc.decrypt_data_block(edata, ekey)
+
+            synapse = self._check_synapse(data)
+
+            if synapse:
+                synapses.append(synapse)
+
+        if log.isEnabledFor(logging.INFO):
+            log.info(\
+                "Response contained [{}] valid Synapses."\
+                    .format(len(synapses)))
+
+        data_rw.object = synapses
+
+        return synapses
 
     def _decrypt_data_response(self, drmsg, data_key):
         # Decrypt the data we received.
@@ -2753,13 +2782,16 @@ class ChordTasks(object):
         return data
 
     @asyncio.coroutine
-    def _retrieve_data(self, data_id):
+    def _retrieve_data(self, data_id, synapse_request):
         "Retrieve data for data_id from the file system (and meta data from"\
         " the database."\
         "returns: data, original_size,\
                 <version, signature, epubkey, pubkeylen>"\
         "   original_size is the size of the data before it was encrypted."\
         "   version, Etc. are for updateable keys."
+
+        if synapse_request:
+            return (yield from self._synapse_request(synapse_request))
 
         def dbcall():
             with self.engine.node.db.open_session() as sess:
@@ -2850,6 +2882,30 @@ class ChordTasks(object):
 
         return enc_data, result.original_size, version,\
             result.signature, result.epubkey, result.pubkeylen
+
+    @asyncio.coroutine
+    def _synapse_request(self, synapse_request):
+        def dbcall():
+            with self.engine.node.db.open_session() as sess:
+                q = sess.query(Synapse, SynapseKey)\
+                    .join(Synapse.keys)
+
+                q = self._build_synapse_db_query(sess, q, synapse_request)
+
+                # No more than 256 SynapseS should be able to fit in one 32k
+                # packet.
+                return q.limit(257).all()
+
+        result = yield from self.loop.run_in_executor(None, dbcall)
+
+        log.warning("Found [{}] results.".format(len(result)))
+
+        synapses = []
+
+        for synapse, key in result:
+            synapses.append((key.ekey, synapse.data, synapse.original_size))
+
+        return synapses, None, None, None, None, None
 
     @asyncio.coroutine
     def _store_key(self, peer, data_id, dmsg):
@@ -2982,6 +3038,9 @@ class ChordTasks(object):
 
     @asyncio.coroutine
     def __store_new_synapse(self, peer_dbid, dmsg, synapse):
+        if len(dmsg.data) > consts.MAX_DATA_BLOCK_SIZE:
+            raise ChordException("Synapse is larger than MAX_DATA_BLOCK_SIZE.")
+
         # We make up a random encryption key, encrypt the Synapse data with
         # that key and store in the Synapse table, encrypt that key with each
         # Synapse key that we are storing and store together in SynapseKey.

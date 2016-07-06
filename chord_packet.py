@@ -8,6 +8,7 @@ import logging
 import struct
 
 from chordexception import ChordException
+import consts
 from db import Peer
 import peer as mnpeer
 import sshtype
@@ -274,7 +275,32 @@ class ChordDataResponse(ChordMessage):
 
     def encode(self):
         nbuf = super().encode()
-        nbuf += sshtype.encodeBinary(self.data)
+        if type(self.data) is list:
+            # SynapseRequest response mode.
+            nbuf += sshtype.encodeBinary(b'')
+            nbuf += struct.pack(">L", 0)
+            nbuf += sshtype.encodeMpint(-1)
+
+            size = 0
+            cnt = 0
+            for eekey, edata, original_size in self.data:
+                size = size + consts.NODE_ID_BYTES + 4 + len(edata) + 2
+                cnt += 1
+                if size > consts.MAX_DATA_BLOCK_SIZE:
+                    break
+
+            nbuf += struct.pack(">H", cnt)
+
+            for idx in range(cnt):
+                eekey, edata, original_size = self.data[idx]
+
+                nbuf += eekey # len = NODE_ID_BYTES always.
+                sshtype.encode_binary_onto(nbuf, edata)
+                nbuf += struct.pack(">H", original_size)
+
+            return nbuf
+        else:
+            nbuf += sshtype.encodeBinary(self.data)
         nbuf += struct.pack(">L", self.original_size)
 
         if self.version is not None:
@@ -299,6 +325,28 @@ class ChordDataResponse(ChordMessage):
 
         l, self.version = sshtype.parseMpint(self.buf[i:])
         i += l
+
+        if self.version == -1:
+            assert self.data == b''
+
+            cnt = struct.unpack(">H", self.buf[i:i+2])[0]
+            i += 2
+
+            rows = []
+
+            for idx in range(cnt):
+                end = i + consts.NODE_ID_BYTES
+                eekey = self.buf[i:end]
+                i, val = sshtype.parse_binary_from(self.buf, end)
+                original_size = struct.unpack(">H", self.buf[i:i+2])[0]
+                i += 2
+
+                rows.append((eekey, val, original_size))
+
+            assert i == len(self.buf)
+            self.data = rows
+            return
+
         l, self.signature = sshtype.parseBinary(self.buf[i:])
         i += l
 

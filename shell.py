@@ -600,9 +600,10 @@ class Shell(cmd.Cmd):
 
         if data_rw and data_rw.data is not None:
             self.writeln("len(data): {}".format(len(data_rw.data)))
-            self.writeln("data:")
-            self.write_raw(data_rw.data)
-            self.writeln("")
+            for data in data_rw.data:
+                self.writeln("data:")
+                self.writeln(hex_dump(data.buf))
+                self.writeln("")
         else:
             self.writeln("Not found.")
 
