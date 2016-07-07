@@ -13,7 +13,7 @@ import os
 import random
 
 from sqlalchemy import func, and_, or_
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, aliased
 
 import bittrie
 import chord
@@ -57,6 +57,7 @@ class DataResponseWrapper(object):
         self.data_present_cnt = 0
         self.will_store_cnt = 0
         self.storing_nodes = 0
+        self.limited = False
 
 class TunnelMeta(object):
     def __init__(self, peer=None, jobs=None):
@@ -453,7 +454,7 @@ class ChordTasks(object):
     def send_get_synapses(\
             self, target_keys=None, source_key=None, start_timestamp=None,\
             end_timestamp=None, start_key=None, end_key=None, minimum_pow=8,\
-            retry_factor=1):
+            result_callback=None, retry_factor=1):
 
         req = syn.SynapseRequest()
         if start_timestamp:
@@ -527,14 +528,36 @@ class ChordTasks(object):
 
         req.query = query
 
+        total = []
+
+        while True:
+            r = yield from self._send_get_synapses(\
+                req, all_keys, result_callback, retry_factor)
+
+            if not total and not r or not r.limited:
+                return r
+
+            result_callback(r)
+
+            total.extend(r.data)
+            r.data = total
+
+            req.start_key = mutil.bit_add(r.data[-1].synapse_key, 1)
+
+        return r
+
+    @asyncio.coroutine
+    def _send_get_synapses(self, synapse_request, all_keys, result_callback,\
+            retry_factor):
+        data_key = all_keys[0][0] if type(all_keys[0][0]) is bytes\
+            else bytes(all_keys[0][0])
+
         tasks = []
 
         for key in all_keys:
-            data_key = key[0] if type(key[0]) is bytes else bytes(key[0])
-
             tasks.append(self.send_find_node(\
-                key[1], for_data=True, data_key=data_key, synapse_request=req,\
-                retry_factor=retry_factor))
+                key[1], for_data=True, data_key=data_key,\
+                synapse_request=synapse_request, retry_factor=retry_factor))
 
         data_rw = None
 
@@ -2424,10 +2447,6 @@ class ChordTasks(object):
             q = q.filter(SynapseKey.timestamp >= sreq.start_timestamp)
         if sreq.end_timestamp:
             q = q.filter(SynapseKey.timestamp < sreq.end_timestamp)
-        if sreq.start_key:
-            q = q.filter(SynapseKey.data_id >= sreq.start_key)
-        if sreq.end_key:
-            q = q.filter(SynapseKey.data_id <= sreq.end_key)
         if sreq.minimum_pow:
             q = q.filter(SynapseKey.pow_difficulty >= sreq.minimum_pow)
 
@@ -2449,6 +2468,20 @@ class ChordTasks(object):
         else:
             log.warning("Ignoring unsupported SynapseRequest.Query.Type [{}]."\
                 .format(type_))
+
+        # Since paging + save coding time, we always sort.
+        als = aliased(SynapseKey)
+
+        q = q.join(als, SynapseKey.synapse_id == als.synapse_id)
+        q = q.filter(\
+            als.key_type == SynapseKey.KeyType.synapse_key.value)
+
+        if sreq.start_key:
+            q = q.filter(als.data_id >= sreq.start_key)
+        if sreq.end_key:
+            q = q.filter(als.data_id <= sreq.end_key)
+
+        q = q.order_by(als.data_id)
 
         return q
 
@@ -2725,14 +2758,14 @@ class ChordTasks(object):
             return data
 
         if type(drmsg.data) is list:
-            r = self._process_synapse_data_response(drmsg.data, data_rw)
+            r = self._process_synapse_data_response(drmsg, data_rw)
         elif len(drmsg.data) == 0:
             # This can happen if a node had an error, it sends an empty one so
             # we aren't waiting.
             log.info("DataReponse is empty.")
             return False
         else:
-            # Normal non-Syanpse response handling.
+            # Normal non-Synapse response handling.
             r = yield from self.loop.run_in_executor(None, threadcall)
 
         if r is not None:
@@ -2743,13 +2776,13 @@ class ChordTasks(object):
             data_rw.data_done.set()
             return False
 
-    def _process_synapse_data_response(self, rows, data_rw):
+    def _process_synapse_data_response(self, drmsg, data_rw):
         synapses = []
 
         if log.isEnabledFor(logging.INFO):
             log.info("Processing SyanpseRequest response.")
 
-        for eekey, edata, osize in rows:
+        for eekey, edata, osize in drmsg.data:
             ekey = enc.decrypt_data_block(eekey, data_rw.data_key)
             data = enc.decrypt_data_block(edata, ekey)
 
@@ -2764,6 +2797,7 @@ class ChordTasks(object):
                     .format(len(synapses)))
 
         data_rw.object = synapses
+        data_rw.limited = drmsg.limited
 
         return synapses
 
@@ -2894,7 +2928,7 @@ class ChordTasks(object):
 
                 # No more than 256 SynapseS should be able to fit in one 32k
                 # packet.
-                return q.limit(257).all()
+                return q.limit(256).all()
 
         result = yield from self.loop.run_in_executor(None, dbcall)
 

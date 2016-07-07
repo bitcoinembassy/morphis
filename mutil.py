@@ -276,3 +276,9 @@ def make_safe_for_html_content(val):
         return html.escape(val.decode())
     else:
         return html.escape(val)
+
+def bit_add(buf):
+    for i in range(len(buf)-1, -1, -1):
+        buf[i] = (buf[i] + 1) & 0xff
+        if buf[i] != 0:
+            break

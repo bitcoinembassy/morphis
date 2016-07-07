@@ -271,6 +271,9 @@ class ChordDataResponse(ChordMessage):
         self.epubkey = None
         self.pubkeylen = None
 
+        # SynapseRequest response mode.
+        self.limited = False
+
         super().__init__(CHORD_MSG_DATA_RESPONSE, buf)
 
     def encode(self):
@@ -283,13 +286,20 @@ class ChordDataResponse(ChordMessage):
 
             size = 0
             cnt = 0
+            limited = False
+
             for eekey, edata, original_size in self.data:
                 size = size + consts.NODE_ID_BYTES + 4 + len(edata) + 2
                 cnt += 1
                 if size > consts.MAX_DATA_BLOCK_SIZE:
+                    limited = True
                     break
 
             nbuf += struct.pack(">H", cnt)
+
+            if cnt == 256:
+                #NOTE: We assume we tried to fetch max 256 from the db.
+                limited = True # Possibly.
 
             for idx in range(cnt):
                 eekey, edata, original_size = self.data[idx]
@@ -297,6 +307,8 @@ class ChordDataResponse(ChordMessage):
                 nbuf += eekey # len = NODE_ID_BYTES always.
                 sshtype.encode_binary_onto(nbuf, edata)
                 nbuf += struct.pack(">H", original_size)
+
+            nbuf += struct.pack("?", limited)
 
             return nbuf
         else:
@@ -338,10 +350,13 @@ class ChordDataResponse(ChordMessage):
                 end = i + consts.NODE_ID_BYTES
                 eekey = self.buf[i:end]
                 i, val = sshtype.parse_binary_from(self.buf, end)
-                original_size = struct.unpack(">H", self.buf[i:i+2])[0]
+                original_size = struct.unpack_from(">H", self.buf, i)[0]
                 i += 2
 
                 rows.append((eekey, val, original_size))
+
+            self.limited = struct.unpack_from("?", self.buf, i)[0]
+            i += 1
 
             assert i == len(self.buf)
             self.data = rows
