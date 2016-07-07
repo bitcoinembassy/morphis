@@ -275,9 +275,17 @@ def _process_axon_synapses(dispatcher, axon_addr_enc):
 
         first = False
 
-    dp = dpush.DpushEngine(dispatcher.node)
+#    dp = dpush.DpushEngine(dispatcher.node)
+#
+#    yield from dp.scan_targeted_blocks(axon_addr, 8, cb)
 
-    yield from dp.scan_targeted_blocks(axon_addr, 8, cb)
+    @asyncio.coroutine
+    def cb2(data_rw):
+        for synapse in data_rw.data:
+            yield from cb(synapse.synapse_key)
+
+    yield from dispatcher.node.engine.tasks.send_get_synapses(\
+        axon_addr, result_callback=cb2)
 
     if first:
         dispatcher.send_partial_content("Nothing found yet.</body>")

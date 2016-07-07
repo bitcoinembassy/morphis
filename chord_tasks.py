@@ -538,7 +538,7 @@ class ChordTasks(object):
                 return total if total else None
 
             if result_callback:
-                result_callback(r)
+                yield from result_callback(r)
 
             if not r.limited:
                 if not total:
