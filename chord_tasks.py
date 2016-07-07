@@ -534,17 +534,21 @@ class ChordTasks(object):
             r = yield from self._send_get_synapses(\
                 req, all_keys, result_callback, retry_factor)
 
-            if not total and not r or not r.limited:
-                return r
+            if not r:
+                return total if total else None
 
-            result_callback(r)
+            if result_callback:
+                result_callback(r)
+
+            if not r.limited:
+                if not total:
+                    return r
+
+                total.extend(r.data)
+                return total
 
             total.extend(r.data)
-            r.data = total
-
             req.start_key = mutil.bit_add(r.data[-1].synapse_key, 1)
-
-        return r
 
     @asyncio.coroutine
     def _send_get_synapses(self, synapse_request, all_keys, result_callback,\
