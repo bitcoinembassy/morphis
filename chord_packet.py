@@ -203,7 +203,7 @@ class ChordFindNode(ChordMessage):
         nbuf += struct.pack("B", self.data_mode.value)
 
         if self.query:
-            assert not self.version
+            assert not self.version or self.version is -1, self.version
             assert not self.target_key
             # Synapse Multi-index/Shared-keyspace Request Mode.
             self.version = -1
