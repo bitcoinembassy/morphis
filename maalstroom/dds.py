@@ -150,7 +150,7 @@ def _process_axon_read(dispatcher, req):
         key = mbase32.decode(req)
         target_key = None
 
-    post = yield from _load_dds_post(dispatcher, key, target_key)
+    post = yield from _load_dds_post(dispatcher.node, key, target_key)
 
     timestr = "<unspecified>"
 
@@ -189,7 +189,7 @@ def _process_axon_read(dispatcher, req):
         data = data_rw.data
 
         # Cache the 'post' locally.
-        yield from _save_dds_post(dispatcher, key, target_key, obj, data)
+        yield from _save_dds_post(dispatcher.node, key, target_key, obj, data)
 
     key_enc = mbase32.encode(key)
 
@@ -413,21 +413,22 @@ def __format_post(data):
             .format(\
                 data[:end].decode(), make_safe_for_html_content(data[start:]))
 
+#TODO: Move to DdsEngine.
 @asyncio.coroutine
-def _load_dds_post(dispatcher, key, target_key):
+def _load_dds_post(node, key, target_key):
     def dbcall():
-        with dispatcher.node.db.open_session() as sess:
+        with node.db.open_session() as sess:
             q = sess.query(DdsPost).filter(\
                 or_(DdsPost.data_key == key, DdsPost.data_pow == key))
 
             return q.first()
 
-    return (yield from dispatcher.loop.run_in_executor(None, dbcall))
+    return (yield from node.loop.run_in_executor(None, dbcall))
 
 @asyncio.coroutine
-def _save_dds_post(dispatcher, key, target_key, obj, data):
+def _save_dds_post(node, key, target_key, obj, data):
     def dbcall():
-        with dispatcher.node.db.open_session() as sess:
+        with node.db.open_session() as sess:
             post = DdsPost()
 
             post.first_seen = mutil.utc_datetime()
@@ -455,4 +456,4 @@ def _save_dds_post(dispatcher, key, target_key, obj, data):
 
             return post
 
-    return (yield from dispatcher.loop.run_in_executor(None, dbcall))
+    return (yield from node.loop.run_in_executor(None, dbcall))
