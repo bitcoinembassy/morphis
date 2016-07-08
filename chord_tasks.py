@@ -772,6 +772,7 @@ class ChordTasks(object):
                 fnmsg.target_key = target_key
         if synapse_request:
             fnmsg.query = synapse_request
+        fnmsg.encode() # Later thing expect fnmsg.buf to be ready.
 
         # Setup the DataResponseWrapper which is returned from this function
         # but also is used to pass around some info to helper functions this
@@ -1474,7 +1475,8 @@ class ChordTasks(object):
             log.debug("Sending root level FindNode msg to Peer (dbid=[{}])."\
                 .format(peer.dbid))
 
-        peer.protocol.write_channel_data(local_cid, fnmsg.encode())
+        assert fnmsg.buf
+        peer.protocol.write_channel_data(local_cid, fnmsg.buf)
 
         pkt = yield from queue.get()
         if not pkt:
@@ -1654,7 +1656,7 @@ class ChordTasks(object):
 
                             query_cntr.value -= 1
                             # There should only be one GetData at a time.
-                            assert not query_cntr.value
+                            assert not query_cntr.value, query_cntr.value
                             done_one.set()
                             done_all.set()
                             continue

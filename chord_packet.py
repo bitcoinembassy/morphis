@@ -59,10 +59,13 @@ class ChordMessage(object):
                 .format(self._packet_type, self.packet_type))
 
     def encode(self):
-        nbuf = bytearray()
-        nbuf += struct.pack("B", self.packet_type & 0xff)
+        if not self.buf:
+            self.buf = nbuf = bytearray()
+        else:
+            nbuf = self.buf
+            nbuf.clear()
 
-        self.buf = nbuf
+        nbuf += struct.pack("B", self.packet_type & 0xff)
 
         return nbuf
 
@@ -199,6 +202,7 @@ class ChordFindNode(ChordMessage):
 
     def encode(self):
         nbuf = super().encode()
+
         nbuf += sshtype.encodeBinary(self.node_id)
         nbuf += struct.pack("B", self.data_mode.value)
 
