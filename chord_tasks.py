@@ -944,7 +944,7 @@ class ChordTasks(object):
                             node_id, significant_bits, tun_meta, query_cntr,\
                             done_all, done_one, task_cntr, result_trie,\
                             data_mode, far_peers_by_path, sent_data_request,\
-                            data_rw, depth),\
+                            synapse_request, data_rw, depth),\
                         loop=self.loop)
                     tasks.append(task)
                 else:
@@ -1199,8 +1199,8 @@ class ChordTasks(object):
 
                         asyncio.async(\
                             self._wait_for_data_stored(\
-                                data_mode, row, tun_meta, query_cntr,\
-                                done_one, done_all, data_rw),\
+                                data_mode, row, tun_meta, synapse_request,\
+                                query_cntr, done_one, done_all, data_rw),\
                             loop=self.loop)
                     else:
                         # Then this immediate Peer had its channel closed;
@@ -1565,7 +1565,7 @@ class ChordTasks(object):
     def _process_find_node_relay(\
             self, node_id, significant_bits, tun_meta, query_cntr, done_all,\
             done_one, task_cntr, result_trie, data_mode, far_peers_by_path,\
-            sent_data_request, data_rw, depth):
+            sent_data_request, sreq, data_rw, depth):
         "This method processes an open tunnel's responses, processing the"\
         " incoming messages and appending the PeerS in those messages to the"\
         " result_trie. This method does not close any channel to the tunnel,"\
@@ -1580,7 +1580,7 @@ class ChordTasks(object):
             r = yield from self.__process_find_node_relay(\
                 node_id, significant_bits, tun_meta, query_cntr, done_all,\
                 done_one, task_cntr, result_trie, data_mode,\
-                far_peers_by_path, sent_data_request, data_rw, depth)
+                far_peers_by_path, sent_data_request, sreq, data_rw, depth)
 
             if not r:
                 return
@@ -1609,7 +1609,7 @@ class ChordTasks(object):
     def __process_find_node_relay(\
             self, node_id, significant_bits, tun_meta, query_cntr, done_all,\
             done_one, task_cntr, result_trie, data_mode, far_peers_by_path,\
-            sent_data_request, data_rw, depth):
+            sent_data_request, sreq, data_rw, depth):
         "Inner function for above call."
         while True:
             pkt = yield from tun_meta.queue.get()
@@ -1646,7 +1646,7 @@ class ChordTasks(object):
                         rmsg = cp.ChordDataResponse(pkts[0])
 
                         r = yield from self._process_data_response(\
-                            rmsg, tun_meta, path, data_rw)
+                            sreq, rmsg, tun_meta, path, data_rw)
 
                         if not r:
                             # If the data was invalid, we will try from another
@@ -1887,8 +1887,8 @@ class ChordTasks(object):
         return pkts, path
 
     @asyncio.coroutine
-    def _wait_for_data_stored(self, data_mode, vpeer, tun_meta, query_cntr,\
-            done_one, done_all, data_rw):
+    def _wait_for_data_stored(self, data_mode, vpeer, tun_meta, sreq,\
+            query_cntr, done_one, done_all, data_rw):
         "This is a coroutine that is used in data_mode and is started for"\
         " immediate PeerS that do not have a tunnel open (and thus a tunnel"\
         " coroutine already processing it."
@@ -1909,7 +1909,7 @@ class ChordTasks(object):
                 rmsg = cp.ChordDataResponse(pkt)
 
                 r = yield from self._process_data_response(\
-                    rmsg, tun_meta, None, data_rw)
+                    sreq, rmsg, tun_meta, None, data_rw)
 
                 if not r:
                     # If the data was invalid, we will try from another
@@ -2640,12 +2640,12 @@ class ChordTasks(object):
                 drmsg.pubkeylen = pubkeylen
 
         r = yield from\
-            self._process_data_response(drmsg, None, None, data_rw)
+            self._process_data_response(sreq, drmsg, None, None, data_rw)
 
         return r
 
     @asyncio.coroutine
-    def _process_data_response(self, drmsg, tun_meta, path, data_rw):
+    def _process_data_response(self, sreq, drmsg, tun_meta, path, data_rw):
         "Processes the DataResponse message, storing the decrypted data into"\
         " data_rw if it matches the original key. Returns True on success,"\
         " False otherwise."
@@ -2763,7 +2763,12 @@ class ChordTasks(object):
 
             return data
 
-        if type(drmsg.data) is list:
+        if sreq:
+            if not type(drmsg.data) is list:
+                log.info(\
+                    "ChordDataResponse contained other than list for"\
+                    " SynapseRequest.")
+                return False
             r = self._process_synapse_data_response(drmsg, data_rw)
         elif len(drmsg.data) == 0:
             # This can happen if a node had an error, it sends an empty one so

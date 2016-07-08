@@ -274,9 +274,11 @@ def _process_axon_synapses(dispatcher, axon_addr_enc):
         nonlocal new_tasks
 
         for synapse in data_rw.data:
+
             if loaded.get(bytes(synapse.synapse_key)):
-                log.info("Skipping already loaded Synapse for key=[{}]."\
-                    .format(mbase32.encode(synapse.synapse_key)))
+                if log.isEnabledFor(logging.INFO):
+                    log.info("Skipping already loaded Synapse for key=[{}]."\
+                        .format(mbase32.encode(synapse.synapse_key)))
                 continue
             new_tasks.append(\
                 asyncio.async(\

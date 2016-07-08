@@ -602,7 +602,10 @@ class Shell(cmd.Cmd):
             self.writeln("len(data): {}".format(len(data_rw.data)))
             for data in data_rw.data:
                 self.writeln("data:")
-                self.writeln(hex_dump(data.buf))
+                if hasattr(data, "buf"):
+                    self.writeln(hex_dump(data.buf))
+                else:
+                    self.writeln("type: {}".format(type(data)))
                 self.writeln("")
         else:
             self.writeln("Not found.")
