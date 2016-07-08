@@ -215,8 +215,9 @@ def _process_axon_synapses(dispatcher, axon_addr_enc):
 
         first = False
 
+        if post.synapse_key:
+            loaded[post.synapse_key] = True
         loaded[post.data_key] = True
-        loaded[post.data_pow] = True
 
     dispatcher.send_partial_content("<hr id='new'/>", first)
 
@@ -385,7 +386,7 @@ def retrieve_post(node, key, target_key):
     post = yield from _load_dds_post(node, key)
 
     if post:
-        return post.data
+        return post
 
     if not target_key:
         # Plain static data.
@@ -420,8 +421,11 @@ def retrieve_post(node, key, target_key):
 def _load_dds_post(node, key):
     def dbcall():
         with node.db.open_session() as sess:
-            q = sess.query(DdsPost).filter(\
-                or_(DdsPost.data_key == key, DdsPost.data_pow == key))
+            q = sess.query(DdsPost).filter(
+                or_(\
+                    DdsPost.synapse_key == key,\
+                    DdsPost.synapse_pow == key,\
+                    DdsPost.data_key == key))
 
             return q.first()
 
@@ -437,17 +441,18 @@ def _save_dds_post(node, key, target_key, obj, data):
             post.data = data
 
             if obj:
+                assert target_key
+                post.target_key = target_key
+
                 if type(obj) is syn.Synapse:
-                    post.data_key = obj.synapse_key
-                    post.data_pow = obj.synapse_pow
+                    post.synapse_key = obj.synapse_key
+                    post.synapse_pow = obj.synapse_pow
+                    post.data_key = obj.source_key
                     post.timestamp = mutil.utc_datetime(obj.timestamp)
                 else:
                     assert type(obj) is tb.TargetedBlock, type(obj)
-                    post.data_key = post.data_pow = key
+                    post.data_key = post.synapse_pow = key
                     post.timestamp = post.first_seen
-
-                assert target_key
-                post.target_key = target_key
             else:
                 post.data_key = key
                 post.timestamp = post.first_seen

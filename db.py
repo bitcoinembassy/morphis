@@ -240,16 +240,18 @@ def _init_daos(Base, d):
         __tablename__ = "ddspost"
 
         id = Column(Integer, primary_key=True)
-        data_key = Column(LargeBinary, nullable=False)
-        data_pow = Column(LargeBinary, nullable=True)
         target_key = Column(LargeBinary, nullable=True)
+        synapse_key = Column(LargeBinary, nullable=True)
+        synapse_pow = Column(LargeBinary, nullable=True)
+        data_key = Column(LargeBinary, nullable=False)
         data = Column(LargeBinary, nullable=True)
         timestamp = Column(UtcDateTime, nullable=False)
         first_seen = Column(UtcDateTime, nullable=False)
 
-    Index("ddspost__data_key", DdsPost.data_key)
-    Index("ddspost__data_pow", DdsPost.data_pow)
     Index("ddspost__target_key", DdsPost.target_key)
+    Index("ddspost__synapse_key", DdsPost.synapse_key)
+    Index("ddspost__synapse_pow", DdsPost.synapse_pow)
+    Index("ddspost__data_key", DdsPost.data_key)
 
     d.DdsPost = DdsPost
 
