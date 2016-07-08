@@ -620,6 +620,18 @@ def _upgrade_4_to_5(db):
             sess.execute(st)
         except:
             sess.rollback()
+
+        st = "select synapse_key from ddspost"
+        try:
+            sess.execute(st)
+        except:
+            sess.rollback()
+            try:
+                rebuild = True
+                st = "drop table ddspost"
+                sess.execute(st)
+            except:
+                sess.rollback()
         ##.
 
         # Our calc_log_distance calculation was broken in older versions! Code

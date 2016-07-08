@@ -4,6 +4,7 @@
 import llog
 
 import asyncio
+from concurrent import futures
 from datetime import datetime
 import logging
 import os
@@ -160,9 +161,10 @@ def _process_axon_read(dispatcher, req):
 
     content = yield from _format_axon(dispatcher.node, post.data, key, key_enc)
 
+    timestr = mutil.format_human_no_ms_datetime(post.timestamp)
+
     template = templates.dds_synapse_view[0]
-    template = template.format(\
-        key=key_enc, content=content, timestamp=post.timestamp)
+    template = template.format(key=key_enc, content=content, timestamp=timestr)
 
     msg = "<head><link rel='stylesheet' href='morphis://.dds/style.css'>"\
         "</link></head><body style='height: 90%; padding:0;margin:0;'>{}"\
@@ -179,12 +181,7 @@ def _process_axon_read(dispatcher, req):
 def _process_axon_synapses(dispatcher, axon_addr_enc):
     axon_addr = mbase32.decode(axon_addr_enc)
 
-#    dispatcher.send_partial_content(\
-#        "<head><meta target='_self' http-equiv='refresh' content='15'></meta>"\
-#            "</head><body>", True)
     dispatcher.send_partial_content(templates.dds_axon_synapses_start[0], True)
-
-    first = False # Get rid of this now as we always open with <body>.
 
     def dbcall():
         with dispatcher.node.db.open_session() as sess:
@@ -199,31 +196,59 @@ def _process_axon_synapses(dispatcher, axon_addr_enc):
     loaded = {}
 
     for post in posts:
-#        msg = "<div style='height: 5.5em; width: 100%; overflow: hidden;'>"\
-#            "{}</div>\n".format(_format_axon(post.data, post.data_key))
-
-        timestr = mutil.format_human_no_ms_datetime(post.timestamp)
-
         content =\
             yield from _format_axon(dispatcher.node, post.data, post.data_key)
+        timestr = mutil.format_human_no_ms_datetime(post.timestamp)
 
         template = templates.dds_synapse_view[0]
         template = template.format(\
             key=axon_addr_enc, content=content, timestamp=timestr)
 
-        dispatcher.send_partial_content(template, first)
-
-        first = False
+        dispatcher.send_partial_content(template)
 
         if post.synapse_key:
             loaded[post.synapse_key] = True
         loaded[post.data_key] = True
 
-    dispatcher.send_partial_content("<hr id='new'/>", first)
+    dispatcher.send_partial_content("<hr id='new'/>")
+
+    @asyncio.coroutine
+    def process_post(synapse):
+        post = yield from retrieve_post(dispatcher.node, synapse)
+
+        if not post:
+            dispatcher.send_partial_content(\
+                "Not found on the network at the moment.")
+            return
+
+        key = synapse.synapse_key
+        key_enc = mbase32.encode(key)
+
+        content =\
+            yield from _format_axon(dispatcher.node, post.data, key, key_enc)
+
+        timestr = mutil.format_human_no_ms_datetime(post.timestamp)
+
+        template = templates.dds_synapse_view[0]
+        template =\
+            template.format(key=key_enc, content=content, timestamp=timestr)
+
+        msg = "<head><link rel='stylesheet' href='morphis://.dds/style.css'>"\
+            "</link></head><body style='height: 90%; padding:0;margin:0;'>{}"\
+            "</body>"\
+                .format(template)
+
+#        content_type = "text/html; charset={}"\
+#            .format(dispatcher.get_accept_charset())
+#
+#        dispatcher.send_partial_content(msg, content_type=content_type)
+        dispatcher.send_partial_content(msg)
+
+    new_tasks = []
 
     @asyncio.coroutine
     def cb(key):
-        nonlocal first
+        nonlocal new_tasks
 
         key_enc = mbase32.encode(key)
 
@@ -232,14 +257,13 @@ def _process_axon_synapses(dispatcher, axon_addr_enc):
                 .format(key_enc))
             return
 
-        msg = "<iframe src='morphis://.dds/axon/read/{key}/{target_key}'"\
-            " style='height: 15em; width: 100%; border: 0;'"\
-            " seamless='seamless'></iframe>\n"\
-                .format(key=key_enc, target_key=axon_addr_enc)
-
-        dispatcher.send_partial_content(msg)
-
-        first = False
+        raise Exception("TODO: YOU_ARE_HERE")
+#        msg = "<iframe src='morphis://.dds/axon/read/{key}/{target_key}'"\
+#            " style='height: 15em; width: 100%; border: 0;'"\
+#            " seamless='seamless'></iframe>\n"\
+#                .format(key=key_enc, target_key=axon_addr_enc)
+#
+#        dispatcher.send_partial_content(msg)
 
 #    dp = dpush.DpushEngine(dispatcher.node)
 #
@@ -247,14 +271,26 @@ def _process_axon_synapses(dispatcher, axon_addr_enc):
 
     @asyncio.coroutine
     def cb2(data_rw):
+        nonlocal new_tasks
+
         for synapse in data_rw.data:
-            yield from cb(synapse.synapse_key)
+            if loaded.get(bytes(synapse.synapse_key)):
+                log.info("Skipping already loaded synapse for key=[{}]."\
+                    .format(mbase32.encode(synapse.synapse_key)))
+                return
+            new_tasks.append(\
+                asyncio.async(\
+                    process_post(synapse),\
+                    loop=dispatcher.node.loop))
 
     yield from dispatcher.node.engine.tasks.send_get_synapses(\
         axon_addr, result_callback=cb2)
 
-    if first:
-        dispatcher.send_partial_content("Nothing found yet.</body>")
+    if new_tasks:
+        yield from asyncio.wait(\
+            new_tasks,\
+            loop=dispatcher.node.loop,\
+            return_when=futures.ALL_COMPLETED)
 
     dispatcher.send_partial_content(\
         "<div>Last refreshed: {}</div><span id='end' style='color: gray'/>"\
@@ -382,7 +418,14 @@ def __format_post(data):
 #TODO: Move to DdsEngine.
 
 @asyncio.coroutine
-def retrieve_post(node, key, target_key):
+def retrieve_post(node, key, target_key=None):
+    synapse = None
+    if type(key) is syn.Synapse:
+        assert not target_key
+        synapse = key
+        key = synapse.synapse_key
+        target_key = synapse.target_key
+
     post = yield from _load_dds_post(node, key)
 
     if post:
@@ -396,10 +439,13 @@ def retrieve_post(node, key, target_key):
         obj = None
     else:
         # TargetedBlock or Synapse.
-        data_rw = yield from node.chord_engine.tasks.send_get_targeted_data(\
-                bytes(key), target_key=target_key)
-
-        obj = data_rw.object
+        if synapse:
+            obj = synapse
+        else:
+            data_rw =\
+                yield from node.chord_engine.tasks.send_get_targeted_data(\
+                    bytes(key), target_key=target_key)
+            obj = data_rw.object
 
         if obj:
             if type(obj) is syn.Synapse:
