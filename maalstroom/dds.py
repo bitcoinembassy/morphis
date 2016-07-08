@@ -275,9 +275,9 @@ def _process_axon_synapses(dispatcher, axon_addr_enc):
 
         for synapse in data_rw.data:
             if loaded.get(bytes(synapse.synapse_key)):
-                log.info("Skipping already loaded synapse for key=[{}]."\
+                log.info("Skipping already loaded Synapse for key=[{}]."\
                     .format(mbase32.encode(synapse.synapse_key)))
-                return
+                continue
             new_tasks.append(\
                 asyncio.async(\
                     process_post(synapse),\
