@@ -1927,7 +1927,7 @@ def _process_create_contact_create(dispatcher, name , addr, user):
 def _load_addressbook_list(dispatcher, user):
     def dbcall():
         with dispatcher.node.db.open_session() as sess:
-            return sess.query(AddressBook).all()
+            return sess.query(AddressBook).order_by(AddressBook.user==user).all()
     return (yield from dispatcher.node.loop.run_in_executor(None, dbcall))
 
 @asyncio.coroutine
@@ -1940,19 +1940,23 @@ def _process_addressbook_list(dispatcher, ls, req):
     for ab in ls:
         if ab.user == ab.identity_key:
             # Indicator that this address belongs to the users node.
-            symbol = "*self*"
+            tint = "green"
+            del_button_class = 'display_none'
         else:
-            symbol = ""
+            tint = "black"
+            del_button_class = 'trash-icon-new'
         if not ab.first or not ab.last:
             dispatcher.send_partial_content(\
                 templates.dmail_addressbook_contacts_row[0].format(\
-                    userstar=symbol, first=ab.name, last="",\
-                    idkey=mbase32.encode(ab.identity_key)))
+                    tint=tint, first=ab.name, last="",\
+                    idkey=mbase32.encode(ab.identity_key),\
+                    del_button_class=del_button_class))
         else:
             dispatcher.send_partial_content(\
                 templates.dmail_addressbook_contacts_row[0].format(\
-                    userstar=symbol,first=ab.first, last=ab.last,\
-                    idkey=mbase32.encode(ab.identity_key)))
+                    tint=tint,first=ab.first, last=ab.last,\
+                    idkey=mbase32.encode(ab.identity_key),\
+                    del_button_class=del_button_class))
     dispatcher.send_partial_content(templates.dmail_addressbook_contacts_end[0])
     dispatcher.end_partial_content()
 
