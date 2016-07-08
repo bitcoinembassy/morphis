@@ -150,54 +150,21 @@ def _process_axon_read(dispatcher, req):
         key = mbase32.decode(req)
         target_key = None
 
-    post = yield from _load_dds_post(dispatcher.node, key, target_key)
+    #
 
-    timestr = "<unspecified>"
+    post = yield from retrieve_post(dispatcher.node, key, target_key)
 
-    if post:
-        data = post.data
-    else:
-        if not target_key:
-            # Plain static data.
-            data_rw = yield from\
-                dispatcher.node.chord_engine.tasks.send_get_data(bytes(key))
-
-            obj = None
-        else:
-            # TargetedBlock or Synapse.
-            data_rw = yield from\
-                dispatcher.node.chord_engine.tasks.send_get_targeted_data(\
-                    bytes(key), target_key=target_key)
-
-            obj = data_rw.object
-
-            if obj:
-                if type(obj) is syn.Synapse:
-                    data_rw = yield from\
-                        dispatcher.node.chord_engine.tasks.send_get_data(\
-                            obj.source_key)
-                    timestr = mutil.format_human_no_ms_datetime(\
-                        mutil.utc_datetime(obj.timestamp))
-                else:
-                    assert type(obj) is tb.TargetedBlock, type(obj)
-                    data_rw.data = data_rw.data[tb.TargetedBlock.BLOCK_OFFSET:]
-
-        if not data_rw.data:
-            dispatcher.send_content("Not found on the network at the moment.")
-            return
-
-        data = data_rw.data
-
-        # Cache the 'post' locally.
-        yield from _save_dds_post(dispatcher.node, key, target_key, obj, data)
+    if not post:
+        dispatcher.send_content("Not found on the network at the moment.")
+        return
 
     key_enc = mbase32.encode(key)
 
-    content = yield from _format_axon(dispatcher.node, data, key, key_enc)
+    content = yield from _format_axon(dispatcher.node, post.data, key, key_enc)
 
     template = templates.dds_synapse_view[0]
     template = template.format(\
-        key=key_enc, content=content, timestamp=timestr)
+        key=key_enc, content=content, timestamp=post.timestamp)
 
     msg = "<head><link rel='stylesheet' href='morphis://.dds/style.css'>"\
         "</link></head><body style='height: 90%; padding:0;margin:0;'>{}"\
@@ -209,6 +176,42 @@ def _process_axon_read(dispatcher, req):
 
     dispatcher.send_content(msg, content_type=content_type)
     return
+
+@asyncio.coroutine
+def retrieve_post(node, key, target_key):
+    post = yield from _load_dds_post(node, key)
+
+    if post:
+        return post.data
+
+    if not target_key:
+        # Plain static data.
+        data_rw = yield from\
+            node.chord_engine.tasks.send_get_data(bytes(key))
+
+        obj = None
+    else:
+        # TargetedBlock or Synapse.
+        data_rw = yield from node.chord_engine.tasks.send_get_targeted_data(\
+                bytes(key), target_key=target_key)
+
+        obj = data_rw.object
+
+        if obj:
+            if type(obj) is syn.Synapse:
+                data_rw = yield from\
+                    node.chord_engine.tasks.send_get_data(obj.source_key)
+            else:
+                assert type(obj) is tb.TargetedBlock, type(obj)
+                data_rw.data = data_rw.data[tb.TargetedBlock.BLOCK_OFFSET:]
+
+    if not data_rw.data:
+        return None
+
+    # Cache the 'post' locally.
+    post = yield from _save_dds_post(node, key, target_key, obj, data_rw.data)
+
+    return post
 
 @asyncio.coroutine
 def _process_axon_synapses(dispatcher, axon_addr_enc):
@@ -414,8 +417,9 @@ def __format_post(data):
                 data[:end].decode(), make_safe_for_html_content(data[start:]))
 
 #TODO: Move to DdsEngine.
+
 @asyncio.coroutine
-def _load_dds_post(node, key, target_key):
+def _load_dds_post(node, key):
     def dbcall():
         with node.db.open_session() as sess:
             q = sess.query(DdsPost).filter(\
@@ -453,6 +457,11 @@ def _save_dds_post(node, key, target_key, obj, data):
             sess.add(post)
 
             sess.commit()
+
+            # Make sure data is loaded for use by caller.
+            len(post.data)
+
+            sess.expunge_all()
 
             return post
 
