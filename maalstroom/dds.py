@@ -183,45 +183,26 @@ def _process_axon_synapses(dispatcher, axon_addr_enc):
 
     dispatcher.send_partial_content(templates.dds_axon_synapses_start[0], True)
 
-    def dbcall():
-        with dispatcher.node.db.open_session() as sess:
-            q = sess.query(DdsPost)\
-                .filter(DdsPost.target_key == axon_addr)\
-                .order_by(DdsPost.timestamp)
-
-            return q.all()
-
-    posts = yield from dispatcher.loop.run_in_executor(None, dbcall)
-
     loaded = {}
 
-    for post in posts:
-        content =\
-            yield from _format_axon(dispatcher.node, post.data, post.data_key)
-        timestr = mutil.format_human_no_ms_datetime(post.timestamp)
-
-        template = templates.dds_synapse_view[0]
-        template = template.format(\
-            key=axon_addr_enc, content=content, timestamp=timestr)
-
-        dispatcher.send_partial_content(template)
-
-        if post.synapse_key:
-            loaded[post.synapse_key] = True
-        loaded[post.data_key] = True
-
-    dispatcher.send_partial_content("<hr id='new'/>")
-
     @asyncio.coroutine
-    def process_post(synapse):
-        post = yield from retrieve_post(dispatcher.node, synapse)
+    def process_post(post):
+        assert type(post) in (syn.Synapse, DdsPost)
+
+        if type(post) is syn.Synapse:
+            synapse = post
+            key = synapse.synapse_key
+            post = yield from retrieve_post(dispatcher.node, synapse)
+        else:
+            key = post.synapse_key
+            if not key:
+                key = post.data_key
 
         if not post:
             dispatcher.send_partial_content(\
                 "Not found on the network at the moment.")
             return
 
-        key = synapse.synapse_key
         key_enc = mbase32.encode(key)
 
         content =\
@@ -233,16 +214,28 @@ def _process_axon_synapses(dispatcher, axon_addr_enc):
         template =\
             template.format(key=key_enc, content=content, timestamp=timestr)
 
-        msg = "<head><link rel='stylesheet' href='morphis://.dds/style.css'>"\
-            "</link></head><body style='height: 90%; padding:0;margin:0;'>{}"\
-            "</body>"\
-                .format(template)
+        dispatcher.send_partial_content(template)
 
-#        content_type = "text/html; charset={}"\
-#            .format(dispatcher.get_accept_charset())
-#
-#        dispatcher.send_partial_content(msg, content_type=content_type)
-        dispatcher.send_partial_content(msg)
+        if post.synapse_key:
+            loaded[post.synapse_key] = True
+        if post.synapse_pow:
+            loaded[post.synapse_pow] = True
+        loaded[post.data_key] = True
+
+    def dbcall():
+        with dispatcher.node.db.open_session() as sess:
+            q = sess.query(DdsPost)\
+                .filter(DdsPost.target_key == axon_addr)\
+                .order_by(DdsPost.timestamp)
+
+            return q.all()
+
+    posts = yield from dispatcher.loop.run_in_executor(None, dbcall)
+
+    for post in posts:
+        yield from process_post(post)
+
+    dispatcher.send_partial_content("<hr id='new'/>")
 
     new_tasks = []
 
@@ -274,8 +267,9 @@ def _process_axon_synapses(dispatcher, axon_addr_enc):
         nonlocal new_tasks
 
         for synapse in data_rw.data:
-
             if loaded.get(bytes(synapse.synapse_key)):
+                loaded[synapse.synapse_key] = True
+                loaded[synapse.synapse_pow] = True
                 if log.isEnabledFor(logging.INFO):
                     log.info("Skipping already loaded Synapse for key=[{}]."\
                         .format(mbase32.encode(synapse.synapse_key)))
