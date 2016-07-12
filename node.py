@@ -479,7 +479,7 @@ def __main():
             if maalstroom_enabled:
                 import client_engine as cengine
 
-                ce = cengine.ClientEngine(node.chord_engine, node.db)
+                ce = cengine.ClientEngine(node)
 
                 if args.updatetest:
                     ce.update_test = True

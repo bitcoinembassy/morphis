@@ -23,12 +23,10 @@ import sshtype
 log = logging.getLogger(__name__)
 
 class ClientEngine(object):
-    def __init__(self, engine, db):
-        assert type(engine) is chord.ChordEngine
-
-        self.engine = engine
-        self.db = db
-        self.loop = engine.loop
+    def __init__(self, node):
+        self.engine = node.engine
+        self.db = node.db
+        self.loop = node.loop
 
         self.latest_version_number = None
         self.latest_version_data = None
@@ -66,7 +64,7 @@ class ClientEngine(object):
         self._running = True
 
         if not self._dmail_engine:
-            self._dmail_engine = dmail.DmailEngine(self.engine.tasks, self.db)
+            self._dmail_engine = dmail.DmailEngine(self.engine.node)
 
         asyncio.async(self._start_version_poller(), loop=self.loop)
         if self.auto_scan_enabled:
@@ -149,7 +147,7 @@ class ClientEngine(object):
 
     @asyncio.coroutine
     def _dmail_auto_publish(self, dmail_address):
-        data_rw = yield from self.engine.tasks.send_get_data(\
+        data_rw = yield from self.tasks.send_get_data(\
             dmail_address.site_key, retry_factor=100)
 
         if data_rw.data:

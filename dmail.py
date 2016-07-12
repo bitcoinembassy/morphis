@@ -264,10 +264,10 @@ class DmailPart(object):
         return idx
 
 class DmailEngine(object):
-    def __init__(self, task_engine, db):
-        self.task_engine = task_engine
-        self.db = db
-        self.loop = task_engine.loop
+    def __init__(self, node):
+        self.tasks = node.engine.tasks
+        self.db = node.db
+        self.loop = node.loop
 
     @asyncio.coroutine
     def generate_dmail_address(self, prefix=None, difficulty=20):
@@ -332,7 +332,7 @@ class DmailEngine(object):
         retry = 0
         while True:
             storing_nodes = yield from\
-                self.task_engine.send_store_updateable_key(\
+                self.tasks.send_store_updateable_key(\
                     dms_data, privkey, version=int(time.time()*1000),\
                     store_key=True, key_callback=key_callback,\
                     retry_factor=retry * 20)
@@ -473,7 +473,7 @@ class DmailEngine(object):
         start = target
 
         while True:
-            data_rw = yield from self.task_engine.send_find_key(\
+            data_rw = yield from self.tasks.send_find_key(\
                 start, target_key=target, significant_bits=significant_bits,\
                 retry_factor=100)
 
@@ -496,7 +496,7 @@ class DmailEngine(object):
         " Returns a Dmail object, not a db.DmailMessage object."
 
         data_rw =\
-            yield from self.task_engine.send_get_targeted_data(key, target_key)
+            yield from self.tasks.send_get_targeted_data(key, target_key)
 
         if not data_rw.data:
             return None, None
@@ -678,7 +678,7 @@ class DmailEngine(object):
         retry = 0
         while True:
             storing_nodes = yield from\
-                self.task_engine.send_store_targeted_data(\
+                self.tasks.send_store_targeted_data(\
                     tb_data, store_key=True, key_callback=key_callback,\
                     retry_factor=retry * 10)
 
@@ -714,12 +714,12 @@ class DmailEngine(object):
             nonlocal key
             key = akey
 
-        r1 = yield from self.task_engine.send_store_data(\
+        r1 = yield from self.tasks.send_store_data(\
             data, store_key=True, key_callback=key_callback)
 
         synapse = syn.Synapse.for_target(target_addr, key, difficulty)
 
-        r2 = yield from self.task_engine.send_store_synapse(\
+        r2 = yield from self.tasks.send_store_synapse(\
             synapse, store_key=True, key_callback=key_callback)
 
         if log.isEnabledFor(logging.INFO):
@@ -777,7 +777,7 @@ class DmailEngine(object):
 
         if significant_bits:
             log.info("Key was incomplete, searching the network.")
-            data_rw = yield from self.task_engine.send_find_key(\
+            data_rw = yield from self.tasks.send_find_key(\
                 addr, significant_bits=significant_bits)
 
             if not data_rw.data_key:
@@ -788,7 +788,7 @@ class DmailEngine(object):
             addr = bytes(data_rw.data_key)
 
         data_rw =\
-            yield from self.task_engine.send_get_data(addr, retry_factor=100)
+            yield from self.tasks.send_get_data(addr, retry_factor=100)
 
         if not data_rw.data:
             if log.isEnabledFor(logging.INFO):
@@ -828,7 +828,7 @@ class DmailEngine(object):
                 return False
 
         while True:
-            data_rw = yield from self.task_engine.send_find_key(\
+            data_rw = yield from self.tasks.send_find_key(\
                 start, target_key=target, significant_bits=significant_bits,\
                 retry_factor=100)
 

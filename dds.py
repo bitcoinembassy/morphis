@@ -15,7 +15,7 @@ log = logging.getLogger(__name__)
 
 class DdsEngine(object):
     def __init__(self, node):
-        self.core = node.chord_engine
+        self.tasks = node.engine.tasks
         self.db = node.db
         self.loop = node.loop
 
@@ -46,7 +46,7 @@ class DdsEngine(object):
         retry = 0
         while True:
             storing_nodes = yield from\
-                self.core.tasks.send_store_synapse(\
+                self.tasks.send_store_synapse(\
                     synapse, store_key=True, key_callback=key_callback,
                     retry_factor=retry*10)
 

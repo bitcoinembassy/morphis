@@ -123,8 +123,28 @@ def __main():
         loop.stop()
         return
 
+    class EngineFacade():
+        @property
+        def tasks(self):
+            return mc
+
+    engine = EngineFacade()
+
+    class NodeFacade():
+        @property
+        def db(self):
+            return dbase
+
+        @property
+        def engine(self):
+            return engine
+
+        @property
+        def loop(self):
+            return loop
+
     dbase = init_db(args)
-    de = dmail.DmailEngine(mc, dbase)
+    de = dmail.DmailEngine(NodeFacade())
 
     log.info("Processing command requests...")
 

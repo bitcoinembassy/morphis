@@ -521,6 +521,8 @@ def serve_get(dispatcher, rpath):
             default_id = None
             dmail_address = yield from _load_dmail_address(\
                 dispatcher, site_key=sender_addr)
+            if not dmail_address:
+                dispatcher.send_content("Invalid sender address requested.")
             owner_if_anon_id = dmail_address.id
         else:
             default_id = yield from _load_default_dmail_address_id(dispatcher)
@@ -942,8 +944,7 @@ def serve_get(dispatcher, rpath):
 
         private_key = rsakey.RsaKey(privdata=dmail_address.site_privatekey)
 
-        de = dmail.DmailEngine(\
-            dispatcher.node.chord_engine.tasks, dispatcher.node.db)
+        de = dmail.DmailEngine(dispatcher.node)
 
         storing_nodes = yield from de.publish_dmail_site(private_key, dms)
 
@@ -995,9 +996,7 @@ def serve_post(dispatcher, rpath):
 
         log.info("Sending submitted Dmail.")
 
-        de =\
-            dmail.DmailEngine(\
-                dispatcher.node.chord_engine.tasks, dispatcher.node.db)
+        de = dmail.DmailEngine(dispatcher.node)
 
         sender_asymkey =\
             rsakey.RsaKey(privdata=dm.address.site_privatekey)\
@@ -1655,9 +1654,7 @@ def _process_dmail_address(dispatcher, process_call, dbid=None, site_key=None,\
 
 @asyncio.coroutine
 def _fetch_dmail(dispatcher, dmail_addr, dmail_key):
-    de =\
-        dmail.DmailEngine(\
-            dispatcher.node.chord_engine.tasks, dispatcher.node.db)
+    de = dmail.DmailEngine(dispatcher.node)
 
     if log.isEnabledFor(logging.INFO):
         dmail_key_enc = mbase32.encode(dmail_key)
@@ -1782,8 +1779,7 @@ def _format_dmail(dm, valid_sig):
 
 @asyncio.coroutine
 def _create_dmail_address(dispatcher, prefix, difficulty):
-    de = dmail.DmailEngine(\
-        dispatcher.node.chord_engine.tasks, dispatcher.node.db)
+    de = dmail.DmailEngine(dispatcher.node)
     privkey, data_key, dms, storing_nodes =\
         yield from de.generate_dmail_address(prefix, difficulty)
     return privkey, data_key, dms, storing_nodes
