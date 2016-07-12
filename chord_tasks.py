@@ -2006,12 +2006,16 @@ class ChordTasks(object):
                     pmsg.data_present = data_present
 
                 if log.isEnabledFor(logging.INFO):
+                    data_present_val =\
+                        data_present if type(data_present) is bool\
+                            else mbase32.encode(data_present)
+
                     log.info(\
                         "Writing DataPresence (data_id=[{}], data_present="\
                             "[{}]) response."\
                                 .format(\
                                     mbase32.encode(fnmsg.node_id),\
-                                    data_present))
+                                    data_present_val))
 
                 peer.protocol.write_channel_data(local_cid, pmsg.encode())
             elif fnmsg.data_mode is cp.DataMode.store:
