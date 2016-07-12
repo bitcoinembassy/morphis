@@ -1903,21 +1903,21 @@ def _process_addressbook_list(dispatcher, ls, req):
     for ab in ls:
         if ab.user == ab.identity_key:
             # Indicator that this address belongs to the users node.
-            tint = "green"
+            contact_tint = 'new-mail'
             del_button_class = 'display_none'
         else:
-            tint = "black"
+            contact_tint = ''
             del_button_class = 'trash-icon-new'
         if not ab.first or not ab.last:
             dispatcher.send_partial_content(\
                 templates.dmail_addressbook_contacts_row[0].format(\
-                    tint=tint, first=ab.name, last="",\
+                    contact_tint=contact_tint, first=ab.name, last="",\
                     idkey=mbase32.encode(ab.identity_key),\
                     del_button_class=del_button_class))
         else:
             dispatcher.send_partial_content(\
                 templates.dmail_addressbook_contacts_row[0].format(\
-                    tint=tint,first=ab.first, last=ab.last,\
+                    contact_tint=contact_tint, first=ab.first, last=ab.last,\
                     idkey=mbase32.encode(ab.identity_key),\
                     del_button_class=del_button_class))
     dispatcher.send_partial_content(templates.dmail_addressbook_contacts_end[0])
