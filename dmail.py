@@ -427,7 +427,7 @@ class DmailEngine(object):
             dmail_bytes += sshtype.encodeBinary(signature)
 
         storing_nodes = yield from\
-            self._send_dmail(from_asymkey, rsite, dmail_bytes, signature)
+            self._send_dmail(from_asymkey, rsite, dmail_bytes)
 
         return storing_nodes
 
@@ -615,7 +615,7 @@ class DmailEngine(object):
             + b"c1ac0baac06fa7175677a4a1bf65860a84708d67")
 
     @asyncio.coroutine
-    def _send_dmail(self, from_asymkey, recipient, dmail_bytes, signature):
+    def _send_dmail(self, from_asymkey, recipient, dmail_bytes):
         assert type(recipient) is DmailSite
 
         # Read in recipient DmailSite.
@@ -754,7 +754,8 @@ class DmailEngine(object):
         nonce_bytes = yield from self.loop.run_in_executor(None, threadcall)
 
         if log.isEnabledFor(logging.INFO):
-            log.info("Work found nonce [{}].".format(nonce_bytes))
+            log.info(\
+                "Work found nonce [{}].".format(mutil.hex_string(nonce_bytes)))
 
         TargetedBlock.set_nonce(tb_data, nonce_bytes)
 
