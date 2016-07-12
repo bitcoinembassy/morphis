@@ -9,7 +9,7 @@ import logging
 import enc
 import mbase32
 import mutil
-from targetedblock import Synapse
+import synapse as syn
 
 log = logging.getLogger(__name__)
 
@@ -21,15 +21,15 @@ class DdsEngine(object):
 
     def create_synapse(\
             self, target_key, source_key, key, stamps=None, timestamp=None):
-        syn = Synapse()
-        syn.target_key = target_key
-        syn.source_key = source_key
-        syn.key = key
+        s = syn.Synapse()
+        s.target_key = target_key
+        s.source_key = source_key
+        s.key = key
         if timestamp:
-            syn.timestamp = timestamp
-        syn.stamps = stamps
+            s.timestamp = timestamp
+        s.stamps = stamps
 
-        return syn
+        return s
 
     @asyncio.coroutine
     def upload_synapse(self, synapse):
