@@ -108,7 +108,8 @@ def serve_get(dispatcher, rpath):
         if "addressbook" in req:
             template = templates.dmail_addressbook_wrapper[0]
             template = template.format( \
-                tag=tag, addr=addr_enc)
+                tag=tag, addr=addr_enc,
+                idkey="")
         else:
             template = templates.dmail_page_wrapper[0]
             template = template.format(\
@@ -246,21 +247,27 @@ def serve_get(dispatcher, rpath):
             template = templates.dmail_addressbook_wrapper[0]
             template = template.format( \
                 tag="", \
-                addr=user)
+                addr=user, \
+                idkey=idkey)
             dispatcher.send_content(template)
 
         elif req.startswith("/rename_contact"):
             p0 = req.find("/", 2)
             idkey = req[p0 + 1:]
-
-            yield from _process_create_contact(dispatcher, idkey, rename=True)
+            template = templates.dmail_addressbook_wrapper[0]
+            template = template.format( \
+                tag="", \
+                addr=user, \
+                idkey=idkey)
+            dispatcher.send_content(template)
 
         elif req == "/clear_contacts":
             yield from _process_clear_addressbook(dispatcher,user)
             template = templates.dmail_addressbook_wrapper[0]
             template = template.format( \
                 tag="", \
-                addr=user)
+                addr=user, \
+                idkey="")
             dispatcher.send_content(template)
 
         elif req.startswith("/delete_confirmation"):
@@ -1128,10 +1135,13 @@ def serve_post(dispatcher, rpath):
 
         if not entry:
             yield from _process_rename_contact_create(dispatcher, name, addr)
-        yield from _process_create_contact(dispatcher,"")
 
-        return
-
+        template = templates.dmail_addressbook_wrapper[0]
+        template = template.format( \
+            tag="", \
+            addr=user, \
+            idkey="")
+        dispatcher.send_content(template)
     else:
         dispatcher.send_error(errcode=400)
 
