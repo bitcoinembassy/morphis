@@ -470,8 +470,10 @@ def serve_get(dispatcher, rpath):
             sender_addr_enc = eparams.get("sender")
             if sender_addr_enc:
                 sender_addr_enc = sender_addr_enc[0]
+                sender_addr = mbase32.decode(sender_addr_enc)
             else:
                 sender_addr_enc = ""
+                sender_addr = None
 
             msg_id = fia(eparams.get("msg_id"))
             if msg_id:
@@ -498,6 +500,7 @@ def serve_get(dispatcher, rpath):
         else:
             subject = ""
             sender_addr_enc = ""
+            sender_addr = None
             message_text = ""
             p0 = len(params)
 
@@ -514,47 +517,24 @@ def serve_get(dispatcher, rpath):
         elif not message_text:
             autofocus_fields["message_text_autofocus"] = " autofocus"
 
-        addrs = yield from _list_dmail_addresses(dispatcher)
-
-        if sender_addr_enc:
-            sender_addr = mbase32.decode(sender_addr_enc)
+        if sender_addr:
             default_id = None
+            dmail_address = yield from _load_dmail_address(\
+                dispatcher, site_key=sender_addr)
+            owner_if_anon_id = dmail_address.id
         else:
-            sender_addr = None
             default_id = yield from _load_default_dmail_address_id(dispatcher)
-            if not default_id:
-                owner_if_anon_id = ""
+            owner_if_anon_id = default_id if default_id else ""
 
-        from_addr_options = []
-
-        for addr in addrs:
-            if sender_addr:
-                selected = addr.site_key.startswith(sender_addr)
-            elif default_id:
-                selected = addr.id == default_id
-            else:
-                selected = False
-
-            if selected:
-                option = '<option value="{}" selected>{}</option>'
-                owner_if_anon_id = addr.id
-            else:
-                option = '<option value="{}">{}</option>'
-
-            addr_enc = mbase32.encode(addr.site_key)
-
-            from_addr_options.append(option.format(addr.id, addr_enc))
-
-        from_addr_options.append("<option value="">[Anonymous]</option>")
-
-        from_addr_options = ''.join(from_addr_options)
+        from_addr_options = yield from render_dmail_addresses(\
+            dispatcher, sender_addr, default_id)
 
         template = templates.dmail_compose[0]
         template = template.format(\
             csrf_token=dispatcher.client_engine.csrf_token,\
             delete_class="display_none",\
             owner_if_anon=owner_if_anon_id,\
-            from_addr_options=from_addr_options,\
+            from_addr_options=''.join(from_addr_options),\
             dest_addr=dest_addr_enc,\
             subject=subject,\
             message_text=message_text,\
@@ -1070,6 +1050,39 @@ def serve_post(dispatcher, rpath):
     else:
         dispatcher.send_error(errcode=400)
 
+@asyncio.coroutine
+def render_dmail_addresses(\
+        dispatcher, sender_addr=None, default_id=None, use_addr=False):
+    addrs = yield from _list_dmail_addresses(dispatcher)
+
+    addr_options = []
+    selected_id = None
+
+    for addr in addrs:
+        if sender_addr:
+            selected = addr.site_key.startswith(sender_addr)
+        elif default_id:
+            selected = addr.id == default_id
+        else:
+            selected = False
+
+        if selected:
+            option = "<option value='{}' selected>{}</option>"
+            selected_id = addr.id
+        else:
+            option = "<option value='{}'>{}</option>"
+
+        addr_enc = mbase32.encode(addr.site_key)
+
+        addr_id = addr_enc if use_addr else addr.id
+        addr_options.append(option.format(addr_id, addr_enc))
+
+    if selected_id:
+        addr_options.append("<option value=''>[Anonymous]</option>")
+    else:
+        addr_options.append("<option value='' selected>[Anonymous]</option>")
+
+    return addr_options
 @asyncio.coroutine
 def _create_tag(dispatcher, tag_name):
     def dbcall():
