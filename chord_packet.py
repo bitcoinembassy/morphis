@@ -176,8 +176,6 @@ class ChordPeerList(ChordMessage):
         i += 4
         self.peers = []
         for n in range(pcnt):
-            if log.isEnabledFor(logging.DEBUG):
-                log.debug("Reading record {}.".format(n))
             peer = Peer() # db.Peer.
             l, peer.address = sshtype.parseString(self.buf[i:])
             i += l
