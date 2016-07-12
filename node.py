@@ -4,10 +4,10 @@
 
 import llog
 
+import argparse
 import asyncio
 import logging
 import os
-import argparse
 
 from sqlalchemy import update, func
 
@@ -32,6 +32,7 @@ log = logging.getLogger(__name__)
 
 loop = None
 nodes = []
+node_callback = None
 
 dumptasksonexit = False
 maalstroom_enabled = True
@@ -263,7 +264,6 @@ def main():
 
     loop = asyncio.get_event_loop()
 
-    #loop.run_until_complete(_main(loop))
     asyncio.async(_main(), loop=loop)
 
     try:
@@ -433,6 +433,9 @@ def __main():
                 node.offline_mode = True
 
             nodes.append(node)
+
+            if node_callback:
+                node_callback(node)
 
             if db_pool_size:
                 node.db.pool_size = db_pool_size
