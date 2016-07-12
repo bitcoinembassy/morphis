@@ -412,6 +412,10 @@ if not initialized_template:
     # dds.
     dds_css = load("dds/style.css", True)
 
+    dds_wrapper = load("dds/wrapper.html", True)
+
+    dds_identbar = load("dds/identbar.html", True)
+
     dds_main = load("dds/main.html", True)
     dds_axon = load("dds/axon.html", True)
     dds_create_synapse = load("dds/create_synapse.html", True)

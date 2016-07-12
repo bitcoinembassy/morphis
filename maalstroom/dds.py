@@ -7,6 +7,7 @@ import asyncio
 from concurrent import futures
 from datetime import datetime
 import logging
+from urllib.parse import parse_qs
 import os
 
 from sqlalchemy import or_
@@ -20,10 +21,10 @@ import maalstroom.dmail as dmail
 import maalstroom.templates as templates
 import mbase32
 from morphisblock import MorphisBlock
-import synapse as syn
-import targetedblock as tb
 from mutil import fia, hex_dump, make_safe_for_html_content
 import mutil
+import synapse as syn
+import targetedblock as tb
 import sshtype
 
 log = logging.getLogger(__name__)
@@ -35,7 +36,14 @@ s_dds_len = len(".dds")
 def serve_get(dispatcher, rpath):
     log.info("Service .dds request.")
 
-    req = rpath[s_dds_len:]
+    path, sep, query = rpath.partition('?')
+    req = path[s_dds_len:]
+
+    if query:
+        qdict = parse_qs(query, keep_blank_values=True)
+        ident_enc = fia(qdict.get("ident"))
+    else:
+        ident_enc = None
 
     if req == "" or req == "/":
         random_id_enc = mbase32.encode(os.urandom(consts.NODE_ID_BYTES))
@@ -43,7 +51,33 @@ def serve_get(dispatcher, rpath):
         template = templates.dds_main[0]
         template = template.format(random_id_enc=random_id_enc)
 
-        dispatcher.send_content(template)
+        if ident_enc:
+            ident = mbase32.decode(ident_enc)
+        else:
+            if ident_enc is None:
+                dmail_address = yield from dmail._load_default_dmail_address(\
+                    dispatcher, fetch_keys=True)
+                if dmail_address:
+                    ident = dmail_address.site_key
+                    ident_enc = mbase32.encode(ident)
+            if not ident_enc:
+                ident = None
+                ident_enc = "[Anonymous]"
+
+        available_idents = yield from dmail.render_dmail_addresses(\
+            dispatcher, ident, use_addr=True)
+
+        template2 = templates.dds_identbar[0]
+        template2 = template2.format(\
+            current_ident=ident_enc, available_idents=available_idents)
+
+        template = template2 + template
+
+        wrapper = templates.dds_wrapper[0]
+        wrapper =\
+            wrapper.format(title="MORPHiS Maalstroom DDS", child=template)
+
+        dispatcher.send_content(wrapper)
         return
     elif req == "/style.css":
         template = templates.dds_css[0]
