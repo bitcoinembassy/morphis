@@ -344,7 +344,7 @@ def _speed_test():
 
     rval = os.urandom(512>>3)
 
-    for i in range(500000):
+    for i in range(5000000):
         val = os.urandom(512>>3)
 
         xval = [rvalc ^ valc for rvalc, valc in zip(rval, val)]
@@ -352,11 +352,12 @@ def _speed_test():
 
         k = XorKey(rval, val)
 
-        now = datetime.today()
+        if not i % 5000:
+            now = datetime.today()
         #r = bt.put(k, xiv)
         r = bt[k] = xiv
         if not i % 5000:
-            print("put took: {}".format(datetime.today() - now))
+            print("put [{}] took: {}".format(i, datetime.today() - now))
 
     n = XorKey(os.urandom(512>>3), os.urandom(512>>3))
     bt[n] = int.from_bytes(n, "big")
