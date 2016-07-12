@@ -459,8 +459,8 @@ def serve_get(dispatcher, rpath):
                 existing_tag_rows.append(row)
         else:
             remove_tag_class = "display_none"
-        
-        if tag == "Inbox":
+
+        if dest_class == " display_none":
             contact_addr=addr_enc
         else:
             contact_addr=dest_addr_enc
