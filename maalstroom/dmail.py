@@ -2017,8 +2017,10 @@ def _get_users_name(dispatcher, addr_enc):
                 .filter(AddressBook.identity_key == addr).first()
 
             if not q:
-                return "anon"
+                return
             else:
-                return q.name
-
+                if q.name:
+                    return q.name
+                else:
+                    return addr_enc
     return (yield from dispatcher.loop.run_in_executor(None, dbcall))
