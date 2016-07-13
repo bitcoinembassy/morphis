@@ -64,6 +64,7 @@ def yf(coroutine):
     r = result_queue.get()
     if type(r) is ExceptionResult:
         raise r.exception
+    return r
 
 ## Example usage:
 # To print out contents of [ire6bomibt4q9zp5bpd9wa7wzusxab8h]:
