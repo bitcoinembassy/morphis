@@ -243,7 +243,10 @@ class Dmail(object):
             self.parts.append(part)
 
         self.signature_offset = idx
-        idx, self.signature = sshtype.parse_binary_from(buf, idx)
+
+        if idx < len(buf):
+            # Then the message is signed, so grab the signature as well.
+            idx, self.signature = sshtype.parse_binary_from(buf, idx)
 
         return idx
 
@@ -594,6 +597,9 @@ class DmailEngine(object):
 
         if not data:
             raise DmailException("Dmail data was empty.")
+
+        if len(data) != dw.data_len:
+            data = data[:dw.data_len]
 
         dmail = Dmail(data)
 
