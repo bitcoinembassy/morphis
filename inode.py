@@ -1,7 +1,10 @@
 # Höfundarréttur (c) eilífur  Heimur-Heilinn
 # License: GPL v2.
 
+import llog
+
 import asyncio
+import logging
 import threading
 import queue
 
@@ -14,6 +17,8 @@ import node as morphis_node
 import sshtype
 import synapse as syn
 import targetedblock as tb
+
+log = logging.getLogger(__name__)
 
 node = None
 loop = None
@@ -37,10 +42,18 @@ def main():
 if __name__ == "__main__":
     threading.Thread(target=main, name="MORPHiS Node", daemon=True).start()
 
+class ExceptionResult(object):
+    def __init__(self, exception):
+        self.exception = exception
+
 @asyncio.coroutine
 def _yield_from(coroutine, result_queue):
-    r = yield from coroutine
-    result_queue.put(r)
+    try:
+        r = yield from coroutine
+        result_queue.put(r)
+    except Exception as e:
+        log.exception(e)
+        result_queue.put(ExceptionResult(e))
 
 def _schedule_yield_from(coroutine, result_queue):
     task = asyncio.async(_yield_from(coroutine, result_queue))
@@ -48,10 +61,12 @@ def _schedule_yield_from(coroutine, result_queue):
 def yf(coroutine):
     result_queue = queue.Queue()
     loop.call_soon_threadsafe(_schedule_yield_from, coroutine, result_queue)
-    return result_queue.get()
+    r = result_queue.get()
+    if type(r) is ExceptionResult:
+        raise r.exception
 
 ## Example usage:
-# To print out contents of [samzu1ctt7kscitkrt5jft91gtw5c1i6]:
+# To print out contents of [ire6bomibt4q9zp5bpd9wa7wzusxab8h]:
 # python3 -i inode.py -l logging-ms.ini --webdevel
-# yf(node.engine.tasks.send_get_data(bytes(mbase32.decode("samzu1ctt7kscitkrt5jft91gtw5c1i6aiujd6g5qrm13w3peph4kjusp737q5zr1cijr9rwmrcw3sgxf8143kw69zph55s71hcicqa")))).data
+# yf(node.engine.tasks.send_get_data(bytes(mbase32.decode("ire6bomibt4q9zp5bpd9wa7wzusxab8hb4z1bspw35sdtp8977t58wa3dtprk985swgbtf7nkbkdc65o5ehzmsbqkfxwattxfztgsk1")))).data
 
