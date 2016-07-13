@@ -15,6 +15,7 @@ from sqlalchemy import or_
 import consts
 from db import User, DdsPost
 from dmail import DmailEngine
+from dds import DdsEngine
 import dpush
 import enc
 import maalstroom.dmail as dmail
@@ -138,10 +139,7 @@ def _process_axon_create(dispatcher, req):
 @asyncio.coroutine
 def _process_axon_grok(dispatcher, req):
     if req.startswith("@"):
-        #TODO: Come up with a formal spec. We should probably deal with
-        # unprintable characters by merging them, Etc.
-        str_id = req[1:].encode().lower()
-        key = enc.generate_ID(str_id)
+        key = DdsEngine.calc_key_for_channel(req[1:])
         significant_bits = None
     else:
         key, significant_bits = dispatcher.decode_key(req)
