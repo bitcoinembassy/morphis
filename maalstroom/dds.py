@@ -30,87 +30,102 @@ import sshtype
 
 log = logging.getLogger(__name__)
 
-s_dds = ".dds"
-s_dds_len = len(".dds")
+S_DDS = ".dds"
+
+class MaalstroomRequest(object):
+    def __init__(self, dispatcher, service, rpath):
+        assert type(service) is str
+        self.dispatcher = dispatcher
+        self.service = service
+        self.path, sep, self.query = rpath.partition('?')
+        self.req = self.path[len(service):]
+
+        log.info("req=[{}].".format(self.req))
+
+        if self.query:
+            self.qdict = parse_qs(self.query, keep_blank_values=True)
+        else:
+            self.qdict = {}
+
+class DdsRequest(MaalstroomRequest):
+    def __init__(self, dispatcher, rpath):
+        super().__init__(dispatcher, ".dds", rpath)
+
+        self._ident_enc = None
+        self.ident_enc_ = False
+        self._ident = None
+        self.ident_ = False
+
+    @property
+    def ident_enc(self):
+        if not self.ident_enc_:
+            self.ident_enc_ = True
+            self._ident_enc = fia(self.qdict.get("ident"))
+        return self._ident_enc
+
+    @property
+    def ident(self):
+        if not self.ident_:
+            self.ident_ = True
+            if self.ident_enc:
+                self._ident = mbase32.decode(self.ident_enc)
+            elif self._ident_enc is None:
+                self._ident = None # Default.
+            else:
+                assert self._ident_enc == ""
+                self._ident = b"" # Anonymous.
+
+        return self._ident
+
+    @ident.setter
+    def ident(self, value):
+        self._ident = value
+        if value == b"":
+            self._ident_enc = ""
+            return
+        self._ident_enc = mbase32.encode(value)
+        self.ident_enc_ = True
+
+    @ident_enc.setter
+    def ident_enc(self, value):
+        self._ident_enc = value
+        if value == "":
+            self._ident = b""
+            return
+        self._ident = mbase32.decode(value)
+        self.ident_ = True
 
 @asyncio.coroutine
 def serve_get(dispatcher, rpath):
     log.info("Service .dds request.")
 
-    path, sep, query = rpath.partition('?')
-    req = path[s_dds_len:]
-
-    if query:
-        qdict = parse_qs(query, keep_blank_values=True)
-        ident_enc = fia(qdict.get("ident"))
-    else:
-        ident_enc = None
+    mr = DdsRequest(dispatcher, rpath)
+    req = mr.req
 
     if req == "" or req == "/":
-        random_id_enc = mbase32.encode(os.urandom(consts.NODE_ID_BYTES))
-
-        template = templates.dds_main[0]
-        template = template.format(random_id_enc=random_id_enc)
-
-        if ident_enc:
-            ident = mbase32.decode(ident_enc)
-        else:
-            if ident_enc is None:
-                dmail_address = yield from dmail._load_default_dmail_address(\
-                    dispatcher, fetch_keys=True)
-                if dmail_address:
-                    ident = dmail_address.site_key
-                    ident_enc = mbase32.encode(ident)
-            if not ident_enc:
-                ident = None
-                ident_enc = "[Anonymous]"
-
-        available_idents = yield from dmail.render_dmail_addresses(\
-            dispatcher, ident, use_addr=True)
-
-        template2 = templates.dds_identbar[0]
-        template2 = template2.format(\
-            current_ident=ident_enc, available_idents=available_idents)
-
-        template = template2 + template
-
-        wrapper = templates.dds_wrapper[0]
-        wrapper =\
-            wrapper.format(title="MORPHiS Maalstroom DDS", child=template)
-
-        dispatcher.send_content(wrapper)
-        return
+        yield from _process_root(mr)
     elif req == "/style.css":
-        template = templates.dds_css[0]
-
-        dispatcher.send_content(template, content_type="text/css")
-        return
+        dispatcher.send_content(templates.dds_css[0], content_type="text/css")
     elif req.startswith("/images/"):
         dispatcher.send_content(templates.dds_imgs[req[8:]])
-        return
     elif req == "/axon/create":
         # Render the Create Axon (Targeted or not) page.
         yield from _process_axon_create(dispatcher, req[5:])
-        return
     elif req.startswith("/axon/grok/"):
         # Render the Grok View; which shows the Axon, SynapseS and Synapse
         # create form.
         yield from _process_axon_grok(dispatcher, req[11:])
-        return
     elif req.startswith("/axon/read/"):
         # Render an individual Axon.
         yield from _process_axon_read(dispatcher, req[11:])
-        return
     elif req.startswith("/axon/synapses/"):
         # Scan for and render SynapseS connected to the requested Axon.
         yield from _process_axon_synapses(dispatcher, req[15:])
-        return
     elif req.startswith("/synapse/create/"):
         # Render the Create Synapse entry form.
         yield from _process_synapse_create(dispatcher, req[16:])
-        return
-
-    dispatcher.send_error("request: {}".format(req), errcode=400)
+    else:
+        dispatcher.send_error("request: {}".format(req), errcode=400)
 
 @asyncio.coroutine
 def serve_post(dispatcher, rpath):
@@ -125,6 +140,34 @@ def serve_post(dispatcher, rpath):
         return
 
     dispatcher.send_error("request: {}".format(req), errcode=400)
+
+@asyncio.coroutine
+def _process_root(req):
+    random_id_enc = mbase32.encode(os.urandom(consts.NODE_ID_BYTES))
+
+    template = templates.dds_main[0]
+    template = template.format(random_id_enc=random_id_enc)
+
+    if req.ident_enc is None:
+        dmail_address = yield from dmail._load_default_dmail_address(\
+            req.dispatcher, fetch_keys=True)
+        if dmail_address:
+            req.ident = dmail_address.site_key
+
+    available_idents = yield from dmail.render_dmail_addresses(\
+        req.dispatcher, req.ident, use_addr=True)
+
+    template2 = templates.dds_identbar[0]
+    template2 = template2.format(\
+        current_ident=req.ident_enc, available_idents=available_idents)
+
+    template = template2 + template
+
+    wrapper = templates.dds_wrapper[0]
+    wrapper =\
+        wrapper.format(title="MORPHiS Maalstroom DDS", child=template)
+
+    req.dispatcher.send_content(wrapper)
 
 @asyncio.coroutine
 def _process_axon_create(dispatcher, req):
