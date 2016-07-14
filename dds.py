@@ -26,18 +26,6 @@ class DdsEngine(object):
         self.db = node.db
         self.loop = node.loop
 
-    def create_synapse(\
-            self, target_key, source_key, key, stamps=None, timestamp=None):
-        s = syn.Synapse()
-        s.target_key = target_key
-        s.source_key = source_key
-        s.key = key
-        if timestamp:
-            s.timestamp = timestamp
-        s.stamps = stamps
-
-        return s
-
     @asyncio.coroutine
     def upload_synapse(self, synapse):
         synapse_key = None
@@ -46,7 +34,7 @@ class DdsEngine(object):
             nonlocal synapse_key
             synapse_key = key
 
-        # Upload the TargetedBlock to the network.
+        # Upload the Synapse to the network.
         log.info("Sending Synapse to the network.")
 
         total_storing = 0
@@ -59,7 +47,7 @@ class DdsEngine(object):
 
             total_storing += storing_nodes
 
-            if total_storing >= 3:
+            if total_storing >= 7:
                 break
 
             if retry > 32:
@@ -75,3 +63,5 @@ class DdsEngine(object):
         if log.isEnabledFor(logging.INFO):
             log.info("Synapse sent; key=[{}], id=[{}], storing_nodes=[{}]."\
                 .format(key_enc, id_enc, total_storing))
+
+        return storing_nodes

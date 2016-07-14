@@ -129,11 +129,11 @@ def serve_get(dispatcher, rpath):
 
 @asyncio.coroutine
 def serve_post(dispatcher, rpath):
-    assert rpath.startswith(s_dds)
+    assert rpath.startswith(S_DDS)
 
     log.info("Service .dds post.")
 
-    req = rpath[s_dds_len:]
+    req = rpath[len(S_DDS):]
 
     if req == "/synapse/create":
         yield from _process_synapse_create_post(dispatcher, req)
@@ -428,9 +428,7 @@ def _process_synapse_create_post(dispatcher, req):
 
     synapse = syn.Synapse.for_target(target_addr, key)
 
-    yield from\
-        dispatcher.node.chord_engine.tasks.send_store_synapse(\
-            synapse, store_key=True, key_callback=key_callback)
+    yield from DdsEngine(dispatcher.node).upload_synapse(synapse)
 
     resp =\
         "Resulting&nbsp;<a href='morphis://.dds/axon/read/{synapse_addr}/"\
