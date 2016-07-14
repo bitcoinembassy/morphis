@@ -34,6 +34,7 @@ class ClientEngine(object):
         self.auto_publish_enabled = True
         self.auto_scan_enabled = True
 
+        #FIXME: Why is this here? It should be in Maalstroom somewhere.
         self.csrf_token = base58.encode(os.urandom(64))
 
         self._dmail_engine = None
