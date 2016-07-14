@@ -157,7 +157,7 @@ def serve_get(dispatcher, rpath):
     elif req.startswith("/axon/grok/"):
         # Render the Grok View; which shows the Axon, SynapseS and Synapse
         # create form.
-        yield from _process_axon_grok(dispatcher, req[11:])
+        yield from _process_axon_grok(mr)
     elif req.startswith("/axon/read/"):
         # Render an individual Axon.
         yield from _process_axon_read(dispatcher, req[11:])
@@ -166,7 +166,7 @@ def serve_get(dispatcher, rpath):
         yield from _process_axon_synapses(dispatcher, req[15:])
     elif req.startswith("/synapse/create/"):
         # Render the Create Synapse entry form.
-        yield from _process_synapse_create(dispatcher, req[16:])
+        yield from _process_synapse_create(mr)
     else:
         dispatcher.send_error("request: {}".format(req), errcode=400)
 
@@ -224,37 +224,39 @@ def _process_axon_create(dispatcher, req):
     dispatcher.send_content([template, req])
 
 @asyncio.coroutine
-def _process_axon_grok(dispatcher, req):
-    if req.startswith("@"):
-        key = DdsEngine.calc_key_for_channel(req[1:])
+def _process_axon_grok(req):
+    arg = req.req[11:]
+
+    if arg.startswith("@"):
+        key = DdsEngine.calc_key_for_channel(arg[1:])
         significant_bits = None
     else:
-        key, significant_bits = dispatcher.decode_key(req)
+        key, significant_bits = req.dispatcher.decode_key(arg)
 
         if not key:
-            dispatcher.send_error(\
-                "Invalid encoded key: [{}].".format(req), 400)
+            req.dispatcher.send_error(\
+                "Invalid encoded key: [{}].".format(arg), 400)
             return
 
     if significant_bits:
         # Support prefix keys.
-        key = yield from dispatcher.fetch_key(key, significant_bits)
+        key = yield from req.dispatcher.fetch_key(key, significant_bits)
 
         if not key:
             return
 
-    msg = "<iframe src='morphis://.dds/axon/read/{key}'"\
+    msg = "<iframe src='morphis://.dds/axon/read/{key}{query}'"\
         " style='height: 10em; width: 100%; border: 1;'"\
         " seamless='seamless'></iframe><iframe"\
-        " src='morphis://.dds/axon/synapses/{key}#new'"\
+        " src='morphis://.dds/axon/synapses/{key}{query}#new'"\
         " style='height: calc(100% - 17.5em); width: 100%; border: 0;'"\
         " seamless='seamless'></iframe><iframe"\
-        " src='morphis://.dds/synapse/create/{key}'"\
+        " src='morphis://.dds/synapse/create/{key}{query}'"\
         " style='height: 7em; width: 100%; border: 1;'"\
         " seamless='seamless'></iframe>"\
-            .format(key=mbase32.encode(key))
+            .format(key=mbase32.encode(key), query=req.query)
 
-    dispatcher.send_content(msg)
+    req.dispatcher.send_content(msg)
     return
 
 @asyncio.coroutine
@@ -414,18 +416,21 @@ def _process_axon_synapses(dispatcher, axon_addr_enc):
     dispatcher.end_partial_content()
 
 @asyncio.coroutine
-def _process_synapse_create(dispatcher, target_addr):
-    if dispatcher.handle_cache(target_addr):
+def _process_synapse_create(req):
+    target_addr = req.req[16:]
+    if req.dispatcher.handle_cache(target_addr):
         return
 
     template = templates.dds_create_synapse[0]
 
     template = template.format(\
-        csrf_token=dispatcher.client_engine.csrf_token,\
+        csrf_token=req.dispatcher.client_engine.csrf_token,\
         message_text="",\
-        target_addr=target_addr)
+        target_addr=target_addr,\
+        ident=req.ident_enc[:32],\
+        query=req.query)
 
-    dispatcher.send_content(template)
+    req.dispatcher.send_content(template)
 
 @asyncio.coroutine
 def _process_synapse_create_post(dispatcher, req):

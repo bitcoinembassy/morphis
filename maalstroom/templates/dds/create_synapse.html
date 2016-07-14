@@ -6,7 +6,8 @@
             <input type="hidden" name="target_addr" value="{target_addr}"/>
             <input type="hidden" name="csrf_token" id="csrf_token" value="{csrf_token}"/>
             <!--textarea name="content" autofocus>{message_text}</textarea-->
-            <input type="text" style="width: 100%;" name="content" value="{message_text}" placeholder="Singleline message..." autofocus />
+            <input type="text" style="width: calc(100% - 12em);" name="content" value="{message_text}" placeholder="Singleline message..." autofocus />
+            <span style="font-size: 0.5em;">{ident}</span>
             <textarea name="content2" style="width: calc(100% - 6em);" autofocus rows="3" id="TITLE" placeholder="Multiline message..."></textarea>
             <button class="reply" type="submit">SEND</button>
         </form>
