@@ -972,8 +972,6 @@ class Shell(cmd.Cmd):
 
         self.shell_locals["syn"] = syn
 
-        self.writeln("timestamp=[{}].".format(syn.timestamp))
-
         self.writeln(\
             "Synapse created; pow=[{}], difficulty=[{}]."\
                 .format(\
@@ -981,6 +979,15 @@ class Shell(cmd.Cmd):
                     consts.NODE_ID_BITS
                      - mutil.calc_log_distance(\
                         syn.target_key, syn.synapse_pow)[0]))
+        if not timestamp:
+            self.writeln("timestamp=[{}].".format(syn.timestamp))
+
+        self.writeln(\
+            "diff=[{}]."\
+                .format(\
+                    mutil.bin_string(\
+                        mutil.calc_raw_distance(\
+                            syn.target_key, syn.synapse_pow))))
 
     def emptyline(self):
         pass
