@@ -37,63 +37,106 @@ class MaalstroomRequest(object):
         assert type(service) is str
         self.dispatcher = dispatcher
         self.service = service
-        self.path, sep, self.query = rpath.partition('?')
+        self.path, sep, self._query = rpath.partition('?')
         self.req = self.path[len(service):]
 
         log.info("req=[{}].".format(self.req))
 
-        if self.query:
-            self.qdict = parse_qs(self.query, keep_blank_values=True)
+        if self._query:
+            self.qdict = parse_qs(self._query, keep_blank_values=True)
+            self._query = '?' + self._query
         else:
             self.qdict = {}
+
+        self._modified = False # True means self.query needs rebuild.
+
+    @property
+    def modified(self):
+        return self._modified
+
+    def set_modified(self):
+        self._modified = True
 
 class DdsRequest(MaalstroomRequest):
     def __init__(self, dispatcher, rpath):
         super().__init__(dispatcher, ".dds", rpath)
 
         self._ident_enc = None
-        self.ident_enc_ = False
+        self.__ident_enc = False
         self._ident = None
-        self.ident_ = False
+        self.__ident = False
 
     @property
     def ident_enc(self):
-        if not self.ident_enc_:
-            self.ident_enc_ = True
-            self._ident_enc = fia(self.qdict.get("ident"))
+        if self.__ident_enc:
+            return self._ident_enc
+
+        self.__ident_enc = True
+        self._ident_enc = fia(self.qdict.get("ident"))
+
         return self._ident_enc
 
     @property
     def ident(self):
-        if not self.ident_:
-            self.ident_ = True
-            if self.ident_enc:
-                self._ident = mbase32.decode(self.ident_enc)
-            elif self._ident_enc is None:
-                self._ident = None # Default.
-            else:
-                assert self._ident_enc == ""
-                self._ident = b"" # Anonymous.
+        if self.__ident:
+            return self._ident
+
+        self.__ident = True
+        if self.ident_enc:
+            self._ident = mbase32.decode(self.ident_enc)
+        elif self._ident_enc is None:
+            self._ident = None # Default.
+        else:
+            assert self._ident_enc == ""
+            self._ident = b"" # Anonymous.
 
         return self._ident
 
     @ident.setter
     def ident(self, value):
+        self.set_modified()
+
         self._ident = value
-        if value == b"":
+
+        if value is None:
+            self._ident_enc = None
+            return
+        elif not value:
+            assert value == b""
             self._ident_enc = ""
             return
+
         self._ident_enc = mbase32.encode(value)
         self.ident_enc_ = True
 
     @ident_enc.setter
     def ident_enc(self, value):
+        self.set_modified()
+
         self._ident_enc = value
-        if value == "":
+
+        if value is None:
+            self._ident = None
+            return
+        elif not value:
+            assert value == ""
             self._ident = b""
             return
+
         self._ident = mbase32.decode(value)
         self.ident_ = True
+
+    @property
+    def query(self):
+        if self._query and not self.modified:
+            return self._query
+
+        if self.ident_enc:
+            self._query = "?ident={}".format(self.ident_enc)
+        else:
+            self._query = ""
+
+        return self._query
 
 @asyncio.coroutine
 def serve_get(dispatcher, rpath):
@@ -145,14 +188,17 @@ def serve_post(dispatcher, rpath):
 def _process_root(req):
     random_id_enc = mbase32.encode(os.urandom(consts.NODE_ID_BYTES))
 
-    template = templates.dds_main[0]
-    template = template.format(random_id_enc=random_id_enc)
+    log.warning("query=[{}].".format(req.query))
 
+    # Determine ident.
     if req.ident_enc is None:
         dmail_address = yield from dmail._load_default_dmail_address(\
             req.dispatcher, fetch_keys=True)
         if dmail_address:
             req.ident = dmail_address.site_key
+
+    template = templates.dds_main[0]
+    template = template.format(random_id_enc=random_id_enc, query=req.query)
 
     available_idents = yield from dmail.render_dmail_addresses(\
         req.dispatcher, req.ident, use_addr=True)
