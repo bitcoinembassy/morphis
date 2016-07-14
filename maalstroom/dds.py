@@ -188,8 +188,6 @@ def serve_post(dispatcher, rpath):
 def _process_root(req):
     random_id_enc = mbase32.encode(os.urandom(consts.NODE_ID_BYTES))
 
-    log.warning("query=[{}].".format(req.query))
-
     # Determine ident.
     if req.ident_enc is None:
         dmail_address = yield from dmail._load_default_dmail_address(\
