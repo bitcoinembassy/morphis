@@ -350,11 +350,11 @@ def _process_axon_synapses(dispatcher, axon_addr_enc):
                     process_post(synapse),\
                     loop=dispatcher.node.loop))
 
+    dp = dpush.DpushEngine(dispatcher.node)
+    new_tasks.append(asyncio.async(dp.scan_targeted_blocks(axon_addr, 8, cb)))
+
     yield from dispatcher.node.engine.tasks.send_get_synapses(\
         axon_addr, result_callback=cb2, retry_factor=25)
-
-    dp = dpush.DpushEngine(dispatcher.node)
-    yield from dp.scan_targeted_blocks(axon_addr, 8, cb)
 
     if new_tasks:
         yield from asyncio.wait(\
