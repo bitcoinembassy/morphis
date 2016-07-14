@@ -588,7 +588,7 @@ class ChordTasks(object):
         " nodes that claim to have stored it."
         assert type(synapse) is syn.Synapse
 
-        data = yield from synapse.encode()
+        data = synapse.buf if synapse.buf else (yield from synapse.encode())
 
         if log.isEnabledFor(logging.INFO):
             if synapse.synapse_pow:
