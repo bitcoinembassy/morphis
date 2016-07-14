@@ -5,6 +5,7 @@ import llog
 
 import asyncio
 import cmd
+import consts
 from datetime import datetime
 import logging
 import queue as tqueue
@@ -16,10 +17,12 @@ import enc
 import mbase32
 import mn1
 import multipart
-from mutil import hex_dump, hex_string, decode_key, calc_raw_distance
+from mutil import hex_dump, hex_string, decode_key, calc_raw_distance, calc_log_distance
+import mutil
 import node
 import rsakey
 import sshtype
+import synapse
 
 log = logging.getLogger(__name__)
 
@@ -927,6 +930,45 @@ class Shell(cmd.Cmd):
         self.writeln("Timed command took: {}.".format(diff))
 
         self.lastcmd("time " + arg)
+
+    @asyncio.coroutine
+    def do_test_create_synapse(self, arg):
+        "[DIFFICULTY=8] [TIMESTAMP] [SEED] Create a Synapse object, storing"\
+        " it in shell var 'syn'."
+
+        difficulty = 8
+        seed = b""
+        timestamp = None
+
+        if arg:
+            args = arg.split(' ')
+            difficulty = int(args[0])
+            if len(args) > 1:
+                timestamp = float(args[1])
+                if len(args) > 2:
+                    seed = mbase32.decode(args[2])
+
+        target_key = enc.generate_ID(seed)
+        source_key = enc.generate_ID(target_key)
+
+        syn = synapse.Synapse.for_target(target_key, source_key, difficulty)
+
+        if timestamp:
+            syn.timestamp = timestamp
+
+        yield from syn.encode()
+
+        self.shell_locals["syn"] = syn
+
+        self.writeln("timestamp=[{}].".format(syn.timestamp))
+
+        self.writeln(\
+            "Synapse created; pow=[{}], difficulty=[{}]."\
+                .format(\
+                    hex_string(syn.nonce),\
+                    consts.NODE_ID_BITS
+                     - mutil.calc_log_distance(\
+                        syn.target_key, syn.synapse_pow)[0]))
 
     def emptyline(self):
         pass
