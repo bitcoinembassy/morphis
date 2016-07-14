@@ -71,7 +71,7 @@ class DpushEngine(object):
         while True:
             data_rw = yield from self.core.tasks.send_find_key(\
                 start, target_key=target, significant_bits=significant_bits,\
-                retry_factor=100)
+                retry_factor=25)
 
             key = data_rw.data_key
 
