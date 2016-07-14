@@ -262,20 +262,23 @@ def _process_axon_synapses(dispatcher, axon_addr_enc):
 
     @asyncio.coroutine
     def process_post(post):
-        assert type(post) in (syn.Synapse, DdsPost)
-
         if type(post) is syn.Synapse:
-            synapse = post
-            key = synapse.synapse_key
-            post = yield from retrieve_post(dispatcher.node, synapse)
-        else:
+            key = post.synapse_key
+            post = yield from retrieve_post(dispatcher.node, post)
+        elif type(post) is DdsPost:
             key = post.synapse_key
             if not key:
                 key = post.data_key
+        else:
+            assert type(post) in (bytes, bytearray)
+            key = post
+            post = yield from retrieve_post(dispatcher.node, post, axon_addr)
 
         if not post:
-            dispatcher.send_partial_content(\
-                "Not found on the network at the moment.")
+            if log.isEnabledFor(logging.INFO):
+                log.info(\
+                    "Post data not found for found key [{}]."\
+                        .format(mbase32.encode(key)))
             return
 
         key_enc = mbase32.encode(key)
@@ -325,17 +328,10 @@ def _process_axon_synapses(dispatcher, axon_addr_enc):
                 .format(key_enc))
             return
 
-        raise Exception("TODO: YOU_ARE_HERE")
-#        msg = "<iframe src='morphis://.dds/axon/read/{key}/{target_key}'"\
-#            " style='height: 15em; width: 100%; border: 0;'"\
-#            " seamless='seamless'></iframe>\n"\
-#                .format(key=key_enc, target_key=axon_addr_enc)
-#
-#        dispatcher.send_partial_content(msg)
-
-#    dp = dpush.DpushEngine(dispatcher.node)
-#
-#    yield from dp.scan_targeted_blocks(axon_addr, 8, cb)
+        new_tasks.append(\
+            asyncio.async(\
+                process_post(key),\
+                loop=dispatcher.node.loop))
 
     @asyncio.coroutine
     def cb2(data_rw):
@@ -356,6 +352,9 @@ def _process_axon_synapses(dispatcher, axon_addr_enc):
 
     yield from dispatcher.node.engine.tasks.send_get_synapses(\
         axon_addr, result_callback=cb2, retry_factor=25)
+
+    dp = dpush.DpushEngine(dispatcher.node)
+    yield from dp.scan_targeted_blocks(axon_addr, 8, cb)
 
     if new_tasks:
         yield from asyncio.wait(\
@@ -441,18 +440,7 @@ def _process_synapse_create_post(dispatcher, req):
 
 @asyncio.coroutine
 def _format_axon(node, data, key, key_enc=None):
-    try:
-        result = __format_post(data)
-    except UnicodeDecodeError:
-        synapse = syn.Synapse(data)
-
-        data_rw = yield from\
-                node.chord_engine.tasks.send_get_data(synapse.source_key)
-
-        if not data_rw or data_rw.data is None:
-            return "<NOT FOUND>"
-
-        result = __format_post(data_rw.data)
+    result = __format_post(data)
 
     if not key_enc:
         key_enc = mbase32.encode(key)
