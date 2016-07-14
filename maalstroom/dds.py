@@ -355,7 +355,7 @@ def _process_axon_synapses(dispatcher, axon_addr_enc):
                     loop=dispatcher.node.loop))
 
     yield from dispatcher.node.engine.tasks.send_get_synapses(\
-        axon_addr, result_callback=cb2)
+        axon_addr, result_callback=cb2, retry_factor=5)
 
     if new_tasks:
         yield from asyncio.wait(\

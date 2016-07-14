@@ -38,22 +38,25 @@ class DdsEngine(object):
         log.info("Sending Synapse to the network.")
 
         total_storing = 0
-        retry = 0
+        retry = 5
         while True:
             storing_nodes = yield from\
                 self.tasks.send_store_synapse(\
                     synapse, store_key=True, key_callback=key_callback,
-                    retry_factor=retry*10)
+                    retry_factor=retry)
+
 
             total_storing += storing_nodes
 
             if total_storing >= 7:
                 break
-
-            if retry > 32:
+            if retry > 30:
                 break
-            elif retry > 3:
-                yield from asyncio.sleep(1)
+
+            if log.isEnabledFor(logging.INFO):
+                log.info(\
+                    "retry=[{}], storing_nodes=[{}], total_storing=[{}]."\
+                        .format(retry, storing_nodes, total_storing))
 
             retry += 1
 
