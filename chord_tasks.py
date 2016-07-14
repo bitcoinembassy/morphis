@@ -82,6 +82,10 @@ class VPeer(object):
         self.will_store = False
         self.data_present = False
 
+    def __str__(self):
+        return\
+            "<VPeer: peer.address=[{}], path=[{}]>".format(peer.address, path)
+
 EMPTY_PEER_LIST_MESSAGE = cp.ChordPeerList(peers=[])
 EMPTY_PEER_LIST_PACKET = EMPTY_PEER_LIST_MESSAGE.encode()
 EMPTY_GET_DATA_MESSAGE = cp.ChordGetData()
@@ -1643,10 +1647,20 @@ class ChordTasks(object):
                             # DataResponse messages now.
                             continue
 
-                        rmsg = cp.ChordDataResponse(pkts[0])
+                        try:
+                            rmsg = cp.ChordDataResponse(pkts[0])
 
-                        r = yield from self._process_data_response(\
-                            sreq, rmsg, tun_meta, path, data_rw)
+                            r = yield from self._process_data_response(\
+                                sreq, rmsg, tun_meta, path, data_rw)
+                        except Exception:
+                            r = None
+                            if log.isEnabledFor(logging.INFO):
+                                log.info(\
+                                    "Peer [{}] sent corrupt"\
+                                    " ChordDataResponse with [path={}]."\
+                                        .format(\
+                                            tun_meta.peer.address,\
+                                            path))
 
                         if not r:
                             # If the data was invalid, we will try from another
@@ -1906,10 +1920,17 @@ class ChordTasks(object):
                 continue
 
             if data_mode is cp.DataMode.get:
-                rmsg = cp.ChordDataResponse(pkt)
+                try:
+                    rmsg = cp.ChordDataResponse(pkt)
 
-                r = yield from self._process_data_response(\
-                    sreq, rmsg, tun_meta, None, data_rw)
+                    r = yield from self._process_data_response(\
+                        sreq, rmsg, tun_meta, None, data_rw)
+                except Exception:
+                    r = None
+                    if log.isEnabledFor(logging.INFO):
+                        log.info(\
+                            "Peer [{}] sent corrupt ChordDataResponse."\
+                                .format(vpeer))
 
                 if not r:
                     # If the data was invalid, we will try from another
