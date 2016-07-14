@@ -932,6 +932,18 @@ class Shell(cmd.Cmd):
         self.lastcmd("time " + arg)
 
     @asyncio.coroutine
+    def do_mbase32_encode(self, arg):
+        "[STR] mbase32 encode the specified string, returning the result."
+
+        self.writeln(mbase32.encode(arg.encode()))
+
+    @asyncio.coroutine
+    def do_mbase32_decode(self, arg):
+        "[STR] mbase32 decode the specified value, returning the result."
+
+        self.writeln(mbase32.decode(arg))
+
+    @asyncio.coroutine
     def do_test_create_synapse(self, arg):
         "[DIFFICULTY=8] [TIMESTAMP] [SEED] Create a Synapse object, storing"\
         " it in shell var 'syn'."
