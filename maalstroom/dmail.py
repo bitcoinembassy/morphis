@@ -242,26 +242,36 @@ def serve_get(dispatcher, rpath):
 
         elif req.startswith("/delete_contact"):
             p0 = req.find("/", 2)
-            idkey = req[p0+1:]
+            p1 = req.find("/", p0+1)
+            idkey = req[p0+1:p1]
+            csrf_token = req[p1+1:]
+
+            if not dispatcher.check_csrf_token(csrf_token):
+                return
             yield from _process_delete_contact(dispatcher,idkey)
             template = templates.dmail_addressbook_wrapper[0]
             template = template.format( \
                 tag="", \
                 addr=user, \
-                idkey=idkey)
+                idkey="")
             dispatcher.send_content(template)
 
         elif req.startswith("/rename_contact"):
             p0 = req.find("/", 2)
             idkey = req[p0 + 1:]
             template = templates.dmail_addressbook_wrapper[0]
-            template = template.format( \
+            template = template.format(\
                 tag="", \
                 addr=user, \
                 idkey=idkey)
             dispatcher.send_content(template)
 
-        elif req == "/clear_contacts":
+        elif req.startswith("/clear_contacts"):
+            p0 = req.find("/", 2)
+            csrf_token = req[p0 + 1:]
+            print(csrf_token)
+            if not dispatcher.check_csrf_token(csrf_token):
+                return
             yield from _process_clear_addressbook(dispatcher,user)
             template = templates.dmail_addressbook_wrapper[0]
             template = template.format( \
@@ -272,17 +282,22 @@ def serve_get(dispatcher, rpath):
 
         elif req.startswith("/delete_confirmation"):
             p0 = req.find("/", 2)
-            idkey = req[p0+1:]
+            p1 = req.find("/", p0+1)
 
+            idkey = req[p0+1:p1]
+            csrf_token = req[p1+1:]
+            print(csrf_token)
             if idkey == "all":
-                dispatcher.send_content(templates.dmail_delete_all_popup)
+                template = fia(templates.dmail_delete_all_popup)
+                dispatcher.send_content(template.format(csrf_token=csrf_token))
             else:
                 contact = yield from _get_users_name(dispatcher, idkey)
                 idkey_disp = idkey[0:8]+"..."
                 template = fia(templates.dmail_delete_popup)
                 template = template.format(contact = contact,\
                     idkey_disp=idkey_disp,\
-                    idkey=idkey)
+                    idkey=idkey, \
+                    csrf_token=csrf_token)
                 dispatcher.send_content(template)
 
     elif req.startswith("/msg_list/list/"):
@@ -1127,9 +1142,11 @@ def serve_post(dispatcher, rpath):
     elif req == "/addressbook/create_contact/make_it_so":
         user = (yield from _load_default_dmail_address(dispatcher)).site_key
         dd = yield from dispatcher.read_post()
-        if not dd: return  # Invalid csrf_token.
         name = fia(dd["name"])
         addr = mbase32.decode(fia(dd["addr"]).lower())
+        csrf_token = fia(dd["csrf_token"])
+        if not dispatcher.check_csrf_token(csrf_token):
+            return
         entry = yield from\
             _process_create_contact_create(dispatcher, name , addr, user)
 
@@ -1943,8 +1960,9 @@ def _load_addressbook_list(dispatcher, user):
 @asyncio.coroutine
 def _process_addressbook_list(dispatcher, ls, req):
     if req == "/list": req = ""
+    csrf_token = dispatcher.client_engine.csrf_token
     template = templates.dmail_addressbook_contacts[0].format( \
-        csrf_token=dispatcher.client_engine.csrf_token, to=req)
+        csrf_token=csrf_token, to=req)
     dispatcher.send_partial_content( \
         template, True)
     for ab in ls:
@@ -1960,14 +1978,17 @@ def _process_addressbook_list(dispatcher, ls, req):
                 templates.dmail_addressbook_contacts_row[0].format(\
                     contact_tint=contact_tint, first=ab.name, last="",\
                     idkey=mbase32.encode(ab.identity_key),\
-                    del_button_class=del_button_class))
+                    del_button_class=del_button_class, \
+                    csrf_token = csrf_token))
         else:
             dispatcher.send_partial_content(\
                 templates.dmail_addressbook_contacts_row[0].format(\
                     contact_tint=contact_tint, first=ab.first, last=ab.last,\
                     idkey=mbase32.encode(ab.identity_key),\
-                    del_button_class=del_button_class))
-    dispatcher.send_partial_content(templates.dmail_addressbook_contacts_end[0])
+                    del_button_class=del_button_class, \
+                    csrf_token=csrf_token))
+
+    dispatcher.send_partial_content(templates.dmail_addressbook_contacts_end[0].format(csrf_token = csrf_token))
     dispatcher.end_partial_content()
 
 @asyncio.coroutine
