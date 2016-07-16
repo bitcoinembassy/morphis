@@ -84,7 +84,8 @@ class VPeer(object):
 
     def __str__(self):
         return\
-            "<VPeer: peer.address=[{}], path=[{}]>".format(peer.address, path)
+            "<VPeer: peer.address=[{}], path=[{}]>"\
+                .format(self.peer.address, self.path)
 
 EMPTY_PEER_LIST_MESSAGE = cp.ChordPeerList(peers=[])
 EMPTY_PEER_LIST_PACKET = EMPTY_PEER_LIST_MESSAGE.encode()
