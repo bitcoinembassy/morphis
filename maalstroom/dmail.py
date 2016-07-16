@@ -476,25 +476,31 @@ def serve_get(dispatcher, rpath):
         m32_reply_subject = generate_safe_reply_subject(dm, True)
 
         if dm.sender_dmail_key:
-            sender_addr = mbase32.encode(dm.sender_dmail_key)
+            sender_addr_enc = mbase32.encode(dm.sender_dmail_key)
+            sender_display = yield from\
+                get_contact_name(dispatcher.node, dm.sender_dmail_key)
+
             if dm.sender_valid:
                 sender_class = "valid_sender"
             else:
                 sender_class = "invalid_sender"
         else:
-            sender_addr = "[Anonymous]"
+            sender_addr_enc = "[Anonymous]"
             sender_class = "valid_sender"
 
         if dm.destination_dmail_key:
             # It is a message from us.
             dest_addr_enc = mbase32.encode(dm.destination_dmail_key)
+            dest_addr_display = yield from\
+                get_contact_name(dispatcher.node, dm.destination_dmail_key)
             dest_class = ""
             contact_addr = dest_addr_enc
         else:
             # It is a message to us.
             dest_addr_enc = ""
+            dest_addr_display = ""
             dest_class = " display_none"
-            contact_addr = sender_addr
+            contact_addr = sender_addr_enc
 
         unquoted_tag = unquote(tag)
 
@@ -542,9 +548,11 @@ def serve_get(dispatcher, rpath):
             msg_id=msg_dbid,\
             sender_class=sender_class,\
             contact=contact_addr,\
-            sender=sender_addr,\
+            sender=sender_addr_enc,\
+            sender_display=sender_display,\
             dest_class=dest_class,\
             dest_addr=dest_addr_enc,\
+            dest_addr_display=dest_addr_display,\
             date=mutil.format_human_no_ms_datetime(dm.date),\
             remove_tag_class=remove_tag_class,\
             existing_tags=''.join(existing_tag_rows),\
