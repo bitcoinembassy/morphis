@@ -988,7 +988,7 @@ def serve_get(dispatcher, rpath):
         prefix = qdict["prefix"][0]
         difficulty = int(qdict["difficulty"][0])
         csrf_token = qdict["csrf_token"][0]
-        user = qdict["username"][0]
+        contact_name = qdict["username"][0]
 
         if not dispatcher.check_csrf_token(csrf_token):
             return
@@ -1001,7 +1001,7 @@ def serve_get(dispatcher, rpath):
         dmail_key_enc = mbase32.encode(dmail_key)
 
         yield from _create_or_update_contact(\
-            dispatcher.node, dmail_key, dmail_key, username)
+            dispatcher.node, dmail_key, dmail_key, contact_name)
 
         dispatcher.send_partial_content(templates.dmail_frame_start, True)
         if storing_nodes:
@@ -1017,10 +1017,15 @@ def serve_get(dispatcher, rpath):
                 " click the \"Republish Dmail Site\" button.</p>"\
                     .format(dmail_key_enc).encode())
 
+        contact_name = yield from get_contact_name(dispatcher.node, dmail_key)
+
         dispatcher.send_partial_content(\
             '<p>New dmail address: <a href="morphis://.dmail/wrapper/'\
-            '{addr_enc}">{addr_enc}</a> for {username}</p>'\
-                .format(addr_enc=dmail_key_enc, username=user).encode())
+            '{addr_enc}">{addr_enc}</a> with local name [{contact_name}].</p>'\
+                .format(\
+                    addr_enc=dmail_key_enc,\
+                    contact_name=contact_name)\
+                        .encode())
         dispatcher.send_partial_content(templates.dmail_frame_end)
         dispatcher.end_partial_content()
 
