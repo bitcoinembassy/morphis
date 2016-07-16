@@ -485,7 +485,7 @@ def serve_get(dispatcher, rpath):
             else:
                 sender_class = "invalid_sender"
         else:
-            sender_addr_enc = "[Anonymous]"
+            sender_display = sender_addr_enc = "[Anonymous]"
             sender_class = "valid_sender"
 
         if dm.destination_dmail_key:
