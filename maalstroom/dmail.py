@@ -218,7 +218,7 @@ def serve_get(dispatcher, rpath):
                         tag=ctag.name)
             tag_rows.append(row)
 
-        username = yield from _get_users_name(dispatcher.node, addr)
+        username = yield from get_contact_name(dispatcher.node, addr)
 
         template = template.format(\
             csrf_token=dispatcher.client_engine.csrf_token,\
@@ -309,7 +309,7 @@ def serve_get(dispatcher, rpath):
                 dispatcher.send_content(template.format(csrf_token=csrf_token))
             else:
                 contact = yield from\
-                    _get_users_name(dispatcher.node, mbase32.decode(idkey))
+                    get_contact_name(dispatcher.node, mbase32.decode(idkey))
                 idkey_disp = idkey[0:8]+"..."
                 template = fia(templates.dmail_delete_popup)
                 template = template.format(\
@@ -356,7 +356,7 @@ def serve_get(dispatcher, rpath):
         addr_enc = params[:p0]
         tag = params[p0 + 1:]
         user = yield from\
-            _get_users_name(dispatcher.node, mbase32.decode(addr_enc))
+            get_contact_name(dispatcher.node, mbase32.decode(addr_enc))
 
         if dispatcher.handle_cache(req):
             return
@@ -2057,7 +2057,7 @@ def _create_or_update_contact(node, addr, user, name, first=None, last=None):
     return (yield from node.loop.run_in_executor(None, dbcall))
 
 @asyncio.coroutine
-def _get_users_name(node, addr):
+def get_contact_name(node, addr):
     contact = yield from _load_contact(node, addr)
 
     if not contact:
