@@ -261,7 +261,6 @@ def serve_get(dispatcher, rpath):
         elif req.startswith("/clear_contacts"):
             p0 = req.find("/", 2)
             csrf_token = req[p0 + 1:]
-            print(csrf_token)
             if not dispatcher.check_csrf_token(csrf_token):
                 return
             yield from _process_clear_addressbook(dispatcher,user)
@@ -278,7 +277,6 @@ def serve_get(dispatcher, rpath):
 
             idkey = req[p0+1:p1]
             csrf_token = req[p1+1:]
-            print(csrf_token)
             if idkey == "all":
                 template = fia(templates.dmail_delete_all_popup)
                 dispatcher.send_content(template.format(csrf_token=csrf_token))
