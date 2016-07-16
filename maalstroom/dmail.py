@@ -218,7 +218,7 @@ def serve_get(dispatcher, rpath):
                         tag=ctag.name)
             tag_rows.append(row)
 
-        username= yield from _get_users_name(dispatcher,addr_enc)
+        username = yield from _get_users_name(dispatcher.node, addr)
 
         template = template.format(\
             csrf_token=dispatcher.client_engine.csrf_token,\
@@ -308,10 +308,12 @@ def serve_get(dispatcher, rpath):
                 template = fia(templates.dmail_delete_all_popup)
                 dispatcher.send_content(template.format(csrf_token=csrf_token))
             else:
-                contact = yield from _get_users_name(dispatcher, idkey)
+                contact = yield from\
+                    _get_users_name(dispatcher.node, mbase32.decode(idkey))
                 idkey_disp = idkey[0:8]+"..."
                 template = fia(templates.dmail_delete_popup)
-                template = template.format(contact = contact,\
+                template = template.format(\
+                    contact=contact,\
                     idkey_disp=idkey_disp,\
                     idkey=idkey, \
                     csrf_token=csrf_token)
@@ -353,7 +355,8 @@ def serve_get(dispatcher, rpath):
         p0 = params.index('/')
         addr_enc = params[:p0]
         tag = params[p0 + 1:]
-        user = yield from _get_users_name(dispatcher, addr_enc)
+        user = yield from\
+            _get_users_name(dispatcher.node, mbase32.decode(addr_enc))
 
         if dispatcher.handle_cache(req):
             return
@@ -2054,21 +2057,25 @@ def _create_or_update_contact(node, addr, user, name, first=None, last=None):
     return (yield from node.loop.run_in_executor(None, dbcall))
 
 @asyncio.coroutine
-def _get_users_name(dispatcher, addr_enc):
-    addr = mbase32.decode(addr_enc)
-    def dbcall():
-        with dispatcher.node.db.open_session() as sess:
-            q = sess.query(AddressBook)\
-                .filter(AddressBook.identity_key == addr).first()
+def _get_users_name(node, addr):
+    contact = yield from _load_contact(node, addr)
 
-            if not q:
-                return
-            else:
-                if q.name:
-                    return q.name
+    if not contact:
+        return mbase32.encode(addr)
+    else:
+        if contact.name:
+            return contact.name
+        else:
+            if contact.first:
+                if contact.last:
+                    return contact.first + " " + contact.last
                 else:
-                    return addr_enc
-    return (yield from dispatcher.loop.run_in_executor(None, dbcall))
+                    return contact.first
+            else:
+                if contact.last:
+                    return contact.last
+                else:
+                    return mbase32.encode(addr)
 
 @asyncio.coroutine
 def _load_contact(node, addr):
