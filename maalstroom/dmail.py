@@ -238,9 +238,8 @@ def serve_get(dispatcher, rpath):
             ab = yield from _load_addressbook_list(dispatcher.node, user)
             yield from _process_addressbook_list(dispatcher, ab)
 
-        elif req.startswith("/create_contact"):
-            p0 = req.find("/",2)
-            addr_enc = req[p0+1:]
+        elif req.startswith("/create_contact/"):
+            addr_enc = req[16:]
 
             if addr_enc == ANONYMOUS_STRING:
                 #FIXME: Probably should have diabled the ability to click the
@@ -253,6 +252,10 @@ def serve_get(dispatcher, rpath):
 
         elif req.startswith("/edit_contact/"):
             addr = mbase32.decode(req[14:])
+
+            if not addr:
+                dispatcher.send_content(templates.dmail_empty_panel)
+                return
 
             yield from _process_edit_contact(dispatcher, addr)
 

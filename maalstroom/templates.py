@@ -444,4 +444,7 @@ if not initialized_template:
 
     load_resources(dds_imgs, "images/dds")
 
+    # Misc.
+    dmail_empty_panel = load("dmail/empty_panel.html", False)
+
     initialized_template = True
