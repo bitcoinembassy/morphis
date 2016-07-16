@@ -86,14 +86,18 @@ def _init_daos(Base, d):
 
     class AddressBook(Base):
         __tablename__ = "addressbook"
-        identity_key = Column(LargeBinary, nullable= False)
+
         id = Column(Integer, primary_key=True)
+        identity_key = Column(LargeBinary, nullable=False)
         name = Column(String, nullable=False)
         last = Column(String, nullable=True)
         first = Column(String, nullable=True)
         user = Column(LargeBinary, nullable=True)
 
-    Index("last", AddressBook.last)
+    Index("addressbook_identity_key", AddressBook.last)
+    Index("addressbook_name", AddressBook.last)
+    Index("addressbook_first", AddressBook.last)
+    Index("addressbook_last", AddressBook.last)
 
     d.AddressBook = AddressBook
 

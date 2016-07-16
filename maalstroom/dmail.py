@@ -31,6 +31,8 @@ s_dmail = ".dmail"
 s_dmail_len = len(s_dmail)
 top_tags = ["Inbox", "Outbox", "Sent", "Drafts", "Trash"]
 
+ANONYMOUS_STRING = "[Anonymous]"
+
 @asyncio.coroutine
 def serve_get(dispatcher, rpath):
     global top_tags
@@ -233,12 +235,26 @@ def serve_get(dispatcher, rpath):
         req = req[12:]
         user = (yield from _load_default_dmail_address(dispatcher)).site_key
         if req == "/list":
-            ab = yield from _load_addressbook_list(dispatcher, user)
-            yield from _process_addressbook_list(dispatcher, ab, "")
-        elif req.startswith("/edit_contacts"):
+            ab = yield from _load_addressbook_list(dispatcher.node, user)
+            yield from _process_addressbook_list(dispatcher, ab)
+
+        elif req.startswith("/create_contact"):
             p0 = req.find("/",2)
-            idkey = req[p0+1:]
-            yield from _process_create_contact(dispatcher, idkey)
+            addr_enc = req[p0+1:]
+
+            if addr_enc == ANONYMOUS_STRING:
+                #FIXME: Probably should have diabled the ability to click the
+                # button then.
+                addr = None
+            else:
+                addr = mbase32.decode(addr_enc)
+
+            yield from _process_edit_contact(dispatcher, addr, True)
+
+        elif req.startswith("/edit_contact/"):
+            addr = mbase32.decode(req[14:])
+
+            yield from _process_edit_contact(dispatcher, addr)
 
         elif req.startswith("/delete_contact"):
             p0 = req.find("/", 2)
@@ -970,8 +986,9 @@ def serve_get(dispatcher, rpath):
                 _create_dmail_address(dispatcher, prefix, difficulty)
 
         dmail_key_enc = mbase32.encode(dmail_key)
-        yield from _process_create_contact_create(\
-            dispatcher, user, dmail_key, dmail_key)
+
+        yield from _create_or_update_contact(\
+            dispatcher.node, dmail_key, dmail_key, username)
 
         dispatcher.send_partial_content(templates.dmail_frame_start, True)
         if storing_nodes:
@@ -1061,7 +1078,9 @@ def serve_post(dispatcher, rpath):
 
         if submit:
             if submit == "contact":
-                yield from _process_create_contact(dispatcher, mbase32.encode(dm.destination_dmail_key))
+                assert False, "Do we ever get here?"
+                yield from _process_edit_contact(\
+                    dispatcher, dm.destination_dmail_key)
                 return
             elif submit == "send":
                 tag = "Outbox"
@@ -1139,17 +1158,19 @@ def serve_post(dispatcher, rpath):
 
     elif req == "/addressbook/create_contact/make_it_so":
         user = (yield from _load_default_dmail_address(dispatcher)).site_key
-        dd = yield from dispatcher.read_post()
-        name = fia(dd["name"])
-        addr = mbase32.decode(fia(dd["addr"]).lower())
-        csrf_token = fia(dd["csrf_token"])
-        if not dispatcher.check_csrf_token(csrf_token):
-            return
-        entry = yield from\
-            _process_create_contact_create(dispatcher, name , addr, user)
 
-        if not entry:
-            yield from _process_rename_contact_create(dispatcher, name, addr)
+        dd = yield from dispatcher.read_post()
+
+        if not dispatcher.check_csrf_token(fia(dd["csrf_token"])):
+            return
+
+        name = fia(dd["name"])
+        first = fia(dd["first"])
+        last = fia(dd["last"])
+        addr = mbase32.decode(fia(dd["addr"]).lower())
+
+        entry = yield from _create_or_update_contact(\
+            dispatcher.node, addr, user, name, first, last)
 
         template = templates.dmail_addressbook_wrapper[0]
         template = template.format( \
@@ -1904,65 +1925,50 @@ def generate_safe_reply_subject(dm, m32=False):
         return quote_plus(reply_subject)
 
 @asyncio.coroutine
-def _process_create_contact(dispatcher,ref, rename=False):
-    if ref=="/edit_contacts": ref = ""
-    if rename:
-        button_class="RENAME CONTACT"
+def _process_edit_contact(dispatcher, addr, create=False):
+    contact = yield from _load_contact(dispatcher.node, addr)
+
+    if not contact:
+        name = first = last = ""
     else:
-        button_class="ADD CONTACT"
+        name = contact.name
+        first = contact.first
+        last = contact.last
+
+    if create:
+        button_class = "CREATE CONTACT"
+        extra_class = "display_none"
+    else:
+        button_class = "SAVE CONTACT"
+        extra_class = ""
+
     template = templates.dmail_addressbook_edit_contact[0]
     template =\
-        template.format(csrf_token=dispatcher.client_engine.csrf_token,\
-                addr=ref,\
-                button_class=button_class)
+        template.format(\
+            csrf_token=dispatcher.client_engine.csrf_token,\
+            name=name,\
+            extra_class=extra_class,\
+            first=first,\
+            last=last,\
+            addr=mbase32.encode(addr),\
+            button_class=button_class)
     dispatcher.send_content(template)
 
 @asyncio.coroutine
-def _process_create_contact_create(dispatcher, name , addr, user):
-    b = name.find(" ")
-    if b == -1:
-        first = ""
-        last = ""
-    else:
-        first = name[0:name.find(" ")]
-        last = name[name.find(" ")+1:]
-    if not name or not addr:
-        return
+def _load_addressbook_list(node, user):
     def dbcall():
-
-        with dispatcher.node.db.open_session() as sess:
-            q = sess.query(AddressBook)
-            q = q.filter(AddressBook.identity_key == addr)
-            entry = q.first()
-            if not entry:
-                entry = AddressBook()
-                entry.identity_key = addr
-                entry.name = name
-                entry.first  = first
-                entry.last = last
-                entry.user = user
-                sess.add(entry)
-                sess.commit()
-                sess.expunge_all()
-                return entry
-            else: return
-    return (yield from dispatcher.node.loop.run_in_executor(None, dbcall))
-
-@asyncio.coroutine
-def _load_addressbook_list(dispatcher, user):
-    def dbcall():
-        with dispatcher.node.db.open_session() as sess:
+        with node.db.open_session() as sess:
             return sess.query(AddressBook).order_by(AddressBook.user==user).all()
-    return (yield from dispatcher.node.loop.run_in_executor(None, dbcall))
+    return (yield from node.loop.run_in_executor(None, dbcall))
 
 @asyncio.coroutine
-def _process_addressbook_list(dispatcher, ls, req):
-    if req == "/list": req = ""
+def _process_addressbook_list(dispatcher, ls):
     csrf_token = dispatcher.client_engine.csrf_token
-    template = templates.dmail_addressbook_contacts[0].format( \
-        csrf_token=csrf_token, to=req)
-    dispatcher.send_partial_content( \
-        template, True)
+
+    template =\
+        templates.dmail_addressbook_contacts[0].format(csrf_token=csrf_token)
+    dispatcher.send_partial_content(template, True)
+
     for ab in ls:
         if ab.user == ab.identity_key:
             # Indicator that this address belongs to the users node.
@@ -1971,22 +1977,21 @@ def _process_addressbook_list(dispatcher, ls, req):
         else:
             contact_tint = ''
             del_button_class = 'trash-icon-new'
-        if not ab.first or not ab.last:
-            dispatcher.send_partial_content(\
-                templates.dmail_addressbook_contacts_row[0].format(\
-                    contact_tint=contact_tint, first=ab.name, last="",\
-                    idkey=mbase32.encode(ab.identity_key),\
-                    del_button_class=del_button_class, \
-                    csrf_token = csrf_token))
-        else:
-            dispatcher.send_partial_content(\
-                templates.dmail_addressbook_contacts_row[0].format(\
-                    contact_tint=contact_tint, first=ab.first, last=ab.last,\
-                    idkey=mbase32.encode(ab.identity_key),\
-                    del_button_class=del_button_class, \
-                    csrf_token=csrf_token))
 
-    dispatcher.send_partial_content(templates.dmail_addressbook_contacts_end[0].format(csrf_token = csrf_token))
+        dispatcher.send_partial_content(\
+            templates.dmail_addressbook_contacts_row[0].format(\
+                contact_tint=contact_tint,\
+                name=ab.name,\
+                first=ab.first,\
+                last=ab.last,\
+                idkey=mbase32.encode(ab.identity_key),\
+                del_button_class=del_button_class,\
+                csrf_token=csrf_token))
+
+    dispatcher.send_partial_content(\
+        templates.dmail_addressbook_contacts_end[0].format(\
+            csrf_token=csrf_token))
+
     dispatcher.end_partial_content()
 
 @asyncio.coroutine
@@ -2016,28 +2021,34 @@ def _process_delete_contact(dispatcher, todel):
     r = yield from dispatcher.node.loop.run_in_executor(None, dbcall)
 
 @asyncio.coroutine
-def _process_rename_contact(dispatcher, idkey):
-    template = templates.dmail_addressbook_rename_contact[0]
-    template = template.format(\
-        csrf_token=dispatcher.client_engine.csrf_token, idkey=idkey)
-    dispatcher.send_content(template)
-
-@asyncio.coroutine
-def _process_rename_contact_create(dispatcher, newName, id_key):
+def _create_or_update_contact(node, addr, user, name, first=None, last=None):
+    if not addr or not name:
+        return
 
     def dbcall():
-        with dispatcher.node.db.open_session() as sess:
-            q = sess.query(AddressBook)\
-                .filter(AddressBook.identity_key == id_key).first()
-            q.name = newName
-            q.first = newName[:newName.find(" ")+1]
-            q.last = newName[newName.find(" ")+1:]
-            sess.add(q)
+        with node.db.open_session() as sess:
+            q = sess.query(AddressBook)
+            q = q.filter(AddressBook.identity_key == addr)
+
+            entry = q.first()
+            if not entry:
+                entry = AddressBook()
+                sess.add(entry)
+
+            entry.identity_key = addr
+            entry.name = name
+            entry.first  = first
+            entry.last = last
+            entry.user = user
+
             sess.commit()
 
-            return
-    yield from dispatcher.node.loop.run_in_executor(None, dbcall)
+            sess.expunge(entry)
+            return entry
 
+    return (yield from node.loop.run_in_executor(None, dbcall))
+
+@asyncio.coroutine
 def _get_users_name(dispatcher, addr_enc):
     addr = mbase32.decode(addr_enc)
     def dbcall():
@@ -2053,3 +2064,14 @@ def _get_users_name(dispatcher, addr_enc):
                 else:
                     return addr_enc
     return (yield from dispatcher.loop.run_in_executor(None, dbcall))
+
+@asyncio.coroutine
+def _load_contact(node, addr):
+    def dbcall():
+        with node.db.open_session() as sess:
+            q = sess.query(AddressBook)\
+                .filter(AddressBook.identity_key == addr)
+
+            return q.first()
+
+    return (yield from node.loop.run_in_executor(None, dbcall))

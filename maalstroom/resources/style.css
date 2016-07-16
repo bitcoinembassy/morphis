@@ -1164,12 +1164,6 @@ background: #d1cfd1;
 	border-radius: 4px;
 	font-size: .85em;
 }
-.listing tbody td {
-	display: table-cell;
-	padding-bottom: 5px;
-	padding-top: 5px;
-	height: auto;
-}
 
 table.listing {
 	border: 0;
@@ -1177,14 +1171,28 @@ table.listing {
 	border-spacing: 0;
 	/*	background: #f1f1f1;*/
 	table-layout: fixed;
+    padding: 0px;
+    margin: 0px;
+}
+
+table.listing tbody td {
+	display: table-cell;
+	height: auto;
+    padding: 0px;
+    margin: 0px;
+}
+
+table.listing tbody td:first-child a.cell-link {
+    padding-left: 15px;
+}
+
+table.listing tbody td a.cell-link {
+    padding: 5px;
 }
 
 table.listing tr:hover, table.listing tr:hover a {
 	background-color: #38a3af;
 	color: #ffffff;
-}
-td.name {
-	padding-left: 10px;
 }
 iframe.subject-txt {
 	display: inline;
@@ -1340,4 +1348,7 @@ input.subject-field:focus {
 	border: 0;
 	outline: 0;
 	box-shadow: none;
+}
+a.cell-link {
+    display: block;
 }

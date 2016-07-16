@@ -412,11 +412,9 @@ if not initialized_template:
     dmail_addressbook_wrapper =\
         load("dmail/addressbook_wrapper.html", True)
     dmail_addressbook_edit_contact =\
-        load("dmail/addressbook_edit_contacts.html", True)
+        load("dmail/addressbook_edit_contact.html", True)
     dmail_addressbook_contacts = \
         load("dmail/addressbook_contacts.html", True)
-    dmail_addressbook_rename_contact = \
-        load("dmail/addressbook_rename_contact.html", True)
     dmail_addressbook_contacts_row = \
         load("dmail/addressbook_contacts_row.html", True)
     dmail_addressbook_contacts_end = \
