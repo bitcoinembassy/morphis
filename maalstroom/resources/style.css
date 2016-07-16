@@ -1151,6 +1151,15 @@ background: #f1f1f1;
 #contactfooter:hover {
 background: #d1cfd1;
 }
+.contacts-wrapper {
+	min-height: 100%;
+	height: auto !important;
+	height: 100%;
+	margin: 0 auto -2.8em;
+}
+.contactfooter-wrap, .push {
+	height: 2.8em;
+}
 .contact-input {
 	padding-top: 8px;
 	padding-bottom: 8px;
@@ -1171,23 +1180,23 @@ table.listing {
 	border-spacing: 0;
 	/*	background: #f1f1f1;*/
 	table-layout: fixed;
-    padding: 0px;
-    margin: 0px;
+	padding: 0px;
+	margin: 0px;
 }
 
 table.listing tbody td {
 	display: table-cell;
 	height: auto;
-    padding: 0px;
-    margin: 0px;
+	padding: 0px;
+	margin: 0px;
 }
 
 table.listing tbody td:first-child a.cell-link {
-    padding-left: 15px;
+	padding-left: 15px;
 }
 
 table.listing tbody td a.cell-link {
-    padding: 5px;
+	padding: 5px;
 }
 
 table.listing tr:hover, table.listing tr:hover a {
@@ -1350,5 +1359,5 @@ input.subject-field:focus {
 	box-shadow: none;
 }
 a.cell-link {
-    display: block;
+	display: block;
 }
