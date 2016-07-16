@@ -1221,9 +1221,13 @@ def render_dmail_addresses(\
         else:
             option = "<option value='{}'>{}</option>"
 
-        addr_enc = mbase32.encode(addr.site_key)
-
+        addr_enc = yield from get_contact_name(dispatcher.node, addr.site_key)
         addr_id = addr_enc if use_addr else addr.id
+
+        site_key_enc = mbase32.encode(addr.site_key)
+        if addr_enc != site_key_enc:
+            addr_enc += " [" + site_key_enc + "]"
+
         addr_options.append(option.format(addr_id, addr_enc))
 
     if selected_id:
