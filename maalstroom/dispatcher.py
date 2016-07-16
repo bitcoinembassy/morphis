@@ -811,6 +811,7 @@ class MaalstroomDispatcher(object):
     def send_204(self):
         "No content."
         self.send_response(204)
+        self._send_no_cache()
         self.send_header("Content-Length", 0)
         self.end_headers()
         self.finish_response()
