@@ -26,7 +26,7 @@ log = logging.getLogger(__name__)
 LATEST_SCHEMA_VERSION = 5
 
 Base = declarative_base()
-
+AddressBook = None
 Peer = None
 DataBlock = None
 NodeState = None
@@ -83,6 +83,19 @@ def _init_daos(Base, d):
     Index("address", Peer.address)
 
     d.Peer = Peer
+
+    class AddressBook(Base):
+        __tablename__ = "addressbook"
+        identity_key = Column(LargeBinary, nullable= False)
+        id = Column(Integer, primary_key=True)
+        name = Column(String, nullable=False)
+        last = Column(String, nullable=True)
+        first = Column(String, nullable=True)
+        user = Column(LargeBinary, nullable=True)
+
+    Index("last", AddressBook.last)
+
+    d.AddressBook = AddressBook
 
     class DataBlock(Base):
         __tablename__ = "datablock"
@@ -459,6 +472,7 @@ if Peer is None:
     DmailTag = d.DmailTag
 
     #FIXME: New stuff (sort properly later).
+    AddressBook = d.AddressBook
     User = d.User
     DdsPost = d.DdsPost
     Synapse = d.Synapse
@@ -639,6 +653,11 @@ def _upgrade_4_to_5(db):
         sess.execute(update(Peer, bind=db.engine).values(distance=None))
 
         _update_node_state(sess, 5)
+        if f:
+            k = AxonKey()
+            k.synapse_id = 1
+            k.x = f.x
+            sess.add(k, m)
 
         sess.commit()
 

@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+<base target="_top" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/style.css">
+</head>
+<body class="iframe">
+<span class="inbox-head nowrap">Rename {idkey}</span>
+<form class="message nowrap" style="height: calc(100% - 2em);" action="morphis://.dmail/addressbook/rename_contact/make_it_so" method="post" accept-charset="UTF-8 ISO-8859-1">
+    <ul>
+        <input type="hidden" name="csrf_token" id="csrf_token" value="{csrf_token}"/>
+        <input type="hidden" name="idkey" id="idkey" value="{idkey}"/>
+        <li>
+            <label class="to" for="name">New Name</label> <!-- Please rename classes to match names. -->
+            <input type="text" name="name" id="name" value="" autofocus/>
+        </li>
+        <li>
+	        <button class="submit" type="submit" formtarget="_self" name="submit" value="send">Rename</button>
+        </li>
+     </ul>
+</form>
+
+</div>
+</body></html>

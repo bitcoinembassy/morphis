@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head>
+<base target="_top" /><link rel="stylesheet" type="text/css" href="morphis://.dmail/style.css"/>
+</head>
+<body>
+	<span class="inbox-head nowrap">Address Book</span>
+<br/><br/>
+
+<div class="edit-contact">
+
+<form style="height: calc(100% - 2em);" action="morphis://.dmail/addressbook/create_contact/make_it_so" method="post" accept-charset="UTF-8 ISO-8859-1">
+<!--	<h1 class="contacts-title">Add Contact</h1>-->
+	<fieldset id="contacthead">
+		<div class="contact-input contact-field">
+		    <input type="hidden" name="csrf_token" id="csrf_token" value="{csrf_token}"/>
+			<label for="name">Contact Name</label>
+			<input type="text" name="name" id="name" value="" autofocus placeholder="Contact Name" title="Name" size="32" maxlength="50" />
+		</div>
+		<div class="contact-input contact-field">
+		<label class="to" for="addr">Dmail Address</label>
+        <input type="text" name="addr" id= addr value="{addr}" autofocus placeholder="Dmail Address" title="Dmail" size="40" maxlength="254" /></div>
+		<button class="button" type="submit" formtarget="_top" name="submit" value="send">{button_class}</button>&nbsp;
+		<a class="button" href="morphis://.dmail">CANCEL</a>
+	</fieldset>
+</form>
+</div>
+</body></html>
