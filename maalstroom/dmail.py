@@ -1574,7 +1574,7 @@ def _list_dmails_for_tag(dispatcher, addr, tag):
         if show_sender:
             addr_key = msg.sender_dmail_key
             if addr_key:
-                addr_value = mbase32.encode(addr_key)
+                addr_value = addr_key
                 if not msg.sender_valid:
                     sender_class = " invalid_sender"
             else:
@@ -1582,12 +1582,16 @@ def _list_dmails_for_tag(dispatcher, addr, tag):
         else:
             addr_key = msg.destination_dmail_key
             if addr_key:
-                addr_value = mbase32.encode(addr_key)
+                addr_value = addr_key
             else:
                 addr_value = None
 
-        if not addr_value:
-            addr_value = "[Anonymous]"
+        if addr_value:
+            addr_display =\
+                yield from get_contact_name(dispatcher.node, addr_value)
+            addr_value = mbase32.encode(addr_value)
+        else:
+            addr_display = addr_value = "[Anonymous]"
 
         row = row_template.format(
             csrf_token=dispatcher.client_engine.csrf_token,\
@@ -1600,6 +1604,7 @@ def _list_dmails_for_tag(dispatcher, addr, tag):
             safe_reply_subject=safe_reply_subject,\
             sender_class=sender_class,\
             sender=addr_value,\
+            sender_display=addr_display,\
             timestamp=mutil.format_human_no_ms_datetime(msg.date))
 
         dispatcher.send_partial_content(row)
