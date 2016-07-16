@@ -132,7 +132,7 @@ class ChordEngine():
                     .format(addr))
 
             def dbcall():
-                with self.node.db.open_session() as sess:
+                with self.node.db.open_session(True) as sess:
                     nonlocal addr
                     dbpeer = sess.query(Peer).filter(Peer.address == addr)\
                         .first()
@@ -345,7 +345,7 @@ class ChordEngine():
         log.info("Processing connection count.")
 
         def dbcall():
-            with self.node.db.open_session() as sess:
+            with self.node.db.open_session(True) as sess:
                 st = sess.query(Peer)\
                     .statement.with_only_columns(\
                         [func.count('*')])
@@ -389,7 +389,7 @@ class ChordEngine():
                 continue
 
             def dbcall():
-                with self.node.db.open_session() as sess:
+                with self.node.db.open_session(True) as sess:
                     grace = mutil.utc_datetime() - timedelta(minutes=5)
 
                     q = sess.query(Peer)\

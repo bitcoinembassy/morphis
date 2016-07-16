@@ -347,7 +347,7 @@ def _process_axon_synapses(dispatcher, axon_addr_enc):
         loaded[post.data_key] = True
 
     def dbcall():
-        with dispatcher.node.db.open_session() as sess:
+        with dispatcher.node.db.open_session(True) as sess:
             q = sess.query(DdsPost)\
                 .filter(DdsPost.target_key == axon_addr)\
                 .order_by(DdsPost.timestamp)
@@ -572,7 +572,7 @@ def retrieve_post(node, key, target_key=None):
 @asyncio.coroutine
 def _load_dds_post(node, key):
     def dbcall():
-        with node.db.open_session() as sess:
+        with node.db.open_session(True) as sess:
             q = sess.query(DdsPost).filter(
                 or_(\
                     DdsPost.synapse_key == key,\

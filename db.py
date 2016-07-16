@@ -287,6 +287,7 @@ class Db():
         self.is_sqlite = False
         self.sqlite_reader_count = 0
         self.sqlite_no_readers = threading.Event()
+        self.sqlite_no_readers.set()
         self.sqlite_write_lock = threading.Lock()
 
         self.pool_size = 10
@@ -302,8 +303,6 @@ class Db():
 
     @contextmanager
     def open_session(self, read_only=False):
-        read_only = False; #TODO: Need to implement a read-write lock.
-
         if self.sqlite_lock is not None:
             if read_only:
                 with self.sqlite_write_lock:

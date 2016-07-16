@@ -188,7 +188,7 @@ class ClientEngine(object):
         yield from self.engine.protocol_ready.wait()
 
         def dbcall():
-            with self.db.open_session() as sess:
+            with self.db.open_session(True) as sess:
                 q = sess.query(DmailAddress)\
                     .options(joinedload("keys"))\
                     .filter(DmailAddress.scan_interval > 0)

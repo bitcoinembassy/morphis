@@ -1374,7 +1374,7 @@ def _load_dmail_address(dispatcher, dbid=None, site_key=None,\
     "Fetch from our database the parameters that are stored in a DMail site."
 
     def dbcall():
-        with dispatcher.node.db.open_session() as sess:
+        with dispatcher.node.db.open_session(True) as sess:
             q = sess.query(DmailAddress)
 
             if fetch_keys:
@@ -1403,7 +1403,7 @@ def _load_dmail_address(dispatcher, dbid=None, site_key=None,\
 @asyncio.coroutine
 def _load_default_dmail_address_id(dispatcher):
     def dbcall():
-        with dispatcher.node.db.open_session() as sess:
+        with dispatcher.node.db.open_session(True) as sess:
             q = sess.query(NodeState)\
                 .filter(NodeState.key == consts.NSK_DEFAULT_ADDRESS)
 
@@ -1422,7 +1422,7 @@ def _load_default_dmail_address_id(dispatcher):
 @asyncio.coroutine
 def _load_default_dmail_address(dispatcher, fetch_keys=False):
     def dbcall():
-        with dispatcher.node.db.open_session() as sess:
+        with dispatcher.node.db.open_session(True) as sess:
             q = sess.query(NodeState)\
                 .filter(NodeState.key == consts.NSK_DEFAULT_ADDRESS)
 
@@ -1439,6 +1439,13 @@ def _load_default_dmail_address(dispatcher, fetch_keys=False):
                     sess.expunge_all()
                     return addr
 
+    addr = yield from dispatcher.loop.run_in_executor(None, dbcall)
+
+    if addr:
+        return addr
+
+    def dbcall2():
+        with dispatcher.node.db.open_session() as sess:
             addr = sess.query(DmailAddress)\
                 .order_by(DmailAddress.id)\
                 .limit(1)\
@@ -1458,7 +1465,7 @@ def _load_default_dmail_address(dispatcher, fetch_keys=False):
 
             return addr
 
-    addr = yield from dispatcher.loop.run_in_executor(None, dbcall)
+    addr = yield from dispatcher.loop.run_in_executor(None, dbcall2)
 
     return addr
 
@@ -1482,7 +1489,7 @@ def _count_unread_dmails(dispatcher, addr=None, tag=None):
         addr = mbase32.decode(addr)
 
     def dbcall():
-        with dispatcher.node.db.open_session() as sess:
+        with dispatcher.node.db.open_session(True) as sess:
             q = sess.query(func.count("*"))
 
             q = q.filter(DmailMessage.read == False)
@@ -1512,7 +1519,7 @@ def _load_dmails_for_tag(dispatcher, addr, tag):
         addr = mbase32.decode(addr)
 
     def dbcall():
-        with dispatcher.node.db.open_session() as sess:
+        with dispatcher.node.db.open_session(True) as sess:
             q = sess.query(DmailMessage)\
                 .filter(\
                     DmailMessage.address.has(DmailAddress.site_key == addr))
@@ -1647,9 +1654,9 @@ def _load_dmail(dispatcher, dmail_dbid, fetch_parts=False, fetch_tags=False):
 
 @asyncio.coroutine
 def _process_dmail_message(dispatcher, msg_dbid, process_call,\
-        fetch_parts=False, fetch_tags=False):
+        fetch_parts=False, fetch_tags=False, read_only=False):
     def dbcall():
-        with dispatcher.node.db.open_session() as sess:
+        with dispatcher.node.db.open_session(read_only) as sess:
             q = sess.query(DmailMessage)
             if fetch_parts:
                 q = q.options(joinedload("parts"))
@@ -1674,7 +1681,7 @@ def _process_dmail_message(dispatcher, msg_dbid, process_call,\
 @asyncio.coroutine
 def _load_first_address_with_new_mail(dispatcher):
     def dbcall():
-        with dispatcher.node.db.open_session() as sess:
+        with dispatcher.node.db.open_session(True) as sess:
             q = sess.query(DmailAddress)\
                 .filter(\
                     DmailAddress.messages.any(\
@@ -1777,9 +1784,9 @@ def _empty_trash(dispatcher, addr_enc):
 
 @asyncio.coroutine
 def _process_dmail_address(dispatcher, process_call, dbid=None, site_key=None,\
-    fetch_keys=False):
+        fetch_keys=False, read_only=False):
     def dbcall():
-        with dispatcher.node.db.open_session() as sess:
+        with dispatcher.node.db.open_session(read_only) as sess:
             q = sess.query(DmailAddress)
 
             if fetch_keys:
@@ -1983,8 +1990,10 @@ def _process_edit_contact(dispatcher, addr, create=False):
 @asyncio.coroutine
 def _load_addressbook_list(node, user):
     def dbcall():
-        with node.db.open_session() as sess:
-            return sess.query(AddressBook).order_by(AddressBook.user==user).all()
+        with node.db.open_session(True) as sess:
+            return sess.query(AddressBook)\
+                .order_by(AddressBook.user==user).all()
+
     return (yield from node.loop.run_in_executor(None, dbcall))
 
 @asyncio.coroutine
@@ -2023,7 +2032,7 @@ def _process_addressbook_list(dispatcher, ls):
 @asyncio.coroutine
 def _process_clear_addressbook(dispatcher, user):
     def dbcall():
-        with dispatcher.node.db.open_session() as sess:
+        with dispatcher.node.db.open_session(True) as sess:
             contacts = sess.query(AddressBook).all()
             return contacts
 
@@ -2098,7 +2107,7 @@ def get_contact_name(node, addr):
 @asyncio.coroutine
 def _load_contact(node, addr):
     def dbcall():
-        with node.db.open_session() as sess:
+        with node.db.open_session(True) as sess:
             q = sess.query(AddressBook)\
                 .filter(AddressBook.identity_key == addr)
 

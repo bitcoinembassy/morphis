@@ -2413,7 +2413,7 @@ class ChordTasks(object):
                 return False
 
         def dbcall():
-            with self.engine.node.db.open_session() as sess:
+            with self.engine.node.db.open_session(True) as sess:
                 if significant_bits:
                     # Wildcard key search mode.
                     q = sess.query(DataBlock.data_id)
@@ -2460,7 +2460,7 @@ class ChordTasks(object):
     @asyncio.coroutine
     def _check_synapse_request(self, sreq):
         def dbcall():
-            with self.engine.node.db.open_session() as sess:
+            with self.engine.node.db.open_session(True) as sess:
                 q = sess.query(SynapseKey.data_id)
 
                 q = self._build_synapse_db_query(sess, q, sreq)
@@ -2560,7 +2560,7 @@ class ChordTasks(object):
 
             # Check if we have this block.
             def dbcall():
-                with self.engine.node.db.open_session() as sess:
+                with self.engine.node.db.open_session(True) as sess:
                     if version:
                         old_entry = sess.query(DataBlock)\
                             .filter(DataBlock.data_id == data_id)\
@@ -2607,7 +2607,7 @@ class ChordTasks(object):
         # If there is space contention, then we do a more complex algorithm
         # in order to see if we want to store it.
         def dbcall():
-            with self.engine.node.db.open_session() as sess:
+            with self.engine.node.db.open_session(True) as sess:
                 # First check if we have this block already.
                 q = sess.query(func.count("*")).select_from(DataBlock)
                 q = q.filter(DataBlock.data_id == data_id)
@@ -2865,7 +2865,7 @@ class ChordTasks(object):
             return (yield from self._synapse_request(synapse_request))
 
         def dbcall():
-            with self.engine.node.db.open_session() as sess:
+            with self.engine.node.db.open_session(True) as sess:
                 data_block = sess.query(DataBlock).filter(\
                     DataBlock.data_id == data_id).first()
 
@@ -2957,7 +2957,7 @@ class ChordTasks(object):
     @asyncio.coroutine
     def _synapse_request(self, synapse_request):
         def dbcall():
-            with self.engine.node.db.open_session() as sess:
+            with self.engine.node.db.open_session(True) as sess:
                 q = sess.query(Synapse, SynapseKey)\
                     .join(Synapse.keys)
 
@@ -3063,7 +3063,7 @@ class ChordTasks(object):
         synapse_id = enc.generate_ID(synapse.synapse_key)
 
         def dbcall_chk():
-            with self.engine.node.db.open_session() as sess:
+            with self.engine.node.db.open_session(True) as sess:
                 q = sess.query(Synapse)\
                     .filter(\
                         Synapse.keys.any(\
@@ -3260,6 +3260,10 @@ class ChordTasks(object):
                     .format(peer_dbid)
                 log.warning(errmsg)
                 raise ChordException(errmsg)
+            else:
+                a, b = enc.encrypt_data_block(dmsg.pubkey, data_key)
+                epubkey = a + b
+
         else:
             if targeted:
                 valid = False
@@ -3355,9 +3359,7 @@ class ChordTasks(object):
                 if pubkey:
                     data_block.version = str(dmsg.version)
                     data_block.signature = dmsg.signature
-
-                    a, b = enc.encrypt_data_block(dmsg.pubkey, data_key)
-                    data_block.epubkey = a + b
+                    data_block.epubkey = epubkey
                     data_block.pubkeylen = len(dmsg.pubkey)
 
                 if targeted:

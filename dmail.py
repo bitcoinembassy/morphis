@@ -440,7 +440,7 @@ class DmailEngine(object):
             log.info("Scanning dmail [{}].".format(mbase32.encode(addr)))
 
         def dbcall():
-            with self.db.open_session() as sess:
+            with self.db.open_session(True) as sess:
                 q = sess.query(db.DmailAddress)\
                     .filter(db.DmailAddress.site_key == addr)
 
@@ -825,7 +825,7 @@ class DmailEngine(object):
         start = target
 
         def check_have_dmail_dbcall():
-            with self.db.open_session() as sess:
+            with self.db.open_session(True) as sess:
                 q = sess.query(func.count("*")).select_from(db.DmailMessage)\
                     .filter(db.DmailMessage.data_key == dmail_key)
 

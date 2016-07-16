@@ -151,7 +151,7 @@ class Node():
 
         else:
             def dbcall():
-                with self.db.open_session() as sess:
+                with self.db.open_session(True) as sess:
                     node_state = sess.query(db.NodeState)\
                         .filter(db.NodeState.key == NSK_DATASTORE_SIZE)\
                         .first()

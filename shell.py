@@ -514,6 +514,18 @@ class Shell(cmd.Cmd):
             log.exception("exec")
             self.writeln("Exception: [{}].".format(e))
 
+    def do_dbcall_ro(self, arg):
+        "Execute python code within a READ-ONLY Db Session."
+
+        if not self.peer.engine.node.eval_enabled:
+            self.writeln("Eval is disabled.")
+            return
+
+        with self.peer.engine.node.db.open_session(True) as sess:
+            self.shell_locals["sess"] = sess
+            exec(arg, globals(), self.shell_locals)
+            del self.shell_locals["sess"]
+
     def do_dbcall(self, arg):
         "Execute python code within a Db Session."
 
@@ -521,7 +533,7 @@ class Shell(cmd.Cmd):
             self.writeln("Eval is disabled.")
             return
 
-        with self.peer.engine.node.db.open_session() as sess:
+        with self.peer.engine.node.db.open_session(False) as sess:
             self.shell_locals["sess"] = sess
             exec(arg, globals(), self.shell_locals)
             del self.shell_locals["sess"]
