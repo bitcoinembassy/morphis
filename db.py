@@ -653,11 +653,6 @@ def _upgrade_4_to_5(db):
         sess.execute(update(Peer, bind=db.engine).values(distance=None))
 
         _update_node_state(sess, 5)
-        if f:
-            k = AxonKey()
-            k.synapse_id = 1
-            k.x = f.x
-            sess.add(k, m)
 
         sess.commit()
 
