@@ -988,7 +988,7 @@ def serve_get(dispatcher, rpath):
         prefix = qdict["prefix"][0]
         difficulty = int(qdict["difficulty"][0])
         csrf_token = qdict["csrf_token"][0]
-        contact_name = qdict["username"][0]
+        contact_name = qdict["contact_name"][0]
 
         if not dispatcher.check_csrf_token(csrf_token):
             return
