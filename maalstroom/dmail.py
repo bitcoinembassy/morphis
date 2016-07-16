@@ -480,11 +480,15 @@ def serve_get(dispatcher, rpath):
             sender_class = "valid_sender"
 
         if dm.destination_dmail_key:
+            # It is a message from us.
             dest_addr_enc = mbase32.encode(dm.destination_dmail_key)
             dest_class = ""
+            contact_addr = dest_addr_enc
         else:
+            # It is a message to us.
             dest_addr_enc = ""
             dest_class = " display_none"
+            contact_addr = sender_addr
 
         unquoted_tag = unquote(tag)
 
@@ -506,11 +510,6 @@ def serve_get(dispatcher, rpath):
                 existing_tag_rows.append(row)
         else:
             remove_tag_class = "display_none"
-
-        if dest_class == " display_none":
-            contact_addr=addr_enc
-        else:
-            contact_addr=dest_addr_enc
 
         current_tag_names = [x.name for x in dm.tags]
         current_tag_names.extend(top_tags)
@@ -1938,9 +1937,11 @@ def _process_edit_contact(dispatcher, addr, create=False):
     if create:
         button_class = "CREATE CONTACT"
         extra_class = "display_none"
+        addr_readonly = " readonly='readonly'"
     else:
         button_class = "SAVE CONTACT"
         extra_class = ""
+        addr_readonly = ""
 
     template = templates.dmail_addressbook_edit_contact[0]
     template =\
@@ -1948,6 +1949,7 @@ def _process_edit_contact(dispatcher, addr, create=False):
             csrf_token=dispatcher.client_engine.csrf_token,\
             name=name,\
             extra_class=extra_class,\
+            addr_readonly=addr_readonly,\
             first=first,\
             last=last,\
             addr=mbase32.encode(addr),\
