@@ -632,8 +632,8 @@ def serve_get(dispatcher, rpath):
 
         if sender_addr:
             default_id = None
-            dmail_address = yield from _load_dmail_address(\
-                dispatcher, site_key=sender_addr)
+            dmail_address = yield from\
+                load_dmail_address(dispatcher.node, site_key=sender_addr)
             if not dmail_address:
                 dispatcher.send_content("Invalid sender address requested.")
             owner_if_anon_id = dmail_address.id
@@ -781,8 +781,9 @@ def serve_get(dispatcher, rpath):
         if not dispatcher.check_csrf_token(csrf_token):
             return
 
-        dmail_address = yield from _load_dmail_address(\
-            dispatcher, site_key=mbase32.decode(addr_enc), fetch_keys=True)
+        dmail_address = yield from load_dmail_address(\
+            dispatcher.node, site_key=mbase32.decode(addr_enc),\
+            fetch_keys=True)
 
         dispatcher.client_engine.trigger_dmail_scan(dmail_address)
 
@@ -944,8 +945,8 @@ def serve_get(dispatcher, rpath):
             addr_enc = params
 
             dmail_address = yield from\
-                _load_dmail_address(\
-                    dispatcher, site_key=mbase32.decode(addr_enc),\
+                load_dmail_address(\
+                    dispatcher.node, site_key=mbase32.decode(addr_enc),\
                     fetch_keys=True)
         else:
             dmail_address = yield from\
@@ -1283,8 +1284,8 @@ def _read_dmail_post(dispatcher):
         if sender_dmail_id and sender_dmail_id != "":
             sender_dmail_id = int(sender_dmail_id)
 
-            dmail_address =\
-                yield from _load_dmail_address(dispatcher, sender_dmail_id)
+            dmail_address = yield from\
+                load_dmail_address(dispatcher.node, sender_dmail_id)
 
             dm.address = dmail_address
             dm.sender_valid = True
@@ -1294,8 +1295,8 @@ def _read_dmail_post(dispatcher):
     if not dm.address:
         owner_if_anon = dd.get("owner_if_anon")
         if owner_if_anon and owner_if_anon[0]:
-            dmail_address =\
-                yield from _load_dmail_address(dispatcher, owner_if_anon[0])
+            dmail_address = yield from\
+                load_dmail_address(dispatcher.node, owner_if_anon[0])
             dm.address = dmail_address
 
         if dm.address:
@@ -1373,12 +1374,11 @@ def _save_outgoing_dmail(dispatcher, dm, tag_name):
     return dm
 
 @asyncio.coroutine
-def _load_dmail_address(dispatcher, dbid=None, site_key=None,\
-        fetch_keys=False):
+def load_dmail_address(node, dbid=None, site_key=None, fetch_keys=False):
     "Fetch from our database the parameters that are stored in a DMail site."
 
     def dbcall():
-        with dispatcher.node.db.open_session(True) as sess:
+        with node.db.open_session(True) as sess:
             q = sess.query(DmailAddress)
 
             if fetch_keys:
@@ -1400,7 +1400,7 @@ def _load_dmail_address(dispatcher, dbid=None, site_key=None,\
 
             return dmailaddr
 
-    dmailaddr = yield from dispatcher.loop.run_in_executor(None, dbcall)
+    dmailaddr = yield from node.loop.run_in_executor(None, dbcall)
 
     return dmailaddr
 
@@ -1829,7 +1829,7 @@ def _fetch_dmail(dispatcher, dmail_addr, dmail_key):
             .format(dmail_key_enc, dmail_addr_enc))
 
     dmail_address =\
-        yield from _load_dmail_address(dispatcher, site_key=dmail_addr)
+        yield from load_dmail_address(dispatcher.node, site_key=dmail_addr)
 
     dmail_key_obj = dmail_address.keys[0]
 
