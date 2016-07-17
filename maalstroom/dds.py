@@ -249,10 +249,10 @@ def _process_axon_grok(req):
         " style='height: 10em; width: 100%; border: 1;'"\
         " seamless='seamless'></iframe><iframe"\
         " src='morphis://.dds/axon/synapses/{key}{query}#new'"\
-        " style='height: calc(100% - 17.5em); width: 100%; border: 0;'"\
+        " style='height: calc(100% - 19em); width: 100%; border: 0;'"\
         " seamless='seamless'></iframe><iframe"\
         " src='morphis://.dds/synapse/create/{key}{query}'"\
-        " style='height: 7em; width: 100%; border: 1;'"\
+        " style='height: 8.5em; width: 100%; border: 1;'"\
         " seamless='seamless'></iframe>"\
             .format(key=mbase32.encode(key), query=req.query)
 
@@ -429,13 +429,15 @@ def _process_synapse_create(req):
         return
 
     template = templates.dds_create_synapse[0]
-
     template = template.format(\
         csrf_token=req.dispatcher.client_engine.csrf_token,\
         message_text="",\
         target_addr=target_addr,\
-        ident=req.ident_enc[:32],\
+        ident=req.ident_enc,\
         query=req.query)
+
+#    template =\
+#        templates.dds_wrapper[0].format(title="DDS Post Box", child=template)
 
     req.dispatcher.send_content(template)
 
