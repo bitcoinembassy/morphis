@@ -3,8 +3,9 @@
 	<!--div class="dds-user-icon"><img src="morphis://.dds/images/user-icon3-sm.png"></div-->
 	    <div class="dds-reply">
         <form class="dds-message" action="morphis://.dds/synapse/create" method="post" accept-charset="UTF-8 ISO-8859-1">
-            <input type="hidden" name="target_addr" value="{target_addr}"/>
             <input type="hidden" name="csrf_token" id="csrf_token" value="{csrf_token}"/>
+            <input type="hidden" name="target_addr" value="{target_addr}"/>
+            <input type="hidden" name="ident" value="{ident}"/>
             <!--textarea name="content" autofocus>{message_text}</textarea-->
             <input type="text" style="width: calc(100% - 12em);" name="content" value="{message_text}" placeholder="Singleline message..." autofocus />
             <span style="font-size: 0.5em;">{ident}</span>

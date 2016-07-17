@@ -458,11 +458,11 @@ def _process_synapse_create_post(dispatcher, req):
         dispatcher.send_error("No content.", errcode=400)
         return
 
-    key = None
+    content_key = None
 
     def key_callback(akey):
-        nonlocal key
-        key = akey
+        nonlocal content_key
+        content_key = akey
 
     yield from\
         dispatcher.node.chord_engine.tasks.send_store_data(\
@@ -474,14 +474,24 @@ def _process_synapse_create_post(dispatcher, req):
         resp =\
             "Resulting&nbsp;<a href='morphis://.dds/axon/read/{axon_addr}'>"\
                 "Axon</a>&nbsp;Address:<br/>{axon_addr}"\
-                     .format(axon_addr=mbase32.encode(key))
+                     .format(axon_addr=mbase32.encode(content_key))
 
         dispatcher.send_content(resp)
         return
 
     target_addr = mbase32.decode(target_addr)
 
-    synapse = syn.Synapse.for_target(target_addr, key)
+    synapse = syn.Synapse.for_target(target_addr, content_key)
+
+    ident_enc = fia(dd["ident"])
+    if ident_enc:
+        log.warning("ident_enc=[{}].".format(ident_enc))
+        ident_addr = mbase32.decode(ident_enc)
+        ident_dmail_address = yield from\
+            dmail.load_dmail_address(dispatcher.node, site_key=ident_addr)
+        signing_key =\
+            rsakey.RsaKey(privdata=ident_dmail_address.site_privatekey)
+        synapse.key = signing_key
 
     yield from DdsEngine(dispatcher.node).upload_synapse(synapse)
 
