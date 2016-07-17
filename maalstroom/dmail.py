@@ -1201,7 +1201,7 @@ def serve_post(dispatcher, rpath):
 
 @asyncio.coroutine
 def render_dmail_addresses(\
-        dispatcher, sender_addr=None, default_id=None, use_addr=False):
+        dispatcher, sender_addr=None, default_id=None, use_key_as_id=False):
     addrs = yield from _list_dmail_addresses(dispatcher)
 
     addr_options = []
@@ -1222,7 +1222,7 @@ def render_dmail_addresses(\
             option = "<option value='{}'>{}</option>"
 
         addr_enc = yield from get_contact_name(dispatcher.node, addr.site_key)
-        addr_id = addr_enc if use_addr else addr.id
+        addr_id = mbase32.encode(addr.site_key) if use_key_as_id else addr.id
 
         site_key_enc = mbase32.encode(addr.site_key)
         if addr_enc != site_key_enc:

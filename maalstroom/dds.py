@@ -199,7 +199,7 @@ def _process_root(req):
     template = template.format(random_id_enc=random_id_enc, query=req.query)
 
     available_idents = yield from dmail.render_dmail_addresses(\
-        req.dispatcher, req.ident, use_addr=True)
+        req.dispatcher, req.ident, use_key_as_id=True)
 
     template2 = templates.dds_identbar[0]
     template2 = template2.format(\
