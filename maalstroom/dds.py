@@ -439,6 +439,9 @@ def _process_synapse_create_post(dispatcher, req):
         dispatcher.send_error("request: {}".format(req), errcode=400)
         return
 
+    if not dispatcher.check_csrf_token(dd["csrf_token"][0]):
+        return
+
     content = fia(dd["content"])
     content2 = fia(dd.get("content2"))
 
