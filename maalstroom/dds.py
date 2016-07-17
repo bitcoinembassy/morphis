@@ -369,7 +369,10 @@ def _process_axon_synapses(dispatcher, axon_addr_enc):
     def cb(key):
         nonlocal new_tasks
 
-        if loaded.get(bytes(key)):
+        if type(key) is bytearray:
+            key = bytes(key)
+
+        if loaded.get(key):
             if log.isEnabledFor(logging.INFO):
                 log.info("Skipping already loaded TargetedBlock/Synapse for"\
                     " key=[{}].".format(mbase32.encode(key)))
