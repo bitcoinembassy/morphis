@@ -327,6 +327,12 @@ def _process_axon_synapses(dispatcher, axon_addr_enc):
                         .format(mbase32.encode(key)))
             return
 
+#        if post.synapse_key:
+#            loaded.setdefault(post.synapse_key, True)
+#        if post.synapse_pow:
+#            loaded.setdefault(post.synapse_pow, True)
+#        loaded.setdefault(post.data_key) = True
+
         key_enc = mbase32.encode(key)
 
         content =\
@@ -340,12 +346,6 @@ def _process_axon_synapses(dispatcher, axon_addr_enc):
 
         dispatcher.send_partial_content(template)
 
-        if post.synapse_key:
-            loaded[post.synapse_key] = True
-        if post.synapse_pow:
-            loaded[post.synapse_pow] = True
-        loaded[post.data_key] = True
-
     def dbcall():
         with dispatcher.node.db.open_session(True) as sess:
             q = sess.query(DdsPost)\
@@ -357,6 +357,8 @@ def _process_axon_synapses(dispatcher, axon_addr_enc):
     posts = yield from dispatcher.loop.run_in_executor(None, dbcall)
 
     for post in posts:
+        key = post.synapse_pow if post.synapse_pow else post.data_key
+        loaded.setdefault(key, True)
         yield from process_post(post)
 
     dispatcher.send_partial_content("<hr id='new'/>")
@@ -367,12 +369,13 @@ def _process_axon_synapses(dispatcher, axon_addr_enc):
     def cb(key):
         nonlocal new_tasks
 
-        key_enc = mbase32.encode(key)
-
         if loaded.get(bytes(key)):
-            log.info("Skipping already loaded synapse for key=[{}]."\
-                .format(key_enc))
+            if log.isEnabledFor(logging.INFO):
+                log.info("Skipping already loaded TargetedBlock/Synapse for"\
+                    " key=[{}].".format(mbase32.encode(key)))
             return
+
+            loaded.setdefault(key, True)
 
         new_tasks.append(\
             asyncio.async(\
@@ -384,13 +387,14 @@ def _process_axon_synapses(dispatcher, axon_addr_enc):
         nonlocal new_tasks
 
         for synapse in data_rw.data:
-            if loaded.get(bytes(synapse.synapse_key)):
-                loaded[synapse.synapse_key] = True
-                loaded[synapse.synapse_pow] = True
+            if loaded.get(bytes(synapse.synapse_pow)):
                 if log.isEnabledFor(logging.INFO):
                     log.info("Skipping already loaded Synapse for key=[{}]."\
-                        .format(mbase32.encode(synapse.synapse_key)))
+                        .format(mbase32.encode(synapse.synapse_pow)))
                 continue
+
+            loaded.setdefault(synapse.synapse_pow, True)
+
             new_tasks.append(\
                 asyncio.async(\
                     process_post(synapse),\
