@@ -489,7 +489,7 @@ def _process_synapse_create_post(dispatcher, req):
         "Resulting&nbsp;<a href='morphis://.dds/axon/read/{synapse_addr}/"\
             "{target_addr}'>Synapse</a>&nbsp;Address:<br/>{synapse_addr}"\
                  .format(\
-                    synapse_addr=mbase32.encode(key),\
+                    synapse_addr=mbase32.encode(synapse.synapse_pow),\
                     target_addr=mbase32.encode(target_addr))
 
     dispatcher.send_content(resp)
