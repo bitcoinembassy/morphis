@@ -375,7 +375,7 @@ def _process_axon_synapses(dispatcher, axon_addr_enc):
                     " key=[{}].".format(mbase32.encode(key)))
             return
 
-            loaded.setdefault(key, True)
+        loaded.setdefault(key, True)
 
         new_tasks.append(\
             asyncio.async(\
