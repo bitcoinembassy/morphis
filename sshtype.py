@@ -62,6 +62,11 @@ def encodeMpint(val):
     length = struct.pack(">L", len(buf))
     return length + buf
 
+def encode_mpint_onto(output, val):
+    buf = putil.deflate_long(val)
+    output += struct.pack(">L", len(buf))
+    output += buf
+
 def encodeNameList(val):
     return encodeString(val)
 
@@ -75,6 +80,11 @@ def encodeString(val):
 
     length = struct.pack(">L", len(buf))
     return length + buf
+
+def encode_string_onto(output, val):
+    buf = val.encode(encoding="UTF-8")
+    output += struct.pack(">L", len(buf))
+    output += buf
 
 def encodeBinary(buf):
     length = struct.pack(">L", len(buf))
