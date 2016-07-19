@@ -123,9 +123,6 @@ class MaalstroomDispatcher(object):
             self.send_content([content, None])
             return
 
-        if log.isEnabledFor(logging.DEBUG):
-            log.debug("rpath=[{}].".format(rpath))
-
         if rpath[0] == '.':
             try:
                 yield from self.dispatch_GET(rpath)

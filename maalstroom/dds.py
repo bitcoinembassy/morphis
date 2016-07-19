@@ -40,8 +40,6 @@ class MaalstroomRequest(object):
         self.path, sep, self._query = rpath.partition('?')
         self.req = self.path[len(service):]
 
-        log.info("req=[{}].".format(self.req))
-
         if self._query:
             self.qdict = parse_qs(self._query, keep_blank_values=True)
             self._query = '?' + self._query
