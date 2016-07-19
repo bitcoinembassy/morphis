@@ -469,16 +469,16 @@ def _process_synapse_create_post(dispatcher, req):
     def key_callback(akey):
         nonlocal content_key
 
-        if log.isEnabledFor(logging.INFO):
-            log.info("content_key=[{}].".format(mbase32.encode(content_key)))
-
         content_key = akey
         content_key_ready.set()
+
+        if log.isEnabledFor(logging.INFO):
+            log.info("content_key=[{}].".format(mbase32.encode(content_key)))
 
     @asyncio.coroutine
     def store_content():
         storing_nodes = 0
-        for retry in range(20, 30):
+        for retry in range(10, 50, 5):
             storing_nodes += yield from\
                 dispatcher.node.chord_engine.tasks.send_store_data(\
                     content.encode(),\
