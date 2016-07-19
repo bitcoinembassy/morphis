@@ -26,6 +26,8 @@ from sshexception import *
 
 log = logging.getLogger(__name__)
 
+RSASSA_PSS = "RSASSA-PSS"
+
 SHA1_DIGESTINFO =\
     b'\x30\x21\x30\x09\x06\x05\x2b\x0e\x03\x02\x1a\x05\x00\x04\x14'
 
@@ -36,7 +38,7 @@ class RsaKey(asymkey.AsymKey):
     data.
     """
 
-    def __init__(self, data=None, privdata=None, filename=None, password=None, vals=None, file_obj=None):
+    def __init__(self, data=None, privdata=None, filename=None, password=None, vals=None, file_obj=None, i=0):
         self.n = None
         self.e = None
         self.d = None
@@ -64,12 +66,11 @@ class RsaKey(asymkey.AsymKey):
                 else:
                     self._decode_key(privdata)
             else:
-                i, v = sshtype.parseString(data)
-                if v != 'ssh-rsa':
-                    raise SshException('Invalid key')
-                l, self.e = sshtype.parseMpint(data[i:])
-                i += l
-                l, self.n = sshtype.parseMpint(data[i:])
+                i, v = sshtype.parse_string_from(data, i)
+                if v != "ssh-rsa":
+                    raise SshException("Invalid key")
+                i, self.e = sshtype.parse_mpint_from(data, i)
+                i, self.n = sshtype.parse_mpint_from(data, i)
         self.size = util.bit_length(self.n)
 
     def asbytes(self):
@@ -79,13 +80,16 @@ class RsaKey(asymkey.AsymKey):
             return m
 
         m = bytearray()
-        m += sshtype.encodeString('ssh-rsa')
-        m += sshtype.encodeMpint(self.e)
-        m += sshtype.encodeMpint(self.n)
+        self.encode_pubkey_onto(m)
 
         self.__public_key_bytes = m
 
         return m
+
+    def encode_pubkey_onto(self, output):
+        sshtype.encode_string_onto(output, "ssh-rsa")
+        sshtype.encode_mpint_onto(output, self.e)
+        sshtype.encode_mpint_onto(output, self.n)
 
     def __str__(self):
         return self.asbytes()
@@ -97,7 +101,7 @@ class RsaKey(asymkey.AsymKey):
         return hash(h)
 
     def get_name(self):
-        return 'ssh-rsa'
+        return "ssh-rsa"
 
     def get_bits(self):
         return self.size
@@ -105,7 +109,23 @@ class RsaKey(asymkey.AsymKey):
     def can_sign(self):
         return self.d is not None
 
-    def calc_rsassa_pss_sig(self, data):
+    def generate_rsassa_pss_sig(self, data, output=None, output_header=True):
+        sig = self._generate_rsassa_pss_sig(data)
+
+        if output_header:
+            if not output:
+                output = bytearray()
+            sshtype.encode_string_onto(output, RSASSA_PSS)
+            sshtype.encode_binary_onto(output, sig)
+            return output
+
+        if output:
+            sshtype.encode_binary_onto(output, sig)
+            return output
+
+        return sig
+
+    def _generate_rsassa_pss_sig(self, data):
         return self._rsassa_pss_signer().sign(enc._generate_ID(data))
 
     def sign_ssh_data(self, data, output=None):
@@ -116,21 +136,30 @@ class RsaKey(asymkey.AsymKey):
 
         if not output:
             output = bytearray()
-        output += sshtype.encodeString('ssh-rsa')
-        output += sshtype.encodeBinary(sig)
+        sshtype.encode_string_onto(output, "ssh-rsa")
+        sshtype.encode_binary_onto(output, sig)
 
         return output
 
-    def verify_rsassa_pss_sig(self, data, signature):
-        h = enc._generate_ID(data)
+    def verify_rsassa_pss_sig(self, data, signature, i=0):
+        if verify_header:
+            i, hstr = sshtype.parse_string_from(signature, i)
+            if hstr != RSASSA_PSS:
+                log.warning("Not an RSASSA-PSS signature!")
+                return False
 
-        signer = self._rsassa_pss_verifier()
+        i, raw_signature = sshtype.parse_binary_from(signature, i)
 
-        return signer.verify(h, signature)
+        return self._verify_rsassa_pss_sig(data, raw_signature)
+
+    def _verify_rsassa_pss_sig(self, data, raw_signature):
+        return self._rsassa_pss_verifier().verify(\
+            enc._generate_ID(data),\
+            raw_signature)
 
     def verify_ssh_sig(self, key_data, sig_msg):
-        i, v = sshtype.parseString(sig_msg)
-        if v != 'ssh-rsa':
+        i, v = sshtype.parse_string_from(sig_msg, 0)
+        if v != "ssh-rsa":
             log.warning("Not an ssh-rsa signature!")
             return False
         if log.isEnabledFor(logging.DEBUG):
@@ -199,11 +228,11 @@ class RsaKey(asymkey.AsymKey):
         b = bytearray()
 
         b += struct.pack("B", 1) # mnk version.
-        b += sshtype.encodeMpint(self.e)
-        b += sshtype.encodeMpint(self.n)
-        b += sshtype.encodeMpint(self.d)
-        b += sshtype.encodeMpint(self.p)
-        b += sshtype.encodeMpint(self.q)
+        sshtype.encode_mpint_onto(b, self.e)
+        sshtype.encode_mpint_onto(b, self.n)
+        sshtype.encode_mpint_onto(b, self.d)
+        sshtype.encode_mpint_onto(b, self.p)
+        sshtype.encode_mpint_onto(b, self.q)
 
         return b
 
@@ -273,13 +302,8 @@ class RsaKey(asymkey.AsymKey):
         ver = struct.unpack("B", data[:1])[0]
         if ver != 1:
             raise SshException("Unsupported mnk version [{}].".format(ver))
-        i = 1
-        l, self.e = sshtype.parseMpint(data[i:])
-        i += l
-        l, self.n = sshtype.parseMpint(data[i:])
-        i += l
-        l, self.d = sshtype.parseMpint(data[i:])
-        i += l
-        l, self.p = sshtype.parseMpint(data[i:])
-        i += l
-        l, self.q = sshtype.parseMpint(data[i:])
+        i, self.e = sshtype.parse_mpint_from(data, 1)
+        i, self.n = sshtype.parse_mpint_from(data, i)
+        i, self.d = sshtype.parse_mpint_from(data, i)
+        i, self.p = sshtype.parse_mpint_from(data, i)
+        i, self.q = sshtype.parse_mpint_from(data, i)

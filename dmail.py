@@ -426,8 +426,8 @@ class DmailEngine(object):
         dmail_bytes = dmail.encode()
 
         if from_asymkey:
-            signature = from_asymkey.calc_rsassa_pss_sig(dmail_bytes)
-            dmail_bytes += sshtype.encodeBinary(signature)
+            from_asymkey.generate_rsassa_pss_sig(\
+                dmail_bytes, dmail_bytes, False)
 
         storing_nodes = yield from\
             self._send_dmail(from_asymkey, rsite, dmail_bytes)
@@ -560,7 +560,7 @@ class DmailEngine(object):
         if dw.signature:
             signature = dw.signature
             pubkey = rsakey.RsaKey(dmail.sender_pubkey)
-            valid_sig = pubkey.verify_rsassa_pss_sig(dw.data_enc, signature)
+            valid_sig = pubkey._verify_rsassa_pss_sig(dw.data_enc, signature)
 
             return dmail, valid_sig
         else:
@@ -605,9 +605,9 @@ class DmailEngine(object):
 
         if dmail.signature:
             pubkey = rsakey.RsaKey(dmail.sender_pubkey)
-            valid_sig =\
-                pubkey.verify_rsassa_pss_sig(\
-                    data[:dmail.signature_offset], dmail.signature)
+            valid_sig = pubkey._verify_rsassa_pss_sig(\
+                data[:dmail.signature_offset], dmail.signature)
+            log.warning("valid_sig=[{}].".format(valid_sig))
 
             return dmail, valid_sig
         else:
