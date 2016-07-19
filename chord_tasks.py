@@ -7,6 +7,7 @@ import asyncio
 from collections import namedtuple
 from concurrent import futures
 from datetime import datetime
+import functools
 import logging
 import math
 import os
@@ -588,7 +589,8 @@ class ChordTasks(object):
 
     @asyncio.coroutine
     def send_store_synapse(\
-            self, synapse, store_key=True, key_callback=None, retry_factor=20):
+            self, synapse, store_key=True, key_callback=None, retry_factor=5,\
+            min_storing_nodes=5):
         "Sends a StoreData request for a Synapse, returning the count of"\
         " nodes that claim to have stored it."
         assert type(synapse) is syn.Synapse
@@ -617,56 +619,73 @@ class ChordTasks(object):
         sdmsg.data = data
         sdmsg.targeted = True
 
+        @asyncio.coroutine
+        def retry_until(func, amount, *args, **kwargs):
+            total = 0
+
+            while total < amount:
+                total += yield from func(*args, **kwargs)
+
+            return total
+
         tasks = []
 
         #NOTE: We use the hashes of the keys as the IDs (DHT Key) due to the
         # DHT anti-entrapment feature.
 
         # Store for synapse_key (natural key of synapse).
-        tasks.append(asyncio.async(self.send_find_node(\
-            enc.generate_ID(synapse.synapse_key), for_data=True,
-            data_msg=sdmsg, retry_factor=retry_factor), loop=self.loop))
+        tasks.append(\
+            asyncio.async(\
+                retry_until(self.send_find_node, min_storing_nodes,\
+                    enc.generate_ID(synapse.synapse_key), for_data=True,\
+                    data_msg=sdmsg, retry_factor=retry_factor),\
+                loop=self.loop))
 
         if synapse.nonce:
             # Store for synapse_pow (PoW key of synapse).
-            tasks.append(asyncio.async(self.send_find_node(\
-                enc.generate_ID(synapse.synapse_pow), for_data=True,
-                data_msg=sdmsg, retry_factor=retry_factor), loop=self.loop))
+            tasks.append(\
+                asyncio.async(\
+                    retry_until(self.send_find_node, min_storing_nodes,\
+                        enc.generate_ID(synapse.synapse_pow), for_data=True,\
+                        data_msg=sdmsg, retry_factor=retry_factor),\
+                    loop=self.loop))
             if store_key:
-                @asyncio.coroutine
-                def store_key_f1():
-                    yield from self.send_store_key(\
-                        data, synapse.synapse_pow, targeted=True,\
-                        retry_factor=retry_factor)
-                    return 0
-
-                tasks.append(asyncio.async(store_key_f1(), loop=self.loop))
+                tasks.append(\
+                    asyncio.async(\
+                        retry_until(self.send_store_key, min_storing_nodes,\
+                            data, synapse.synapse_pow, targeted=True,\
+                            retry_factor=retry_factor),\
+                        loop=self.loop))
 
         # Store for target_key.
         for target_key in synapse.target_keys:
-            tasks.append(asyncio.async(self.send_find_node(\
-                enc.generate_ID(target_key), for_data=True,
-                data_msg=sdmsg, retry_factor=retry_factor), loop=self.loop))
+            tasks.append(\
+                asyncio.async(\
+                    retry_until(self.send_find_node, min_storing_nodes,\
+                        enc.generate_ID(target_key), for_data=True,\
+                        data_msg=sdmsg, retry_factor=retry_factor),\
+                    loop=self.loop))
 
         # Store for source_key.
-        tasks.append(asyncio.async(self.send_find_node(\
-            enc.generate_ID(synapse.source_key), for_data=True,
-            data_msg=sdmsg, retry_factor=retry_factor), loop=self.loop))
+        tasks.append(\
+            asyncio.async(\
+                retry_until(self.send_find_node, min_storing_nodes,\
+                    enc.generate_ID(synapse.source_key), for_data=True,\
+                    data_msg=sdmsg, retry_factor=retry_factor),\
+                loop=self.loop))
 
         # Store the synapse_key itself (for find_key operations).
         if store_key:
-            @asyncio.coroutine
-            def store_key_f2():
-                yield from self.send_store_key(\
-                    data, synapse.synapse_key, targeted=True,\
-                    retry_factor=retry_factor)
-                return 0
-
-            tasks.append(asyncio.async(store_key_f2(), loop=self.loop))
+            tasks.append(\
+                asyncio.async(\
+                    retry_until(self.send_store_key, min_storing_nodes,\
+                        data, synapse.synapse_key, targeted=True,\
+                        retry_factor=retry_factor),\
+                    loop=self.loop))
 
         vals = yield from asyncio.gather(*tasks, loop=self.loop)
 
-        return sum(vals)
+        return vals
 
     @asyncio.coroutine
     def send_store_updateable_key(\

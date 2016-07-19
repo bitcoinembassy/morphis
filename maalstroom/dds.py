@@ -523,7 +523,7 @@ def _process_synapse_create_post(dispatcher, req):
             rsakey.RsaKey(privdata=ident_dmail_address.site_privatekey)
         synapse.key = signing_key
 
-    yield from DdsEngine(dispatcher.node).upload_synapse(synapse)
+    yield from dispatcher.node.engine.tasks.send_store_synapse(synapse)
 
     storing_nodes =\
         yield from asyncio.wait_for(content_task, None, loop=dispatcher.loop)
