@@ -607,7 +607,9 @@ class DmailEngine(object):
             pubkey = rsakey.RsaKey(dmail.sender_pubkey)
             valid_sig = pubkey._verify_rsassa_pss_sig(\
                 data[:dmail.signature_offset], dmail.signature)
-            log.warning("valid_sig=[{}].".format(valid_sig))
+
+            if log.isEnabledFor(logging.DEBUG):
+                log.debug("valid_sig=[{}].".format(valid_sig))
 
             return dmail, valid_sig
         else:
