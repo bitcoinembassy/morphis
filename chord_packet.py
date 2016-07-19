@@ -352,6 +352,8 @@ class ChordDataResponse(ChordMessage):
                 end = i + consts.NODE_ID_BYTES
                 eekey = self.buf[i:end]
                 i, val = sshtype.parse_binary_from(self.buf, end)
+                #FIXME: Should have made this bigger than H (short) so to
+                # support a possible bigger packet and data block size.
                 original_size = struct.unpack_from(">H", self.buf, i)[0]
                 i += 2
 

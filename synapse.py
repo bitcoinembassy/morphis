@@ -123,8 +123,9 @@ class Synapse(object):
             nbuf = self.buf
             nbuf.clear()
 
-        # 0 is reserved; also, spec requires at least one target_key anyways.
-        assert len(self.target_keys) > 0 and len(self.target_keys) < 256
+        # 0 and >=128 are reserved; also, logic requires at least one
+        # target_key anyways.
+        assert len(self.target_keys) > 0 and len(self.target_keys) < 128
         nbuf += struct.pack("B", len(self.target_keys) & 0xff)
         for tkey in self.target_keys:
             assert len(tkey) == consts.NODE_ID_BYTES
@@ -170,6 +171,9 @@ class Synapse(object):
 
         if not ntarget_keys:
             raise Exception("ntarget_keys=0 is reserved.")
+        if ntarget_keys >= 128:
+            raise Exception(\
+                "ntarget_keys=[{}] is reserved.".format(ntarget_keys))
 
         for idx in range(ntarget_keys):
             end = i + consts.NODE_ID_BYTES
