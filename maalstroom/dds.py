@@ -478,7 +478,7 @@ def _process_synapse_create_post(dispatcher, req):
     @asyncio.coroutine
     def store_content():
         storing_nodes = 0
-        for retry in range(5, 15):
+        for retry in range(20, 30):
             storing_nodes += yield from\
                 dispatcher.node.chord_engine.tasks.send_store_data(\
                     content.encode(),\
