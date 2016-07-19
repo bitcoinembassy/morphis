@@ -658,7 +658,7 @@ def _save_dds_post(node, key, target_key, obj, data):
                 else:
                     assert type(obj) is tb.TargetedBlock, type(obj)
                     post.data_key = post.synapse_pow = key
-                    post.timestamp = post.first_seen
+                    post.timestamp = mutil.utc_datetime(0)
             else:
                 post.data_key = key
                 post.timestamp = post.first_seen
