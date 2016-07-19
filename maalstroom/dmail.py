@@ -233,9 +233,12 @@ def serve_get(dispatcher, rpath):
         dispatcher.send_content(template)
     elif req.startswith("/addressbook"):
         req = req[12:]
-        user = (yield from _load_default_dmail_address(dispatcher)).site_key
+
+        user_addr =\
+            (yield from _load_default_dmail_address(dispatcher)).site_key
+
         if req == "/list":
-            ab = yield from _load_addressbook_list(dispatcher.node, user)
+            ab = yield from _load_addressbook_list(dispatcher.node, user_addr)
             yield from _process_addressbook_list(dispatcher, ab)
 
         elif req.startswith("/create_contact/"):
@@ -271,7 +274,7 @@ def serve_get(dispatcher, rpath):
             template = templates.dmail_addressbook_wrapper[0]
             template = template.format( \
                 tag="", \
-                addr=user, \
+                addr=mbase32.encode(user_addr), \
                 idkey="")
             dispatcher.send_content(template)
 
@@ -281,7 +284,7 @@ def serve_get(dispatcher, rpath):
             template = templates.dmail_addressbook_wrapper[0]
             template = template.format(\
                 tag="", \
-                addr=user, \
+                addr=mbase32.encode(user_addr), \
                 idkey=idkey)
             dispatcher.send_content(template)
 
@@ -290,11 +293,11 @@ def serve_get(dispatcher, rpath):
             csrf_token = req[p0 + 1:]
             if not dispatcher.check_csrf_token(csrf_token):
                 return
-            yield from _process_clear_addressbook(dispatcher,user)
+            yield from _process_clear_addressbook(dispatcher, user_addr)
             template = templates.dmail_addressbook_wrapper[0]
             template = template.format( \
                 tag="", \
-                addr=user, \
+                addr=mbase32.encode(user_addr), \
                 idkey="")
             dispatcher.send_content(template)
 
