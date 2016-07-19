@@ -464,14 +464,36 @@ def _process_synapse_create_post(dispatcher, req):
         return
 
     content_key = None
+    content_key_ready = asyncio.Event()
 
     def key_callback(akey):
         nonlocal content_key
-        content_key = akey
 
-    yield from\
-        dispatcher.node.chord_engine.tasks.send_store_data(\
-            content.encode(), store_key=True, key_callback=key_callback)
+        if log.isEnabledFor(logging.INFO):
+            log.info("content_key=[{}].".format(mbase32.encode(content_key)))
+
+        content_key = akey
+        content_key_ready.set()
+
+    @asyncio.coroutine
+    def store_content():
+        storing_nodes = 0
+        for retry in range(30):
+            storing_nodes += yield from\
+                dispatcher.node.chord_engine.tasks.send_store_data(\
+                    content.encode(),\
+                    store_key=True,\
+                    key_callback=key_callback,\
+                    retry_factor=retry)
+
+            if storing_nodes >= 5:
+                break
+
+        return storing_nodes
+
+    content_task = asyncio.async(store_content(), loop=dispatcher.loop)
+
+    yield from content_key_ready.wait()
 
     target_addr = fia(dd["target_addr"])
 
@@ -499,6 +521,13 @@ def _process_synapse_create_post(dispatcher, req):
         synapse.key = signing_key
 
     yield from DdsEngine(dispatcher.node).upload_synapse(synapse)
+
+    storing_nodes =\
+        yield from asyncio.wait_for(content_task, None, loop=dispatcher.loop)
+
+    if storing_nodes < 5:
+        log.warning(\
+            "Only [{}] storing nodes for content.".format(storing_nodes))
 
     resp =\
         "Resulting&nbsp;<a href='morphis://.dds/axon/read/{synapse_addr}/"\
