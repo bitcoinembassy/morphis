@@ -8,6 +8,7 @@ from collections import namedtuple
 from concurrent import futures
 from datetime import datetime
 import functools
+import itertools
 import logging
 import math
 import os
@@ -619,14 +620,31 @@ class ChordTasks(object):
         sdmsg.data = data
         sdmsg.targeted = True
 
+        if log.isEnabledFor(logging.INFO):
+            task_id_seq = itertools.count()
+
         @asyncio.coroutine
         def retry_until(func, amount, *args, **kwargs):
-            total = 0
+            nonlocal task_id_seq
 
-            while total < amount:
+            total = 0
+            if log.isEnabledFor(logging.INFO):
+                task_id = task_id_seq.__next__()
+
+            retry_factor = kwargs.get("retry_factor", 5)
+
+            while True:
                 total += yield from func(*args, **kwargs)
 
-            return total
+                if total >= amount:
+                    return total
+
+                retry_factor += 1
+                kwargs["retry_factor"] = retry_factor
+
+                if log.isEnabledFor(logging.INFO):
+                    log.info("Retrying task_id=[{}] with retry_factor=[{}]."\
+                        .format(task_id, retry_factor))
 
         tasks = []
 
