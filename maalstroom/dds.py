@@ -487,6 +487,9 @@ def _process_synapse_create_post(dispatcher, req):
                     retry_factor=retry)
 
             if storing_nodes >= 5:
+                if log.isEnabledFor(logging.INFO):
+                    log.info("Stored content; storing_nodes=[{}]."\
+                        .format(storing_nodes))
                 break
 
         return storing_nodes
