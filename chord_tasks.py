@@ -2969,7 +2969,8 @@ class ChordTasks(object):
 
         result = yield from self.loop.run_in_executor(None, dbcall)
 
-        log.warning("Found [{}] results.".format(len(result)))
+        if log.isEnabledFor(logging.INFO):
+            log.info("Found [{}] Synapse results.".format(len(result)))
 
         synapses = []
 
