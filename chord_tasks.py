@@ -2868,7 +2868,9 @@ class ChordTasks(object):
 
         for eekey, edata, osize in drmsg.data:
             ekey = enc.decrypt_data_block(eekey, data_rw.data_key)
-            data = enc.decrypt_data_block(edata, ekey)
+            enc_data = enc.decrypt_data_block(edata, ekey)
+
+            data = enc_data[:osize]
 
             synapse = self._check_synapse(data)
 
