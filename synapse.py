@@ -135,7 +135,7 @@ class Synapse(object):
 
         if not self.timestamp:
             self.timestamp = mutil.utc_timestamp()
-        nbuf += sshtype.encodeMpint(int(self.timestamp*1000))
+        sshtype.encode_mpint_onto(nbuf, int(self.timestamp*1000))
 
         if self.signature:
             nbuf += sshtype.encodeBinary(self.signature)
@@ -250,10 +250,10 @@ class SynapseRequest(object):
         return nbuf
 
     def encode_onto(self, nbuf):
-        nbuf += sshtype.encodeMpint(int(self.start_timestamp*1000))
-        nbuf += sshtype.encodeMpint(int(self.end_timestamp*1000))
-        nbuf += sshtype.encodeBinary(self.start_key)
-        nbuf += sshtype.encodeBinary(self.end_key)
+        sshtype.encode_mpint_onto(nbuf, int(self.start_timestamp*1000))
+        sshtype.encode_mpint_onto(nbuf, int(self.end_timestamp*1000))
+        sshtype.encode_binary_onto(nbuf, self.start_key)
+        sshtype.encode_binary_onto(nbuf, self.end_key)
         nbuf += struct.pack(">H", self.minimum_pow)
         self.query.encode_onto(nbuf)
 
@@ -330,7 +330,7 @@ class SynapseRequest(object):
 
             def encode_onto(self, buf):
                 buf += struct.pack("B", self.type.value)
-                buf += sshtype.encodeBinary(self.value)
+                sshtype.encode_binary_onto(buf, self.value)
 
             def parse_from(self, buf, i):
                 ev = struct.unpack_from("B", buf, i)[0]
