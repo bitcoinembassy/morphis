@@ -141,7 +141,7 @@ class RsaKey(asymkey.AsymKey):
 
         return output
 
-    def verify_rsassa_pss_sig(self, data, signature, i=0):
+    def verify_rsassa_pss_sig(self, data, signature, i=0, verify_header=True):
         if verify_header:
             i, hstr = sshtype.parse_string_from(signature, i)
             if hstr != RSASSA_PSS:
@@ -150,9 +150,15 @@ class RsaKey(asymkey.AsymKey):
 
         i, raw_signature = sshtype.parse_binary_from(signature, i)
 
+        if type(raw_signature) is bytearray:
+            raw_signature = bytes(raw_signature)
+
         return self._verify_rsassa_pss_sig(data, raw_signature)
 
     def _verify_rsassa_pss_sig(self, data, raw_signature):
+        assert type(data) in (bytes, bytearray)
+        assert type(raw_signature) is bytes
+
         return self._rsassa_pss_verifier().verify(\
             enc._generate_ID(data),\
             raw_signature)
