@@ -158,6 +158,7 @@ def _init_daos(Base, d):
             synapse_pow = 2
             target_key = 3
             source_key = 4
+            signing_key = 5
 
     Index("synapsekey__data_id", SynapseKey.data_id)
 
@@ -262,6 +263,7 @@ def _init_daos(Base, d):
         synapse_pow = Column(LargeBinary, nullable=True)
         data_key = Column(LargeBinary, nullable=False)
         data = Column(LargeBinary, nullable=True)
+        signing_key = Column(LargeBinary, nullable=True)
         timestamp = Column(UtcDateTime, nullable=False)
         first_seen = Column(UtcDateTime, nullable=False)
 
@@ -652,7 +654,7 @@ def _upgrade_4_to_5(db):
         except:
             sess.rollback()
 
-        st = "select synapse_key from ddspost"
+        st = "select signing_key from ddspost"
         try:
             sess.execute(st)
         except:

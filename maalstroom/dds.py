@@ -24,6 +24,7 @@ import mbase32
 from morphisblock import MorphisBlock
 from mutil import fia, hex_dump, make_safe_for_html_content
 import mutil
+import rsakey
 import synapse as syn
 import targetedblock as tb
 import sshtype
@@ -283,7 +284,12 @@ def _process_axon_read(dispatcher, req):
     timestr = mutil.format_human_no_ms_datetime(post.timestamp)
 
     template = templates.dds_synapse_view[0]
-    template = template.format(key=key_enc, content=content, timestamp=timestr)
+    template = template.format(\
+        key=key_enc,\
+        signing_key="",\
+        signer="<TODO>",\
+        content=content,\
+        timestamp=timestr)
 
     msg = "<head><link rel='stylesheet' href='morphis://.dds/style.css'>"\
         "</link></head><body style='height: 90%; padding:0;margin:0;'>{}"\
@@ -338,9 +344,17 @@ def _process_axon_synapses(dispatcher, axon_addr_enc):
 
         timestr = mutil.format_human_no_ms_datetime(post.timestamp)
 
+        signer_name = yield from dmail.get_contact_name(\
+            dispatcher.node, post.signing_key)
+
         template = templates.dds_synapse_view[0]
         template =\
-            template.format(key=key_enc, content=content, timestamp=timestr)
+            template.format(\
+                key=key_enc,\
+                signing_key=mbase32.encode(post.signing_key),\
+                signer=signer_name,\
+                content=content,\
+                timestamp=timestr)
 
         dispatcher.send_partial_content(template)
 
@@ -426,12 +440,17 @@ def _process_synapse_create(req):
     if req.dispatcher.handle_cache(target_addr):
         return
 
+    ident_name =\
+        yield from dmail.get_contact_name(req.dispatcher.node, req.ident)
+    ident_str = "{} ({})".format(ident_name, req.ident_enc)
+
     template = templates.dds_create_synapse[0]
     template = template.format(\
         csrf_token=req.dispatcher.client_engine.csrf_token,\
         message_text="",\
         target_addr=target_addr,\
         ident=req.ident_enc,\
+        ident_str=ident_str,\
         query=req.query)
 
 #    template =\
@@ -652,6 +671,7 @@ def _save_dds_post(node, key, target_key, obj, data):
                     post.synapse_key = obj.synapse_key
                     post.synapse_pow = obj.synapse_pow
                     post.data_key = obj.source_key
+                    post.signing_key = obj.signing_key
                     post.timestamp = mutil.utc_datetime(obj.timestamp)
                 else:
                     assert type(obj) is tb.TargetedBlock, type(obj)

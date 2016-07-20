@@ -10,6 +10,7 @@ NODE_ID_BYTES = NODE_ID_BITS >> 3
 MAX_DATA_BLOCK_SIZE = 32768
 
 NULL_KEY = bytes([0x00] * NODE_ID_BYTES)
+NULL_LONG = bytes((0x00,) * 4)
 
 NSK_DEFAULT_ADDRESS = "default_address"
 NSK_SCHEMA_VERSION = "schema_version"

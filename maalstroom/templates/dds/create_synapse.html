@@ -7,7 +7,7 @@
                 <input type="hidden" name="target_addr" value="{target_addr}"/>
                 <input type="hidden" name="ident" value="{ident}"/>
                 <!--textarea name="content" autofocus>{message_text}</textarea-->
-                <div style="font-size: 0.75em; text-overflow: ellipsis; overflow: hidden;">{ident}</div>
+                <div style="font-size: 0.75em; text-overflow: ellipsis; overflow: hidden;">{ident_str}</div>
                 <input type="text" style="width: calc(100% - 12em);" name="content" value="{message_text}" placeholder="Singleline message..." autofocus />
                 <textarea name="content2" style="width: calc(100% - 6em);" autofocus rows="3" id="TITLE" placeholder="Multiline message..."></textarea>
                 <button class="reply" type="submit">SEND</button>

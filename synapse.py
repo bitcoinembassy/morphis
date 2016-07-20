@@ -13,6 +13,7 @@ import consts
 import enc
 import mbase32
 import mutil
+import rsakey
 import sshtype
 
 log = logging.getLogger(__name__)
@@ -38,7 +39,7 @@ class Synapse(object):
         self.source_key = source_key
         self.timestamp = None
         self.key = None
-        self.pubkey = None
+        self._pubkey = None
         self.signature = None
         self.nonce = None
         self.stamps = []
@@ -46,10 +47,16 @@ class Synapse(object):
 
         self.difficulty = difficulty
 
+        self.signature_offset = None
+        self.pubkey_offset = None
         self.nonce_offset = None
+
+        self.signature_type = None
+        self.pubkey_len = None
 
         self._synapse_key = None
         self._synapse_pow = None
+        self._signing_key = None
         self._log_distance = None
 
         if buf:
@@ -138,26 +145,34 @@ class Synapse(object):
             self.timestamp = mutil.utc_timestamp()
         sshtype.encode_mpint_onto(nbuf, int(self.timestamp*1000))
 
+        self.signature_offset = len(nbuf)
         if self.signature:
-            nbuf += sshtype.encodeBinary(self.signature)
+            nbuf += self.signature
         elif self.key:
-            nbuf += sshtype.encodeBinary(self.key.calc_rsassa_pss_sig(nbuf))
+            # Will be one string and one binary.
+            self.key.generate_rsassa_pss_sig(nbuf, nbuf)
         else:
-            nbuf += sshtype.encodeBinary(b'')
+            assert not self._pubkey
+            sshtype.encode_string_onto(nbuf, "")
 
-        if self.pubkey:
-            nbuf += sshtype.encodeBinary(self.pubkey)
+        if self._pubkey:
+            offset = len(nbuf)
+            nbuf += consts.NULL_LONG
+            nbuf += self._pubkey
+            struct.pack_into(">L", nbuf, offset, len(nbuf) - offset - 4)
         elif self.key:
-            nbuf += sshtype.encodeBinary(self.key.asbytes())
+            offset = len(nbuf)
+            nbuf += consts.NULL_LONG
+            self.key.encode_pubkey_onto(nbuf)
+            struct.pack_into(">L", nbuf, offset, len(nbuf) - offset - 4)
         else:
-            nbuf += sshtype.encodeBinary(b'')
+            assert not self.signature
+            sshtype.encode_string_onto(nbuf, "")
 
         self.nonce_offset = nonce_offset = len(nbuf)
         nbuf += b' ' * Synapse.NONCE_SIZE
-
         nonce_bytes = yield from\
             self._calculate_nonce(nbuf, nonce_offset, self.difficulty)
-
         self._store_nonce(nbuf, nonce_bytes, nonce_offset)
 
         if self.stamps:
@@ -187,9 +202,23 @@ class Synapse(object):
         i, tsms = sshtype.parse_mpint_from(self.buf, i)
         self.timestamp = tsms/1000
 
-        # For now we only support rsassa_pss.
-        i, self.signature = sshtype.parse_binary_from(self.buf, i)
-        i, self.key_bytes = sshtype.parse_binary_from(self.buf, i)
+        self.signature_offset = i
+        i, self.signature_type = sshtype.parse_string_from(self.buf, i)
+        if self.signature_type:
+            # For now we only support rsassa_pss.
+            assert\
+                self.signature_type == rsakey.RSASSA_PSS, self.signature_type
+            sig_bin_len = struct.unpack_from(">L", self.buf, i)[0]
+            i += 4 + sig_bin_len
+        else:
+            self.signature_type = None
+
+        self.pubkey_len = struct.unpack_from(">L", self.buf, i)[0]
+        i += 4
+        if self.pubkey_len:
+            assert self.signature_type
+            self.pubkey_offset = i
+            i += self.pubkey_len
 
         self.nonce_offset = i
         end = i + Synapse.NONCE_SIZE
@@ -198,6 +227,41 @@ class Synapse(object):
 
         if i < len(self.buf):
             self.stamps = self.buf[i:]
+
+    def is_signed(self):
+        return self.signature_type is not None
+
+    def check_signature(self):
+        assert self.buf and self.is_signed
+
+        if not self.key:
+            self.key = rsakey.RsaKey(self.buf, i=self.pubkey_offset)
+
+        return self.key.verify_rsassa_pss_sig(
+            self.buf[:self.signature_offset], self.buf, self.signature_offset)
+
+    @property
+    def pubkey(self):
+        if self._pubkey:
+            return self._pubkey
+
+        self._pubkey =\
+            self.buf[self.pubkey_offset:self.pubkey_offset+self.pubkey_len]
+
+        return self._pubkey
+
+    @pubkey.setter
+    def pubkey(self, value):
+        self._pubkey = value
+
+    @property
+    def signing_key(self):
+        if self._signing_key:
+            return self._signing_key
+
+        self._signing_key = enc.generate_ID(self.pubkey)
+
+        return self._signing_key
 
     @asyncio.coroutine
     def _calculate_nonce(self, buf, offset, difficulty):

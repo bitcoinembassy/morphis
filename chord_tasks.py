@@ -3215,6 +3215,11 @@ class ChordTasks(object):
                     store_key(target_key, SynapseKey.KeyType.target_key)
                 store_key(synapse.source_key, SynapseKey.KeyType.source_key)
 
+                if synapse.is_signed():
+                    store_key(\
+                        synapse.signing_key,\
+                        SynapseKey.KeyType.signing_key)
+
                 sess.commit()
 
         yield from self.loop.run_in_executor(None, dbcall)
@@ -3591,7 +3596,13 @@ class ChordTasks(object):
                     ").".format(synapse.timestamp, now))
             return None
 
-        if not synapse.signature:
+        if synapse.is_signed():
+            r = synapse.check_signature()
+            if not r:
+                log.warning("Invalid Synapse; signature is invalid.")
+                return None
+
+        if not synapse.stamps:
             # Then it is required to be a POW Synapse.
             dist, direction = synapse.log_distance
 
@@ -3608,7 +3619,7 @@ class ChordTasks(object):
 
             return synapse
 
-        # Signed Synapse.
+        # Stamped Synapse.
         raise Exception()
         #TODO:YOU_ARE_HERE
         #return synapse
