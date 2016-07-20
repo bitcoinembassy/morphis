@@ -441,6 +441,11 @@ def _process_synapse_create(req):
     if req.dispatcher.handle_cache(target_addr):
         return
 
+    if not req.ident:
+        dmail_address =\
+            yield from dmail._load_default_dmail_address(req.dispatcher)
+        req.ident = dmail_address.site_key
+
     ident_name =\
         yield from dmail.get_contact_name(req.dispatcher.node, req.ident)
     if ident_name == req.ident_enc or not req.ident:
