@@ -256,6 +256,8 @@ class Synapse(object):
 
     @property
     def signing_key(self):
+        assert self.is_signed()
+
         if self._signing_key:
             return self._signing_key
 

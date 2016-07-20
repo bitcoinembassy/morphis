@@ -344,8 +344,9 @@ def _process_axon_synapses(dispatcher, axon_addr_enc):
 
         timestr = mutil.format_human_no_ms_datetime(post.timestamp)
 
-        signer_name = yield from dmail.get_contact_name(\
-            dispatcher.node, post.signing_key)
+        signing_key = post.signing_key if post.signing_key else ""
+        signer_name =\
+            yield from dmail.get_contact_name(dispatcher.node, signing_key)
 
         template = templates.dds_synapse_view[0]
         template =\
@@ -674,7 +675,8 @@ def _save_dds_post(node, key, target_key, obj, data):
                     post.synapse_key = obj.synapse_key
                     post.synapse_pow = obj.synapse_pow
                     post.data_key = obj.source_key
-                    post.signing_key = obj.signing_key
+                    if obj.is_signed():
+                        post.signing_key = obj.signing_key
                     post.timestamp = mutil.utc_datetime(obj.timestamp)
                 else:
                     assert type(obj) is tb.TargetedBlock, type(obj)
