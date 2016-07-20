@@ -536,7 +536,6 @@ def _process_synapse_create_post(dispatcher, req):
 
     ident_enc = fia(dd["ident"])
     if ident_enc:
-        log.warning("ident_enc=[{}].".format(ident_enc))
         ident_addr = mbase32.decode(ident_enc)
         ident_dmail_address = yield from\
             dmail.load_dmail_address(dispatcher.node, site_key=ident_addr)
