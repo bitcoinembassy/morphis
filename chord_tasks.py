@@ -3167,7 +3167,8 @@ class ChordTasks(object):
         # Synapse key that we are storing and store together in SynapseKey.
         enc_key = os.urandom(64)
         enc_data, b = enc.encrypt_data_block(dmsg.data, enc_key)
-        enc_data += b
+        if b:
+            enc_data += b
 
         distances = []
 
