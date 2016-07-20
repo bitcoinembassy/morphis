@@ -442,7 +442,10 @@ def _process_synapse_create(req):
 
     ident_name =\
         yield from dmail.get_contact_name(req.dispatcher.node, req.ident)
-    ident_str = "{} ({})".format(ident_name, req.ident_enc)
+    if ident_name == req.ident_enc or not req.ident:
+        ident_str = ident_name
+    else:
+        ident_str = "{} ({})".format(ident_name, req.ident_enc)
 
     template = templates.dds_create_synapse[0]
     template = template.format(\
