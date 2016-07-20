@@ -3313,7 +3313,7 @@ class ChordTasks(object):
                 raise ChordException(errmsg)
             else:
                 a, b = enc.encrypt_data_block(dmsg.pubkey, data_key)
-                epubkey = a + b
+                epubkey = a + b if b else a
 
         else:
             if targeted:
