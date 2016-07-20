@@ -2095,7 +2095,6 @@ def _create_or_update_contact(node, addr, user, name, first=None, last=None):
 
 @asyncio.coroutine
 def get_contact_name(node, addr):
-    log.warning(addr)
     assert addr is not None
 
     if not addr:
