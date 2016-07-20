@@ -251,16 +251,12 @@ def serve_get(dispatcher, rpath):
             else:
                 addr = mbase32.decode(addr_enc)
 
-            yield from _process_edit_contact(dispatcher, addr, True)
+            yield from _process_edit_contact(dispatcher, addr, True, False)
 
         elif req.startswith("/edit_contact/"):
             addr = mbase32.decode(req[14:])
 
-            if not addr:
-                dispatcher.send_content(templates.dmail_empty_panel)
-                return
-
-            yield from _process_edit_contact(dispatcher, addr)
+            yield from _process_edit_contact(dispatcher, addr, not bool(addr))
 
         elif req.startswith("/delete_contact"):
             p0 = req.find("/", 2)
@@ -1965,7 +1961,7 @@ def generate_safe_reply_subject(dm, m32=False):
         return quote_plus(reply_subject)
 
 @asyncio.coroutine
-def _process_edit_contact(dispatcher, addr, create=False):
+def _process_edit_contact(dispatcher, addr, create=False, full=True):
     contact = yield from _load_contact(dispatcher.node, addr)
 
     if not contact:
@@ -1977,12 +1973,18 @@ def _process_edit_contact(dispatcher, addr, create=False):
 
     if create:
         button_class = "CREATE CONTACT"
-        extra_class = "display_none"
-        addr_readonly = " readonly='readonly'"
+        if addr:
+            addr_readonly = " readonly='readonly'"
+        else:
+            addr_readonly = ""
     else:
         button_class = "SAVE CONTACT"
-        extra_class = ""
         addr_readonly = ""
+
+    if full:
+        extra_class = ""
+    else:
+        extra_class = "display_none"
 
     template = templates.dmail_addressbook_edit_contact[0]
     template =\
