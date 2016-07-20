@@ -591,7 +591,7 @@ class ChordTasks(object):
     @asyncio.coroutine
     def send_store_synapse(\
             self, synapse, store_key=True, key_callback=None, retry_factor=5,\
-            min_storing_nodes=5):
+            min_storing_nodes=5, max_retries=30):
         "Sends a StoreData request for a Synapse, returning the count of"\
         " nodes that claim to have stored it."
         assert type(synapse) is syn.Synapse
@@ -625,13 +625,14 @@ class ChordTasks(object):
 
         @asyncio.coroutine
         def retry_until(func, amount, *args, **kwargs):
-            nonlocal task_id_seq
+            nonlocal task_id_seq, max_retries
 
             total = 0
             if log.isEnabledFor(logging.INFO):
                 task_id = task_id_seq.__next__()
 
             retry_factor = kwargs.get("retry_factor", 5)
+            total_max_retries = retry_factor + max_retries
 
             while True:
                 total += yield from func(*args, **kwargs)
@@ -640,6 +641,17 @@ class ChordTasks(object):
                     return total
 
                 retry_factor += 1
+
+                if retry_factor >= total_max_retries:
+                    if "task_id" not in locals():
+                        task_id = None
+
+                    log.warning(\
+                        "Retry task (id=[{}]) reached max_retries ({})"\
+                        " with total=[{}]."\
+                            .format(task_id, max_retries, total))
+                    return total
+
                 kwargs["retry_factor"] = retry_factor
 
                 if log.isEnabledFor(logging.INFO):
