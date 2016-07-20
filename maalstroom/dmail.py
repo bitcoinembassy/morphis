@@ -1004,6 +1004,9 @@ def serve_get(dispatcher, rpath):
 
         dmail_key_enc = mbase32.encode(dmail_key)
 
+        if not contact_name:
+            contact_name = dmail_key_enc
+
         yield from _create_or_update_contact(\
             dispatcher.node, dmail_key, dmail_key, contact_name)
 
