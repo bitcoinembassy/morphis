@@ -148,7 +148,7 @@ class ClientEngine(object):
 
     @asyncio.coroutine
     def _dmail_auto_publish(self, dmail_address):
-        data_rw = yield from self.tasks.send_get_data(\
+        data_rw = yield from self.engine.tasks.send_get_data(\
             dmail_address.site_key, retry_factor=100)
 
         if data_rw.data:
