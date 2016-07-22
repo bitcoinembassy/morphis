@@ -273,7 +273,8 @@ class DmailEngine(object):
         self.loop = node.loop
 
     @asyncio.coroutine
-    def generate_dmail_address(self, prefix=None, difficulty=20):
+    def generate_dmail_address(self, prefix=None, difficulty=20,\
+            public_name=None):
         assert type(difficulty) is int
 
         if log.isEnabledFor(logging.INFO):
@@ -293,6 +294,7 @@ class DmailEngine(object):
         dms = DmailSite()
         dms.generate()
         dms.root["difficulty"] = difficulty
+        dms.root["name"] = public_name
 
         data_key = None
         def key_callback(value):

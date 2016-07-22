@@ -957,26 +957,15 @@ def serve_get(dispatcher, rpath):
                     "No dmail addresses, please create one first.")
                 return
 
-        content = templates.dmail_address_config[0]
-
-        content = content.replace(\
-            "{csrf_token}",\
-            dispatcher.client_engine.csrf_token)
-        content = content.replace(\
-            "${DIFFICULTY}",\
-            str(dmail_address.keys[0].difficulty))
-        content = content.replace(\
-            "${DMAIL_ADDRESS_SHORT}", addr_enc[:32])
-        content = content.replace(\
-            "${DMAIL_ADDRESS}", addr_enc)
-        content = content.replace(\
-            "${PRIVATE_KEY}",\
-            base58.encode(dmail_address.site_privatekey))
-        content = content.replace(\
-            "${X}", base58.encode(dmail_address.keys[0].x))
-        content = content.replace(\
-            "${TARGET_KEY}",\
-            mbase32.encode(dmail_address.keys[0].target_key))
+        content = templates.dmail_address_config[0].format(\
+            csrf_token=dispatcher.client_engine.csrf_token,\
+            public_name="",\
+            difficulty=str(dmail_address.keys[0].difficulty),\
+            dmail_address_short=addr_enc[:32],\
+            dmail_address=addr_enc,\
+            private_key=base58.encode(dmail_address.site_privatekey),\
+            x=base58.encode(dmail_address.keys[0].x),\
+            target_key=mbase32.encode(dmail_address.keys[0].target_key))
 
         dispatcher.send_content(content)
 ##### OLD ACTIONS:
@@ -988,15 +977,18 @@ def serve_get(dispatcher, rpath):
         prefix = qdict["prefix"][0]
         difficulty = int(qdict["difficulty"][0])
         csrf_token = qdict["csrf_token"][0]
+        public_name = qdict["public_name"][0]
         contact_name = qdict["contact_name"][0]
 
         if not dispatcher.check_csrf_token(csrf_token):
             return
 
+        if not contact_name and public_name:
+            contact_name = public_name
+
         log.info("prefix=[{}].".format(prefix))
-        privkey, dmail_key, dms, storing_nodes =\
-            yield from\
-                _create_dmail_address(dispatcher, prefix, difficulty)
+        privkey, dmail_key, dms, storing_nodes = yield from\
+            _create_dmail_address(dispatcher, prefix, difficulty, public_name)
 
         dmail_key_enc = mbase32.encode(dmail_key)
 
@@ -1040,6 +1032,7 @@ def serve_get(dispatcher, rpath):
         addr_enc = qdict["dmail_address"][0]
         difficulty = qdict["difficulty"][0]
         csrf_token = qdict["csrf_token"][0]
+        public_name = qdict["public_name"][0]
 
         if not dispatcher.check_csrf_token(csrf_token):
             return
@@ -1067,6 +1060,7 @@ def serve_get(dispatcher, rpath):
         root["target"] =\
             mbase32.encode(dmail_address.keys[0].target_key)
         root["difficulty"] = int(difficulty)
+        root["name"] = public_name
 
         private_key = rsakey.RsaKey(privdata=dmail_address.site_privatekey)
 
@@ -1946,10 +1940,10 @@ def _format_dmail(dm, valid_sig):
     return dmail_text
 
 @asyncio.coroutine
-def _create_dmail_address(dispatcher, prefix, difficulty):
+def _create_dmail_address(dispatcher, prefix, difficulty, public_name):
     de = dmail.DmailEngine(dispatcher.node)
     privkey, data_key, dms, storing_nodes =\
-        yield from de.generate_dmail_address(prefix, difficulty)
+        yield from de.generate_dmail_address(prefix, difficulty, public_name)
     return privkey, data_key, dms, storing_nodes
 
 def generate_safe_reply_subject(dm, m32=False):

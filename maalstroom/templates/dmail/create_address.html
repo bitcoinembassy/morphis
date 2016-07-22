@@ -3,22 +3,27 @@
 <form action="morphis://.dmail/create_address/make_it_so" method="get">
     <input type="hidden" name="csrf_token" id="csrf_token" value="{csrf_token}"/>
     <h4>Dmail Address Generation</h4>
-    <p>To create yourself a new Dmail Address, simply click the Create button below. Changing these values from their defaults is not needed at all.</p>
+    <p>To create yourself a new Dmail Address, simply click the Create button below.</p>
     <p>
-        <label for="difficulty">Difficulty</label>
-        <input type="text" name="difficulty" id="difficulty" value="20"/>
-    </p>
-    <p>NOTE: Difficulty is the anti-spam setting that determines how much work it is to send you a Dmail. Its effect is exponential (work=2^difficulty). Do not set it too low -- I would recommend no lower than 20. If 2^difficulty is lower than the amount of nodes in the network, then the network will likely have trouble finding your Dmails.</p>
-    <p>
-        <label for="prefix">Dmail Prefix</label>
+        <label for="prefix">Dmail Vanity Prefix</label>
         <input type="text" name="prefix" id="prefix"/>&nbsp;<span class="italic">(Optional)</span>
     </p>
     <p>NOTE: Each letter in the prefix will make the address take 32x longer to generate. Three letters takes almost an hour on my test machine.</p>
+    <p>
+        <label for="public_name">Public Name</label>
+        <input type="text" name="public_name" id="public_name"/>
+    </p>
+    <p>NOTE: This public name is what others will see.</p>
     <p>
         <label for="contact_name">Your Name</label>
         <input type="text" name="contact_name" id="contact_name"/>
     </p>
      <p>NOTE: This information will not be shared; it will only be stored in your address book. This name will show up as the display value for your address in your own UI.</p>
+    <p>
+        <label for="difficulty">Difficulty</label>
+        <input type="text" name="difficulty" id="difficulty" value="20"/>
+    </p>
+    <p>NOTE: Difficulty is the anti-spam setting that determines how much work it is to send you a Dmail. Its effect is exponential (work=2^difficulty). Do not set it too low -- I would recommend no lower than 20. If 2^difficulty is lower than the amount of nodes in the network, then the network will likely have trouble finding your Dmails.</p>
     <input type="submit" formtarget="_self" id="create" value="Create"/>
 </form>
 </body></html>
