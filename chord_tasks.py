@@ -2458,6 +2458,7 @@ class ChordTasks(object):
             mask = ((1 << (chord.NODE_ID_BITS - significant_bits)) - 1)\
                 .to_bytes(chord.NODE_ID_BYTES, "big")
 
+            #FIXME: This calculation is broken. See issue #95.
             end_id = bytearray()
 
             for c1, c2 in zip(data_id, mask):
