@@ -2,10 +2,10 @@
     <div class="dds-user-icon"><img src="morphis://.dds/images/user-icon3-sm.png"></div>
     <div class="dds-post">
 	<div class="dds-post-nav">
-	    <div class="dds-post-name"><a href="morphis://.text/{signing_key}" title="{signing_key}">{signer}</a> thought</div>
+	    <div class="dds-post-name dds-trunc"><a href="morphis://.text/{signing_key}" title="{signing_key}">{signer}</a></div><div class="dds-post-title">&nbsp;thought&nbsp;&nbsp;</div>
 	    <div class="dds-post-time">on {timestamp}</div>
 	    <div class="dds-post-reply"><button class="post" type="submit">&lt;</button></div>
 	</div>
-	    <div class="dds-post-text">{content}</div>
+	    <div style="overflow: hidden; text-overflow: ellipsis; -o-text-overflow: ellipsis;" class="dds-post-text">{content}</div>
     </div>
 </div>

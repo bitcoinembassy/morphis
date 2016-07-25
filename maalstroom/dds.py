@@ -590,7 +590,8 @@ def _format_axon(node, data, key, key_enc=None):
 
     return result\
         + "<div style='font-family: monospace; font-size: 8pt;"\
-            "color: #a0a0ff; position: absolute; bottom: 0.3em;"\
+            "color: #80C9D1; position: absolute; bottom: 0.3em;"\
+            "padding-right: 10px; padding-bottom: 5px;"\
             "right: 0.3em;'>{}</div>".format(key_enc[:32])
 
 def __format_post(data):
@@ -598,7 +599,7 @@ def __format_post(data):
     fn = data.find(b'\n')
 
     if fr == -1 and fn == -1:
-        return "<h3>{}</h3>".format(make_safe_for_html_content(data))
+        return "{}".format(make_safe_for_html_content(data))
 
     if fr == -1:
         end = fn
@@ -610,8 +611,8 @@ def __format_post(data):
         end = fr
         start = end + 2
 
-    return "<h3 style='padding:0;margin:0;'>{}</h3>"\
-        "<pre style='color: gray; padding:0;margin:0;'>{}</pre>"\
+    return "{}<br/>" \
+        "{}"\
             .format(\
                 data[:end].decode(), make_safe_for_html_content(data[start:]))
 
