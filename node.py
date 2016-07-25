@@ -355,6 +355,9 @@ def __main():
     parser.add_argument("-l", dest="logconf",\
         help="Specify alternate logging.ini [IF SPECIFIED, THIS MUST BE THE"\
             " FIRST PARAMETER!].")
+    parser.add_argument("--maalstroom-bind",\
+        help="Specify bind address (host:port) for Maalstroom. The default"\
+            " is \":4250\"; which will listen on all interfaces on port 4251.")
     parser.add_argument("--maxconn", type=int,\
         help="Specify the maximum connections to seek.")
     parser.add_argument("--nodecount", type=int,\
@@ -443,6 +446,10 @@ def __main():
             if maalstroom_enabled:
                 import maalstroom
 
+                if args.maalstroom_bind:
+                    maalstroom.host, mport =\
+                        args.maalstroom_bind.split(':')
+                    maalstroom.port = int(mport)
                 if args.disable_csrf_check:
                     maalstroom.disable_csrf_check = True
                 if args.dmdmail:
