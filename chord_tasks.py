@@ -257,7 +257,7 @@ class ChordTasks(object):
 
     @asyncio.coroutine
     def send_get_data(self, data_key, path=None, scan_only=False,\
-            retry_factor=1):
+            force_cache=False, retry_factor=1):
         assert type(data_key) in (bytes, bytearray)\
             and len(data_key) == chord.NODE_ID_BYTES,\
             "type(data_key)=[{}], len={}."\
@@ -275,12 +275,37 @@ class ChordTasks(object):
 
         data_id = enc.generate_ID(data_key)
 
+        if force_cache:
+            data_rw = yield from self._get_data_from_cache(data_key, path)
+
+            if data_rw:
+                if data_rw.version:
+                    # Async check we had the latest; only point then to update
+                    # the cache for next request.
+                    asyncio.async(self._send_get_data(\
+                        data_key, path, scan_only, True, retry_factor))
+
+                return data_rw
+
+        yield from self._send_get_data(data_key, path, scan_only, retry_factor)
+
+    @asyncio.coroutine
+    def _send_get_data(self, data_key, path=None, scan_only=False,\
+            force_cache=False, retry_factor=1):
         data_rw = yield from\
             self.send_find_node(data_id, for_data=True, data_key=data_key,\
                 path_hash=path_hash, scan_only=scan_only,\
                 retry_factor=retry_factor)
 
         if data_rw.data:
+            if force_cache:
+                    if data_rw.version:
+                        yield from self._store_data_in_cache(\
+                            data_rw.data, data_rw.pubkey, data_rw.path_hash,\
+                            data_rw.version, data_rw.signature)
+                    else:
+                        yield from self._store_data_in_cache(data_rw.data)
+
             #FIXME: This is not optimal as we start a whole new FindNode for
             # this. When rewriting this file incorporate this stage into the
             # retrevial process at the end (and have it async just like this).
@@ -3687,3 +3712,32 @@ class ChordTasks(object):
             sess.add(node_state)
 
         node_state.value = str(int(node_state.value) + size_diff)
+
+    # Cache API.
+    def _get_data_from_cache(self, data_key, path=None):
+        data, data_l, version, signature, epubkey, pubkeylen =\
+            yield from self._retrieve_data(data_id, None)
+
+        if not data:
+            return None
+
+        data_rw = DataResponseWrapper(data_key)
+
+        drmsg = cp.ChordDataResponse()
+        drmsg.data = enc_data
+        drmsg.original_size = data_l
+        if version is not None:
+            drmsg.version = version
+            drmsg.signature = signature
+            if epubkey:
+                drmsg.epubkey = epubkey
+                drmsg.pubkeylen = pubkeylen
+
+        r = yield from\
+            self._process_data_response(None, drmsg, None, None, data_rw)
+
+        return data_rw
+
+    def _store_data_in_cache(self, data, pubkey=None, path_hash=None,\
+            version=None, sig=None):
+        pass
