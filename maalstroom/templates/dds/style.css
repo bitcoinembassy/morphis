@@ -186,6 +186,8 @@ a:hover {
 }
 .dds-post-text { 
 	padding-bottom: 10px;
+	overflow-wrap: break-word;
+	word-wrap: break-word;
 }
 .dds-footer {
 }
