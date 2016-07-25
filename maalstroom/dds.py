@@ -6,6 +6,7 @@ import llog
 import asyncio
 from concurrent import futures
 from datetime import datetime
+import json
 import logging
 from urllib.parse import parse_qs
 import os
@@ -348,11 +349,25 @@ def _process_axon_synapses(dispatcher, axon_addr_enc):
         signer_name =\
             yield from dmail.get_contact_name(dispatcher.node, signing_key)
 
+        signing_key_enc = mbase32.encode(post.signing_key)
+
+        if signing_key and signer_name == signing_key_enc:
+            data_rw = yield from dispatcher.node.engine.tasks.send_get_data(\
+                signing_key, force_cache=True)
+
+            if data_rw:
+                json_bytes = data_rw.data
+                if json_bytes:
+                    name = json.loads(json_bytes.decode()).get("name")
+                    if name:
+                        signer_name = make_safe_for_html_content(name)
+                        log.info("Using Dsite name=[{}].".format(signer_name))
+
         template = templates.dds_synapse_view[0]
         template =\
             template.format(\
                 key=key_enc,\
-                signing_key=mbase32.encode(post.signing_key),\
+                signing_key=signing_key_enc,\
                 signer=signer_name,\
                 content=content,\
                 timestamp=timestr)

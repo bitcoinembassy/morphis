@@ -3756,7 +3756,8 @@ class ChordTasks(object):
     def _store_data_in_cache(self, data_id, data, pubkey=None, path_hash=None,\
             version=None, signature=None, need_pruning=False):
 
-        data_present = yield from self._check_has_data(data_id, None, None)
+        data_present =\
+            yield from self._check_has_data(data_id, None, None, None)
         if data_present:
             return
 
@@ -3768,6 +3769,6 @@ class ChordTasks(object):
         dmsg.signature = signature
 
         r = yield from\
-            self._store_data(self, None, data_id, dmsg, need_pruning)
+            self._store_data(None, data_id, dmsg, need_pruning)
 
         return r
