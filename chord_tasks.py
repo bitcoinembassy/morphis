@@ -276,18 +276,19 @@ class ChordTasks(object):
 
         data_id = enc.generate_ID(data_key)
 
-        if force_cache:
-            data_rw =\
-                yield from self._get_data_from_cache(data_key, data_id, path)
+        data_rw =\
+            yield from self._get_data_from_cache(data_key, data_id, path_hash)
 
-            if data_rw:
-                if data_rw.version:
+        if data_rw:
+            if data_rw.version:
+                if force_cache:
                     # Async check we had the latest; only point then to update
                     # the cache for next request.
                     asyncio.async(self._send_get_data(\
                         data_key, data_id, orig_data_key, path, path_hash,\
                         scan_only, True, retry_factor))
-
+                    return data_rw
+            else:
                 return data_rw
 
         r = yield from self._send_get_data(\
@@ -2900,10 +2901,12 @@ class ChordTasks(object):
 
         if r is not None:
             data_rw.data = r
-            data_rw.data_done.set()
+            if data_rw.data_done:
+                data_rw.data_done.set()
             return True
         else:
-            data_rw.data_done.set()
+            if data_rw.data_done:
+                data_rw.data_done.set()
             return False
 
     def _process_synapse_data_response(self, drmsg, data_rw):
@@ -3723,7 +3726,7 @@ class ChordTasks(object):
 
     # Cache API.
     @asyncio.coroutine
-    def _get_data_from_cache(self, data_key, data_id, path=None):
+    def _get_data_from_cache(self, data_key, data_id, path_hash=None):
         data, data_l, version, signature, epubkey, pubkeylen =\
             yield from self._retrieve_data(data_id, None)
 
@@ -3731,6 +3734,8 @@ class ChordTasks(object):
             return None
 
         data_rw = DataResponseWrapper(data_key)
+        if path_hash:
+            data_rw.path_hash = path_hash
 
         drmsg = cp.ChordDataResponse()
         drmsg.data = data
