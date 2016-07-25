@@ -291,7 +291,8 @@ class ChordTasks(object):
                 return data_rw
 
         r = yield from self._send_get_data(\
-            data_key, data_id, orig_data_key, path, scan_only, retry_factor)
+            data_key, data_id, orig_data_key, path, path_hash, scan_only,\
+            False, retry_factor)
 
         return r
 
