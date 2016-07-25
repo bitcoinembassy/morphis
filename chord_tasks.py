@@ -263,11 +263,12 @@ class ChordTasks(object):
             "type(data_key)=[{}], len={}."\
                 .format(type(data_key), len(data_key))
 
+        orig_data_key = data_key
+
         if path:
             if type(path) is str:
                 path = path.encode()
 
-            orig_data_key = data_key
             path_hash = enc.generate_ID(path)
             data_key = enc.generate_ID(data_key + path_hash)
         else:
@@ -276,22 +277,28 @@ class ChordTasks(object):
         data_id = enc.generate_ID(data_key)
 
         if force_cache:
-            data_rw = yield from self._get_data_from_cache(data_key, path)
+            data_rw =\
+                yield from self._get_data_from_cache(data_key, data_id, path)
 
             if data_rw:
                 if data_rw.version:
                     # Async check we had the latest; only point then to update
                     # the cache for next request.
                     asyncio.async(self._send_get_data(\
-                        data_key, path, scan_only, True, retry_factor))
+                        data_key, data_id, orig_data_key, path, path_hash,\
+                        scan_only, True, retry_factor))
 
                 return data_rw
 
-        yield from self._send_get_data(data_key, path, scan_only, retry_factor)
+        r = yield from self._send_get_data(\
+            data_key, data_id, orig_data_key, path, scan_only, retry_factor)
+
+        return r
 
     @asyncio.coroutine
-    def _send_get_data(self, data_key, path=None, scan_only=False,\
-            force_cache=False, retry_factor=1):
+    def _send_get_data(self, data_key, data_id, orig_data_key, path=None,\
+            path_hash=None, scan_only=False, force_cache=False,\
+            retry_factor=1):
         data_rw = yield from\
             self.send_find_node(data_id, for_data=True, data_key=data_key,\
                 path_hash=path_hash, scan_only=scan_only,\
@@ -299,12 +306,12 @@ class ChordTasks(object):
 
         if data_rw.data:
             if force_cache:
-                    if data_rw.version:
-                        yield from self._store_data_in_cache(\
-                            data_rw.data, data_rw.pubkey, data_rw.path_hash,\
-                            data_rw.version, data_rw.signature)
-                    else:
-                        yield from self._store_data_in_cache(data_rw.data)
+                if data_rw.version:
+                    yield from self._store_data_in_cache(\
+                        data_rw.data, data_rw.pubkey, data_rw.path_hash,\
+                        data_rw.version, data_rw.signature)
+                else:
+                    yield from self._store_data_in_cache(data_rw.data)
 
             #FIXME: This is not optimal as we start a whole new FindNode for
             # this. When rewriting this file incorporate this stage into the
@@ -3714,7 +3721,8 @@ class ChordTasks(object):
         node_state.value = str(int(node_state.value) + size_diff)
 
     # Cache API.
-    def _get_data_from_cache(self, data_key, path=None):
+    @asyncio.coroutine
+    def _get_data_from_cache(self, data_key, data_id, path=None):
         data, data_l, version, signature, epubkey, pubkeylen =\
             yield from self._retrieve_data(data_id, None)
 
@@ -3724,7 +3732,7 @@ class ChordTasks(object):
         data_rw = DataResponseWrapper(data_key)
 
         drmsg = cp.ChordDataResponse()
-        drmsg.data = enc_data
+        drmsg.data = data
         drmsg.original_size = data_l
         if version is not None:
             drmsg.version = version
@@ -3738,6 +3746,22 @@ class ChordTasks(object):
 
         return data_rw
 
-    def _store_data_in_cache(self, data, pubkey=None, path_hash=None,\
-            version=None, sig=None):
-        pass
+    @asyncio.coroutine
+    def _store_data_in_cache(self, data_id, data, pubkey=None, path_hash=None,\
+            version=None, signature=None, need_pruning=False):
+
+        data_present = yield from self._check_has_data(data_id, None, None)
+        if data_present:
+            return
+
+        dmsg = cp.ChordStoreData()
+        dmsg.data = data
+        dmsg.pubkey = pubkey
+        dmsg.path_hash = path_hash
+        dmsg.version = version
+        dmsg.signature = signature
+
+        r = yield from\
+            self._store_data(self, None, data_id, dmsg, need_pruning)
+
+        return r
