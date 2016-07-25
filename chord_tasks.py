@@ -310,10 +310,10 @@ class ChordTasks(object):
             if force_cache:
                 if data_rw.version:
                     yield from self._store_data_in_cache(\
-                        data_rw.data, data_rw.pubkey, data_rw.path_hash,\
-                        data_rw.version, data_rw.signature)
+                        data_id, data_rw.data, data_rw.pubkey,\
+                        data_rw.path_hash, data_rw.version, data_rw.signature)
                 else:
-                    yield from self._store_data_in_cache(data_rw.data)
+                    yield from self._store_data_in_cache(data_id, data_rw.data)
 
             #FIXME: This is not optimal as we start a whole new FindNode for
             # this. When rewriting this file incorporate this stage into the
