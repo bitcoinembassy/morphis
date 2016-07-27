@@ -252,7 +252,7 @@ def _process_axon_grok(req):
         " style='height: calc(100% - 19em); width: 100%; border: 0;'"\
         " seamless='seamless'></iframe><iframe"\
         " src='morphis://.dds/synapse/create/{key}{query}'"\
-        " style='height: 8.5em; width: 100%; border: 1;'"\
+        " style='height: 8.5em; width: 100%; border: 0;'"\
         " seamless='seamless'></iframe>"\
             .format(key=mbase32.encode(key), query=req.query)
 
