@@ -246,7 +246,7 @@ def _process_axon_grok(req):
             return
 
     msg = "<iframe src='morphis://.dds/axon/read/{key}{query}'"\
-        " style='height: 10em; width: 100%; border: 1;'"\
+        " style='height: 8em; width: 100%; border: 0;'"\
         " seamless='seamless'></iframe><iframe"\
         " src='morphis://.dds/axon/synapses/{key}{query}#new'"\
         " style='height: calc(100% - 19em); width: 100%; border: 0;'"\
@@ -293,7 +293,7 @@ def _process_axon_read(dispatcher, req):
         timestamp=timestr)
 
     msg = "<head><link rel='stylesheet' href='morphis://.dds/style.css'>"\
-        "</link></head><body style='height: 90%; padding:0;margin:0;'>{}"\
+        "</link></head><body style='height: 80%; padding:0;margin:0;'>{}"\
         "</body>"\
             .format(template)
 
