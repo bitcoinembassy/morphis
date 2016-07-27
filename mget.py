@@ -63,11 +63,14 @@ def __main():
     parser.add_argument(\
         "--dburl",\
         help="Specify the database url to use.")
-    parser.add_argument("--store-data", action="store_true",
+    parser.add_argument(\
+        "--store-data", action="store_true",
         help="Store data in MORPHiS and return the key.")
-    parser.add_argument("--nn", type=int,\
+    parser.add_argument(\
+        "--nn", type=int,\
         help="Node instance number.")
-    parser.add_argument("-l", dest="logconf",\
+    parser.add_argument(\
+        "-l", dest="logconf",\
         help="Specify alternate logging.ini [IF SPECIFIED, THIS MUST BE THE"\
             " FIRST PARAMETER!].")
 
@@ -77,17 +80,19 @@ def __main():
         "-i",\
         help="Read file as stdin.")
     parser.add_argument(\
-        "-o",\
-        help="Send output to specified file.",
-        type=str)
+        "-o", type=str,\
+        help="Send output to specified file.")
     parser.add_argument(\
         "-O", action="store_true",\
         help="Send output to specified file.")
 
     parser.add_argument(\
-        "--stat",\
-        help="Report node status.",\
-        action="store_true")
+        "--stat", action="store_true",\
+        help="Report node status.")
+
+    parser.add_argument(\
+        "-e", dest="encrypt", action="store_true",\
+        help="Encrypt AES-256 in CBC mode using a random key.")
 
     args = parser.parse_args()
 
@@ -163,8 +168,17 @@ def __process(args, loop, mc):
             print("SHORT KEY: " + key_enc[:32])
             print("FULL KEY: " + key_enc)
 
-        store_cnt, link_cnt = yield from\
-            multipart.store_data(mc.engine, data, key_callback=key_callback)
+
+        if args.encrypt:
+            def ekc(enc_key):
+                print("ENCRYPTION KEY: " + mbase32.encode(enc_key))
+
+            store_cnt, link_cnt = yield from multipart.store_data(\
+                mc.engine, data, key_callback=key_callback,\
+                enc_mode=multipart.ENC_MODE_DEFAULT, enc_key_callback=ekc)
+        else:
+            store_cnt, link_cnt = yield from multipart.store_data(\
+                mc.engine, data, key_callback=key_callback)
 
         return
 

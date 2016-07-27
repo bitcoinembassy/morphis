@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 import functools
 import heapq
 import logging
+import os
 import random
 import struct
 
@@ -17,9 +18,13 @@ import consts
 import enc
 import mbase32
 from morphisblock import MorphisBlock
+import mutil
 import node
 import peer as mnpeer
 import sshtype
+
+ENC_MODE_AES_256_CBC = "AES-256-CBC"
+ENC_MODE_DEFAULT = ENC_MODE_AES_256_CBC
 
 DEFAULT_CONCURRENCY = 32
 
@@ -488,7 +493,9 @@ def get_data(engine, data_key, data_callback, path=None, ordered=False,\
 
 @asyncio.coroutine
 def store_data(engine, data, privatekey=None, path=None, version=None,\
-        key_callback=None, store_key=True, mime_type="", concurrency=DEFAULT_CONCURRENCY):
+        key_callback=None, store_key=True, mime_type="", enc_mode=None,\
+        enc_key=None, enc_iv=None, enc_key_callback=None,\
+        concurrency=DEFAULT_CONCURRENCY):
     data_len = len(data)
 
     if isinstance(key_callback, KeyCallback):
@@ -511,9 +518,30 @@ def store_data(engine, data, privatekey=None, path=None, version=None,\
     else:
         store_link = False
 
+    if enc_mode:
+        assert enc_mode == ENC_MODE_AES_256_CBC, enc_mode
+        if not enc_key:
+            assert enc_key_callback
+            if enc_iv:
+                enc_key = os.urandom(32) + enc_iv
+            else:
+                enc_key = os.urandom(64)
+
+            enc_key_callback(enc_key)
+
+    if enc_mode:
+        len_bytes = sshtype.encodeMpint(data_len)
+        if len(len_bytes) + data_len <= consts.MAX_DATA_BLOCK_SIZE:
+            data = len_bytes + data
+
     if data_len <= consts.MAX_DATA_BLOCK_SIZE:
         if log.isEnabledFor(logging.INFO):
             log.info("Data fits in one block, performing simple store.")
+
+        if enc_mode:
+            data, data2 = enc.encrypt_data_block(data, enc_key)
+            if data2:
+                data = data + data2
 
         if privatekey and not store_link:
             store_cnt = yield from engine.tasks.send_store_updateable_key(\
@@ -529,8 +557,8 @@ def store_data(engine, data, privatekey=None, path=None, version=None,\
         if log.isEnabledFor(logging.INFO):
             log.info("Storing multipart.")
 
-        yield from _store_data_multipart(\
-                engine, data, key_callback, store_key, concurrency)
+        yield from HashTreeStore(engine, key_callback, enc_mode, enc_key)\
+            .store_data_multipart(data, store_key, concurrency)
 
         store_cnt = -1
 
@@ -566,154 +594,176 @@ def __key_callback(keys, idx, key):
     idx = key_len * idx
     keys[idx:idx+key_len] = key
 
-@asyncio.coroutine
-def _store_data_multipart(engine, data, key_callback, store_key, concurrency):
-    depth = 1
-    task_semaphore = asyncio.Semaphore(concurrency)
+class HashTreeStore(object):
+    def __init__(self, engine, key_callback, enc_mode=None, enc_key=None):
+        self.engine = engine
+        self.loop = engine.loop
+        self.key_callback = key_callback
+        self.enc_mode = enc_mode
+        self.enc_key = enc_key
 
-    full_data_len = data_len = len(data)
-    assert data_len > consts.MAX_DATA_BLOCK_SIZE
+    @asyncio.coroutine
+    def store_data_multipart(self, data, store_key, concurrency):
+        depth = 1
+        task_semaphore = asyncio.Semaphore(concurrency)
 
-    while True:
-        nblocks = int(data_len / consts.MAX_DATA_BLOCK_SIZE)
-        if data_len % consts.MAX_DATA_BLOCK_SIZE:
-            nblocks += 1
+        full_data_len = data_len = len(data)
+        assert data_len > consts.MAX_DATA_BLOCK_SIZE
 
-        keys = bytearray(nblocks * consts.NODE_ID_BYTES)
+        while True:
+            nblocks = int(data_len / consts.MAX_DATA_BLOCK_SIZE)
+            if data_len % consts.MAX_DATA_BLOCK_SIZE:
+                nblocks += 1
 
-        start = 0
-        end = consts.MAX_DATA_BLOCK_SIZE
+            keys = bytearray(nblocks * consts.NODE_ID_BYTES)
 
-        tasks = []
+            start = 0
+            end = consts.MAX_DATA_BLOCK_SIZE
 
-        for i in range(nblocks):
-            _key_callback = functools.partial(__key_callback, keys, i)
+            tasks = []
 
-            tasks.append(\
-                asyncio.async(\
-                    _store_block(\
-                        engine, i, data[start:end], _key_callback,\
-                        task_semaphore),\
-                    loop=engine.loop))
+            for i in range(nblocks):
+                _key_callback = functools.partial(__key_callback, keys, i)
 
-            if task_semaphore.locked():
-                done, pending = yield from asyncio.wait(tasks,\
-                    loop=engine.loop, return_when=futures.FIRST_COMPLETED)
-                tasks = list(pending)
+                block_data = data[start:end]
+
+                if self.enc_mode:
+                    # This might be like ESSIV I guess.
+                    enc_key =\
+                        self.enc_key[:32]\
+                        + enc.generate_ID(\
+                            self.enc_key[32:] + i.to_bytes(32, "big"))[:32]
+                    block_data, data2 =\
+                        enc.encrypt_data_block(block_data, enc_key)
+                    assert not data2
+
+                tasks.append(\
+                    asyncio.async(\
+                        self._store_block(\
+                            self.engine, i, block_data, _key_callback,\
+                            task_semaphore),\
+                        loop=self.loop))
+
+                if task_semaphore.locked():
+                    done, pending = yield from asyncio.wait(tasks,\
+                        loop=self.loop, return_when=futures.FIRST_COMPLETED)
+                    tasks = list(pending)
 
 #                for task in done:
 #                    if not task.result():
 #                        log.warning("Upload failed!")
 #                        return False
 
-            yield from task_semaphore.acquire()
+                yield from task_semaphore.acquire()
 
-            start = end
-            end += consts.MAX_DATA_BLOCK_SIZE
-            if end > data_len:
-                assert i >= (nblocks - 2)
-                end = data_len
+                start = end
+                end += consts.MAX_DATA_BLOCK_SIZE
+                if end > data_len:
+                    assert i >= (nblocks - 2)
+                    end = data_len
 
-        # Wait for all previous hashes to be done. This simplifies the code, as
-        # otherwise we have to track which are done to make sure we are not
-        # uploading a block of hashes that is not complete.
-        done, pending = yield from asyncio.wait(tasks, loop=engine.loop)
-        tasks = list()
+            # Wait for all previous hashes to be done. This simplifies the
+            # code, as otherwise we have to track which are done to make sure
+            # we are not uploading a block of hashes that is not complete.
+            done, pending = yield from asyncio.wait(tasks, loop=self.loop)
+            tasks = list()
 
-        data = keys
-        data_len = len(data)
-        if data_len\
-                <= (consts.MAX_DATA_BLOCK_SIZE - HashTreeBlock.HEADER_BYTES):
-            break
+            data = keys
+            data_len = len(data)
+            if data_len\
+                    <= (consts.MAX_DATA_BLOCK_SIZE\
+                        - HashTreeBlock.HEADER_BYTES):
+                break
 
-        depth += 1
+            depth += 1
 
-    # Store root MorphisBlock.
-    block = HashTreeBlock()
-    block.depth = depth
-    block.size = full_data_len
-    block.data = keys
+        # Store root MorphisBlock.
+        block = HashTreeBlock()
+        block.depth = depth
+        block.size = full_data_len
+        block.data = keys
 
-    block_data = block.encode()
+        block_data = block.encode()
 
 #    yield from\
 #        engine.tasks.send_store_data(block_data, store_key=store_key,\
 #            key_callback=key_callback, retry_factor=50)
-    yield from\
-        _store_block(\
-            engine, -1, block_data, key_callback, task_semaphore,\
-            store_key=store_key)
+        yield from\
+            self._store_block(\
+                -1, block_data, task_semaphore, store_key=store_key)
 
-@asyncio.coroutine
-def _store_block(engine, i, block_data, key_callback, task_semaphore,\
-        store_key=False):
-    tries = 0
-    storing_nodes = 0
+    @asyncio.coroutine
+    def _store_block(self, i, block_data, task_semaphore, store_key=False):
+        tries = 0
+        storing_nodes = 0
 
-    while True:
-        if not tries:
-            snodes = yield from\
-                engine.tasks.send_store_data(\
-                    block_data, store_key=store_key, key_callback=key_callback)
-        else:
-            if store_key:
-                if tries > 1:
-                    store_key = False
+        key_callback = self.key_callback
 
-            snodes = yield from\
-                engine.tasks.send_store_data(\
-                    block_data, store_key=store_key,\
-                    key_callback=key_callback,\
-                    retry_factor=tries * 10)
+        while True:
+            if not tries:
+                snodes = yield from self.engine.tasks.send_store_data(\
+                        block_data, store_key=store_key,\
+                        key_callback=key_callback)
+            else:
+                if store_key:
+                    if tries > 1:
+                        store_key = False
 
-        task_semaphore.release()
+                snodes = yield from\
+                    self.engine.tasks.send_store_data(\
+                        block_data, store_key=store_key,\
+                        key_callback=key_callback,\
+                        retry_factor=tries * 10)
 
-        storing_nodes += snodes
+            task_semaphore.release()
 
-        if storing_nodes >= 3:
-            return True
-        else:
-            if log.isEnabledFor(logging.INFO):
-                log.info("Only stored block #{} to [{}] nodes so far;"\
-                    " trying again (tries=[{}])."\
-                        .format(i, storing_nodes, tries))
+            storing_nodes += snodes
 
-        if tries == 1:
-            # Grab the data_key this time for use on next try's logic below.
-            data_key = None
-            orig_key_callback = key_callback
-            def key_callback(key):
-                nonlocal data_key, key_callback
-                data_key = key
-                orig_key_callback(key)
-                key_callback = orig_key_callback
-        elif tries == 2:
-            data_rw =\
-                yield from\
-                    engine.tasks.send_get_data(data_key, retry_factor=30,\
-                        scan_only=True)
-            if data_rw.data is not None and data_rw.data_present_cnt:
-                storing_nodes += data_rw.data_present_cnt
+            if storing_nodes >= 3:
+                return True
+            else:
                 if log.isEnabledFor(logging.INFO):
-                    log.info("Block #{} was found [{}] times on the network."\
-                        .format(i, data_rw.data_present_cnt))
-                if storing_nodes >= 3:
+                    log.info("Only stored block #{} to [{}] nodes so far;"\
+                        " trying again (tries=[{}])."\
+                            .format(i, storing_nodes, tries))
+
+            if tries == 1:
+                # Grab the data_key this time for use on next try's logic below.
+                data_key = None
+                def key_callback(key):
+                    nonlocal data_key, key_callback
+                    data_key = key
+                    self.key_callback(key)
+                    key_callback = self.key_callback
+            elif tries == 2:
+                data_rw = yield from\
+                    self.engine.tasks.send_get_data(\
+                        data_key, retry_factor=30, scan_only=True)
+                if data_rw.data is not None and data_rw.data_present_cnt:
+                    storing_nodes += data_rw.data_present_cnt
                     if log.isEnabledFor(logging.INFO):
-                        log.info("Block #{} is already redundant enough on"\
-                            " the network; not uploading it anymore for now."\
-                                .format(i))
-                    return True
+                        log.info(\
+                            "Block #{} was found [{}] times on the network."\
+                                .format(i, data_rw.data_present_cnt))
+                    if storing_nodes >= 3:
+                        if log.isEnabledFor(logging.INFO):
+                            log.info(\
+                                "Block #{} is already redundant enough on"\
+                                " the network; not uploading it anymore for"\
+                                " now."\
+                                    .format(i))
+                        return True
 
-        tries += 1
+            tries += 1
 
-        if tries < 5:
+            if tries < 5:
 #            yield from asyncio.sleep(1.1**1.1**tries)
-            yield from task_semaphore.acquire()
-            continue
+                yield from task_semaphore.acquire()
+                continue
 
-        if log.isEnabledFor(logging.WARNING):
-            log.warn("Failed to upload block #{} enough (data_key=[{}],"\
-                " storing_nodes=[{}])."\
-                    .format(i, mbase32.encode(data_key), storing_nodes))
+            if log.isEnabledFor(logging.WARNING):
+                log.warn("Failed to upload block #{} enough (data_key=[{}],"\
+                    " storing_nodes=[{}])."\
+                        .format(i, mbase32.encode(data_key), storing_nodes))
 
-        return False
+            return False
