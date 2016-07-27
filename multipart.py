@@ -381,7 +381,7 @@ class HashTreeFetch(object):
 
 @asyncio.coroutine
 def get_data_buffered(engine, data_key, path=None, retry_seconds=30,\
-        concurrency=DEFAULT_CONCURRENCY, max_link_depth=1):
+        enc_key=None, concurrency=DEFAULT_CONCURRENCY, max_link_depth=1):
     cb = BufferingDataCallback()
 
     r = yield from get_data(engine, data_key, cb, path=path, ordered=True,\
@@ -405,7 +405,8 @@ def get_data_buffered(engine, data_key, path=None, retry_seconds=30,\
 
 @asyncio.coroutine
 def get_data(engine, data_key, data_callback, path=None, ordered=False,\
-        positions=None, retry_seconds=30, concurrency=DEFAULT_CONCURRENCY, max_link_depth=1):
+        positions=None, retry_seconds=30, enc_key=None,\
+        concurrency=DEFAULT_CONCURRENCY, max_link_depth=1):
     assert not path or type(path) is bytes, type(path)
     assert isinstance(data_callback, DataCallback), type(data_callback)
 
@@ -588,12 +589,6 @@ def store_data(engine, data, privatekey=None, path=None, version=None,\
 
     return store_cnt, link_cnt
 
-def __key_callback(keys, idx, key):
-    key_len = len(key)
-    assert key_len == consts.NODE_ID_BYTES
-    idx = key_len * idx
-    keys[idx:idx+key_len] = key
-
 class HashTreeStore(object):
     def __init__(self, engine, key_callback, enc_mode=None, enc_key=None):
         self.engine = engine
@@ -610,6 +605,12 @@ class HashTreeStore(object):
         full_data_len = data_len = len(data)
         assert data_len > consts.MAX_DATA_BLOCK_SIZE
 
+        def __key_callback(keys, idx, key):
+            key_len = len(key)
+            assert key_len == consts.NODE_ID_BYTES
+            idx = key_len * idx
+            keys[idx:idx+key_len] = key
+
         while True:
             nblocks = int(data_len / consts.MAX_DATA_BLOCK_SIZE)
             if data_len % consts.MAX_DATA_BLOCK_SIZE:
@@ -623,7 +624,8 @@ class HashTreeStore(object):
             tasks = []
 
             for i in range(nblocks):
-                _key_callback = functools.partial(__key_callback, keys, i)
+                _key_callback =\
+                    functools.partial(__key_callback, keys, i)
 
                 block_data = data[start:end]
 
@@ -635,13 +637,13 @@ class HashTreeStore(object):
                             self.enc_key[32:] + i.to_bytes(32, "big"))[:32]
                     block_data, data2 =\
                         enc.encrypt_data_block(block_data, enc_key)
-                    assert not data2
+                    if data2:
+                        block_data = block_data + data2
 
                 tasks.append(\
                     asyncio.async(\
                         self._store_block(\
-                            self.engine, i, block_data, _key_callback,\
-                            task_semaphore),\
+                            i, block_data, _key_callback, task_semaphore),\
                         loop=self.loop))
 
                 if task_semaphore.locked():
@@ -690,14 +692,14 @@ class HashTreeStore(object):
 #            key_callback=key_callback, retry_factor=50)
         yield from\
             self._store_block(\
-                -1, block_data, task_semaphore, store_key=store_key)
+                -1, block_data, self.key_callback, task_semaphore,\
+                store_key=store_key)
 
     @asyncio.coroutine
-    def _store_block(self, i, block_data, task_semaphore, store_key=False):
+    def _store_block(self, i, block_data, key_callback, task_semaphore,\
+            store_key=False):
         tries = 0
         storing_nodes = 0
-
-        key_callback = self.key_callback
 
         while True:
             if not tries:
@@ -729,12 +731,13 @@ class HashTreeStore(object):
 
             if tries == 1:
                 # Grab the data_key this time for use on next try's logic below.
+                orig_key_callback = key_callback
                 data_key = None
                 def key_callback(key):
                     nonlocal data_key, key_callback
                     data_key = key
-                    self.key_callback(key)
-                    key_callback = self.key_callback
+                    orig_key_callback(key)
+                    key_callback = orig_key_callback
             elif tries == 2:
                 data_rw = yield from\
                     self.engine.tasks.send_get_data(\
