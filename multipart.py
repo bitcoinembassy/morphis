@@ -399,12 +399,13 @@ class HashTreeFetch(object):
 ## Functions:
 
 @asyncio.coroutine
-def get_data_buffered(engine, data_key, path=None, enc_key=None,\
-        retry_seconds=30, concurrency=DEFAULT_CONCURRENCY, max_link_depth=1):
+def get_data_buffered(engine, data_key, path=None, enc_mode=None,\
+        enc_key=None, retry_seconds=30, concurrency=DEFAULT_CONCURRENCY,\
+        max_link_depth=1):
     cb = BufferingDataCallback()
 
     r = yield from get_data(engine, data_key, cb, path=path, ordered=True,\
-            retry_seconds=retry_seconds, enc_key=enc_key,\
+            retry_seconds=retry_seconds, enc_mode=enc_mode, enc_key=enc_key,\
             concurrency=concurrency, max_link_depth=max_link_depth)
 
     if not r:
@@ -424,7 +425,7 @@ def get_data_buffered(engine, data_key, path=None, enc_key=None,\
 
 @asyncio.coroutine
 def get_data(engine, data_key, data_callback, path=None, ordered=False,\
-        positions=None, enc_key=None, retry_seconds=30,\
+        positions=None, enc_mode=None, enc_key=None, retry_seconds=30,\
         concurrency=DEFAULT_CONCURRENCY, max_link_depth=1):
     assert not path or type(path) is bytes, type(path)
     assert isinstance(data_callback, DataCallback), type(data_callback)
@@ -458,7 +459,8 @@ def get_data(engine, data_key, data_callback, path=None, ordered=False,\
 
     while True:
         if not data.startswith(MorphisBlock.UUID):
-            if enc_key:
+            if enc_mode:
+                assert enc_mode is ENC_MODE_AES_256_CBC
                 data = _decrypt_data_block(data, enc_key)
 
             data_callback.notify_size(len(data))
@@ -499,7 +501,7 @@ def get_data(engine, data_key, data_callback, path=None, ordered=False,\
             continue
 
         if block_type != consts.BlockType.hash_tree.value:
-            if enc_key:
+            if enc_mode:
                 data = _decrypt_data_block(data, enc_key)
 
             data_callback.notify_size(len(data))
