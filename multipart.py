@@ -26,7 +26,7 @@ import sshtype
 ENC_MODE_AES_256_CBC = "AES-256-CBC"
 ENC_MODE_DEFAULT = ENC_MODE_AES_256_CBC
 
-DEFAULT_CONCURRENCY = 32
+DEFAULT_CONCURRENCY = 8
 
 log = logging.getLogger(__name__)
 
@@ -795,7 +795,7 @@ class HashTreeStore(object):
 
             tries += 1
 
-            if tries < 5:
+            if tries < 7:
 #            yield from asyncio.sleep(1.1**1.1**tries)
                 yield from task_semaphore.acquire()
                 continue
