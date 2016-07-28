@@ -631,10 +631,17 @@ class HashTreeStore(object):
 
                 if self.enc_mode:
                     # This might be like ESSIV I guess.
+                    #FIXME: Needs AUDIT.
+                    # 256 bit primes.
+                    prime =\
+                        115244071751041278297395724540783621753385602588564058568484098346736657847597
+                    x = 112094643460587755230735386112629557346541959304922893424644085989570535717309
                     enc_key =\
                         self.enc_key[:32]\
-                        + enc.generate_ID(\
-                            self.enc_key[32:] + i.to_bytes(32, "big"))[:32]
+                            + enc.generate_ID(\
+                                self.enc_key[32:]\
+                                    + pow(x, i, prime)\
+                                        .to_bytes(32, "big"))[:32]
                     block_data, data2 =\
                         enc.encrypt_data_block(block_data, enc_key)
                     if data2:
