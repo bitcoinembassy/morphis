@@ -93,6 +93,9 @@ def __main():
     parser.add_argument(\
         "-e", dest="encrypt", action="store_true",\
         help="Encrypt AES-256 in CBC mode using a random key.")
+    parser.add_argument(\
+        "-d", dest="decryption_key", type=str,\
+        help="Decrypt AES-256 in CBC mode using the specified key.")
 
     args = parser.parse_args()
 
@@ -198,7 +201,11 @@ def __process(args, loop, mc):
     if type(key) is bytearray:
         key = bytes(key)
 
-    r = yield from multipart.get_data_buffered(mc.engine, key)
+    if args.decryption_key:
+        r = yield from multipart.get_data_buffered(\
+            mc.engine, key, enc_key=bytes(mbase32.decode(args.decryption_key)))
+    else:
+        r = yield from multipart.get_data_buffered(mc.engine, key)
 
     data = r.data
 

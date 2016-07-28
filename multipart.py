@@ -146,11 +146,12 @@ class LinkBlock(MorphisBlock):
 
 class HashTreeFetch(object):
     def __init__(self, engine, data_callback, ordered=False, positions=None,\
-            retry_seconds=30, concurrency=DEFAULT_CONCURRENCY):
+            enc_key=None, retry_seconds=30, concurrency=DEFAULT_CONCURRENCY):
         self.engine = engine
         self.data_callback = data_callback
         self.ordered = ordered
         self.positions = positions
+        self.enc_key = enc_key
         self.retry_seconds = retry_seconds
         self.concurrency = concurrency
 
@@ -327,6 +328,10 @@ class HashTreeFetch(object):
                     yield from self.__wait(position, waiter)
 
             if not depth:
+                if self.enc_key:
+                    data_rw.data =\
+                        enc.decrypt_data_block(data_rw.data, self.enc_key)
+
                 r = self.data_callback.notify_data(position, data_rw.data)
                 if not r:
                     if log.isEnabledFor(logging.DEBUG):
@@ -380,13 +385,13 @@ class HashTreeFetch(object):
 ## Functions:
 
 @asyncio.coroutine
-def get_data_buffered(engine, data_key, path=None, retry_seconds=30,\
-        enc_key=None, concurrency=DEFAULT_CONCURRENCY, max_link_depth=1):
+def get_data_buffered(engine, data_key, path=None, enc_key=None,\
+        retry_seconds=30, concurrency=DEFAULT_CONCURRENCY, max_link_depth=1):
     cb = BufferingDataCallback()
 
     r = yield from get_data(engine, data_key, cb, path=path, ordered=True,\
-            retry_seconds=retry_seconds, concurrency=concurrency,\
-            max_link_depth=max_link_depth)
+            retry_seconds=retry_seconds, enc_key=enc_key,\
+            concurrency=concurrency, max_link_depth=max_link_depth)
 
     if not r:
         if r is None:
@@ -405,7 +410,7 @@ def get_data_buffered(engine, data_key, path=None, retry_seconds=30,\
 
 @asyncio.coroutine
 def get_data(engine, data_key, data_callback, path=None, ordered=False,\
-        positions=None, retry_seconds=30, enc_key=None,\
+        positions=None, enc_key=None, retry_seconds=30,\
         concurrency=DEFAULT_CONCURRENCY, max_link_depth=1):
     assert not path or type(path) is bytes, type(path)
     assert isinstance(data_callback, DataCallback), type(data_callback)
@@ -439,6 +444,9 @@ def get_data(engine, data_key, data_callback, path=None, ordered=False,\
 
     while True:
         if not data.startswith(MorphisBlock.UUID):
+            if enc_key:
+                data = _decrypt_data_block(data, enc_key)
+
             data_callback.notify_size(len(data))
             data_callback.notify_data(0, data)
             data_callback.notify_finished(True)
@@ -477,13 +485,16 @@ def get_data(engine, data_key, data_callback, path=None, ordered=False,\
             continue
 
         if block_type != consts.BlockType.hash_tree.value:
+            if enc_key:
+                data = _decrypt_data_block(data, enc_key)
+
             data_callback.notify_size(len(data))
             data_callback.notify_data(0, data)
             data_callback.notify_finished(True)
             return True
 
         fetch = HashTreeFetch(\
-            engine, data_callback, ordered, positions, retry_seconds,\
+            engine, data_callback, ordered, positions, enc_key, retry_seconds,\
                 concurrency)
 
         r = yield from fetch.fetch(HashTreeBlock(data))
@@ -491,6 +502,14 @@ def get_data(engine, data_key, data_callback, path=None, ordered=False,\
         data_callback.notify_finished(r)
 
         return r
+
+def _decrypt_data_block(data, enc_key):
+    data = enc.decrypt_data_block(data, enc_key)
+    i, dlen = sshtype.parse_mpint_from(data, 0)
+    dlen -= (len(data) - i)
+    data = data[i:] + data2[:dlen]
+
+    return data
 
 @asyncio.coroutine
 def store_data(engine, data, privatekey=None, path=None, version=None,\
