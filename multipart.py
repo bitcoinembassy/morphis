@@ -155,6 +155,9 @@ class HashTreeFetch(object):
         self.retry_seconds = retry_seconds
         self.concurrency = concurrency
 
+        self._size = None
+        self._nblocks = 0
+
         self._task_semaphore = asyncio.Semaphore(concurrency)
         self._next_position = 0
         self._failed = deque()
@@ -169,6 +172,10 @@ class HashTreeFetch(object):
     @asyncio.coroutine
     def fetch(self, root_block):
         self.data_callback.notify_size(root_block.size)
+
+        if self.enc_key:
+            self._size = root_block.size
+            self._nblocks = int(self._size / consts.MAX_DATA_BLOCK_SIZE) + 1
 
         depth = root_block.depth
         buf = root_block.buf
@@ -329,8 +336,15 @@ class HashTreeFetch(object):
 
             if not depth:
                 if self.enc_key:
+                    blockn = int(position / consts.MAX_DATA_BLOCK_SIZE)
+                    enc_key = _calc_enc_key(self.enc_key, blockn)
+
                     data_rw.data =\
-                        enc.decrypt_data_block(data_rw.data, self.enc_key)
+                        enc.decrypt_data_block(data_rw.data, enc_key)
+
+                    if blockn == self._nblocks - 1:
+                        left = self._size - blockn * consts.MAX_DATA_BLOCK_SIZE
+                        data_rw.data = data_rw.data[:left]
 
                 r = self.data_callback.notify_data(position, data_rw.data)
                 if not r:
@@ -506,10 +520,17 @@ def get_data(engine, data_key, data_callback, path=None, ordered=False,\
 def _decrypt_data_block(data, enc_key):
     data = enc.decrypt_data_block(data, enc_key)
     i, dlen = sshtype.parse_mpint_from(data, 0)
-    dlen -= (len(data) - i)
-    data = data[i:] + data2[:dlen]
+    return data[i:dlen+i]
 
-    return data
+def _calc_enc_key(enc_key, block_num):
+    #FIXME: Needs AUDIT.
+    iv, iv2 = enc.encrypt_data_block(\
+        block_num.to_bytes(32, "little"),\
+        enc_key[32:] + consts.NULL_KEY[:32])
+    assert not iv2
+    assert len(iv) == 32
+
+    return enc_key[:32] + iv
 
 @asyncio.coroutine
 def store_data(engine, data, privatekey=None, path=None, version=None,\
@@ -649,18 +670,7 @@ class HashTreeStore(object):
                 block_data = data[start:end]
 
                 if self.enc_mode:
-                    # This might be like ESSIV I guess.
-                    #FIXME: Needs AUDIT.
-                    # 256 bit primes.
-                    prime =\
-                        115244071751041278297395724540783621753385602588564058568484098346736657847597
-                    x = 112094643460587755230735386112629557346541959304922893424644085989570535717309
-                    enc_key =\
-                        self.enc_key[:32]\
-                            + enc.generate_ID(\
-                                self.enc_key[32:]\
-                                    + pow(x, i, prime)\
-                                        .to_bytes(32, "big"))[:32]
+                    enc_key = _calc_enc_key(self.enc_key, i)
                     block_data, data2 =\
                         enc.encrypt_data_block(block_data, enc_key)
                     if data2:
