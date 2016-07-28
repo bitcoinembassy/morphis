@@ -275,6 +275,15 @@ class MaalstroomDispatcher(object):
             self.send_error(msg, 400)
             return
 
+        enc_key_sep_idx = rpath.find(':')
+        if enc_key_sep_idx != -1:
+            enc_mode = multipart.ENC_MODE_AES_256_CBC
+            enc_key_enc = rpath[enc_key_sep_idx+1:]
+            enc_key = bytes(mbase32.decode(enc_key_enc))
+            rpath = rpath[:enc_key_sep_idx]
+        else:
+            enc_mode = enc_key = None
+
         data_key, significant_bits = self.decode_key(rpath)
 
         if not data_key:
@@ -288,6 +297,9 @@ class MaalstroomDispatcher(object):
                 return
 
             key_enc = mbase32.encode(key)
+
+            if enc_key:
+                key_enc += ':' + enc_key_enc
 
             url_prefix = self.handler.maalstroom_url_prefix_str
             if force_mode:
@@ -327,7 +339,8 @@ class MaalstroomDispatcher(object):
                 try:
                     yield from multipart.get_data(\
                         self.node.chord_engine, data_key, data_callback,\
-                        path=path, ordered=True)
+                        path=path, ordered=True, enc_mode=enc_mode,\
+                        enc_key=enc_key)
                 except Exception as e:
                     log.exception("multipart.get_data(..)")
                     data_callback.exception = e
