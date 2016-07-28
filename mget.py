@@ -203,7 +203,8 @@ def __process(args, loop, mc):
 
     if args.decryption_key:
         r = yield from multipart.get_data_buffered(\
-            mc.engine, key, enc_key=bytes(mbase32.decode(args.decryption_key)))
+            mc.engine, key, enc_mode=multipart.ENC_MODE_AES_256_CBC,\
+            enc_key=bytes(mbase32.decode(args.decryption_key)))
     else:
         r = yield from multipart.get_data_buffered(mc.engine, key)
 
