@@ -484,9 +484,9 @@ def __main():
                 node.chord_engine.connect_peers = addpeer
 
             if maalstroom_enabled:
-                import client_engine as cengine
+                import clientengine
 
-                ce = cengine.ClientEngine(node)
+                ce = clientengine.ClientEngine(node)
 
                 if args.updatetest:
                     ce.update_test = True

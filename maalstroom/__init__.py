@@ -12,7 +12,7 @@ import queue
 from socketserver import ThreadingMixIn
 import threading
 
-import client_engine as cengine
+import clientengine
 import enc
 import mbase32
 import maalstroom.templates as templates
