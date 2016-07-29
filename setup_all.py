@@ -14,7 +14,8 @@ def add_path(files, path):
             files.append(path + "/" + entry)
 
 add_path(files, os.getcwd())
-add_path(files, os.getcwd() + "/maalstroom/")
+add_path(files, os.getcwd() + "/maalstroom")
+add_path(files, os.getcwd() + "/clientengine")
 
 setup(
     name = 'n1',
