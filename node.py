@@ -491,9 +491,9 @@ def __main():
                 if args.updatetest:
                     ce.update_test = True
                 if args.disableautopublish:
-                    ce.auto_publish_enabled = False
+                    ce.dmail.auto_publish_enabled = False
                 if args.disableautoscan:
-                    ce.auto_scan_enabled = False
+                    ce.dmail.auto_scan_enabled = False
 
                 maalstroom.set_client_engine(ce)
 

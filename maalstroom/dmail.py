@@ -784,7 +784,7 @@ def serve_get(dispatcher, rpath):
             dispatcher.node, site_key=mbase32.decode(addr_enc),\
             fetch_keys=True)
 
-        dispatcher.client_engine.trigger_dmail_scan(dmail_address)
+        dispatcher.client_engine.dmail.trigger_dmail_scan(dmail_address)
 
         dispatcher.send_204()
     elif req.startswith("/toggle_read/"):
@@ -870,7 +870,7 @@ def serve_get(dispatcher, rpath):
             yield from _process_dmail_address(\
                 dispatcher, processor, addr_id, fetch_keys=True)
 
-        dispatcher.client_engine.update_dmail_autoscan(addr)
+        dispatcher.client_engine.dmail.update_dmail_autoscan(addr)
 
         if redirect:
             dispatcher.send_301(redirect)
