@@ -14,6 +14,7 @@
  * }
  */
 html { 
+	background-color: #f3f6f8;
 	position: relative;
 	min-height: 100%;
 }
@@ -31,7 +32,9 @@ body {
 	line-height: 1.2em;
 	letter-spacing: .03em;
 	padding: 0;
-	margin: 0 0 0 0;
+	/*  margin: 0 0 150px; ? */
+	margin: 0 0 0px;
+	color: #2a2730;
 	overflow-x: hidden;
 	background-color: #f3f6f8;
 }
@@ -93,33 +96,15 @@ h2 {
 	margin-top: -2px;
 	z-index: 100;
 }
-.channel {
-	font-weight: bold;
-}
-.dds-body-bkg {
-	background-color: #edeeee;
-}
 .dds-wrapper {
+	margin: 2em 5em 2em 5em;
 }
 .dds-header {
 	margin-bottom: .2em;
 }
 .dds-nav {
 	height: 30px;
-	margin-bottom: 1em;
-	background-color: #371f44;
-	color: #fff;
-	padding: 7px 20px 7px 20px;
-}
-.dds-nav a:link,a:visited {
-	color: #38a3af;
-	text-decoration: none;
-	font-weight: bold;
-}
-.dds-nav a:hover {
-	color: #fff;
-	text-decoration: none;
-	font-weight: bold;
+	margin-bottom: 20px;
 }
 .dds-comments-qty {
 	float: left;
@@ -133,60 +118,74 @@ h2 {
 	bottom: 0;
 	height: 130px;
 	width: 100%;
+	background-color: #2a2730;
 }
 .dds-reply-content {
 	margin: 1.5em 5em 0 5em;
 }
 .dds-post-wrapper {
-	padding: 7px 20px 7px 20px;
+	margin-bottom: 20px;
+	background-color: white;
+	padding: 20px;
+	border-radius: 8px;
+	border: solid thin #dddee0;
 	position: relative;
 }
 .dds-post-wrapper:hover {
-	background-color: #fff;
+	border: solid thin #aeb3b8;
+	box-shadow: 0px 0px 5px 2px rgba(221, 222, 224, 0.9);
 }
 .dds-post-nav {
+	margin-bottom: 10px;
 }
-.dds-post-content {
-	margin-left: 45px;
-	line-height: 1.4em;
+.dds-post {
+	margin-left: 65px;
+}
+.dds-reply {
+	margin-left: 65px;
+	margin-right: 65px;
 }
 .dds-post-name {
 	display: inline-block;
-	font-size: 1em;
+	font-weight: 100;
+	font-size: 1.3em;
+	margin-bottom: 5px;
 	color: #141c30;
 	text-decoration: none;
-	max-width: 45%;
+	max-width: 80%;
+	height: 1em;
 	float: left;
 }
 .dds-post-title {
 	display: inline-block;
 	font-weight: 100;
-	font-size: 1em;
+	font-size: 1.3em;
+	margin-bottom: 5px;
 	color: #141c30;
 	text-decoration: none;
 	height: 1em;
 	float: left;
 }
-.dds-post a:link,a:visited {
+a,a:link,a:visited {
 	color: #141c30;
 	text-decoration: none;
-	font-weight: bold;
 }
-.dds-post a:hover {
+a:hover {
 	color: #38a3af;
 	text-decoration: none;
 }
 .dds-post-time {
 	font-size: .9em;
-	color: #a2a6ab;
+	color: #80C9D1;
 	display: inline-block;
 	font-style: italic;
 }
 .dds-post-reply { 
 	float: right;
-	margin-right: 100px;
+	margin-bottom: 5px;
 }
 .dds-post-text { 
+	padding-bottom: 10px;
 	overflow-wrap: break-word;
 	word-wrap: break-word;
 }
@@ -238,74 +237,20 @@ button.post:hover {
 button.post:active {
 	border: 1px solid;
 }
-.dds-post-icons {
-	float: right;
-	margin-right: 100px;
+button.reply {
+	border: 1px solid #fff;
+	border-radius: 3px;
+	color: #fff;
+	padding: 3px 15px;
+	text-align: center;
 }
-.dds-post .dds-button {
-	visibility: hidden;
-}  
-.dds-post:hover .dds-button {
-	visibility: visible;
+button.reply:hover {
+	background: #fff;
+	cursor: pointer;
+	color: #2a2730;
 }
-.dds-reply {
-	background-image: url("morphis://.dds/images/icons.png");
-	background-repeat: no-repeat;
-	width:17px;
-	height:15px;
-	float: left;
-	background-position: left top;
-}
-.dds-reply:hover {
-	background-image: url("morphis://.dds/images/icons-hover-color.png");
-}
-.dds-vote {
-	background-image: url("morphis://.dds/images/icons.png");
-	background-repeat: no-repeat;
-	width:14px;
-	height:15px;
-	float: left;
-	background-position: right top;
-	margin-left: 5px;
-}
-.dds-vote:hover {
-	background-image: url("morphis://.dds/images/icons-hover-color.png");
-}
-.dds-mention {
-	background-image: url("morphis://.dds/images/icons.png");
-	background-repeat: no-repeat;
-	width:16px;
-	height:15px;
-	float: left;
-	background-position: -40px top;
-	margin-left: 5px;
-}
-.dds-mention:hover {
-	background-image: url("morphis://.dds/images/icons-hover-color.png");
-}
-.dds-pm {
-	background-image: url("morphis://.dds/images/icons.png");
-	background-repeat: no-repeat;
-	width:18px;
-	height:15px;
-	float: left;
-	background-position: -20px top;
-	margin-left: 5px;
-}
-.dds-pm:hover {
-	background-image: url("morphis://.dds/images/icons-hover-color.png");
-}
-.dds-follow {
-	background-image: url("morphis://.dds/images/icons.png");
-	background-repeat: no-repeat;
-	width:16px;
-	height:15px;
-	float: left;
-	background-position: -58px top;
-	margin-left: 5px;
-}
-.dds-follow:hover {
-	background-image: url("morphis://.dds/images/icons-hover-color.png");
+button.reply:active {
+	border: 1px solid;
 }
 .dds-trunc {
 	overflow: hidden;
@@ -323,6 +268,116 @@ button.post:active {
 .dds-channel {
 	background-color: #d0bd78;
 }
+.dds-timestamp {
+	display: inline-block;
+	color: red;
+}
+/*Read More styles*/
+figure {
+	margin: 0 0 1.3rem 0;
+	-webkit-transition: .125s linear;
+	-moz-transition: .125s linear;
+	-ms-transition: .125s linear;
+	-o-transition: .125s linear;
+	transition: .125s linear;
+}
+
+figure img {
+	max-width: 100%;
+	height: auto;
+}
+
+body:before, body:after {
+	content: "";
+	display: table;
+}
+
+body:after { clear: both }
+
+p { margin-bottom: 1.3rem }
+
+article {
+	margin-bottom: 3rem;
+	position: relative;
+	*zoom: 1;
+}
+
+article:before, article:after {
+	content: "";
+	display: table;
+}
+
+article:after { clear: both }
+
+article figure {
+	float: left;
+	width: 32.5%;
+}
+
+article section:first-of-type {
+	float: right;
+	width: 62.5%;
+}
+
+article section:last-of-type {
+	display: none;
+	visibility: hidden;
+}
+
+section {
+	-webkit-transition: .125s linear;
+	-moz-transition: .125s linear;
+	-ms-transition: .125s linear;
+	-o-transition: .125s linear;
+	transition: .125s linear;
+}
+
+input[type=checkbox] {
+	border: 0;
+	clip: rect(0 0 0 0);
+	height: 1px;
+	width: 1px;
+	margin: -1px;
+	overflow: hidden;
+	padding: 0;
+	position: absolute;
+}
+
+[for="read_more"] {
+	position: absolute;
+	bottom: -3rem;
+	left: 0;
+	text-align: center;
+	padding: .65rem;
+	box-shadow: inset 1px 1px rgba(0, 0, 0, 0.1), inset -1px -1px rgba(0, 0, 0, 0.1);
+}
+
+[for="read_more"]:hover {
+	background: rgba(0,0,0,.5);
+	color: rgb(255,255,255);
+}
+
+[for="read_more"] span:last-of-type {
+	display: none;
+	visibility: visible;
+}
+
+input[type=checkbox]:checked ~ section {
+	display: block;
+	visibility: visible;
+	width: 100%;
+}
+
+input[type=checkbox]:checked ~ figure { width: 100% }
+
+input[type=checkbox]:checked ~ [for="read_more"] span:first-of-type {
+	display: none;
+	visibility: hidden;
+}
+
+input[type=checkbox]:checked ~ [for="read_more"] span:last-of-type {
+	display: block;
+}
 
 /* Other.*/
 .dds-element {
@@ -335,92 +390,4 @@ button.post:active {
 	font-size: 1.2em;
 	box-shadow: 0px 0px 2px 1px rgba(0, 0, 0, 0.2) inset;
 }
-/*Morphis Dashboard*/
-section li{
-	margin:0 0 10px;
-}
-.wrapper{
-	overflow:hidden;
-}
-section{
-	padding:30px 30px 30px 80px;
-	-moz-transition:all 200ms ease-in;
-	-webkit-transition:all 200ms ease-in;
-	-o-transition:all 200ms ease-in;
-	transition:all 200ms ease-in;
-	
-}
-nav{
-	position:fixed;
-	top:0;
-	left:0;
-	width:250px;
-	height:100%;
-	margin:0 0 0 -250px;
-	-moz-transition:all 200ms ease-in;
-	-webkit-transition:all 200ms ease-in;
-	-o-transition:all 200ms ease-in;
-	transition:all 200ms ease-in;
-}
-nav ul{
-	width:250px;
-	height:100%;
-	padding:0;
-	margin:0;
-	list-style:none;
-	background:#222;
-	overflow:hidden;
-}
-nav li{
-	margin:0;
-}
-nav a{
-	color:#fff;
-	font-size:1em;
-	font-family:'helvetica neue', helvetica, arial, sans-serif;
-	text-decoration:none;
-	display:block;
-	padding:12px 15px;
-	font-weight:300;
-	letter-spacing:2px;
-	border-bottom:1px solid #333;
-}
-nav a:hover{
-	background:#111;
-}
-label{
-	display:block;
-	font-family:'helvetica neue', helvetica, arial, sans-serif;
-	font-weight:700;
-	background:#1ea1b8;
-	width:42px;
-	height:42px;
-	line-height:42px;
-	color:#fff;
-	text-align:center;
-	font-size:2em;
-	line-height:1.1em;
-	position:fixed;
-	top:10px;
-	left:10px;
-	-moz-transition:all 200ms ease-in;
-	-webkit-transition:all 200ms ease-in;
-	-o-transition:all 200ms ease-in;
-	transition:all 200ms ease-in;
-	z-index:500;
-}
-input[type="checkbox"]{
-	display:none;
-}
-input[type="checkbox"]:checked ~ nav{
-	margin:0;
-}
-input[type="checkbox"]:checked ~ label{
-	left:260px;
-}
-input[type="checkbox"]:checked ~ section{
-	-webkit-transform:translate3d(260px, 0, 0);
-	-moz-transform:translate3d(260px, 0, 0);
-	-o-transform:translate3d(260px, 0, 0);
-	transform:translate3d(260px, 0, 0);
-}
+/**/

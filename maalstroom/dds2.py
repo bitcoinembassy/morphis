@@ -8,15 +8,14 @@ from concurrent import futures
 from datetime import datetime
 import json
 import logging
-from urllib.parse import parse_qs, quote_plus
+from urllib.parse import parse_qs
 import os
 
 from sqlalchemy import or_
 
 import consts
-from db import User, DdsPost, NodeState
+from db import User, DdsPost
 from dmail import DmailEngine
-from clientengine.dds import DdsQuery
 from dds import DdsEngine
 import dpush
 import enc
@@ -28,19 +27,18 @@ from mutil import fia, hex_dump, make_safe_for_html_content
 import mutil
 import rsakey
 import synapse as syn
+import targetedblock as tb
 import sshtype
 
 log = logging.getLogger(__name__)
 
 S_DDS = ".dds"
-DEFAULT_FEED_KEY = "dds.feeds.default"
 
 class MaalstroomRequest(object):
     def __init__(self, dispatcher, service, rpath):
         assert type(service) is str
         self.dispatcher = dispatcher
         self.service = service
-        self.rpath = rpath
         self.path, sep, self._query = rpath.partition('?')
         self.req = self.path[len(service):]
 
@@ -67,13 +65,6 @@ class DdsRequest(MaalstroomRequest):
         self.__ident_enc = False
         self._ident = None
         self.__ident = False
-
-    @asyncio.coroutine
-    def process(self):
-        dmail_address = yield from dmail._load_default_dmail_address(\
-            self.dispatcher.node, fetch_keys=True)
-        if dmail_address:
-            self.ident = dmail_address.site_key
 
     @property
     def ident_enc(self):
@@ -140,7 +131,7 @@ class DdsRequest(MaalstroomRequest):
         if self._query and not self.modified:
             return self._query
 
-        if self.ident_enc is not None:
+        if self.ident_enc:
             self._query = "?ident={}".format(self.ident_enc)
         else:
             self._query = ""
@@ -152,7 +143,6 @@ def serve_get(dispatcher, rpath):
     log.info("Service .dds request.")
 
     mr = DdsRequest(dispatcher, rpath)
-    yield from mr.process()
     req = mr.req
 
     if req == "" or req == "/":
@@ -186,77 +176,27 @@ def serve_post(dispatcher, rpath):
 
     log.info("Service .dds post.")
 
-    mr = DdsRequest(dispatcher, rpath)
-    req = mr.req
+    req = rpath[len(S_DDS):]
 
     if req == "/synapse/create":
         yield from _process_synapse_create_post(dispatcher, req)
-    elif req == "/feed/add":
-        yield from _process_feed_add_post(mr)
-    else:
-        dispatcher.send_error("request: {}".format(req), errcode=400)
+        return
+
+    dispatcher.send_error("request: {}".format(req), errcode=400)
 
 @asyncio.coroutine
 def _process_root(req):
-    def dbcall():
-        with req.dispatcher.node.db.open_session(True) as sess:
-            r = sess.query(NodeState)\
-                .filter(NodeState.key == DEFAULT_FEED_KEY)\
-                .one_or_none()
+    random_id_enc = mbase32.encode(os.urandom(consts.NODE_ID_BYTES))
 
-            return r.value if r else None
-
-    # Load user's channel list from the database.
-    channels_json =\
-        yield from req.dispatcher.loop.run_in_executor(None, dbcall)
-
-    if channels_json:
-        channels_list = json.loads(channels_json)
-    else:
-        channels_list =\
-            ["@MORPHiS", "@MORPHiS-dev", None,\
-            "@news", "@tech-news", None,\
-            "@math", "@math-proofs", None,\
-            "@bitcoin", "@bitcoin-wizards", "@bitcoin-dev", None,\
-            "$RANDOM"]
-
-        def dbcall():
-            with req.dispatcher.node.db.open_session() as sess:
-                ns = NodeState()
-                ns.key = DEFAULT_FEED_KEY
-                ns.value = json.dumps(channels_list)
-                sess.add(ns)
-                sess.commit()
-
-        yield from req.dispatcher.loop.run_in_executor(None, dbcall)
-
-    channel_html = "<ul>"
-    for channel_row in channels_list:
-        if channel_row is None:
-            channel_html += "<br/>"
-            continue
-
-        if type(channel_row) is str:
-            addr = text = channel_row
-        else:
-            addr = channel_row[0]
-            text = channel_row[1] if len(channel_row) > 1 else addr
-
-        if addr == "$RANDOM":
-            addr = mbase32.encode(os.urandom(consts.NODE_ID_BYTES))
-
-        channel_html +=\
-            "<li><a href='morphis://.grok/{}{}'>{}</a></li>"\
-                .format(addr, req.query, text)
-
-    channel_html += "</ul>"
+    # Determine ident.
+    if req.ident_enc is None:
+        dmail_address = yield from dmail._load_default_dmail_address(\
+            req.dispatcher, fetch_keys=True)
+        if dmail_address:
+            req.ident = dmail_address.site_key
 
     template = templates.dds_main[0]
-    template = template.format(\
-        csrf_token=req.dispatcher.client_engine.csrf_token,
-        refresh_url="morphis://" + req.rpath,
-        channels=channel_html,\
-        query=req.query)
+    template = template.format(random_id_enc=random_id_enc, query=req.query)
 
     available_idents = yield from dmail.render_dmail_addresses(\
         req.dispatcher, req.ident, use_key_as_id=True)
@@ -332,10 +272,7 @@ def _process_axon_read(dispatcher, req):
         key = mbase32.decode(req)
         target_key = None
 
-    dds_engine = DdsEngine(dispatcher.node)
-    post = yield from dds_engine.load_post(key)
-    if not post:
-        post = yield from dds_engine.fetch_post(key, target_key)
+    post = yield from retrieve_post(dispatcher.node, key, target_key)
 
     if not post:
         dispatcher.send_content("Not found on the network at the moment.")
@@ -376,11 +313,17 @@ def _process_axon_synapses(dispatcher, axon_addr_enc):
 
     @asyncio.coroutine
     def process_post(post):
-        assert type(post) is DdsPost
-
-        key = post.synapse_key
-        if not key:
-            key = post.data_key
+        if type(post) is syn.Synapse:
+            key = post.synapse_key
+            post = yield from retrieve_post(dispatcher.node, post)
+        elif type(post) is DdsPost:
+            key = post.synapse_key
+            if not key:
+                key = post.data_key
+        else:
+            assert type(post) in (bytes, bytearray)
+            key = post
+            post = yield from retrieve_post(dispatcher.node, post, axon_addr)
 
         if not post:
             if log.isEnabledFor(logging.INFO):
@@ -388,6 +331,12 @@ def _process_axon_synapses(dispatcher, axon_addr_enc):
                     "Post data not found for found key [{}]."\
                         .format(mbase32.encode(key)))
             return
+
+#        if post.synapse_key:
+#            loaded.setdefault(post.synapse_key, True)
+#        if post.synapse_pow:
+#            loaded.setdefault(post.synapse_pow, True)
+#        loaded.setdefault(post.data_key) = True
 
         key_enc = mbase32.encode(key)
 
@@ -442,37 +391,57 @@ def _process_axon_synapses(dispatcher, axon_addr_enc):
 
     dispatcher.send_partial_content("<hr id='new'/>")
 
-#    dds_engine = DdsEngine(dispatcher.node)
-#    yield from dispatcher.client_engine.dds.dds_engine.scan_target_key(\
-#        axon_addr, process_post)
+    new_tasks = []
 
-    query = DdsQuery(axon_addr)
-    already = dispatcher.client_engine.dds.check_query_autoscan(query)
-    if not already:
-        dispatcher.client_engine.dds.enable_query_autoscan(query)
+    @asyncio.coroutine
+    def cb(key):
+        nonlocal new_tasks
 
-        dispatcher.send_partial_content(\
-            "<div>Started scanning for new messages...</div>"\
-            "<span id='end' style='color: gray'/></body></html>"\
-                .format(mutil.utc_datetime()))
+        if type(key) is bytearray:
+            key = bytes(key)
 
-        dispatcher.end_partial_content()
-        return
+        if loaded.get(key):
+            if log.isEnabledFor(logging.INFO):
+                log.info("Skipping already loaded TargetedBlock/Synapse for"\
+                    " key=[{}].".format(mbase32.encode(key)))
+            return
 
-#        # If this channel was not being scanned, then we will wait this first
-#        # time.
-#        all_done = asyncio.Event()
-#
-#        @asyncio.coroutine
-#        def query_listener(post):
-#            if post:
-#                yield from process_post(post)
-#            else:
-#                all_done.set()
-#
-#        dispatcher.client_engine.dds.add_query_listener(query, query_listener)
-#
-#        yield from all_done.wait()
+        loaded.setdefault(key, True)
+
+        new_tasks.append(\
+            asyncio.async(\
+                process_post(key),\
+                loop=dispatcher.node.loop))
+
+    @asyncio.coroutine
+    def cb2(data_rw):
+        nonlocal new_tasks
+
+        for synapse in data_rw.data:
+            if loaded.get(bytes(synapse.synapse_pow)):
+                if log.isEnabledFor(logging.INFO):
+                    log.info("Skipping already loaded Synapse for key=[{}]."\
+                        .format(mbase32.encode(synapse.synapse_pow)))
+                continue
+
+            loaded.setdefault(synapse.synapse_pow, True)
+
+            new_tasks.append(\
+                asyncio.async(\
+                    process_post(synapse),\
+                    loop=dispatcher.node.loop))
+
+    dp = dpush.DpushEngine(dispatcher.node)
+    new_tasks.append(asyncio.async(dp.scan_targeted_blocks(axon_addr, 8, cb)))
+
+    yield from dispatcher.node.engine.tasks.send_get_synapses(\
+        axon_addr, result_callback=cb2, retry_factor=25)
+
+    if new_tasks:
+        yield from asyncio.wait(\
+            new_tasks,\
+            loop=dispatcher.node.loop,\
+            return_when=futures.ALL_COMPLETED)
 
     dispatcher.send_partial_content(\
         "<div>Last refreshed: {}</div><span id='end' style='color: gray'/>"\
@@ -486,6 +455,11 @@ def _process_synapse_create(req):
     target_addr = req.req[16:]
     if req.dispatcher.handle_cache(target_addr):
         return
+
+    if not req.ident:
+        dmail_address =\
+            yield from dmail._load_default_dmail_address(req.dispatcher)
+        req.ident = dmail_address.site_key
 
     ident_name =\
         yield from dmail.get_contact_name(req.dispatcher.node, req.ident)
@@ -608,40 +582,6 @@ def _process_synapse_create_post(dispatcher, req):
     dispatcher.send_content(resp)
 
 @asyncio.coroutine
-def _process_feed_add_post(req):
-    dd = yield from req.dispatcher.read_post()
-    refresh_url = fia(dd.get("refresh_url"))
-
-    name = fia(dd.get("name"))
-    address = fia(dd.get("address"))
-
-    def dbcall():
-        with req.dispatcher.node.db.open_session() as sess:
-            feed = sess.query(NodeState)\
-                .filter(NodeState.key == DEFAULT_FEED_KEY)\
-                .one_or_none()
-
-            if feed:
-                feed_list = json.loads(feed.value)
-            else:
-                feed = NodeState()
-                sess.add(feed)
-                feed_list = []
-
-            if not name and not address:
-                feed_list.append(None)
-            else:
-                feed_list.append([address, name])
-
-            feed.value = json.dumps(feed_list)
-
-            sess.commit()
-
-    req.dispatcher.loop.run_in_executor(None, dbcall)
-
-    req.dispatcher.send_301(refresh_url)
-
-@asyncio.coroutine
 def _format_axon(node, data, key, key_enc=None):
     result = __format_post(data)
 
@@ -649,10 +589,10 @@ def _format_axon(node, data, key, key_enc=None):
         key_enc = mbase32.encode(key)
 
     return result\
-        + "<div style='float: right; font-family: monospace; font-style: italic; font-size: 8pt;"\
-            "color: #a2a6ab; position: absolute; top: .6em; width: 100px; overflow: hidden;"\
-            "text-overflow: ellipsis; -o-text-overflow: ellipsis; white-space: nowrap;"\
-            "padding-right: 10px; padding-bottom: 5px; right: 0.3em;'>#{}</div>".format(key_enc[:32])
+        + "<div style='font-family: monospace; font-size: 8pt;"\
+            "color: #80C9D1; position: absolute; bottom: 0.3em;"\
+            "padding-right: 10px; padding-bottom: 5px;"\
+            "right: 0.3em;'>{}</div>".format(key_enc[:32])
 
 def __format_post(data):
     fr = data.find(b'\r')
@@ -675,3 +615,106 @@ def __format_post(data):
         "{}"\
             .format(\
                 data[:end].decode(), make_safe_for_html_content(data[start:]))
+
+#TODO: Move to DdsEngine.
+
+@asyncio.coroutine
+def retrieve_post(node, key, target_key=None):
+    synapse = None
+    if type(key) is syn.Synapse:
+        assert not target_key
+        synapse = key
+        key = synapse.synapse_key
+        target_key = synapse.target_key
+
+    post = yield from _load_dds_post(node, key)
+
+    if post:
+        return post
+
+    if not target_key:
+        # Plain static data.
+        data_rw = yield from\
+            node.chord_engine.tasks.send_get_data(bytes(key))
+
+        obj = None
+    else:
+        # TargetedBlock or Synapse.
+        if synapse:
+            obj = synapse
+        else:
+            data_rw =\
+                yield from node.chord_engine.tasks.send_get_targeted_data(\
+                    bytes(key), target_key=target_key)
+            obj = data_rw.object
+
+        if obj:
+            if type(obj) is syn.Synapse:
+                data_rw = yield from\
+                    node.chord_engine.tasks.send_get_data(obj.source_key)
+            else:
+                assert type(obj) is tb.TargetedBlock, type(obj)
+                data_rw.data = data_rw.data[tb.TargetedBlock.BLOCK_OFFSET:]
+
+    if not data_rw.data:
+        return None
+
+    # Cache the 'post' locally.
+    post = yield from _save_dds_post(node, key, target_key, obj, data_rw.data)
+
+    return post
+
+@asyncio.coroutine
+def _load_dds_post(node, key):
+    def dbcall():
+        with node.db.open_session(True) as sess:
+            q = sess.query(DdsPost).filter(
+                or_(\
+                    DdsPost.synapse_key == key,\
+                    DdsPost.synapse_pow == key,\
+                    DdsPost.data_key == key))
+
+            return q.first()
+
+    return (yield from node.loop.run_in_executor(None, dbcall))
+
+@asyncio.coroutine
+def _save_dds_post(node, key, target_key, obj, data):
+    def dbcall():
+        with node.db.open_session() as sess:
+            post = DdsPost()
+
+            post.first_seen = mutil.utc_datetime()
+            post.data = data
+
+            if obj:
+                assert target_key
+                post.target_key = target_key
+
+                if type(obj) is syn.Synapse:
+                    post.synapse_key = obj.synapse_key
+                    post.synapse_pow = obj.synapse_pow
+                    post.data_key = obj.source_key
+                    if obj.is_signed():
+                        post.signing_key = obj.signing_key
+                    post.timestamp = mutil.utc_datetime(obj.timestamp)
+                else:
+                    assert type(obj) is tb.TargetedBlock, type(obj)
+                    post.data_key = post.synapse_pow = key
+                    post.timestamp = mutil.utc_datetime(0)
+            else:
+                post.data_key = key
+                post.timestamp = post.first_seen
+
+            sess.add(post)
+
+            sess.commit()
+
+            # Make sure data is loaded for use by caller.
+            len(post.data)
+
+            sess.expunge_all()
+
+            return post
+
+    return (yield from node.loop.run_in_executor(None, dbcall))
