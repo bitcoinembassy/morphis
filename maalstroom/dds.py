@@ -272,7 +272,8 @@ def _process_axon_read(dispatcher, req):
         key = mbase32.decode(req)
         target_key = None
 
-    post = yield from retrieve_post(dispatcher.node, key, target_key)
+    dds_engine = DdsEngine(dispatcher.node)
+    post = yield from dds_engine.retrieve_post(key, target_key)
 
     if not post:
         dispatcher.send_content("Not found on the network at the moment.")
@@ -309,13 +310,14 @@ def _process_axon_synapses(dispatcher, axon_addr_enc):
 
     dispatcher.send_partial_content(templates.dds_axon_synapses_start[0], True)
 
+    dds_engine = DdsEngine(dispatcher.node)
     loaded = {}
 
     @asyncio.coroutine
     def process_post(post):
         if type(post) is syn.Synapse:
             key = post.synapse_key
-            post = yield from retrieve_post(dispatcher.node, post)
+            post = yield from dds_engine.retrieve_post(post)
         elif type(post) is DdsPost:
             key = post.synapse_key
             if not key:
@@ -323,7 +325,8 @@ def _process_axon_synapses(dispatcher, axon_addr_enc):
         else:
             assert type(post) in (bytes, bytearray)
             key = post
-            post = yield from retrieve_post(dispatcher.node, post, axon_addr)
+            post = yield from\
+                dds_engine.retrieve_post(post, axon_addr)
 
         if not post:
             if log.isEnabledFor(logging.INFO):
@@ -615,106 +618,3 @@ def __format_post(data):
         "{}"\
             .format(\
                 data[:end].decode(), make_safe_for_html_content(data[start:]))
-
-#TODO: Move to DdsEngine.
-
-@asyncio.coroutine
-def retrieve_post(node, key, target_key=None):
-    synapse = None
-    if type(key) is syn.Synapse:
-        assert not target_key
-        synapse = key
-        key = synapse.synapse_key
-        target_key = synapse.target_key
-
-    post = yield from _load_dds_post(node, key)
-
-    if post:
-        return post
-
-    if not target_key:
-        # Plain static data.
-        data_rw = yield from\
-            node.chord_engine.tasks.send_get_data(bytes(key))
-
-        obj = None
-    else:
-        # TargetedBlock or Synapse.
-        if synapse:
-            obj = synapse
-        else:
-            data_rw =\
-                yield from node.chord_engine.tasks.send_get_targeted_data(\
-                    bytes(key), target_key=target_key)
-            obj = data_rw.object
-
-        if obj:
-            if type(obj) is syn.Synapse:
-                data_rw = yield from\
-                    node.chord_engine.tasks.send_get_data(obj.source_key)
-            else:
-                assert type(obj) is tb.TargetedBlock, type(obj)
-                data_rw.data = data_rw.data[tb.TargetedBlock.BLOCK_OFFSET:]
-
-    if not data_rw.data:
-        return None
-
-    # Cache the 'post' locally.
-    post = yield from _save_dds_post(node, key, target_key, obj, data_rw.data)
-
-    return post
-
-@asyncio.coroutine
-def _load_dds_post(node, key):
-    def dbcall():
-        with node.db.open_session(True) as sess:
-            q = sess.query(DdsPost).filter(
-                or_(\
-                    DdsPost.synapse_key == key,\
-                    DdsPost.synapse_pow == key,\
-                    DdsPost.data_key == key))
-
-            return q.first()
-
-    return (yield from node.loop.run_in_executor(None, dbcall))
-
-@asyncio.coroutine
-def _save_dds_post(node, key, target_key, obj, data):
-    def dbcall():
-        with node.db.open_session() as sess:
-            post = DdsPost()
-
-            post.first_seen = mutil.utc_datetime()
-            post.data = data
-
-            if obj:
-                assert target_key
-                post.target_key = target_key
-
-                if type(obj) is syn.Synapse:
-                    post.synapse_key = obj.synapse_key
-                    post.synapse_pow = obj.synapse_pow
-                    post.data_key = obj.source_key
-                    if obj.is_signed():
-                        post.signing_key = obj.signing_key
-                    post.timestamp = mutil.utc_datetime(obj.timestamp)
-                else:
-                    assert type(obj) is tb.TargetedBlock, type(obj)
-                    post.data_key = post.synapse_pow = key
-                    post.timestamp = mutil.utc_datetime(0)
-            else:
-                post.data_key = key
-                post.timestamp = post.first_seen
-
-            sess.add(post)
-
-            sess.commit()
-
-            # Make sure data is loaded for use by caller.
-            len(post.data)
-
-            sess.expunge_all()
-
-            return post
-
-    return (yield from node.loop.run_in_executor(None, dbcall))

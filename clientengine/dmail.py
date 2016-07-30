@@ -25,7 +25,7 @@ class DmailClientEngine(object):
         self.db = node.db
         self.loop = node.loop
 
-        self.engine = dmail.DmailEngine(node)
+        self.dmail_engine = dmail.DmailEngine(node)
 
         self.auto_publish_enabled = True
         self.auto_scan_enabled = True
@@ -58,7 +58,7 @@ class DmailClientEngine(object):
 
     @asyncio.coroutine
     def _start_dmail_auto_publish(self):
-        yield from self.engine.protocol_ready.wait()
+        yield from self.node.engine.protocol_ready.wait()
 
         def dbcall():
             with self.db.open_session(True) as sess:
@@ -83,7 +83,7 @@ class DmailClientEngine(object):
 
     @asyncio.coroutine
     def _dmail_auto_publish(self, dmail_address):
-        data_rw = yield from self.engine.tasks.send_get_data(\
+        data_rw = yield from self.node.engine.tasks.send_get_data(\
             dmail_address.site_key, retry_factor=100)
 
         if data_rw.data:
@@ -120,7 +120,7 @@ class DmailClientEngine(object):
 
     @asyncio.coroutine
     def _start_dmail_autoscan(self):
-        yield from self.engine.protocol_ready.wait()
+        yield from self.node.engine.protocol_ready.wait()
 
         def dbcall():
             with self.db.open_session(True) as sess:

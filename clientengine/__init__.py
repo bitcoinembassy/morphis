@@ -17,7 +17,6 @@ log = logging.getLogger(__name__)
 
 class ClientEngine(object):
     def __init__(self, node):
-        self.engine = node.engine
         self.loop = node.loop
 
         self.dmail = dmail.DmailClientEngine(node)
@@ -72,14 +71,14 @@ class ClientEngine(object):
 
     @asyncio.coroutine
     def _start_version_poller(self):
-        yield from self.engine.protocol_ready.wait()
+        yield from self.node.engine.protocol_ready.wait()
 
         while self._running:
             data_rw = multipart.BufferingDataCallback()
 
             r =\
                 yield from\
-                    multipart.get_data(self.engine, self._data_key,\
+                    multipart.get_data(self.node.engine, self._data_key,\
                         data_callback=data_rw, path=self._path)
 
             if data_rw.data:
