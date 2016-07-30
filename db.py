@@ -617,6 +617,7 @@ def _upgrade_4_to_5(db):
             sess.execute(st)
             st = "drop table axonkey"
             sess.execute(st)
+            sess.commit()
         except:
             sess.rollback()
 
@@ -631,6 +632,7 @@ def _upgrade_4_to_5(db):
                 sess.execute(st)
                 st = "drop table synapsekey"
                 sess.execute(st)
+                sess.commit()
             except:
                 sess.rollback()
 
@@ -641,6 +643,7 @@ def _upgrade_4_to_5(db):
             rebuild = True
             st = "drop table axon"
             sess.execute(st)
+            sess.commit()
         except:
             sess.rollback()
 
@@ -651,6 +654,7 @@ def _upgrade_4_to_5(db):
             rebuild = True
             st = "drop table axonkey"
             sess.execute(st)
+            sess.commit()
         except:
             sess.rollback()
 
@@ -663,6 +667,22 @@ def _upgrade_4_to_5(db):
                 rebuild = True
                 st = "drop table ddspost"
                 sess.execute(st)
+                sess.commit()
+            except:
+                sess.rollback()
+
+        st = "select timestamp from synapse"
+        try:
+            sess.execute(st)
+        except:
+            sess.rollback()
+            try:
+                rebuild = True
+                st = "drop table synapse"
+                sess.execute(st)
+                st = "drop table synapsekey"
+                sess.execute(st)
+                sess.commit()
             except:
                 sess.rollback()
         ##.
