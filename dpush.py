@@ -54,13 +54,13 @@ class DpushSite(object):
 
 class DpushEngine(object):
     def __init__(self, node):
-        self.core = node.chord_engine
+        self.node = node
         self.db = node.db
         self.loop = node.loop
 
     @asyncio.coroutine
     def scan_targeted_blocks(\
-            self, target, significant_bits, key_callback):
+            self, target, significant_bits, key_callback, retry_factor=25):
         "Scans the network for TargetedBlockS matching requested details."
         if log.isEnabledFor(logging.INFO):
             log.info("Scanning for TargetedBlockS for target=[{}]."\
@@ -69,9 +69,9 @@ class DpushEngine(object):
         start = target
 
         while True:
-            data_rw = yield from self.core.tasks.send_find_key(\
+            data_rw = yield from self.node.engine.tasks.send_find_key(\
                 start, target_key=target, significant_bits=significant_bits,\
-                retry_factor=25)
+                retry_factor=retry_factor)
 
             key = data_rw.data_key
 
