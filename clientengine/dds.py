@@ -48,7 +48,7 @@ class DdsClientEngine(object):
             return
 
         if self._autoscan_task:
-            _autoscan_task.cancel()
+            self._autoscan_task.cancel()
 
 class DdsAutoscanProcess(object):
     def __init__(self, dce, target_key):

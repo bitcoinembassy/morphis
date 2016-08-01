@@ -27,7 +27,6 @@ from mutil import fia, hex_dump, make_safe_for_html_content
 import mutil
 import rsakey
 import synapse as syn
-import targetedblock as tb
 import sshtype
 
 log = logging.getLogger(__name__)
@@ -273,7 +272,9 @@ def _process_axon_read(dispatcher, req):
         target_key = None
 
     dds_engine = DdsEngine(dispatcher.node)
-    post = yield from dds_engine.retrieve_post(key, target_key)
+    post = yield from dds_engine.load_post(key)
+    if not post:
+        post = yield from dds_engine.fetch_post(key, target_key)
 
     if not post:
         dispatcher.send_content("Not found on the network at the moment.")
@@ -317,7 +318,11 @@ def _process_axon_synapses(dispatcher, axon_addr_enc):
     def process_post(post):
         if type(post) is syn.Synapse:
             key = post.synapse_key
-            post = yield from dds_engine.retrieve_post(post)
+            post_ = yield from dds_engine.load_post(key)
+            if post_:
+                post = post_
+            else:
+                post = yield from dds_engine.fetch_post(post, axon_addr)
         elif type(post) is DdsPost:
             key = post.synapse_key
             if not key:
@@ -325,8 +330,9 @@ def _process_axon_synapses(dispatcher, axon_addr_enc):
         else:
             assert type(post) in (bytes, bytearray)
             key = post
-            post = yield from\
-                dds_engine.retrieve_post(post, axon_addr)
+            post = yield from dds_engine.load_post(key)
+            if not post:
+                post = yield from dds_engine.fetch_post(key, axon_addr)
 
         if not post:
             if log.isEnabledFor(logging.INFO):

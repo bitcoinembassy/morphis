@@ -233,7 +233,7 @@ class DmailAutoscanProcess(object):
 
         while self._running:
             new_cnt, old_cnt, err_cnt = yield from\
-                self.dce.engine.scan_and_save_new_dmails(\
+                self.dce.dmail_engine.scan_and_save_new_dmails(\
                     self.dmail_address)
 
             if log.isEnabledFor(logging.INFO):
