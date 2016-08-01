@@ -12,7 +12,7 @@ from sqlalchemy.orm import joinedload
 import base58
 from db import DmailAddress
 import dhgroup14
-import dmail
+import dds
 import mbase32
 import rsakey
 import sshtype
@@ -25,11 +25,13 @@ class DdsClientEngine(object):
         self.db = node.db
         self.loop = node.loop
 
+        self.dds_engine = dds.DdsEngine(node)
+
         self.auto_scan_enabled = True
 
         self._running = False
 
-        self._autoscan_task = None
+        self.autoscan_process = None
 
     @asyncio.coroutine
     def start(self):
@@ -39,8 +41,8 @@ class DdsClientEngine(object):
         self._running = True
 
         if self.auto_scan_enabled:
-            self._autoscan_task =\
-                asyncio.async(self._start_autoscan(), loop=self.loop)
+            self.autoscan_process = DdsAutoscanProcess(self)
+            self.autoscan_process.start()
 
     @asyncio.coroutine
     def stop(self):
@@ -51,11 +53,9 @@ class DdsClientEngine(object):
             self._autoscan_task.cancel()
 
 class DdsAutoscanProcess(object):
-    def __init__(self, dce, target_key):
+    def __init__(self, dce):
         self.dce = dce
         self.loop = dce.loop
-
-        self.target_key = target_key
 
         self._task = None
         self._running = False

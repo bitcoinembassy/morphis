@@ -400,57 +400,8 @@ def _process_axon_synapses(dispatcher, axon_addr_enc):
 
     dispatcher.send_partial_content("<hr id='new'/>")
 
-    new_tasks = []
-
-    @asyncio.coroutine
-    def cb(key):
-        nonlocal new_tasks
-
-        if type(key) is bytearray:
-            key = bytes(key)
-
-        if loaded.get(key):
-            if log.isEnabledFor(logging.INFO):
-                log.info("Skipping already loaded TargetedBlock/Synapse for"\
-                    " key=[{}].".format(mbase32.encode(key)))
-            return
-
-        loaded.setdefault(key, True)
-
-        new_tasks.append(\
-            asyncio.async(\
-                process_post(key),\
-                loop=dispatcher.node.loop))
-
-    @asyncio.coroutine
-    def cb2(data_rw):
-        nonlocal new_tasks
-
-        for synapse in data_rw.data:
-            if loaded.get(bytes(synapse.synapse_pow)):
-                if log.isEnabledFor(logging.INFO):
-                    log.info("Skipping already loaded Synapse for key=[{}]."\
-                        .format(mbase32.encode(synapse.synapse_pow)))
-                continue
-
-            loaded.setdefault(synapse.synapse_pow, True)
-
-            new_tasks.append(\
-                asyncio.async(\
-                    process_post(synapse),\
-                    loop=dispatcher.node.loop))
-
-    dp = dpush.DpushEngine(dispatcher.node)
-    new_tasks.append(asyncio.async(dp.scan_targeted_blocks(axon_addr, 8, cb)))
-
-    yield from dispatcher.node.engine.tasks.send_get_synapses(\
-        axon_addr, result_callback=cb2, retry_factor=25)
-
-    if new_tasks:
-        yield from asyncio.wait(\
-            new_tasks,\
-            loop=dispatcher.node.loop,\
-            return_when=futures.ALL_COMPLETED)
+    yield from dispatcher.client_engine.dds.dds_engine.scan_target_key(\
+        axon_addr, process_post)
 
     dispatcher.send_partial_content(\
         "<div>Last refreshed: {}</div><span id='end' style='color: gray'/>"\

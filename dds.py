@@ -55,7 +55,7 @@ class DdsEngine(object):
             if exists:
                 return
 
-            post = yield from self.dds_engine.fetch_post(key, target_key)
+            post = yield from self.fetch_post(key, target_key)
 
             if not post:
                 if log.isEnabledFor(logging.INFO):
@@ -71,7 +71,7 @@ class DdsEngine(object):
             if exists:
                 return
 
-            post = yield from self.dds_engine.fetch_post(synapse, target_key)
+            post = yield from self.fetch_post(synapse, target_key)
 
             if not post:
                 if log.isEnabledFor(logging.INFO):

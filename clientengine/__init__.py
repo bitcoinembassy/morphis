@@ -10,6 +10,7 @@ import os
 import base58
 import chord
 from clientengine import dmail
+from clientengine import dds
 import mbase32
 import multipart
 
@@ -19,6 +20,7 @@ class ClientEngine(object):
     def __init__(self, node):
         self.loop = node.loop
 
+        self.dds = dds.DdsClientEngine(node)
         self.dmail = dmail.DmailClientEngine(node)
 
         self.latest_version_number = None
