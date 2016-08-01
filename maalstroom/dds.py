@@ -316,23 +316,11 @@ def _process_axon_synapses(dispatcher, axon_addr_enc):
 
     @asyncio.coroutine
     def process_post(post):
-        if type(post) is syn.Synapse:
-            key = post.synapse_key
-            post_ = yield from dds_engine.load_post(key)
-            if post_:
-                post = post_
-            else:
-                post = yield from dds_engine.fetch_post(post, axon_addr)
-        elif type(post) is DdsPost:
-            key = post.synapse_key
-            if not key:
-                key = post.data_key
-        else:
-            assert type(post) in (bytes, bytearray)
-            key = post
-            post = yield from dds_engine.load_post(key)
-            if not post:
-                post = yield from dds_engine.fetch_post(key, axon_addr)
+        assert type(post) is DdsPost
+
+        key = post.synapse_key
+        if not key:
+            key = post.data_key
 
         if not post:
             if log.isEnabledFor(logging.INFO):
