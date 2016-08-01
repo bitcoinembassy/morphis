@@ -16,6 +16,7 @@ from sqlalchemy import or_
 import consts
 from db import User, DdsPost
 from dmail import DmailEngine
+from clientengine.dds import DdsQuery
 from dds import DdsEngine
 import dpush
 import enc
@@ -311,7 +312,6 @@ def _process_axon_synapses(dispatcher, axon_addr_enc):
 
     dispatcher.send_partial_content(templates.dds_axon_synapses_start[0], True)
 
-    dds_engine = DdsEngine(dispatcher.node)
     loaded = {}
 
     @asyncio.coroutine
@@ -328,12 +328,6 @@ def _process_axon_synapses(dispatcher, axon_addr_enc):
                     "Post data not found for found key [{}]."\
                         .format(mbase32.encode(key)))
             return
-
-#        if post.synapse_key:
-#            loaded.setdefault(post.synapse_key, True)
-#        if post.synapse_pow:
-#            loaded.setdefault(post.synapse_pow, True)
-#        loaded.setdefault(post.data_key) = True
 
         key_enc = mbase32.encode(key)
 
@@ -388,8 +382,37 @@ def _process_axon_synapses(dispatcher, axon_addr_enc):
 
     dispatcher.send_partial_content("<hr id='new'/>")
 
-    yield from dispatcher.client_engine.dds.dds_engine.scan_target_key(\
-        axon_addr, process_post)
+#    dds_engine = DdsEngine(dispatcher.node)
+#    yield from dispatcher.client_engine.dds.dds_engine.scan_target_key(\
+#        axon_addr, process_post)
+
+    query = DdsQuery(axon_addr)
+    already = dispatcher.client_engine.dds.check_query_autoscan(query)
+    if not already:
+        dispatcher.client_engine.dds.enable_query_autoscan(query)
+
+        dispatcher.send_partial_content(\
+            "<div>Started scanning for new messages...</div>"\
+            "<span id='end' style='color: gray'/></body></html>"\
+                .format(mutil.utc_datetime()))
+
+        dispatcher.end_partial_content()
+        return
+
+#        # If this channel was not being scanned, then we will wait this first
+#        # time.
+#        all_done = asyncio.Event()
+#
+#        @asyncio.coroutine
+#        def query_listener(post):
+#            if post:
+#                yield from process_post(post)
+#            else:
+#                all_done.set()
+#
+#        dispatcher.client_engine.dds.add_query_listener(query, query_listener)
+#
+#        yield from all_done.wait()
 
     dispatcher.send_partial_content(\
         "<div>Last refreshed: {}</div><span id='end' style='color: gray'/>"\
