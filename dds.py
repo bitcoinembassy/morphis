@@ -214,7 +214,7 @@ class DdsEngine(object):
     def save_post(self, key, target_key, obj, data):
         if log.isEnabledFor(logging.INFO):
             log.info("Saving DdsPost for key=[{}], target_key=[{}]."\
-                .format(key, target_key))
+                .format(mbase32.encode(key), mbase32.encode(target_key)))
 
         def dbcall():
             with self.db.open_session() as sess:
