@@ -21,10 +21,11 @@ log = logging.getLogger(__name__)
 
 class DdsQuery(object):
     def __init__(self, target_key):
-        self.target_key = target_key
+        self.target_key =\
+            target_key if type(target_key) is bytes else bytes(target_key)
 
     def __hash__(self):
-        return has(self.target_key)
+        return hash(self.target_key)
 
     def __eq__(self, other):
         return self.target_key == other.target_key
@@ -42,6 +43,8 @@ class DdsClientEngine(object):
 
         self._running = False
 
+        self._autoscan_processes = {}
+
     @asyncio.coroutine
     def start(self):
         if self._running:
@@ -54,19 +57,19 @@ class DdsClientEngine(object):
         if not self._running:
             return
 
-    def add_query_listener(self, listener, query):
+    def add_query_listener(self, query, listener):
         assert type(query) is DdsQuery
 
         process = self.enable_query_autoscan(query, False)
         process.add_listener(listener)
 
     def check_query_autoscan(self, query):
-        return self.autoscan_processes.get(query) is not None
+        return query in self._autoscan_processes
 
     def enable_query_autoscan(self, query, persistent=True):
         assert type(query) is DdsQuery
 
-        process = self.autoscan_processes.get(query)
+        process = self._autoscan_processes.get(query)
         if process:
             process.persistent = True
             return process
@@ -74,7 +77,7 @@ class DdsClientEngine(object):
         process = DdsAutoscanProcess(self, query, persistent)
         process.start()
 
-        self.autoscan_processes[query] = process
+        self._autoscan_processes[query] = process
 
         return process
 
@@ -94,7 +97,7 @@ class DdsAutoscanProcess(object):
         assert not self._running
         if log.isEnabledFor(logging.INFO):
             log.info("Starting autoscan for target_key=[{}]."\
-                .format(self.query.target_key))
+                .format(mbase32.encode(self.query.target_key)))
 
         self._running = True
         self._task = asyncio.async(self._run(), loop=self.loop)
@@ -108,18 +111,24 @@ class DdsAutoscanProcess(object):
         self._task = None
 
     def add_listener(self, listener):
-        _listeners.append(listener)
+        self._listeners.append(listener)
 
     def remove_listener(self, listener):
-        _listeners.remove(listener)
+        self._listeners.remove(listener)
 
+    @asyncio.coroutine
     def _notify_listeners(self, post):
-        for listener in listeners:
-            listener(post)
+        for listener in self._listeners:
+            yield from listener(post)
 
+    @asyncio.coroutine
     def _run(self):
         while self._running:
+            if log.isEnabledFor(logging.INFO):
+                log.info("DdsAutoscanProcess scanning target_key=[{}] now."\
+                    .format(mbase32.encode(self.query.target_key)))
+
             yield from self.dce.dds_engine.scan_target_key(\
                 self.query.target_key, self._notify_listeners)
             # Let listeners know that the scan finished.
-            self._notify_listeners(None)
+            yield from self._notify_listeners(None)
