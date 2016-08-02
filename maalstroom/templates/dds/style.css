@@ -93,7 +93,7 @@ h2 {
 	margin-top: -2px;
 	z-index: 100;
 }
-.channel {
+.dds-channel {
 	font-weight: bold;
 }
 .dds-body-bkg {
@@ -111,7 +111,12 @@ h2 {
 	color: #fff;
 	padding: 7px 20px 7px 20px;
 }
-.dds-nav a:link,a:visited {
+.dds-nav a:link {
+	color: #38a3af;
+	text-decoration: none;
+	font-weight: bold;
+}
+.dds-nav a:visited {
 	color: #38a3af;
 	text-decoration: none;
 	font-weight: bold;
@@ -127,22 +132,45 @@ h2 {
 .dds-sort {
 	float: right;
 }
+.dds-reply-id {
+	font-size: 0.75em;
+	text-overflow: ellipsis;
+	overflow: hidden;
+	width: 10%;
+	color: #fff;
+	white-space: nowrap;
+	float: left;
+}
+.dds-reply-bracket {
+	font-size: 0.75em;
+	color: #fff;
+	float: left;
+}
 .dds-reply-wrapper {
 	position: fixed;
 	left: 0;
 	bottom: 0;
-	height: 130px;
+	height: 136px;
 	width: 100%;
 }
+.dds-reply-input {
+	float: left;
+	width: 80%;
+}
 .dds-reply-content {
-	margin: 1.5em 5em 0 5em;
+	padding: 7px 20px 7px 20px;
+	background-color: #371f44;
 }
 .dds-post-wrapper {
 	padding: 7px 20px 7px 20px;
 	position: relative;
+	height: 100%;
 }
 .dds-post-wrapper:hover {
 	background-color: #fff;
+}
+.dds-channel-wrapper {
+	margin: 0 20px 0 20px;
 }
 .dds-post-nav {
 }
@@ -193,10 +221,15 @@ h2 {
 .dds-footer {
 }
 hr.style1 {
-	border: 0;
-	height: 0;
+	margin: 10px 0 10px 0;
 	border-top: 1px solid rgba(0, 0, 0, 0.1);
 	border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+}
+hr.style2 {
+	margin: 10px 0 10px 0;
+	height: 6px;
+	background: url("morphis://.dds/images/hr-11.png") repeat-x 0 0;
+	border: 0;
 }
 .dds-message {
 }
@@ -205,21 +238,30 @@ hr.style1 {
 	width: 100%;
 	margin-top: 0;
 	margin-bottom: 10px;
-	border: 1px solid #b2b2b2;
+	border: 1px solid #39a3af;
 	border-radius: 4px;
 	font-size: 1.2em;
-	box-shadow: 0px 0px 2px 1px rgba(0, 0, 0, 0.2) inset;
+	box-shadow: 0px 0px 2px 1px rgba(56, 163, 175, 0.2) inset;
 }
 input[type="text"]:focus, textarea:focus {
 	outline: medium none;
-	border-color: #b2b2b2;
-	box-shadow: 0px 0px 5px 2px rgba(4, 12, 35, 0.9);
+	border-color: #39a3af;
+	box-shadow: 0px 0px 2px 1px rgba(56, 163, 175, 0.9) inset;
 }
 .dds-message li {
 	white-space: nowrap;
 	list-style: none;
 }
-button {
+.dds-message input {
+	height:2em;
+	width: calc(100% - 12em);
+	min-width: 10em;
+	border: 1px solid #39a3af;
+	box-shadow: 0px 0px 2px 1px rgba(56, 163, 175, 0.1) inset;
+	border-radius: 4px;
+	font-size: .85em;
+}
+/*button {
 	vertical-align: top;
 	background-color: transparent;
 }
@@ -237,7 +279,7 @@ button.post:hover {
 }
 button.post:active {
 	border: 1px solid;
-}
+}*/
 .dds-post-icons {
 	float: right;
 	margin-right: 100px;
@@ -319,10 +361,14 @@ button.post:active {
 .dds-user-icon {
 	float: left;
 }
-
-.dds-channel {
-	background-color: #d0bd78;
+.dds-refresh-text {
+	font-style: italic;
+	font-size: .9em;
+	color: #a2a6ab;
 }
+/*.channel {
+	background-color: #d0bd78;
+}*/
 
 /* Other.*/
 .dds-element {
@@ -334,93 +380,4 @@ button.post:active {
 	border-radius: 4px;
 	font-size: 1.2em;
 	box-shadow: 0px 0px 2px 1px rgba(0, 0, 0, 0.2) inset;
-}
-/*Morphis Dashboard*/
-section li{
-	margin:0 0 10px;
-}
-.wrapper{
-	overflow:hidden;
-}
-section{
-	padding:30px 30px 30px 80px;
-	-moz-transition:all 200ms ease-in;
-	-webkit-transition:all 200ms ease-in;
-	-o-transition:all 200ms ease-in;
-	transition:all 200ms ease-in;
-	
-}
-nav{
-	position:fixed;
-	top:0;
-	left:0;
-	width:250px;
-	height:100%;
-	margin:0 0 0 -250px;
-	-moz-transition:all 200ms ease-in;
-	-webkit-transition:all 200ms ease-in;
-	-o-transition:all 200ms ease-in;
-	transition:all 200ms ease-in;
-}
-nav ul{
-	width:250px;
-	height:100%;
-	padding:0;
-	margin:0;
-	list-style:none;
-	background:#222;
-	overflow:hidden;
-}
-nav li{
-	margin:0;
-}
-nav a{
-	color:#fff;
-	font-size:1em;
-	font-family:'helvetica neue', helvetica, arial, sans-serif;
-	text-decoration:none;
-	display:block;
-	padding:12px 15px;
-	font-weight:300;
-	letter-spacing:2px;
-	border-bottom:1px solid #333;
-}
-nav a:hover{
-	background:#111;
-}
-label{
-	display:block;
-	font-family:'helvetica neue', helvetica, arial, sans-serif;
-	font-weight:700;
-	background:#1ea1b8;
-	width:42px;
-	height:42px;
-	line-height:42px;
-	color:#fff;
-	text-align:center;
-	font-size:2em;
-	line-height:1.1em;
-	position:fixed;
-	top:10px;
-	left:10px;
-	-moz-transition:all 200ms ease-in;
-	-webkit-transition:all 200ms ease-in;
-	-o-transition:all 200ms ease-in;
-	transition:all 200ms ease-in;
-	z-index:500;
-}
-input[type="checkbox"]{
-	display:none;
-}
-input[type="checkbox"]:checked ~ nav{
-	margin:0;
-}
-input[type="checkbox"]:checked ~ label{
-	left:260px;
-}
-input[type="checkbox"]:checked ~ section{
-	-webkit-transform:translate3d(260px, 0, 0);
-	-moz-transform:translate3d(260px, 0, 0);
-	-o-transform:translate3d(260px, 0, 0);
-	transform:translate3d(260px, 0, 0);
 }

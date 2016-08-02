@@ -1,18 +1,24 @@
-<!--div class="dds-reply-wrapper">
-    <div class="dds-reply-content"-->
-	<div class="dds-user-icon"><img src="morphis://.dds/images/user-img.png"></div>
-      
+
+<head>
+    <title></title>
+    <meta charset='utf-8'>
+    <link rel="stylesheet" href="morphis://.dds/style.css"></link>
+</head>
+<body><div class="dds-reply-wrapper">
+<div class="dds-reply-content">
+		<div class="dds-user-icon"><img src="morphis://.dds/images/user-img.png"></div>
+
             <form class="dds-message" action="morphis://.dds/synapse/create" method="post" accept-charset="UTF-8 ISO-8859-1">
                 <input type="hidden" name="csrf_token" id="csrf_token" value="{csrf_token}"/>
                 <input type="hidden" name="target_addr" value="{target_addr}"/>
                 <input type="hidden" name="ident" value="{ident}"/>
                 <!--textarea name="content" autofocus>{message_text}</textarea-->
-                <div style="font-size: 0.75em; text-overflow: ellipsis; overflow: hidden;">{ident_str}</div>
-                <input type="text" style="width: calc(100% - 6em);" name="content" value="{message_text}" placeholder="Type a short message..." autofocus />
+                <div class="dds-reply-id">{ident_str}</div><div class="dds-reply-bracket">)</div>
+                <input class="dds-reply-input" type="text" name="content" value="{message_text}" placeholder="Type a short message..." autofocus />
                 <textarea name="content2" style="width: calc(100% - 6em);" autofocus rows="3" id="TITLE" placeholder="Type a long message..."></textarea>
                 <button class="reply" type="submit">SEND</button>
             </form>
-            
-        </div>    
-    <!--/div>
-</div-->
+	</div>
+    </div>
+</div>
+</body>
