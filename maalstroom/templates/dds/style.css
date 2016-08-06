@@ -49,61 +49,51 @@ h2 {
 	letter-spacing: .07em;
 	text-transform: uppercase;
 }
-.select-style {
-	border: 1px solid #2a2730;
-	width: 120px;
-	border-radius: 3px;
-	overflow: hidden;
-	color: #2a2730;
-	position: absolute;
-	right: 0;
+hr.style1 {
+	border-top: 1px solid rgba(0, 0, 0, 0.1);
+	border-bottom: 1px solid rgba(255, 255, 255, 0.3);
 }
-
-.select-style select {
-	padding: 5px 8px;
-	width: 130%;
-	border: none;
-	box-shadow: none;
-	-webkit-appearance: none;
-	background-color: transparent;
-	color: #2a2730;
-	cursor: pointer;
+hr.style2 {
+	height: 6px;
+	background: url("morphis://.dds/images/hr-11.png") repeat-x 0 0;
+	border: 0;
 }
-
-/*select:hover {
- *    background: #2a2730;
- *    cursor: pointer;
- *    color: white;
- * }*/
-
-.select-style select:focus {
-}
-.select-style:after {
-	top: 50%;
-	left: 85%;
-	border: solid transparent;
-	content: " ";
-	height: 0;
-	width: 0;
-	position: absolute;
-	pointer-events: none;
-	border-color: rgba(0, 0, 0, 0);
-	border-top-color: #2a2730;
-	border-width: 5px;
-	margin-top: -2px;
-	z-index: 100;
-}
-.dds-channel {
-	font-weight: bold;
+hr.style12 {
+	height: 6px;
+	background: url("morphis://.dds/images/hr-12.png") repeat-x 0 0;
+	border: 0;
 }
 .dds-body-bkg {
 	background-color: #edeeee;
 }
 .dds-wrapper {
 }
-.dds-header {
-	margin-bottom: .2em;
+.dds-channel-wrapper {
+	margin: 0 20px 0 20px;
 }
+.dds-trunc {
+	overflow: hidden;
+	text-overflow: ellipsis;  // IE 6+, FF 7+, Op 11+, Saf 1.3+, Chr 1+
+	-o-text-overflow: ellipsis;  // for Opera 9 & 10
+	white-space: nowrap;
+}
+
+/**********************
+
+	dds status bar
+
+ *********************/
+
+.dds-channel-header {
+	background-color: #161a1e;
+	height: 2em;
+}
+.dds-channel {
+	font-weight: bold;
+}
+/*.dds-header {
+	margin-bottom: .2em;
+}*/
 .dds-nav {
 	height: 30px;
 	margin-bottom: 1em;
@@ -126,40 +116,102 @@ h2 {
 	text-decoration: none;
 	font-weight: bold;
 }
-.dds-comments-qty {
+
+/*.dds-comments-qty {
 	float: left;
 }
 .dds-sort {
 	float: right;
+}*/
+
+
+/*********************** 
+
+	dds reply footer        
+
+**********************/
+
+.select-style {
+	border: 1px solid #fff;
+	width: 80%;
+	border-radius: 3px;
+	overflow: hidden;
+	color: #fff;
+	float: left;
+	margin-right: 1em;
+	position: relative;
+	display: inline-block;
+	vertical-align: middle;
+}
+.select-style select {
+	padding: 5px 8px;
+	width: 115%;
+	border: none;
+	box-shadow: none;
+	-webkit-appearance: none;
+	background-color: transparent;
+	color: #fff;
+	cursor: pointer;
+}
+.select-style::before,
+.select-style::after {
+	content: "";
+	position: absolute;
+	pointer-events: none;
+}
+.select-style:after {
+	content: "\25BC";
+	height: 1em;
+	font-size: .625em;
+	line-height: 1;
+	right: 1.2em;
+	top: 50%; margin-top: -.5em;
+}
+.select-style:before {
+	width: 2em;
+	right: 0;
+	top: 0;
+	bottom: 0;
+	border-radius: 0 3px 3px 0;
+	background-color: #371f44;
+}
+.dds-reply-top {
+	padding: 0 0 10px 0;
+	height: 3em;
 }
 .dds-reply-id {
 	font-size: 0.75em;
 	text-overflow: ellipsis;
 	overflow: hidden;
-	width: 10%;
+	width: 20%;
 	color: #fff;
 	white-space: nowrap;
 	float: left;
 }
-.dds-reply-bracket {
-	font-size: 0.75em;
+.dds-reply-text {
 	color: #fff;
+	margin: .45em 0 .5em 0;
 	float: left;
 }
 .dds-reply-wrapper {
 	position: fixed;
 	left: 0;
 	bottom: 0;
-	height: 136px;
+	/*height: 136px;*/
 	width: 100%;
+	padding: 14px 20px 7px 20px;
+	background-color: #371f44;
 }
-.dds-reply-input {
+.dds-reply-user-icon {
 	float: left;
-	width: 80%;
+	height: 55px;
+	vertical-align:top;
 }
 .dds-reply-content {
-	padding: 7px 20px 7px 20px;
-	background-color: #371f44;
+	padding-left: 6em;
+	width: 90%;
+}
+.dds-reply-input {
 }
 .dds-post-wrapper {
 	padding: 7px 20px 7px 20px;
@@ -169,9 +221,62 @@ h2 {
 .dds-post-wrapper:hover {
 	background-color: #fff;
 }
-.dds-channel-wrapper {
-	margin: 0 20px 0 20px;
+.dds-message {
 }
+.dds-text-area-wrapper {
+	width: 100%;
+}
+.dds-message textarea {
+	padding:8px;
+	width: 100%;
+	border: 1px solid #371f44;
+	border-radius: 4px;
+	font: 11px 'ralewaylight', sans-serif;
+}
+input[type="text"]:focus, textarea:focus {
+	outline: medium none;
+	border: 1px solid #39a3af;
+	box-shadow: 0px 0px 2px 1px rgba(56, 163, 175, 0.9) inset;
+}
+.dds-message li {
+	white-space: nowrap;
+	list-style: none;
+}
+.dds-message input {
+	height:2em;
+	width: 90%;
+	border: 1px solid #371f44;
+	border-radius: 4px;
+	padding-left: 10px;
+	font: 11px 'ralewaylight', sans-serif;
+}
+.dds-reply-button-wrapper {
+	padding-top: .5em;
+}
+button.dds-reply-button {
+	vertical-align: top;
+	background-color: transparent;
+	border: 1px solid #fff;
+	border-radius: 3px;
+	color: #fff;
+	padding: 3px 10px;
+	text-align: center;
+}
+button.dds-reply-button:hover {
+	background: #38a3af;
+	cursor: pointer;
+	color: #fff;
+}
+button.dds-reply-button:active {
+	border: 1px solid;
+}
+
+/************************ 
+
+	dds post      
+
+***********************/
+
 .dds-post-nav {
 }
 .dds-post-content {
@@ -218,76 +323,14 @@ h2 {
 	overflow-wrap: break-word;
 	word-wrap: break-word;
 }
-.dds-footer {
-}
-hr.style1 {
-	margin: 10px 0 10px 0;
-	border-top: 1px solid rgba(0, 0, 0, 0.1);
-	border-bottom: 1px solid rgba(255, 255, 255, 0.3);
-}
-hr.style2 {
-	margin: 10px 0 10px 0;
-	height: 6px;
-	background: url("morphis://.dds/images/hr-11.png") repeat-x 0 0;
-	border: 0;
-}
-.dds-message {
-}
-.dds-message textarea {
-	padding:8px;
-	width: 100%;
-	margin-top: 0;
-	margin-bottom: 10px;
-	border: 1px solid #39a3af;
-	border-radius: 4px;
-	font-size: 1.2em;
-	box-shadow: 0px 0px 2px 1px rgba(56, 163, 175, 0.2) inset;
-}
-input[type="text"]:focus, textarea:focus {
-	outline: medium none;
-	border-color: #39a3af;
-	box-shadow: 0px 0px 2px 1px rgba(56, 163, 175, 0.9) inset;
-}
-.dds-message li {
-	white-space: nowrap;
-	list-style: none;
-}
-.dds-message input {
-	height:2em;
-	width: calc(100% - 12em);
-	min-width: 10em;
-	border: 1px solid #39a3af;
-	box-shadow: 0px 0px 2px 1px rgba(56, 163, 175, 0.1) inset;
-	border-radius: 4px;
-	font-size: .85em;
-}
-/*button {
-	vertical-align: top;
-	background-color: transparent;
-}
-button.post {
-	border: 1px solid #2a2730;
-	border-radius: 3px;
-	color: #2a2730;
-	padding: 3px 15px;
-	text-align: center;
-}
-button.post:hover {
-	background: #2a2730;
-	cursor: pointer;
-	color: #fff;
-}
-button.post:active {
-	border: 1px solid;
-}*/
 .dds-post-icons {
 	float: right;
 	margin-right: 100px;
 }
-.dds-post .dds-button {
+.dds-post .dds-icon-button {
 	visibility: hidden;
 }  
-.dds-post:hover .dds-button {
+.dds-post:hover .dds-icon-button {
 	visibility: visible;
 }
 .dds-reply {
@@ -349,26 +392,29 @@ button.post:active {
 .dds-follow:hover {
 	background-image: url("morphis://.dds/images/icons-hover-color.png");
 }
-.dds-trunc {
-	overflow: hidden;
-	text-overflow: ellipsis;  // IE 6+, FF 7+, Op 11+, Saf 1.3+, Chr 1+
-	-o-text-overflow: ellipsis;  // for Opera 9 & 10
-	white-space: nowrap;
-}
 .dds-hidden {
 	display: none;
 }
 .dds-user-icon {
 	float: left;
 }
+
+
+/************************ 
+ * 
+ *	dds refresh text     
+ * 
+ ***********************/
+
+.dds-refresh-wrapper {
+	margin: 10px 20px 10px 20px;
+}
 .dds-refresh-text {
 	font-style: italic;
 	font-size: .9em;
 	color: #a2a6ab;
+	padding: 10px 0 10px 0;
 }
-/*.channel {
-	background-color: #d0bd78;
-}*/
 
 /* Other.*/
 .dds-element {
@@ -381,3 +427,5 @@ button.post:active {
 	font-size: 1.2em;
 	box-shadow: 0px 0px 2px 1px rgba(0, 0, 0, 0.2) inset;
 }
+
+

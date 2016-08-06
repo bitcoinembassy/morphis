@@ -4,21 +4,28 @@
     <meta charset='utf-8'>
     <link rel="stylesheet" href="morphis://.dds/style.css"></link>
 </head>
-<body><div class="dds-reply-wrapper">
-<div class="dds-reply-content">
-		<div class="dds-user-icon"><img src="morphis://.dds/images/user-img.png"></div>
-
-            <form class="dds-message" action="morphis://.dds/synapse/create" method="post" accept-charset="UTF-8 ISO-8859-1">
-                <input type="hidden" name="csrf_token" id="csrf_token" value="{csrf_token}"/>
-                <input type="hidden" name="target_addr" value="{target_addr}"/>
-                <input type="hidden" name="ident" value="{ident}"/>
-                <!--textarea name="content" autofocus>{message_text}</textarea-->
-                <div class="dds-reply-id">{ident_str}</div><div class="dds-reply-bracket">)</div>
-                <input class="dds-reply-input" type="text" name="content" value="{message_text}" placeholder="Type a short message..." autofocus />
-                <textarea name="content2" style="width: calc(100% - 6em);" autofocus rows="3" id="TITLE" placeholder="Type a long message..."></textarea>
-                <button class="reply" type="submit">SEND</button>
-            </form>
-	</div>
-    </div>
-</div>
+<body>
+<div class="dds-reply-wrapper">
+		<div class="dds-reply-user-icon"><img src="morphis://.dds/images/user-img.png" height="55px" width="55px"></div>
+		<form class="dds-message" action="morphis://.dds/synapse/create" method="post" accept-charset="UTF-8 ISO-8859-1">
+			<div class="dds-reply-content">
+				<div class="dds-reply-top">
+					<input type="hidden" name="csrf_token" id="csrf_token" value="{csrf_token}"/>
+					<input type="hidden" name="target_addr" value="{target_addr}"/>
+					<input type="hidden" name="ident" value="{ident}"/>
+					<!--<div class="dds-reply-id">{ident_str}</div><div class="dds-reply-bracket">) thought:</div>-->
+					<div class="select-style">
+					<select>
+						<option value="id">{ident_str}</div></option>
+						<option value="id">{ident_str}</div></option>
+						<option value="id">{ident_str}</div></option>
+						<option value="id">{ident_str}</div></option>
+					</select>
+					</div><div class="dds-reply-text">thinks:</div>
+				</div>
+				<div class="dds-text-area-wrapper"><textarea class="dds-reply-input" name="content2" id="TITLE" placeholder="Say something..."></textarea></div>
+				<div class="dds-reply-button-wrapper"><button class="dds-reply-button" accesskey="s" class="reply" type="submit">SEND</button></div>
+			</div>
+		</form>
+		</div>
 </body>

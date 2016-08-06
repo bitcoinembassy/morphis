@@ -440,7 +440,7 @@ def _process_axon_synapses(dispatcher, axon_addr_enc):
         loaded.setdefault(key, True)
         yield from process_post(post)
 
-    dispatcher.send_partial_content("<hr id='new' class='style2'/>")
+    dispatcher.send_partial_content("<div class='dds-refresh-wrapper'><hr id='new' class='style2'/>")
 
 #    dds_engine = DdsEngine(dispatcher.node)
 #    yield from dispatcher.client_engine.dds.dds_engine.scan_target_key(\
@@ -475,7 +475,7 @@ def _process_axon_synapses(dispatcher, axon_addr_enc):
 #        yield from all_done.wait()
 
     dispatcher.send_partial_content(\
-        "<div class='dds-refresh-text'>Last refreshed: {}</div><span id='end' style='color: gray'/>"\
+        "<div class='dds-refresh-text'>Last refreshed: {}</div><span id='end' style='color: gray'/></div>"\
         "</body></html>"\
             .format(mutil.utc_datetime()))
 
