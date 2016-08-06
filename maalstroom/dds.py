@@ -305,15 +305,16 @@ def _process_axon_grok(req):
         if not key:
             return
 
-    msg = "<iframe src='morphis://.dds/axon/read/{key}{query}'"\
+    msg = "<head><link rel='stylesheet' href='morphis://.dds/style.css'></link></head>"\
+        " <body><iframe src='morphis://.dds/axon/read/{key}{query}'"\
         " style='height: 8em; width: 100%; border: 0;'"\
         " seamless='seamless'></iframe><iframe"\
         " src='morphis://.dds/axon/synapses/{key}{query}#new'"\
-        " style='height: calc(100% - 19em); width: 100%; border: 0;'"\
+        " style='height: calc(100% - 267px); width: 100%; border: 0;'"\
         " seamless='seamless'></iframe><iframe"\
         " src='morphis://.dds/synapse/create/{key}{query}'"\
-        " style='width: 100%; border: 0;'"\
-        " seamless='seamless'></iframe>"\
+        " style='width: 100%; height: 165px; border: 0;'"\
+        " seamless='seamless'></iframe></body>"\
             .format(key=mbase32.encode(key), query=req.query)
 
     req.dispatcher.send_content(msg)
