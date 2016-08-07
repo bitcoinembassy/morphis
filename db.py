@@ -167,8 +167,8 @@ def _init_daos(Base, d):
     class NodeState(Base):
         __tablename__ = "nodestate"
 
-        key = Column(String(64), primary_key=True)
-        value = Column(String(128), nullable=True)
+        key = Column(String, primary_key=True)
+        value = Column(String, nullable=True)
 
     d.NodeState = NodeState
 
@@ -460,7 +460,11 @@ class Db():
             version = 4.92
 
         if version == 4.92:
-            _upgrade_5_dev2(self)
+            _upgrade_5_dev2_to_5dev3(self)
+            version = 4.93
+
+        if version == 4.93:
+            _upgrade_5_dev3(self)
 
 #        if version == 4:
 #            _upgrade_4_to_5(self)
@@ -763,8 +767,30 @@ CREATE TABLE synapsekey_t (
 
     log.warning("NOTE: Database schema upgraded.")
 
-def _upgrade_5_dev2(db):
-    log.warning("NOTE: Possibly upgrading v5-dev2 database schema.")
+def _upgrade_5_dev2_to_5dev3(db):
+    log.warning(\
+        "NOTE: Upgrading database schema from version 5-dev2 to 5-dev3.")
+
+    with db.open_session() as sess:
+        sess.execute("""
+CREATE TABLE nodestate_t (
+    "key" VARCHAR NOT NULL,
+    value VARCHAR,
+    PRIMARY KEY ("key")
+);
+""")
+        sess.execute("insert into nodestate_t select * from nodestate")
+        sess.execute("drop table nodestate")
+        sess.execute("alter table nodestate_t rename to nodestate")
+
+        _update_node_state(sess, 4.93)
+
+        sess.commit()
+
+    log.warning("NOTE: Database schema upgraded.")
+
+def _upgrade_5_dev3(db):
+    log.warning("NOTE: Possibly upgrading v5-dev3 database schema.")
 
     db._update_schema()
 
