@@ -145,7 +145,7 @@ def _init_daos(Base, d):
         synapse = relationship(Synapse)
         synapse_id =\
             Column(Integer, ForeignKey("synapse.id"), primary_key=True)
-        key_type = Column(Integer, nullable=False)
+        key_type = Column(Integer, nullable=False, primary_key=True)
         ekey = Column(LargeBinary, nullable=False)
         last_access = Column(UtcDateTime, nullable=True)
 
@@ -418,7 +418,7 @@ class Db():
                 return
 
         if r:
-            version = int(r.value)
+            version = float(r.value)
         else:
             # This is the schema before we started tracking version in db.
             version = 1
@@ -442,9 +442,29 @@ class Db():
             _upgrade_3_to_4(self)
             version = 4
 
-        if version == 4 or True:
-            _upgrade_4_to_5(self)
-            version = LATEST_SCHEMA_VERSION
+        if version == 4:
+            _upgrade_4_to_5_dev(self)
+            version = 4.91
+        elif version == 4.9:
+            _upgrade_5_dev0_to_5dev1(self)
+            version = 4.91
+        elif version == 4.91:
+            _upgrade_5_dev1(self)
+            version = 4.91
+
+        #TODO: For now this is to get anyone who ran earlier dev builds to use
+        # this new 4.9 thing correctly.
+        if version == 5:
+            _upgrade_5_dev0_to_5dev1(self)
+
+#        if version == 4:
+#            _upgrade_4_to_5(self)
+#            assert LATEST_SCHEMA_VERSION == 5
+#            version = LATEST_SCHEMA_VERSION
+#        elif version == 4.9:
+#            _upgrade_5_dev_to_5(self)
+#            assert LATEST_SCHEMA_VERSION == 5
+#            version = LATEST_SCHEMA_VERSION
 
     def _create_schema(self):
         log.info("Creating schema.")
@@ -510,7 +530,7 @@ def _update_node_state(sess, version):
         ns.key = consts.NSK_SCHEMA_VERSION
         sess.add(ns)
 
-    ns.value = str(version)
+    ns.value = version if type(version) is str else str(version)
 
 def _test_and_fix_if_really_4(db):
     with db.open_session() as sess:
@@ -595,8 +615,18 @@ def _upgrade_3_to_4(db):
 
     log.warning("NOTE: Database schema upgraded.")
 
-def _upgrade_4_to_5(db):
-    log.warning("NOTE: Upgrading database schema from version 4 to 5.")
+def _upgrade_4_to_5_dev(db):
+    log.warning("NOTE: Upgrading database schema from version 4 to 5-dev1.")
+
+    with db.open_session() as sess:
+        _update_node_state(sess, 4.91)
+        sess.commit()
+
+    log.warning("NOTE: Database schema upgraded.")
+
+def _upgrade_5_dev0_to_5dev1(db):
+    log.warning(\
+        "NOTE: Upgrading database schema from version 5-dev0 to 5-dev1.")
 
     rebuild = False
 
@@ -691,7 +721,7 @@ def _upgrade_4_to_5(db):
         # in node.py will reset these if they were blank.
         sess.execute(update(Peer, bind=db.engine).values(distance=None))
 
-        _update_node_state(sess, 5)
+        _update_node_state(sess, 4.91)
 
         sess.commit()
 
@@ -699,3 +729,7 @@ def _upgrade_4_to_5(db):
         db._update_schema()
 
     log.warning("NOTE: Database schema upgraded.")
+
+def _upgrade_5_dev1(db):
+    log.warning("NOTE: Possibly upgrading v5-dev1 database schema.")
+    log.warning("NOTE: Done possibly upgrading database schema.")
