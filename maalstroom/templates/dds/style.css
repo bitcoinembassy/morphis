@@ -96,7 +96,6 @@ hr.style12 {
 }*/
 .dds-nav {
 	height: 30px;
-	margin-bottom: 1em;
 	background-color: #371f44;
 	color: #fff;
 	padding: 7px 20px 7px 20px;
@@ -125,13 +124,91 @@ hr.style12 {
 }*/
 
 
-/*********************** 
+/*********************
+
+dds header
+
+**********************/
+
+.dds-statusbar-wrapper {
+	height: 4em;
+	background-color: #161a1e;
+}
+.dds-statusbar-dash-icon {
+	background-color: #161a1e;
+	width: 9em;
+	color: #fff;
+	height: 100%;
+	float: left;
+	font-size: .35em;
+	line-height:1.6em;
+	text-align: center;
+	padding-top: 3em;
+	padding-left: 2em;
+	-webkit-transition: all 0.10s ease-in-out;
+	-moz-transition: all 0.10s ease-in-out;
+	transition: all 0.15s ease-in-out;
+	display: block;
+	margin-left:-10px;
+}
+.dds-statusbar-dash-icon:hover {
+	margin-left: 0px;
+	background-color: #3b3e43;
+	display: block;
+}
+.dds-select-channel {
+	border: 0;
+	border-radius: 3px;
+	overflow: hidden;
+	color: #fff;
+	float: left;
+	margin: 1em 0 0 .5em;
+	position: relative;
+	display: inline-block;
+}
+.dds-select-channel select {
+	padding: 0 8px;
+	width: 120%;
+	border: none;
+	box-shadow: none;
+	-webkit-appearance: none;
+	background-color: transparent;
+	color: #fff;
+	cursor: pointer;
+	font-size: 1.5em;
+	font-weight: 100;
+}
+.dds-select-channel::before,
+.dds-select-channel::after {
+	content: "";
+	position: absolute;
+	pointer-events: none;
+}
+.dds-select-channel:after {
+	content: "\25BD";
+	height: 1em;
+	font-size: .7em;
+	line-height: 1.2;
+	right: 1.2em;
+	top: 50%;
+	margin-top: -.5em;
+}
+.dds-select-channel:before {
+	width: 2em;
+	right: 0;
+	top: 0;
+	bottom: 0;
+	border-radius: 0 3px 3px 0;
+	background-color: #161a1e;
+}
+
+/***********************
 
 	dds reply footer        
 
 **********************/
 
-.select-style {
+.select-reply-style {
 	border: 1px solid #fff;
 	width: 80%;
 	border-radius: 3px;
@@ -143,7 +220,7 @@ hr.style12 {
 	display: inline-block;
 	vertical-align: middle;
 }
-.select-style select {
+.select-reply-style select {
 	padding: 5px 8px;
 	width: 115%;
 	border: none;
@@ -152,22 +229,23 @@ hr.style12 {
 	background-color: transparent;
 	color: #fff;
 	cursor: pointer;
+	font-size: .85em;
 }
-.select-style::before,
-.select-style::after {
+.select-reply-style::before,
+.select-reply-style::after {
 	content: "";
 	position: absolute;
 	pointer-events: none;
 }
-.select-style:after {
-	content: "\25BC";
+.select-reply-style:after {
+	content: "\25BD";
 	height: 1em;
 	font-size: .625em;
 	line-height: 1;
 	right: 1.2em;
 	top: 50%; margin-top: -.5em;
 }
-.select-style:before {
+.select-reply-style:before {
 	width: 2em;
 	right: 0;
 	top: 0;
@@ -252,6 +330,7 @@ input[type="text"]:focus, textarea:focus {
 }
 .dds-reply-button-wrapper {
 	padding-top: .5em;
+	float: right;
 }
 button.dds-reply-button {
 	vertical-align: top;
