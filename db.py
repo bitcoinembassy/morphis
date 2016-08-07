@@ -442,20 +442,25 @@ class Db():
             _upgrade_3_to_4(self)
             version = 4
 
-        if version == 4:
-            _upgrade_4_to_5_dev(self)
-            version = 4.91
-        elif version == 4.9:
-            _upgrade_5_dev0_to_5dev1(self)
-            version = 4.91
-        elif version == 4.91:
-            _upgrade_5_dev1(self)
-            version = 4.91
-
         #TODO: For now this is to get anyone who ran earlier dev builds to use
         # this new 4.9 thing correctly.
         if version == 5:
             _upgrade_5_dev0_to_5dev1(self)
+            version = 4.91
+
+        if version == 4:
+            _upgrade_4_to_5_dev1(self)
+            version = 4.91
+        elif version == 4.9:
+            _upgrade_5_dev0_to_5dev1(self)
+            version = 4.91
+
+        if version == 4.91:
+            _upgrade_5_dev1_to_5dev2(self)
+            version = 4.92
+
+        if version == 4.92:
+            _upgrade_5_dev2(self)
 
 #        if version == 4:
 #            _upgrade_4_to_5(self)
@@ -615,8 +620,10 @@ def _upgrade_3_to_4(db):
 
     log.warning("NOTE: Database schema upgraded.")
 
-def _upgrade_4_to_5_dev(db):
+def _upgrade_4_to_5_dev1(db):
     log.warning("NOTE: Upgrading database schema from version 4 to 5-dev1.")
+
+    db._update_schema()
 
     with db.open_session() as sess:
         _update_node_state(sess, 4.91)
@@ -628,13 +635,10 @@ def _upgrade_5_dev0_to_5dev1(db):
     log.warning(\
         "NOTE: Upgrading database schema from version 5-dev0 to 5-dev1.")
 
-    rebuild = False
-
-    db._update_schema()
+#    rebuild = False
+#    db._update_schema()
 
     with db.open_session() as sess:
-        default = "0" if db.is_sqlite else "false"
-
         ## Clean up DEV mess (REMOVE FOR FINAL).
         st = "select * from synapse where neuron_id is null"
         try:
@@ -725,11 +729,43 @@ def _upgrade_5_dev0_to_5dev1(db):
 
         sess.commit()
 
-    if rebuild:
-        db._update_schema()
+#    if rebuild:
+#        db._update_schema()
 
     log.warning("NOTE: Database schema upgraded.")
 
-def _upgrade_5_dev1(db):
-    log.warning("NOTE: Possibly upgrading v5-dev1 database schema.")
+def _upgrade_5_dev1_to_5dev2(db):
+    log.warning(\
+        "NOTE: Upgrading database schema from version 5-dev1 to 5-dev2.")
+
+    with db.open_session() as sess:
+        sess.execute("""
+CREATE TABLE synapsekey_t (
+    data_id BLOB NOT NULL,
+    distance BLOB NOT NULL,
+    synapse_id INTEGER NOT NULL,
+    key_type INTEGER NOT NULL,
+    ekey BLOB NOT NULL,
+    last_access DATETIME,
+    timestamp DATETIME NOT NULL,
+    pow_difficulty INTEGER,
+    PRIMARY KEY (data_id, synapse_id, key_type),
+    FOREIGN KEY(synapse_id) REFERENCES synapse (id)
+)
+""")
+        sess.execute("insert into synapsekey_t select * from synapsekey")
+        sess.execute("drop table synapsekey")
+        sess.execute("alter table synapsekey_t rename to synapsekey")
+
+        _update_node_state(sess, 4.92)
+
+        sess.commit()
+
+    log.warning("NOTE: Database schema upgraded.")
+
+def _upgrade_5_dev2(db):
+    log.warning("NOTE: Possibly upgrading v5-dev2 database schema.")
+
+    db._update_schema()
+
     log.warning("NOTE: Done possibly upgrading database schema.")
