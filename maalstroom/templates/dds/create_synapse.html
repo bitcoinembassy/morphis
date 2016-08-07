@@ -6,14 +6,13 @@
 </head>
 <body>
 <div class="dds-reply-wrapper">
-		<div class="dds-reply-user-icon"><img src="morphis://.dds/images/user-img.png" height="55px" width="55px"></div>
+		<div class="dds-reply-user-icon"><img src="morphis://.dds/images/user-img-lg.png" height="55px" width="55px"></div>
 		<form class="dds-message" action="morphis://.dds/synapse/create" method="post" accept-charset="UTF-8 ISO-8859-1">
 			<div class="dds-reply-content">
 				<div class="dds-reply-top">
 					<input type="hidden" name="csrf_token" id="csrf_token" value="{csrf_token}"/>
 					<input type="hidden" name="target_addr" value="{target_addr}"/>
 					<input type="hidden" name="ident" value="{ident}"/>
-					<!--<div class="dds-reply-id">{ident_str}</div><div class="dds-reply-bracket">) thought:</div>-->
 					<div class="select-reply-style">
 					<select>
 						<option value="id">{ident_str}</div></option>
@@ -23,8 +22,8 @@
 					</select>
 					</div><div class="dds-reply-text">thinks:</div>
 				</div>
-				<div class="dds-text-area-wrapper"><textarea class="dds-reply-input" name="content2" id="TITLE" placeholder="Say something..."></textarea></div>
-				<div class="dds-reply-button-wrapper"><button class="dds-reply-button" accesskey="s" class="reply" type="submit">SEND</button></div>
+				<div class="dds-text-area-wrapper"><textarea class="dds-reply-input" autofocus name="content2" id="TITLE" placeholder="Say something..."></textarea></div>
+				<div class="dds-reply-button-wrapper"><button class="dds-reply-button" accesskey="a"  class="reply" type="submit">SEND</button></div><!--alt-shift-key-->
 			</div>
 		</form>
 		</div>

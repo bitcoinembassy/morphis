@@ -68,9 +68,9 @@ hr.style12 {
 }
 .dds-wrapper {
 }
-.dds-channel-wrapper {
+/*.dds-channel-wrapper {
 	margin: 0 20px 0 20px;
-}
+}*/
 .dds-trunc {
 	overflow: hidden;
 	text-overflow: ellipsis;  // IE 6+, FF 7+, Op 11+, Saf 1.3+, Chr 1+
@@ -78,50 +78,6 @@ hr.style12 {
 	white-space: nowrap;
 }
 
-/**********************
-
-	dds status bar
-
- *********************/
-
-.dds-channel-header {
-	background-color: #161a1e;
-	height: 2em;
-}
-.dds-channel {
-	font-weight: bold;
-}
-/*.dds-header {
-	margin-bottom: .2em;
-}*/
-.dds-nav {
-	height: 30px;
-	background-color: #371f44;
-	color: #fff;
-	padding: 7px 20px 7px 20px;
-}
-.dds-nav a:link {
-	color: #38a3af;
-	text-decoration: none;
-	font-weight: bold;
-}
-.dds-nav a:visited {
-	color: #38a3af;
-	text-decoration: none;
-	font-weight: bold;
-}
-.dds-nav a:hover {
-	color: #fff;
-	text-decoration: none;
-	font-weight: bold;
-}
-
-/*.dds-comments-qty {
-	float: left;
-}
-.dds-sort {
-	float: right;
-}*/
 
 
 /*********************
@@ -130,11 +86,11 @@ dds header
 
 **********************/
 
-.dds-statusbar-wrapper {
+.dds-header-wrapper {
 	height: 4em;
 	background-color: #161a1e;
 }
-.dds-statusbar-dash-icon {
+.dds-header-dash-icon {
 	background-color: #161a1e;
 	width: 9em;
 	color: #fff;
@@ -151,10 +107,16 @@ dds header
 	display: block;
 	margin-left:-10px;
 }
-.dds-statusbar-dash-icon:hover {
+.dds-header-dash-icon:hover {
 	margin-left: 0px;
 	background-color: #3b3e43;
 	display: block;
+}
+.dds-channel-hash {
+	color: #3b3e43;
+	float: left;
+	font-size: 1.5em;
+	padding-top: .3em;
 }
 .dds-select-channel {
 	border: 0;
@@ -162,13 +124,13 @@ dds header
 	overflow: hidden;
 	color: #fff;
 	float: left;
-	margin: 1em 0 0 .5em;
+	margin: 1em 0 0 0;
 	position: relative;
 	display: inline-block;
+	margin-left: 1em;
 }
 .dds-select-channel select {
-	padding: 0 8px;
-	width: 120%;
+	padding-right: .6em;
 	border: none;
 	box-shadow: none;
 	-webkit-appearance: none;
@@ -177,8 +139,10 @@ dds header
 	cursor: pointer;
 	font-size: 1.5em;
 	font-weight: 100;
+	-webkit-appearance: none;
+	-moz-appearance:    none;
+	appearance:         none;
 }
-.dds-select-channel::before,
 .dds-select-channel::after {
 	content: "";
 	position: absolute;
@@ -189,28 +153,58 @@ dds header
 	height: 1em;
 	font-size: .7em;
 	line-height: 1.2;
-	right: 1.2em;
+	right: 0;
 	top: 50%;
 	margin-top: -.5em;
 }
-.dds-select-channel:before {
-	width: 2em;
-	right: 0;
-	top: 0;
-	bottom: 0;
-	border-radius: 0 3px 3px 0;
+
+
+/**********************
+
+dds status bar
+
+ *********************/
+
+.dds-channel-header {
 	background-color: #161a1e;
+	height: 2em;
 }
+.dds-channel {
+	font-weight: bold;
+}
+.dds-statusbar {
+	height: 30px;
+	background-color: #371f44;
+	color: #fff;
+	padding: 7px 20px 7px 20px;
+	white-space: nowrap;
+}
+.dds-statusbar a:link {
+	color: #38a3af;
+	text-decoration: none;
+	font-weight: bold;
+}
+.dds-statusbar a:visited {
+	color: #38a3af;
+	text-decoration: none;
+	font-weight: bold;
+}
+.dds-statusbar a:hover {
+	color: #fff;
+	text-decoration: none;
+	font-weight: bold;
+}
+
 
 /***********************
 
-	dds reply footer        
+dds reply footer
 
 **********************/
 
 .select-reply-style {
 	border: 1px solid #fff;
-	width: 80%;
+	width: 85%;
 	border-radius: 3px;
 	overflow: hidden;
 	color: #fff;
@@ -222,7 +216,6 @@ dds header
 }
 .select-reply-style select {
 	padding: 5px 8px;
-	width: 115%;
 	border: none;
 	box-shadow: none;
 	-webkit-appearance: none;
@@ -230,6 +223,9 @@ dds header
 	color: #fff;
 	cursor: pointer;
 	font-size: .85em;
+	-webkit-appearance: none;
+	-moz-appearance:    none;
+	appearance:         none;
 }
 .select-reply-style::before,
 .select-reply-style::after {
@@ -350,14 +346,13 @@ button.dds-reply-button:active {
 	border: 1px solid;
 }
 
-/************************ 
 
-	dds post      
+/************************
+
+dds post
 
 ***********************/
 
-.dds-post-nav {
-}
 .dds-post-content {
 	margin-left: 45px;
 	line-height: 1.4em;
@@ -402,6 +397,19 @@ button.dds-reply-button:active {
 	overflow-wrap: break-word;
 	word-wrap: break-word;
 }
+.dds-post-bottom-icons {
+	padding: 2px 0 0 0;
+	color: #a2a6ab;
+}
+.dds-vote-current {
+	background-image: url("morphis://.dds/images/icons.png");
+	background-repeat: no-repeat;
+	width:14px;
+	height:15px;
+	background-position: -76px top;
+	float: left;
+	margin-top: .1em;
+}
 .dds-post-icons {
 	float: right;
 	margin-right: 100px;
@@ -426,10 +434,10 @@ button.dds-reply-button:active {
 .dds-vote {
 	background-image: url("morphis://.dds/images/icons.png");
 	background-repeat: no-repeat;
-	width:14px;
+	width:15px;
 	height:15px;
 	float: left;
-	background-position: right top;
+	background-position: -76px top;
 	margin-left: 5px;
 }
 .dds-vote:hover {
@@ -438,7 +446,7 @@ button.dds-reply-button:active {
 .dds-mention {
 	background-image: url("morphis://.dds/images/icons.png");
 	background-repeat: no-repeat;
-	width:16px;
+	width:15px;
 	height:15px;
 	float: left;
 	background-position: -40px top;
@@ -447,16 +455,16 @@ button.dds-reply-button:active {
 .dds-mention:hover {
 	background-image: url("morphis://.dds/images/icons-hover-color.png");
 }
-.dds-pm {
+.dds-dmail {
 	background-image: url("morphis://.dds/images/icons.png");
 	background-repeat: no-repeat;
 	width:18px;
 	height:15px;
 	float: left;
-	background-position: -20px top;
+	background-position: right top;
 	margin-left: 5px;
 }
-.dds-pm:hover {
+.dds-dmail:hover {
 	background-image: url("morphis://.dds/images/icons-hover-color.png");
 }
 .dds-follow {
@@ -479,14 +487,14 @@ button.dds-reply-button:active {
 }
 
 
-/************************ 
- * 
- *	dds refresh text     
- * 
- ***********************/
+/************************
+
+dds refresh text
+
+***********************/
 
 .dds-refresh-wrapper {
-	margin: 10px 20px 10px 20px;
+	margin: 3px 20px 10px 20px;
 }
 .dds-refresh-text {
 	font-style: italic;

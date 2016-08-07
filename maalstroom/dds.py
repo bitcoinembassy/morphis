@@ -306,11 +306,12 @@ def _process_axon_grok(req):
             return
 
     msg = "<head><link rel='stylesheet' href='morphis://.dds/style.css'></link></head>"\
-        " <body><div class='dds-statusbar-wrapper'><a href=''><div class='dds-statusbar-dash-icon'>"\
-        " &#x25CF;<br />&#x25CF;<br />&#x25CF;</div></a><div class='dds-select-channel'><select><option value='channel'>"\
-        " <span class=''>#morphis&nbsp;</div></option></select></div></div>"\
-        " <div class='dds-nav'>You <a href='' class='dds-username'>@thufir</a> have joined the "\
-	    " <span class='dds-channel'>#morphis</span> conversation.</div>"\
+        " <body><div class='dds-header-wrapper'><a href=''><div class='dds-header-dash-icon'>"\
+        " &#x25CF;<br />&#x25CF;<br />&#x25CF;</div></a><div class='dds-select-channel'>"\
+        " <div class='dds-channel-hash'>#</div><select>"\
+        " <option value='channel'><span class=''>morphis&nbsp;</div></option></select></div></div>"\
+        " <div class='dds-statusbar'>You <a href='' class='dds-username'>@thufir</a> have joined the "\
+        " <span class='dds-channel'>#morphis</span> conversation.</div>"\
         " <iframe src='morphis://.dds/axon/synapses/{key}{query}#new'"\
         " style='height: calc(100% - 246px); width: 100%; border: 0;'"\
         " seamless='seamless'></iframe><iframe"\
