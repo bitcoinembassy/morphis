@@ -8,7 +8,7 @@ from concurrent import futures
 from datetime import datetime
 import json
 import logging
-from urllib.parse import parse_qs
+from urllib.parse import parse_qs, quote_plus
 import os
 
 from sqlalchemy import or_
@@ -33,12 +33,14 @@ import sshtype
 log = logging.getLogger(__name__)
 
 S_DDS = ".dds"
+DEFAULT_FEED_KEY = "dds.feeds.default"
 
 class MaalstroomRequest(object):
     def __init__(self, dispatcher, service, rpath):
         assert type(service) is str
         self.dispatcher = dispatcher
         self.service = service
+        self.rpath = rpath
         self.path, sep, self._query = rpath.partition('?')
         self.req = self.path[len(service):]
 
@@ -176,13 +178,15 @@ def serve_post(dispatcher, rpath):
 
     log.info("Service .dds post.")
 
-    req = rpath[len(S_DDS):]
+    mr = DdsRequest(dispatcher, rpath)
+    req = mr.req
 
     if req == "/synapse/create":
         yield from _process_synapse_create_post(dispatcher, req)
-        return
-
-    dispatcher.send_error("request: {}".format(req), errcode=400)
+    elif req == "/feed/add":
+        yield from _process_feed_add_post(mr)
+    else:
+        dispatcher.send_error("request: {}".format(req), errcode=400)
 
 @asyncio.coroutine
 def _process_root(req):
@@ -196,7 +200,7 @@ def _process_root(req):
     def dbcall():
         with req.dispatcher.node.db.open_session(True) as sess:
             r = sess.query(NodeState)\
-                .filter(NodeState.key == "dds.feeds.default")\
+                .filter(NodeState.key == DEFAULT_FEED_KEY)\
                 .one_or_none()
 
             return r.value if r else None
@@ -219,7 +223,7 @@ def _process_root(req):
         def dbcall():
             with req.dispatcher.node.db.open_session() as sess:
                 ns = NodeState()
-                ns.key = "dds.feeds.default"
+                ns.key = DEFAULT_FEED_KEY
                 ns.value = json.dumps(channels_list)
                 sess.add(ns)
                 sess.commit()
@@ -248,7 +252,11 @@ def _process_root(req):
     channel_html += "</ul>"
 
     template = templates.dds_main[0]
-    template = template.format(channels=channel_html, query=req.query)
+    template = template.format(\
+        csrf_token=req.dispatcher.client_engine.csrf_token,
+        refresh_url="morphis://" + req.rpath,
+        channels=channel_html,\
+        query=req.query)
 
     available_idents = yield from dmail.render_dmail_addresses(\
         req.dispatcher, req.ident, use_key_as_id=True)
@@ -603,6 +611,40 @@ def _process_synapse_create_post(dispatcher, req):
                     target_addr=mbase32.encode(target_addr))
 
     dispatcher.send_content(resp)
+
+@asyncio.coroutine
+def _process_feed_add_post(req):
+    dd = yield from req.dispatcher.read_post()
+    refresh_url = fia(dd.get("refresh_url"))
+
+    name = fia(dd.get("name"))
+    address = fia(dd.get("address"))
+
+    def dbcall():
+        with req.dispatcher.node.db.open_session() as sess:
+            feed = sess.query(NodeState)\
+                .filter(NodeState.key == DEFAULT_FEED_KEY)\
+                .one_or_none()
+
+            if feed:
+                feed_list = json.loads(feed.value)
+            else:
+                feed = NodeState()
+                sess.add(feed)
+                feed_list = []
+
+            if not name and not address:
+                feed_list.append(None)
+            else:
+                feed_list.append([address, name])
+
+            feed.value = json.dumps(feed_list)
+
+            sess.commit()
+
+    req.dispatcher.loop.run_in_executor(None, dbcall)
+
+    req.dispatcher.send_301(refresh_url)
 
 @asyncio.coroutine
 def _format_axon(node, data, key, key_enc=None):
