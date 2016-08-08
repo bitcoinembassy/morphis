@@ -832,6 +832,9 @@ class MaalstroomDispatcher(object):
                 and url.startswith("morphis://"):
             url = self.handler.maalstroom_url_prefix_str + url[10:]
 
+        if log.isEnabledFor(logging.INFO):
+            log.info("Sending redirect to [{}].".format(url))
+
         self.send_response(301)
         self.send_header("Location", url)
 
