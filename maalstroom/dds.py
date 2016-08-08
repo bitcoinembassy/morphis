@@ -14,7 +14,7 @@ import os
 from sqlalchemy import or_
 
 import consts
-from db import User, DdsPost
+from db import User, DdsPost, NodeState
 from dmail import DmailEngine
 from clientengine.dds import DdsQuery
 from dds import DdsEngine
@@ -186,8 +186,6 @@ def serve_post(dispatcher, rpath):
 
 @asyncio.coroutine
 def _process_root(req):
-    random_id_enc = mbase32.encode(os.urandom(consts.NODE_ID_BYTES))
-
     # Determine ident.
     if req.ident_enc is None:
         dmail_address = yield from dmail._load_default_dmail_address(\
@@ -195,8 +193,57 @@ def _process_root(req):
         if dmail_address:
             req.ident = dmail_address.site_key
 
+    def dbcall():
+        with req.dispatcher.node.db.open_session(True) as sess:
+            return sess.query(NodeState)\
+                .filter(NodeState.key == "dds.bookmarks")\
+                .one_or_none()
+
+    # Load user's channel list from the database.
+    channels_json =\
+        yield from req.dispatcher.loop.run_in_executor(None, dbcall)
+
+    if channels_json:
+        channels_list = json.loads(channels_json)
+    else:
+        channels_list =\
+            ["@MORPHiS", "@MORPHiS-dev", None,\
+            "@news", "@tech-news", None,\
+            "@math", "@math-proofs", None,\
+            "@bitcoin", "@bitcoin-wizards", "@bitcoin-dev", None,\
+            "$RANDOM"]
+
+        def dbcall():
+            with req.dispatcher.loop.run_in_executor(None, dbcall):
+                ns = NodeState()
+                ns.key = "dds.bookmarks"
+                ns.value = json.dumps(channels_list)
+                sess.add(ns)
+                sess.commit()
+
+    channel_html = "<ul>"
+    for channel_row in channels_list:
+        if channel_row is None:
+            channel_html += "<br/>"
+            continue
+
+        if type(channel_row) is str:
+            addr = text = channel_row
+        else:
+            addr = channel_row[0]
+            text = channel_row[1] if len(channel_row) > 1 else addr
+
+        if addr == "$RANDOM":
+            addr = mbase32.encode(os.urandom(consts.NODE_ID_BYTES))
+
+        channel_html +=\
+            "<li><a href='morphis://.grok/{}{}'>{}</a></li>"\
+                .format(addr, req.query, text)
+
+    channel_html += "</ul>"
+
     template = templates.dds_main[0]
-    template = template.format(random_id_enc=random_id_enc, query=req.query)
+    template = template.format(channels=channel_html, query=req.query)
 
     available_idents = yield from dmail.render_dmail_addresses(\
         req.dispatcher, req.ident, use_key_as_id=True)
