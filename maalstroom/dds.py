@@ -195,9 +195,12 @@ def _process_root(req):
 
     def dbcall():
         with req.dispatcher.node.db.open_session(True) as sess:
-            return sess.query(NodeState)\
-                .filter(NodeState.key == "dds.bookmarks")\
+            r = sess.query(NodeState)\
+                .filter(NodeState.key == "dds.feeds.default")\
                 .one_or_none()
+
+            return r.value if r else None
+
 
     # Load user's channel list from the database.
     channels_json =\
@@ -214,12 +217,14 @@ def _process_root(req):
             "$RANDOM"]
 
         def dbcall():
-            with req.dispatcher.loop.run_in_executor(None, dbcall):
+            with req.dispatcher.node.db.open_session() as sess:
                 ns = NodeState()
-                ns.key = "dds.bookmarks"
+                ns.key = "dds.feeds.default"
                 ns.value = json.dumps(channels_list)
                 sess.add(ns)
                 sess.commit()
+
+        yield from req.dispatcher.loop.run_in_executor(None, dbcall)
 
     channel_html = "<ul>"
     for channel_row in channels_list:
