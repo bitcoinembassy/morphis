@@ -13,7 +13,7 @@
  *
  * }
  */
-html { 
+html {
 	background-color: #f3f6f8;
 	position: relative;
 	min-height: 100%;
@@ -180,11 +180,11 @@ a:hover {
 	display: inline-block;
 	font-style: italic;
 }
-.dds-post-reply { 
+.dds-post-reply {
 	float: right;
 	margin-bottom: 5px;
 }
-.dds-post-text { 
+.dds-post-text {
 	padding-bottom: 10px;
 	overflow-wrap: break-word;
 	word-wrap: break-word;

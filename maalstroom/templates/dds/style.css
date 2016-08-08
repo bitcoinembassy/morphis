@@ -431,7 +431,7 @@ a.dds-post:hover {
 }
 .dds-post .dds-icon-button {
 	visibility: hidden;
-}  
+}
 .dds-post:hover .dds-icon-button {
 	visibility: visible;
 }
