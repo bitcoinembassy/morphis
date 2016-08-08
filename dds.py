@@ -76,7 +76,7 @@ class DdsEngine(object):
             if not post:
                 if log.isEnabledFor(logging.INFO):
                     log.info("Synapse content not found for key [{}]."\
-                        .format(mbase32.encode(synapse.content_key)))
+                        .format(mbase32.encode(synapse.source_key)))
                 return
 
             yield from post_callback(post)
