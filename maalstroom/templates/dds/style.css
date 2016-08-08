@@ -63,6 +63,9 @@ hr.style12 {
 	background: url("morphis://.dds/images/hr-12.png") repeat-x 0 0;
 	border: 0;
 }
+iframe {
+	border: 0;
+}
 .dds-body-bkg {
 	background-color: #edeeee;
 }
@@ -202,6 +205,15 @@ dds reply footer
 
 **********************/
 
+.dds-reply-accesskey-text {
+	position: relative;
+	color: #fff;
+	right: 1em;
+	top: .45em;
+	font-size: .9em;
+	opacity: .5;
+	font-style: italic;
+}
 .select-reply-style {
 	border: 1px solid #fff;
 	width: 85%;
@@ -287,14 +299,6 @@ dds reply footer
 }
 .dds-reply-input {
 }
-.dds-post-wrapper {
-	padding: 7px 20px 7px 20px;
-	position: relative;
-	height: 100%;
-}
-.dds-post-wrapper:hover {
-	background-color: #fff;
-}
 .dds-message {
 }
 .dds-text-area-wrapper {
@@ -353,6 +357,17 @@ dds post
 
 ***********************/
 
+.dds-post-wrapper {
+	padding: 7px 20px 7px 20px;
+	position: relative;
+	height: 100%;
+	-webkit-transition: all 0.10s ease-in-out;
+	-moz-transition: all 0.10s ease-in-out;
+	transition: all 0.15s ease-in-out;
+}
+.dds-post-wrapper:hover {
+	background-color: #fff;
+}
 .dds-post-content {
 	margin-left: 45px;
 	line-height: 1.4em;
@@ -379,7 +394,7 @@ dds post
 	text-decoration: none;
 	font-weight: bold;
 }
-.dds-post a:hover {
+a.dds-post:hover {
 	color: #38a3af;
 	text-decoration: none;
 }
@@ -516,3 +531,62 @@ dds refresh text
 }
 
 
+/*modal*/
+
+.modalDialog-dmail {
+	position: fixed;
+	font-family: Arial, Helvetica, sans-serif;
+	top: 0;
+	right: 0;
+	bottom: 0;
+	left: 0;
+	background: rgba(0, 0, 0, 0.5);
+	z-index: 99999;
+	opacity:0;
+	-webkit-transition: opacity 400ms ease-in;
+	-moz-transition: opacity 400ms ease-in;
+	transition: opacity 400ms ease-in;
+	pointer-events: none;
+}
+.modalDialog-dmail:target {
+	opacity:1;
+	pointer-events: auto;
+}
+.modalDialog-dmail > div {
+	width: 80%;
+	height: 85%;
+	position: relative;
+	margin: 3% auto;
+	padding: 20px 20px 10px 20px;
+	border: 1px solid #a3a3a3;
+	border-radius: 4px;
+	box-shadow: 0 0 5px #3b3e43;
+	-o-box-shadow: 0 0 5px #3b3e43;
+	-webkit-box-shadow: 0 0 5px #3b3e43;
+	-moz-box-shadow: 0 0 5px #3b3e43;
+	background: #fff;
+}
+.close {
+	border: 1px solid #a3a3a3;
+	line-height: 25px;
+	position: absolute;
+	right: 3.5em;
+	text-align: center;
+	top: 2em;
+	width: 28px;
+	text-decoration: none;
+	font-weight: bold;
+	-webkit-border-radius: 3px;
+	-moz-border-radius: 3px;
+	border-radius: 3px;
+	-webkit-transition: all 0.10s ease-in-out;
+	-moz-transition: all 0.10s ease-in-out;
+	transition: all 0.15s ease-in-out;
+}
+a.close {
+	color: #a3a3a3;
+}
+.close:hover {
+	background: #38a3af;
+	color: #fff;
+}

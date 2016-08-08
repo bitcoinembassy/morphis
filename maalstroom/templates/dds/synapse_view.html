@@ -10,7 +10,13 @@
 					<a href=""><div class="dds-vote dds-icon-button"></div></a>
 					<a href=""><div class="dds-mention dds-icon-button"></div></a>
 					<a href=""><div class="dds-follow dds-icon-button"></div></a>
-					<a href=""><div class="dds-dmail dds-icon-button"></div></a>
+					<a href="#openModal"><div class="dds-dmail dds-icon-button"></div></a>
+				</div>
+				<div id="openModal" class="modalDialog-dmail">
+                    <div>
+                        <a href="#close" title="Close" class="close">&#x2715;</a>
+                        <iframe id="dmail-message" src="morphis://.dmail/compose/" height="100%" width="100%"></iframe>
+                    </div>
 				</div>
 				<div class="dds-post-text">{content}</div>
 				<div class="dds-post-bottom-icons"><div class="dds-vote-current"></div>&nbsp;4</div>
