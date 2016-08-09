@@ -70,10 +70,11 @@ class DdsRequest(MaalstroomRequest):
 
     @asyncio.coroutine
     def process(self):
-        dmail_address = yield from dmail._load_default_dmail_address(\
-            self.dispatcher.node, fetch_keys=True)
-        if dmail_address:
-            self.ident = dmail_address.site_key
+        if self.ident is None:
+            dmail_address = yield from dmail._load_default_dmail_address(\
+                self.dispatcher.node, fetch_keys=True)
+            if dmail_address:
+                self.ident = dmail_address.site_key
 
     @property
     def ident_enc(self):
