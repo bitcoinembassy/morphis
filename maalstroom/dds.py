@@ -202,7 +202,7 @@ def _process_root(req):
         with req.dispatcher.node.db.open_session(True) as sess:
             r = sess.query(NodeState)\
                 .filter(NodeState.key == DEFAULT_FEED_KEY)\
-                .one_or_none()
+                .first()
 
             return r.value if r else None
 
@@ -623,7 +623,7 @@ def _process_feed_add_post(req):
         with req.dispatcher.node.db.open_session() as sess:
             feed = sess.query(NodeState)\
                 .filter(NodeState.key == DEFAULT_FEED_KEY)\
-                .one_or_none()
+                .first()
 
             if feed:
                 feed_list = json.loads(feed.value)
