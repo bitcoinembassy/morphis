@@ -68,6 +68,13 @@ class DdsRequest(MaalstroomRequest):
         self._ident = None
         self.__ident = False
 
+    @asyncio.coroutine
+    def process(self):
+        dmail_address = yield from dmail._load_default_dmail_address(\
+            self.dispatcher.node, fetch_keys=True)
+        if dmail_address:
+            self.ident = dmail_address.site_key
+
     @property
     def ident_enc(self):
         if self.__ident_enc:
@@ -133,7 +140,7 @@ class DdsRequest(MaalstroomRequest):
         if self._query and not self.modified:
             return self._query
 
-        if self.ident_enc:
+        if self.ident_enc is not None:
             self._query = "?ident={}".format(self.ident_enc)
         else:
             self._query = ""
@@ -145,6 +152,7 @@ def serve_get(dispatcher, rpath):
     log.info("Service .dds request.")
 
     mr = DdsRequest(dispatcher, rpath)
+    yield from mr.process()
     req = mr.req
 
     if req == "" or req == "/":
@@ -190,13 +198,6 @@ def serve_post(dispatcher, rpath):
 
 @asyncio.coroutine
 def _process_root(req):
-    # Determine ident.
-    if req.ident_enc is None:
-        dmail_address = yield from dmail._load_default_dmail_address(\
-            req.dispatcher, fetch_keys=True)
-        if dmail_address:
-            req.ident = dmail_address.site_key
-
     def dbcall():
         with req.dispatcher.node.db.open_session(True) as sess:
             r = sess.query(NodeState)\
@@ -204,7 +205,6 @@ def _process_root(req):
                 .one_or_none()
 
             return r.value if r else None
-
 
     # Load user's channel list from the database.
     channels_json =\
@@ -486,11 +486,6 @@ def _process_synapse_create(req):
     target_addr = req.req[16:]
     if req.dispatcher.handle_cache(target_addr):
         return
-
-    if not req.ident:
-        dmail_address =\
-            yield from dmail._load_default_dmail_address(req.dispatcher)
-        req.ident = dmail_address.site_key
 
     ident_name =\
         yield from dmail.get_contact_name(req.dispatcher.node, req.ident)

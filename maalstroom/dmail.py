@@ -87,7 +87,8 @@ def serve_get(dispatcher, rpath):
             qline = None
 
         if not addr_enc:
-            dmail_address = yield from _load_default_dmail_address(dispatcher)
+            dmail_address =\
+                yield from _load_default_dmail_address(dispatcher.node)
             if dmail_address:
                 addr_enc = mbase32.encode(dmail_address.site_key)
 
@@ -235,7 +236,7 @@ def serve_get(dispatcher, rpath):
         req = req[12:]
 
         user_addr =\
-            (yield from _load_default_dmail_address(dispatcher)).site_key
+            (yield from _load_default_dmail_address(dispatcher.node)).site_key
 
         if req == "/list":
             ab = yield from _load_addressbook_list(dispatcher.node, user_addr)
@@ -949,7 +950,7 @@ def serve_get(dispatcher, rpath):
                     fetch_keys=True)
         else:
             dmail_address = yield from\
-                _load_default_dmail_address(dispatcher, fetch_keys=True)
+                _load_default_dmail_address(dispatcher.node, fetch_keys=True)
             if dmail_address:
                 addr_enc = mbase32.encode(dmail_address.site_key)
             else:
@@ -1172,7 +1173,8 @@ def serve_post(dispatcher, rpath):
         yield from _process_dmail_message(dispatcher, dm.id, processor)
 
     elif req == "/addressbook/create_contact/make_it_so":
-        user = (yield from _load_default_dmail_address(dispatcher)).site_key
+        user =\
+            (yield from _load_default_dmail_address(dispatcher.node)).site_key
 
         dd = yield from dispatcher.read_post()
 
@@ -1420,9 +1422,9 @@ def _load_default_dmail_address_id(dispatcher):
     return dispatcher.loop.run_in_executor(None, dbcall)
 
 @asyncio.coroutine
-def _load_default_dmail_address(dispatcher, fetch_keys=False):
+def _load_default_dmail_address(node, fetch_keys=False):
     def dbcall():
-        with dispatcher.node.db.open_session(True) as sess:
+        with node.db.open_session(True) as sess:
             q = sess.query(NodeState)\
                 .filter(NodeState.key == consts.NSK_DEFAULT_ADDRESS)
 
@@ -1439,13 +1441,13 @@ def _load_default_dmail_address(dispatcher, fetch_keys=False):
                     sess.expunge_all()
                     return addr
 
-    addr = yield from dispatcher.loop.run_in_executor(None, dbcall)
+    addr = yield from node.loop.run_in_executor(None, dbcall)
 
     if addr:
         return addr
 
     def dbcall2():
-        with dispatcher.node.db.open_session() as sess:
+        with node.db.open_session() as sess:
             addr = sess.query(DmailAddress)\
                 .order_by(DmailAddress.id)\
                 .limit(1)\
@@ -1465,7 +1467,7 @@ def _load_default_dmail_address(dispatcher, fetch_keys=False):
 
             return addr
 
-    addr = yield from dispatcher.loop.run_in_executor(None, dbcall2)
+    addr = yield from node.loop.run_in_executor(None, dbcall2)
 
     return addr
 
