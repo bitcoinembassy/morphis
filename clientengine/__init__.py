@@ -54,6 +54,7 @@ class ClientEngine(object):
 
         self._running = True
 
+        yield from self.dds.start()
         yield from self.dmail.start()
 
         self._version_poller_task =\
@@ -66,6 +67,7 @@ class ClientEngine(object):
 
         self._running = False
 
+        yield from self.dds.stop()
         yield from self.dmail.stop()
 
         if self._version_poller_task:

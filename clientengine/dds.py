@@ -57,6 +57,9 @@ class DdsClientEngine(object):
         if not self._running:
             return
 
+        for process in self._autoscan_processes.values():
+            process.stop()
+
     def add_query_listener(self, query, listener):
         assert type(query) is DdsQuery
 
