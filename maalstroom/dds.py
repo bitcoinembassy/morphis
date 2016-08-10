@@ -174,7 +174,7 @@ def serve_get(dispatcher, rpath):
         yield from _process_axon_read(dispatcher, req[11:])
     elif req.startswith("/axon/synapses/"):
         # Scan for and render SynapseS connected to the requested Axon.
-        yield from _process_axon_synapses(dispatcher, req[15:])
+        yield from _process_axon_synapses(mr)
     elif req.startswith("/synapse/create/"):
         # Render the Create Synapse entry form.
         yield from _process_synapse_create(mr)
@@ -373,10 +373,16 @@ def _process_axon_read(dispatcher, req):
     return
 
 @asyncio.coroutine
-def _process_axon_synapses(dispatcher, axon_addr_enc):
-    axon_addr = mbase32.decode(axon_addr_enc)
+def _process_axon_synapses(req):
+    axon_addr = mbase32.decode(req.req[15:])
 
-    dispatcher.send_partial_content(templates.dds_axon_synapses_start[0], True)
+    style = "background-color: red" if axon_addr == req.ident == axon_addr\
+        else ""
+
+    template = templates.dds_axon_synapses_start[0]\
+        .format(style=style)
+
+    req.dispatcher.send_partial_content(template, True)
 
     loaded = {}
 
@@ -397,20 +403,21 @@ def _process_axon_synapses(dispatcher, axon_addr_enc):
 
         key_enc = mbase32.encode(key)
 
-        content =\
-            yield from _format_axon(dispatcher.node, post.data, key, key_enc)
+        content = yield from _format_axon(\
+            req.dispatcher.node, post.data, key, key_enc)
 
         timestr = mutil.format_human_no_ms_datetime(post.timestamp)
 
         signing_key = post.signing_key if post.signing_key else ""
         signer_name =\
-            yield from dmail.get_contact_name(dispatcher.node, signing_key)
+            yield from dmail.get_contact_name(req.dispatcher.node, signing_key)
 
         signing_key_enc = mbase32.encode(post.signing_key)
 
         if signing_key and signer_name == signing_key_enc:
-            data_rw = yield from dispatcher.node.engine.tasks.send_get_data(\
-                signing_key, force_cache=True)
+            data_rw =\
+                yield from req.dispatcher.node.engine.tasks.send_get_data(\
+                    signing_key, force_cache=True)
 
             if data_rw:
                 json_bytes = data_rw.data
@@ -420,6 +427,13 @@ def _process_axon_synapses(dispatcher, axon_addr_enc):
                         signer_name = make_safe_for_html_content(name)
                         log.info("Using Dsite name=[{}].".format(signer_name))
 
+        if post.signing_key == req.ident:
+            style = "background-color: lightblue"
+        elif post.signing_key == axon_addr:
+            style = "background-color: yellow"
+        else:
+            style = ""
+
         template = templates.dds_synapse_view[0]
         template =\
             template.format(\
@@ -428,42 +442,44 @@ def _process_axon_synapses(dispatcher, axon_addr_enc):
                 signer=signer_name,\
                 content=content,\
                 timestamp=timestr,\
-                score=post.score)
+                score=post.score,\
+                style=style)
 
-        dispatcher.send_partial_content(template)
+        req.dispatcher.send_partial_content(template)
 
     def dbcall():
-        with dispatcher.node.db.open_session(True) as sess:
+        with req.dispatcher.node.db.open_session(True) as sess:
             q = sess.query(DdsPost)\
                 .filter(DdsPost.target_key == axon_addr)\
                 .order_by(DdsPost.timestamp)
 
             return q.all()
 
-    posts = yield from dispatcher.loop.run_in_executor(None, dbcall)
+    posts = yield from req.dispatcher.loop.run_in_executor(None, dbcall)
 
     for post in posts:
         key = post.synapse_pow if post.synapse_pow else post.data_key
         loaded.setdefault(key, True)
         yield from process_post(post)
 
-    dispatcher.send_partial_content("<div class='dds-refresh-wrapper'><hr id='new' class='style2'/>")
+    req.dispatcher.send_partial_content(\
+        "<div class='dds-refresh-wrapper'><hr id='new' class='style2'/>")
 
 #    dds_engine = DdsEngine(dispatcher.node)
 #    yield from dispatcher.client_engine.dds.dds_engine.scan_target_key(\
 #        axon_addr, process_post)
 
     query = DdsQuery(axon_addr)
-    already = dispatcher.client_engine.dds.check_query_autoscan(query)
+    already = req.dispatcher.client_engine.dds.check_query_autoscan(query)
     if not already:
-        dispatcher.client_engine.dds.enable_query_autoscan(query)
+        req.dispatcher.client_engine.dds.enable_query_autoscan(query)
 
-        dispatcher.send_partial_content(\
+        req.dispatcher.send_partial_content(\
             "<div>Started scanning for new messages...</div>"\
             "<span id='end' style='color: gray'/></body></html>"\
                 .format(mutil.utc_datetime()))
 
-        dispatcher.end_partial_content()
+        req.dispatcher.end_partial_content()
         return
 
 #        # If this channel was not being scanned, then we will wait this first
@@ -477,16 +493,17 @@ def _process_axon_synapses(dispatcher, axon_addr_enc):
 #            else:
 #                all_done.set()
 #
-#        dispatcher.client_engine.dds.add_query_listener(query, query_listener)
+#        req.dispatcher.client_engine.dds.add_query_listener(\
+#            query, query_listener)
 #
 #        yield from all_done.wait()
 
-    dispatcher.send_partial_content(\
+    req.dispatcher.send_partial_content(\
         "<div class='dds-refresh-text'>Last refreshed: {}</div><span id='end' style='color: gray'/></div>"\
         "</body></html>"\
             .format(mutil.utc_datetime()))
 
-    dispatcher.end_partial_content()
+    req.dispatcher.end_partial_content()
 
 @asyncio.coroutine
 def _process_synapse_create(req):
