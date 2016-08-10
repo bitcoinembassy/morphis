@@ -542,7 +542,8 @@ def _process_synapse_create_post(dispatcher, req):
     if not dispatcher.check_csrf_token(dd["csrf_token"][0]):
         return
 
-    content = fia(dd["content"])
+#    content = fia(dd["content"])
+    content = None
     content2 = fia(dd.get("content2"))
 
     if not content:
