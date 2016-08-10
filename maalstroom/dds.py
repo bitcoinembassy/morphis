@@ -358,7 +358,8 @@ def _process_axon_read(dispatcher, req):
         signing_key="",\
         signer="<TODO>",\
         content=content,\
-        timestamp=timestr)
+        timestamp=timestr,\
+        score=post.score)
 
     msg = "<head><link rel='stylesheet' href='morphis://.dds/style.css'>"\
         "</link></head><body style='height: 80%; padding:0;margin:0;'>{}"\
@@ -426,7 +427,8 @@ def _process_axon_synapses(dispatcher, axon_addr_enc):
                 signing_key=signing_key_enc,\
                 signer=signer_name,\
                 content=content,\
-                timestamp=timestr)
+                timestamp=timestr,\
+                score=post.score)
 
         dispatcher.send_partial_content(template)
 

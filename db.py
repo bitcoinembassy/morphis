@@ -266,6 +266,7 @@ def _init_daos(Base, d):
         signing_key = Column(LargeBinary, nullable=True)
         timestamp = Column(UtcDateTime, nullable=False)
         first_seen = Column(UtcDateTime, nullable=False)
+        score = Column(Integer, nullable=True)
 
     Index("ddspost__target_key", DdsPost.target_key)
     Index("ddspost__synapse_key", DdsPost.synapse_key)
@@ -464,7 +465,11 @@ class Db():
             version = 4.93
 
         if version == 4.93:
-            _upgrade_5_dev3(self)
+            _upgrade_5_dev3_to_5dev4(self)
+            version = 4.94
+
+        if version == 4.94:
+            _upgrade_5_dev(self)
 
 #        if version == 4:
 #            _upgrade_4_to_5(self)
@@ -789,8 +794,24 @@ CREATE TABLE nodestate_t (
 
     log.warning("NOTE: Database schema upgraded.")
 
-def _upgrade_5_dev3(db):
-    log.warning("NOTE: Possibly upgrading v5-dev3 database schema.")
+def _upgrade_5_dev3_to_5dev4(db):
+    log.warning(\
+        "NOTE: Upgrading database schema from version 5-dev3 to 5-dev4.")
+
+    t_integer = "INTEGER" if db.is_sqlite else "integer"
+
+    with db.open_session() as sess:
+        sess.execute(\
+            "ALTER TABLE ddspost add column score {}".format(t_integer))
+
+        _update_node_state(sess, 4.94)
+
+        sess.commit()
+
+    log.warning("NOTE: Database schema upgraded.")
+
+def _upgrade_5_dev(db):
+    log.warning("NOTE: Possibly upgrading v5-dev database schema.")
 
     db._update_schema()
 

@@ -9,6 +9,7 @@ import logging
 
 from sqlalchemy import or_
 
+import consts
 from db import DdsPost
 import dpush
 import enc
@@ -234,10 +235,15 @@ class DdsEngine(object):
                         if obj.is_signed():
                             post.signing_key = obj.signing_key
                         post.timestamp = mutil.utc_datetime(obj.timestamp)
+                        post.score =\
+                            consts.NODE_ID_BITS - obj.log_distance[0]
                     else:
                         assert type(obj) is tb.TargetedBlock, type(obj)
                         post.data_key = post.synapse_pow = key
                         post.timestamp = mutil.utc_datetime(0)
+                        post.score =\
+                            consts.NODE_ID_BITS\
+                                - mutil.calc_log_distance(target_key, key)[0]
                 else:
                     post.data_key = key
                     post.timestamp = post.first_seen
