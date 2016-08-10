@@ -290,6 +290,7 @@ def _process_axon_grok(req):
 
     if arg.startswith("@"):
         key = DdsEngine.calc_key_for_channel(arg[1:])
+        arg = '#' + arg[1:]
         significant_bits = None
     else:
         key, significant_bits = req.dispatcher.decode_key(arg)
@@ -306,20 +307,41 @@ def _process_axon_grok(req):
         if not key:
             return
 
-    msg = "<head><link rel='stylesheet' href='morphis://.dds/style.css'></link></head>"\
-        " <body><div class='dds-header-wrapper'><a href=''><div class='dds-header-dash-icon'>"\
-        " &#x25CF;<br />&#x25CF;<br />&#x25CF;</div></a><div class='dds-select-channel'>"\
+    username = yield from\
+        dmail.get_contact_name(req.dispatcher.node, req.ident)
+    if username == req.ident_enc:
+        # If they didn't specify a local addressbook name.
+        data_rw = yield from req.dispatcher.node.engine.tasks.send_get_data(\
+                bytes(req.ident), force_cache=True)
+
+        if data_rw:
+            json_bytes = data_rw.data
+            if json_bytes:
+                username = json.loads(json_bytes.decode()).get("name")
+
+    msg = "<head><link rel='stylesheet' href='morphis://.dds/style.css'>"\
+        "</link></head><body><div class='dds-header-wrapper'><a href=''>"\
+        "<div class='dds-header-dash-icon'>"\
+        " &#x25CF;<br />&#x25CF;<br />&#x25CF;</div></a>"\
+        "<div class='dds-select-channel'>"\
         " <div class='dds-channel-hash'>#</div><select>"\
-        " <option value='channel'><span class=''>morphis&nbsp;</div></option></select></div></div>"\
-        " <div class='dds-statusbar'>You <a href='' class='dds-username'>@thufir</a> have joined the "\
-        " <span class='dds-channel'>#morphis</span> conversation.</div>"\
+        " <option value='channel'><span class=''>{channel_bare}&nbsp;</div>"\
+        "</option></select></div></div>"\
+        " <div class='dds-statusbar'>You <a href='' class='dds-username'>"\
+        "@{user}</a> have joined the "\
+        " <span class='dds-channel'>{channel}</span> conversation.</div>"\
         " <iframe src='morphis://.dds/axon/synapses/{key}{query}#new'"\
         " style='height: calc(100% - 246px); width: 100%; border: 0;'"\
         " seamless='seamless'></iframe><iframe"\
         " src='morphis://.dds/synapse/create/{key}{query}'"\
         " style='width: 100%; height: 165px; border: 0;'"\
         " seamless='seamless'></iframe></body>"\
-            .format(key=mbase32.encode(key), query=req.query)
+            .format(\
+                key=mbase32.encode(key),\
+                query=req.query,\
+                user=username,\
+                channel=arg,\
+                channel_bare=arg[1:])
 
     req.dispatcher.send_content(msg)
     return
