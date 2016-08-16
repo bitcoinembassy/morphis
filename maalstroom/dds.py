@@ -215,7 +215,8 @@ def _process_root(req):
         channels_list = json.loads(channels_json)
     else:
         channels_list =\
-            ["@MORPHiS", "@MORPHiS-dev", None,\
+            ["$OWN", None,\
+            "@MORPHiS", "@MORPHiS-dev", None,\
             "@news", "@tech-news", None,\
             "@math", "@math-proofs", None,\
             "@bitcoin", "@bitcoin-wizards", "@bitcoin-dev", None,\
@@ -238,17 +239,23 @@ def _process_root(req):
             continue
 
         if type(channel_row) is str:
-            addr = text = channel_row
+            addr_enc = text = channel_row
         else:
-            addr = channel_row[0]
-            text = channel_row[1] if len(channel_row) > 1 else addr
+            addr_enc = channel_row[0]
+            text = channel_row[1] if len(channel_row) > 1 else addr_enc
 
-        if addr == "$RANDOM":
-            addr = mbase32.encode(os.urandom(consts.NODE_ID_BYTES))
+        if addr_enc == "$RANDOM":
+            addr_enc = mbase32.encode(os.urandom(consts.NODE_ID_BYTES))
+        elif addr_enc == "$OWN":
+            addr_enc = req.ident_enc
+
+            name = yield from fetch_display_name(\
+                req.dispatcher.node, req.ident, req.ident_enc)
+            text = name + "'s Blog"
 
         channel_html +=\
             "<li><a href='morphis://.grok/{}{}'>{}</a></li>"\
-                .format(addr, req.query, text)
+                .format(addr_enc, req.query, text)
 
     channel_html += "</ul>"
 
@@ -308,16 +315,7 @@ def _process_axon_grok(req):
             return
 
     username = yield from\
-        dmail.get_contact_name(req.dispatcher.node, req.ident)
-    if username == req.ident_enc:
-        # If they didn't specify a local addressbook name.
-        data_rw = yield from req.dispatcher.node.engine.tasks.send_get_data(\
-                bytes(req.ident), force_cache=True)
-
-        if data_rw:
-            json_bytes = data_rw.data
-            if json_bytes:
-                username = json.loads(json_bytes.decode()).get("name")
+        fetch_display_name(req.dispatcher.node, req.ident, req.ident_enc)
 
     msg = "<head><link rel='stylesheet' href='morphis://.dds/style.css'>"\
         "</link></head><body><div class='dds-header-wrapper'><a href=''>"\
@@ -432,23 +430,10 @@ def _process_axon_synapses(req):
         timestr = mutil.format_human_no_ms_datetime(post.timestamp)
 
         signing_key = post.signing_key if post.signing_key else ""
-        signer_name =\
-            yield from dmail.get_contact_name(req.dispatcher.node, signing_key)
-
         signing_key_enc = mbase32.encode(post.signing_key)
 
-        if signing_key and signer_name == signing_key_enc:
-            data_rw =\
-                yield from req.dispatcher.node.engine.tasks.send_get_data(\
-                    signing_key, force_cache=True)
-
-            if data_rw:
-                json_bytes = data_rw.data
-                if json_bytes:
-                    name = json.loads(json_bytes.decode()).get("name")
-                    if name:
-                        signer_name = make_safe_for_html_content(name)
-                        log.info("Using Dsite name=[{}].".format(signer_name))
+        signer_name = yield from fetch_display_name(\
+            req.dispatcher.node, signing_key, signing_key_enc)
 
         if post.signing_key == req.ident:
             style = "background-color: lightblue"
@@ -529,6 +514,29 @@ def _process_axon_synapses(req):
             .format(mutil.utc_datetime()))
 
     req.dispatcher.end_partial_content()
+
+@asyncio.coroutine
+def fetch_display_name(node, signing_key, signing_key_enc=None):
+    signer_name =\
+        yield from dmail.get_contact_name(node, signing_key)
+
+    if signing_key:
+        if not signing_key_enc:
+            signing_key_enc = mbase32.encode(signing_key)
+        if signer_name == signing_key_enc:
+            data_rw = yield from node.engine.tasks.send_get_data(\
+                    signing_key, force_cache=True)
+
+            if data_rw:
+                json_bytes = data_rw.data
+                if json_bytes:
+                    name = json.loads(json_bytes.decode()).get("name")
+                    if name:
+                        signer_name = make_safe_for_html_content(name)
+                        log.info("Using Dsite name=[{}] for key=[{}]."\
+                            .format(signer_name, signing_key_enc))
+
+    return signer_name
 
 @asyncio.coroutine
 def _process_synapse_create(req):

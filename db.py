@@ -469,6 +469,10 @@ class Db():
             version = 4.94
 
         if version == 4.94:
+            _upgrade_5_dev4_to_5dev5(self)
+            version = 4.95
+
+        if version == 4.95:
             _upgrade_5_dev(self)
 
 #        if version == 4:
@@ -805,6 +809,23 @@ def _upgrade_5_dev3_to_5dev4(db):
             "ALTER TABLE ddspost add column score {}".format(t_integer))
 
         _update_node_state(sess, 4.94)
+
+        sess.commit()
+
+    log.warning("NOTE: Database schema upgraded.")
+
+def _upgrade_5_dev4_to_5dev5(db):
+    log.warning(\
+        "NOTE: Upgrading database schema from version 5-dev4 to 5-dev5.")
+
+    from maalstroom.dds import DEFAULT_FEED_KEY
+
+    with db.open_session() as sess:
+        feed = sess.query(NodeState)\
+            .filter(NodeState.key == DEFAULT_FEED_KEY)\
+            .delete(synchronize_session=False)
+
+        _update_node_state(sess, 4.95)
 
         sess.commit()
 
