@@ -381,6 +381,7 @@ def _process_axon_read(dispatcher, req):
         signer="<TODO>",\
         content=content,\
         timestamp=timestr,\
+        relative_time=mutil.format_datetime_as_relative(post.timestamp),\
         score=post.score)
 
     msg = "<head><link rel='stylesheet' href='morphis://.dds/style.css'>"\
@@ -464,6 +465,8 @@ def _process_axon_synapses(req):
                 signer=signer_name,\
                 content=content,\
                 timestamp=timestr,\
+                relative_time=\
+                    mutil.format_datetime_as_relative(post.timestamp),\
                 score=post.score,\
                 style=style)
 

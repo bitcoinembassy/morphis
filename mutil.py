@@ -249,6 +249,30 @@ def fia(array):
 
 from html.parser import HTMLParser
 
+def format_datetime_as_relative(dt):
+    dt = datetime.fromtimestamp(dt.timestamp())
+    now = datetime.now()
+    delta = now - dt
+    year = delta.days / 365.25
+    month = delta.days / 30.4375
+    day = delta.days % 31
+    hour = delta.seconds / 3600
+    minute = delta.seconds / 60
+    second = delta.seconds % 60
+
+    for period in ['year', 'month', 'day', 'hour', 'minute', 'second']:
+        value = locals()[period]
+        if value >= 1:
+            fmt = str(int(value))
+            fmt += ' '
+            fmt += period
+            if value > 1:
+                fmt += 's'
+            fmt += " ago"
+            return fmt
+
+    return "just now"
+
 # MLStripper inherited from Eloff@stackoverflow's idea.
 class MLStripper(HTMLParser):
     def __init__(self):
