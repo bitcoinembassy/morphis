@@ -276,6 +276,12 @@ class ChordTasks(object):
 
         data_id = enc.generate_ID(data_key)
 
+        #FIXME: data_key needs to be bytes for PyCrypto usage later on.
+        if type(data_key) is bytearray:
+            # This check/conversion is done due to bad PyCrypto API refusing to
+            # use a bytearray.
+            data_key = bytes(data_key)
+        assert data_key is None or type(data_key) is bytes, type(data_key)
         data_rw =\
             yield from self._get_data_from_cache(data_key, data_id, path_hash)
 
@@ -814,7 +820,11 @@ class ChordTasks(object):
         #NOTE: I think targeted parameter is only for fetches.
 
         assert len(node_id) == chord.NODE_ID_BYTES
-        # data_key needs to be bytes for PyCrypto usage later on.
+        #FIXME: data_key needs to be bytes for PyCrypto usage later on.
+        if type(data_key) is bytearray:
+            # This check/conversion is done due to bad PyCrypto API refusing to
+            # use a bytearray.
+            data_key = bytes(data_key)
         assert data_key is None or type(data_key) is bytes, type(data_key)
 
         if for_data:
@@ -2937,6 +2947,9 @@ class ChordTasks(object):
         return synapses
 
     def _decrypt_data_response(self, drmsg, data_key):
+        if type(data_key) is not bytes:
+            data_key = bytes(data_key)
+
         # Decrypt the data we received.
         data = enc.decrypt_data_block(drmsg.data, data_key)
 
