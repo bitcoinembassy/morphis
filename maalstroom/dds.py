@@ -317,31 +317,15 @@ def _process_axon_grok(req):
     username = yield from\
         fetch_display_name(req.dispatcher.node, req.ident, req.ident_enc)
 
-    msg = "<head><link rel='stylesheet' href='morphis://.dds/style.css'>"\
-        "</link></head><body><div class='dds-header-wrapper'><a href=''>"\
-        "<div class='dds-header-dash-icon'>"\
-        " &#x25CF;<br />&#x25CF;<br />&#x25CF;</div></a>"\
-        "<div class='dds-select-channel'>"\
-        " <div class='dds-channel-hash'>#</div><select>"\
-        " <option value='channel'><span class=''>{channel_bare}&nbsp;</div>"\
-        "</option></select></div></div>"\
-        " <div class='dds-statusbar'>You <a href='' class='dds-username'>"\
-        "@{user}</a> have joined the "\
-        " <span class='dds-channel'>{channel}</span> conversation.</div>"\
-        " <iframe src='morphis://.dds/axon/synapses/{key}{query}#new'"\
-        " style='height: calc(100% - 246px); width: 100%; border: 0;'"\
-        " seamless='seamless'></iframe><iframe"\
-        " src='morphis://.dds/synapse/create/{key}{query}'"\
-        " style='width: 100%; height: 165px; border: 0;'"\
-        " seamless='seamless'></iframe></body>"\
-            .format(\
-                key=mbase32.encode(key),\
-                query=req.query,\
-                user=username,\
-                channel=arg,\
-                channel_bare=arg[1:])
+    template = templates.dds_axon_grok[0]
+    template = template.format(\
+        key=mbase32.encode(key),\
+        query=req.query,\
+        user=username,\
+        channel=arg,\
+        channel_bare=arg[1:])
 
-    req.dispatcher.send_content(msg)
+    req.dispatcher.send_content(template)
     return
 
 @asyncio.coroutine
