@@ -13,14 +13,17 @@
 					<input type="hidden" name="csrf_token" id="csrf_token" value="{csrf_token}"/>
 					<input type="hidden" name="target_addr" value="{target_addr}"/>
 					<input type="hidden" name="ident" value="{ident}"/>
-					<div class="select-reply-style">
-					<select>
-						<option value="id">{ident_str}</div></option>
-						<option value="id">{ident_str}</div></option>
-						<option value="id">{ident_str}</div></option>
-						<option value="id">{ident_str}</div></option>
-					</select>
-					</div><div class="dds-reply-text">thinks:</div>
+						<ul id="menu">
+							<li>
+								<input id="check01" type="checkbox" name="menu"/>
+								<label for="check01">{ident_str}</label>
+								<ul class="submenu">
+								<li><a href="#">{ident_str}</a></li>
+								<li><a href="#">{ident_str}</a></li>
+								</ul>
+							</li>
+							</ul>
+							<div class="dds-reply-text">thinks:</div>
 				</div>
 				<div class="dds-text-area-wrapper"><textarea class="dds-reply-input" autofocus name="content2" id="TITLE" placeholder="Say something..."></textarea></div>
 				<div class="dds-reply-button-wrapper"><span class="dds-reply-accesskey-text">(Firefox: [Alt] [Shift] + a) (Chrome, Safari: [Alt] + a)</span><button class="dds-reply-button" accesskey="a"  class="reply" type="submit">SEND</button></div>

@@ -72,8 +72,8 @@ iframe {
 .dds-wrapper {
 }
 /*.dds-channel-wrapper {
-	margin: 0 20px 0 20px;
-}*/
+ * margin: 0 20px 0 20px;
+ } **/
 .dds-trunc {
 	overflow: hidden;
 	text-overflow: ellipsis;  // IE 6+, FF 7+, Op 11+, Saf 1.3+, Chr 1+
@@ -84,10 +84,10 @@ iframe {
 
 
 /*********************
-
-dds header
-
-**********************/
+ * 
+ d *ds header
+ 
+ **********************/
 
 .dds-header-wrapper {
 	height: 4em;
@@ -123,14 +123,14 @@ dds header
 }
 .dds-select-channel {
 	border: 0;
-	border-radius: 3px;
+	width: 85%;
 	overflow: hidden;
 	color: #fff;
 	float: left;
-	margin: 1em 0 0 0;
+	margin: 1em 0 0 1em;
 	position: relative;
 	display: inline-block;
-	margin-left: 1em;
+	white-space:nowrap;
 }
 .dds-select-channel select {
 	padding-right: .6em;
@@ -146,6 +146,7 @@ dds header
 	-moz-appearance:    none;
 	appearance:         none;
 }
+.dds-select-channel::before,
 .dds-select-channel::after {
 	content: "";
 	position: absolute;
@@ -160,18 +161,26 @@ dds header
 	top: 50%;
 	margin-top: -.5em;
 }
-
-
-/**********************
-
-dds status bar
-
- *********************/
-
+.dds-select-channel:before {
+	width: 2em;
+	right: 0;
+	top: 0;
+	bottom: 0;
+	border-radius: 0 3px 3px 0;
+	background-color: #161a1e;
+}
 .dds-channel-header {
 	background-color: #161a1e;
 	height: 2em;
 }
+
+
+/**********************
+ * 
+ d *ds status bar
+ 
+ *********************/
+
 .dds-channel {
 	font-weight: bold;
 }
@@ -200,10 +209,10 @@ dds status bar
 
 
 /***********************
-
-dds reply footer
-
-**********************/
+ * 
+ d *ds reply footer
+ 
+ **********************/
 
 .dds-reply-accesskey-text {
 	position: relative;
@@ -214,7 +223,7 @@ dds reply footer
 	opacity: .5;
 	font-style: italic;
 }
-.select-reply-style {
+/*.select-reply-style {
 	border: 1px solid #fff;
 	width: 85%;
 	border-radius: 3px;
@@ -260,7 +269,7 @@ dds reply footer
 	bottom: 0;
 	border-radius: 0 3px 3px 0;
 	background-color: #371f44;
-}
+}*/
 .dds-reply-top {
 	padding: 0 0 10px 0;
 	height: 3em;
@@ -276,7 +285,7 @@ dds reply footer
 }
 .dds-reply-text {
 	color: #fff;
-	margin: .45em 0 .5em 0;
+	margin: 1em 0 .5em 0;
 	float: left;
 }
 .dds-reply-wrapper {
@@ -352,11 +361,17 @@ button.dds-reply-button:active {
 
 
 /************************
+ * 
+ d *ds post
+ 
+ ***********************/
 
-dds post
-
-***********************/
-
+.dds-ident-post {
+	
+}
+.dds-ident-post a:link {
+	color:red;
+}
 .dds-post-wrapper {
 	padding: 7px 20px 7px 20px;
 	position: relative;
@@ -503,10 +518,10 @@ a.dds-post:hover {
 
 
 /************************
-
-dds refresh text
-
-***********************/
+ * 
+ d *ds refresh text
+ 
+ ***********************/
 
 .dds-refresh-wrapper {
 	margin: 3px 20px 10px 20px;
@@ -589,4 +604,121 @@ a.close {
 .close:hover {
 	background: #38a3af;
 	color: #fff;
+}
+
+
+/*----- Dropdown -----*/
+/*Style for the first level menu bar*/
+ul#menu{
+	position:fixed;
+	top:0;
+	height:3em;
+	border: 1px solid #fff;
+	border-radius: 3px;
+	color: #fff;
+	float: left;
+	margin-right: 1em;
+	position: relative;
+	display: inline-block;
+	vertical-align: middle;
+	font-size: .9em;
+	max-width: 85%;
+	-webkit-transition: all 0.10s ease-in-out;
+	-moz-transition: all 0.10s ease-in-out;
+	transition: all 0.15s ease-in-out;
+}
+ul#menu > li{
+	float:left;
+	list-style-type:none;
+	width: 100%;
+}
+ul#menu:hover{
+	color: #38a3af;
+	background: #371f44;
+}
+label{
+	position:relative;
+	display:block;
+	padding:0 18px 0 12px;
+	line-height:3em;
+	transition:background 0.3s;
+	cursor:pointer;
+	overflow:hidden;
+	white-space:nowrap;
+	text-overflow:ellipsis;
+}
+
+label:after{
+	content:"";
+	position:absolute;
+	display:block;
+	top:50%;
+	right:5px;
+	width:0;
+	height:0;
+	border-top:4px solid rgba(255,255,255,.5);
+	border-bottom:0 solid rgba(255,255,255,.5);
+	border-left:4px solid transparent;
+	border-right:4px solid transparent;
+	transition:border-bottom .1s, border-top .1s .1s;
+}
+
+input:checked ~ label:after{
+	border-top:0 solid rgba(255,255,255,.5);
+	border-bottom:4px solid rgba(255,255,255,.5);
+	transition:border-top .1s, border-bottom .1s .1s;
+}
+
+/*hide the inputs*/
+input{display:none}
+
+/*show the second levele menu of the selected voice*/
+input:checked ~ ul.submenu{
+	max-height:300px;
+	transition:max-height 0.5s ease-in;
+}
+
+/*style for the second level menu*/
+ul.submenu{
+	max-width:85%;
+	max-height:0;
+	padding:0;
+	overflow:hidden;
+	list-style-type:none;
+	background:#26162f;
+	box-shadow:0 0 1px rgba(0,0,0,.3);
+	transition:max-height 0.5s ease-out;
+	position:absolute;
+	min-width:100%;
+	-webkit-transition: all 0.10s ease-in-out;
+	-moz-transition: all 0.10s ease-in-out;
+	transition: all 0.15s ease-in-out;
+}
+
+ul.submenu li{
+	max-width: 100%;
+}
+
+ul.submenu li a{
+	max-width: 100%;
+	display:block;
+	padding:12px;
+	color:#ddd;
+	text-decoration:none;
+	box-shadow:0 -1px rgba(0,0,0,.5) inset;
+	transition:background .3s;
+	white-space:nowrap;
+	overflow:hidden;
+	text-overflow:ellipsis;
+}
+
+ul.submenu li a:hover{
+	background:#371f44;
+	color: #38a3af;
+
+}
+ul.scroll{
+	max-height: 110px;
+	overflow-y: auto;
+	overflow-x: hidden;
 }
