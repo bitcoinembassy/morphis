@@ -49,6 +49,12 @@ h2 {
 	letter-spacing: .07em;
 	text-transform: uppercase;
 }
+p {
+	margin: 0 0 10px 0;
+}
+p:last-child {
+	margin-bottom: 0;
+}
 hr.style1 {
 	border-top: 1px solid rgba(0, 0, 0, 0.1);
 	border-bottom: 1px solid rgba(255, 255, 255, 0.3);
@@ -502,9 +508,9 @@ a.close {
 }
 
 
-/*----- Dropdown -----*/
+/*----- User Dropdown -----*/
 /*Style for the first level menu bar*/
-ul.dds-menu{
+ul.dds-menu {
 	position:fixed;
 	top:0;
 	height:3em;
@@ -522,16 +528,16 @@ ul.dds-menu{
 	-moz-transition: all 0.10s ease-in-out;
 	transition: all 0.15s ease-in-out;
 }
-ul.dds-menu > li{
+ul.dds-menu > li {
 	float:left;
 	list-style-type:none;
 	width: 100%;
 }
-ul.dds-menu:hover{
+ul.dds-menu:hover {
 	color: #38a3af;
 	background: #371f44;
 }
-label.dds-menu-input{
+label.dds-menu-input {
 	position:relative;
 	display:block;
 	padding:0 18px 0 12px;
@@ -543,7 +549,7 @@ label.dds-menu-input{
 	text-overflow:ellipsis;
 }
 
-label.dds-menu-input:after{
+label.dds-menu-input:after {
 	content:"";
 	position:absolute;
 	display:block;
@@ -558,26 +564,29 @@ label.dds-menu-input:after{
 	transition:border-bottom .1s, border-top .1s .1s;
 }
 
-input.dds-menu-input:checked ~ label.dds-menu-input:after{
+input.dds-menu-input:checked ~ label.dds-menu-input:after {
 	border-top:0 solid rgba(255,255,255,1);
 	border-bottom:4px solid rgba(255,255,255, 1);
 	transition:border-top .1s, border-bottom .1s .1s;
 }
 
 /*hide the inputs*/
-input.dds-menu-input{display:none}
+input.dds-menu-input {
+	display:none
+}
 
 /*show the second level menu of the selected voice*/
-input.dds-menu-input:checked ~ ul.dds-submenu{
+input.dds-menu-input:checked ~ ul.dds-submenu {
 	max-height:300px;
-	transition:max-height 0.5s ease-in;
+	transition:max-height 0.2s ease-in;
 	max-height: 95px;
 	overflow-y: auto;
 	overflow-x: hidden;
+	z-index: 999;
 }
 
 /*style for the second level menu*/
-ul.dds-submenu{
+ul.dds-submenu {
 	max-width:85%;
 	max-height:0;
 	padding:0;
@@ -593,11 +602,11 @@ ul.dds-submenu{
 	transition: all 0.15s ease-in-out;
 }
 
-ul.dds-submenu li{
+ul.dds-submenu li {
 	max-width: 100%;
 }
 
-ul.dds-submenu li a{
+ul.dds-submenu li a {
 	max-width: 100%;
 	display:block;
 	padding:12px;
@@ -610,13 +619,13 @@ ul.dds-submenu li a{
 	text-overflow:ellipsis;
 }
 
-ul.dds-submenu li a:hover{
+ul.dds-submenu li a:hover {
 	background:#371f44;
 	color: #38a3af;
 }
-/*----- Dropdown -----*/
+/*----- Channel Dropdown -----*/
 /*Style for the first level menu bar*/
-ul.dds-channel-menu{
+ul.dds-channel-menu {
 	position:fixed;
 	top:0;
 	height:100%;
@@ -636,15 +645,15 @@ ul.dds-channel-menu{
 	transition: all 0.15s ease-in-out;
 	background: #161a1e;
 }
-ul.dds-channel-menu > li{
+ul.dds-channel-menu > li {
 	float:left;
 	list-style-type:none;
 	width: 100%;
 }
-ul.dds-channel-menu:hover{
+ul.dds-channel-menu:hover {
 	color: #38a3af;
 }
-label.dds-channel-menu-input{
+label.dds-channel-menu-input {
 	position:relative;
 	display:block;
 	padding:0 18px 0 12px;
@@ -656,7 +665,7 @@ label.dds-channel-menu-input{
 	text-overflow:ellipsis;
 }
 
-label.dds-channel-menu-input:after{
+label.dds-channel-menu-input:after {
 	content:"";
 	position:absolute;
 	display:block;
@@ -671,26 +680,29 @@ label.dds-channel-menu-input:after{
 	transition:border-bottom .1s, border-top .1s .1s;
 }
 
-input.dds-channel-menu-input:checked ~ label.dds-channel-menu-input:after{
+input.dds-channel-menu-input:checked ~ label.dds-channel-menu-input:after {
 	border-top:0 solid rgba(255,255,255,1);
 	border-bottom:4px solid rgba(255,255,255, 1);
 	transition:border-top .1s, border-bottom .1s .1s;
 }
 
 /*hide the inputs*/
-input.dds-channel-menu-input{display:none}
+input.dds-channel-menu-input {
+	display: none
+}
 
 /*show the second level menu of the selected voice*/
-input.dds-channel-menu-input:checked ~ ul.dds-channel-submenu{
-	max-height:300px;
-	transition:max-height 0.5s ease-in;
+input.dds-channel-menu-input:checked ~ ul.dds-channel-submenu {
+	max-height: 300px;
+	transition: max-height 0.2s ease-in;
 	max-height: 250px;
 	overflow-y: auto;
 	overflow-x: hidden;
+	z-index: 999;
 }
 
 /*style for the second level menu*/
-ul.dds-channel-submenu{
+ul.dds-channel-submenu {
 	max-width:85%;
 	max-height:0;
 	padding:0;
@@ -707,11 +719,11 @@ ul.dds-channel-submenu{
 	font-size: .8em;
 }
 
-ul.dds-channel-submenu li{
+ul.dds-channel-submenu li {
 	max-width: 100%;
 }
 
-ul.dds-channel-submenu li a{
+ul.dds-channel-submenu li a {
 	max-width: 100%;
 	display:block;
 	padding:12px;
@@ -724,7 +736,43 @@ ul.dds-channel-submenu li a{
 	text-overflow:ellipsis;
 }
 
-ul.dds-channel-submenu li a:hover{
+ul.dds-channel-submenu li a:hover {
 	background:#232930;
 	color: #38a3af;
+}
+
+/*BLOG*/
+.blog-post-short-wrapper {
+	background: #fff;
+	box-shadow: 0 1px 4px rgba(0,0,0,.04);
+	border: 1px solid rgba(0,0,0,.09);
+	border-radius: 3px;
+	margin: 3em;
+}
+.blog-post-short {
+	padding: 2em;
+}
+.blog-header-content {
+}
+.blog-header-shadow {
+	box-shadow: 0 4px 2px -2px rgba(0,0,0,.05);
+	height: 100%;
+	bottom: 0;
+	background: #fff;
+	padding: 3em 15em 2em 10em;
+}
+.blog-header-title {
+	font-size: 3em;
+}
+.blog-header-profile {
+	padding-top:1em;
+}
+.blog-header-tabs-wrapper {
+	padding-top: 1em;
+}
+.blog-header-tabs {
+	display: inline;
+}
+.blog-user-icon {
+	float: right;
 }
