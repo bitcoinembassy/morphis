@@ -84,10 +84,8 @@ iframe {
 
 
 /*********************
- * 
- d *ds header
- 
- **********************/
+dds header
+**********************/
 
 .dds-header-wrapper {
 	height: 4em;
@@ -161,10 +159,8 @@ dds status bar
 
 
 /***********************
- * 
- d *ds reply footer
- 
- **********************/
+dds reply footer
+**********************/
 
 .dds-reply-accesskey-text {
 	color: #725880;
@@ -175,53 +171,6 @@ dds status bar
 	font-style: italic;
 	display: inline-block;
 }
-/*.select-reply-style {
-	border: 1px solid #fff;
-	width: 85%;
-	border-radius: 3px;
-	overflow: hidden;
-	color: #fff;
-	float: left;
-	margin-right: 1em;
-	position: relative;
-	display: inline-block;
-	vertical-align: middle;
-}
-.select-reply-style select {
-	padding: 5px 8px;
-	border: none;
-	box-shadow: none;
-	-webkit-appearance: none;
-	background-color: transparent;
-	color: #fff;
-	cursor: pointer;
-	font-size: .85em;
-	-webkit-appearance: none;
-	-moz-appearance:    none;
-	appearance:         none;
-}
-.select-reply-style::before,
-.select-reply-style::after {
-	content: "";
-	position: absolute;
-	pointer-events: none;
-}
-.select-reply-style:after {
-	content: "\25BD";
-	height: 1em;
-	font-size: .625em;
-	line-height: 1;
-	right: 1.2em;
-	top: 50%; margin-top: -.5em;
-}
-.select-reply-style:before {
-	width: 2em;
-	right: 0;
-	top: 0;
-	bottom: 0;
-	border-radius: 0 3px 3px 0;
-	background-color: #371f44;
-}*/
 .dds-reply-top {
 	height: 3.5em;
 }
@@ -312,13 +261,10 @@ button.dds-reply-button:active {
 
 
 /************************
- * 
- d *ds post
- 
- ***********************/
+dds post
+***********************/
 
 .dds-ident-post {
-	
 }
 .dds-ident-post a:link {
 	color:red;
@@ -469,10 +415,8 @@ a.dds-post:hover {
 
 
 /************************
- * 
- d *ds refresh text
- 
- ***********************/
+dds refresh text
+***********************/
 
 .dds-refresh-wrapper {
 	margin: 3px 20px 10px 20px;
