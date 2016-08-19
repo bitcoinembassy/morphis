@@ -297,10 +297,12 @@ def _process_axon_grok(req):
 
     if arg.startswith("@"):
         key = DdsEngine.calc_key_for_channel(arg[1:])
-        arg = '#' + arg[1:]
+        channel_bare = arg[1:]
+        arg = '#' + channel_bare
         significant_bits = None
     else:
         key, significant_bits = req.dispatcher.decode_key(arg)
+        channel_bare = arg
 
         if not key:
             req.dispatcher.send_error(\
@@ -323,7 +325,7 @@ def _process_axon_grok(req):
         query=req.query,\
         user=username,\
         channel=arg,\
-        channel_bare=arg[1:])
+        channel_bare=channel_bare)
 
     req.dispatcher.send_content(template)
     return
