@@ -383,7 +383,7 @@ def _process_axon_read(dispatcher, req):
 def _process_axon_synapses(req):
     axon_addr = mbase32.decode(req.req[15:])
 
-    style = "background-color: red" if axon_addr == req.ident == axon_addr\
+    style = "background-color: #e6e6e6" if axon_addr == req.ident == axon_addr\
         else ""
 
     template = templates.dds_axon_synapses_start[0]\
@@ -422,9 +422,9 @@ def _process_axon_synapses(req):
             req.dispatcher.node, signing_key, signing_key_enc)
 
         if post.signing_key == req.ident:
-            style = "background-color: lightblue"
+            style = "color: #9c21a5"
         elif post.signing_key == axon_addr:
-            style = "background-color: yellow"
+            style = "background-color: #fff"
         else:
             style = ""
 
