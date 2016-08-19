@@ -119,55 +119,6 @@ iframe {
 	color: #3b3e43;
 	float: left;
 	font-size: 1.5em;
-	padding-top: .3em;
-}
-.dds-select-channel {
-	border: 0;
-	width: 85%;
-	overflow: hidden;
-	color: #fff;
-	float: left;
-	margin: 1em 0 0 1em;
-	position: relative;
-	display: inline-block;
-	white-space:nowrap;
-}
-.dds-select-channel select {
-	padding-right: .6em;
-	border: none;
-	box-shadow: none;
-	-webkit-appearance: none;
-	background-color: transparent;
-	color: #fff;
-	cursor: pointer;
-	font-size: 1.5em;
-	font-weight: 100;
-	-webkit-appearance: none;
-	-moz-appearance:    none;
-	appearance:         none;
-}
-.dds-select-channel::before,
-.dds-select-channel::after {
-	content: "";
-	position: absolute;
-	pointer-events: none;
-}
-.dds-select-channel:after {
-	content: "\25BD";
-	height: 1em;
-	font-size: .7em;
-	line-height: 1.2;
-	right: 0;
-	top: 50%;
-	margin-top: -.5em;
-}
-.dds-select-channel:before {
-	width: 2em;
-	right: 0;
-	top: 0;
-	bottom: 0;
-	border-radius: 0 3px 3px 0;
-	background-color: #161a1e;
 }
 .dds-channel-header {
 	background-color: #161a1e;
@@ -176,13 +127,14 @@ iframe {
 
 
 /**********************
- * 
- d *ds status bar
- 
- *********************/
+dds status bar
+*********************/
 
 .dds-channel {
 	font-weight: bold;
+	max-width: 50%;
+	display: inline-block;
+	vertical-align: top;
 }
 .dds-statusbar {
 	height: 30px;
@@ -215,13 +167,13 @@ iframe {
  **********************/
 
 .dds-reply-accesskey-text {
-	position: relative;
-	color: #fff;
-	right: 1em;
-	top: .45em;
+	color: #725880;
+	vertical-align: top;
+	margin-top: 5px;
+	margin-right: 15px;
 	font-size: .9em;
-	opacity: .5;
 	font-style: italic;
+	display: inline-block;
 }
 /*.select-reply-style {
 	border: 1px solid #fff;
@@ -271,8 +223,7 @@ iframe {
 	background-color: #371f44;
 }*/
 .dds-reply-top {
-	padding: 0 0 10px 0;
-	height: 3em;
+	height: 3.5em;
 }
 .dds-reply-id {
 	font-size: 0.75em;
@@ -609,7 +560,7 @@ a.close {
 
 /*----- Dropdown -----*/
 /*Style for the first level menu bar*/
-ul#menu{
+ul.dds-menu{
 	position:fixed;
 	top:0;
 	height:3em;
@@ -627,16 +578,16 @@ ul#menu{
 	-moz-transition: all 0.10s ease-in-out;
 	transition: all 0.15s ease-in-out;
 }
-ul#menu > li{
+ul.dds-menu > li{
 	float:left;
 	list-style-type:none;
 	width: 100%;
 }
-ul#menu:hover{
+ul.dds-menu:hover{
 	color: #38a3af;
 	background: #371f44;
 }
-label{
+label.dds-menu-input{
 	position:relative;
 	display:block;
 	padding:0 18px 0 12px;
@@ -648,7 +599,7 @@ label{
 	text-overflow:ellipsis;
 }
 
-label:after{
+label.dds-menu-input:after{
 	content:"";
 	position:absolute;
 	display:block;
@@ -656,30 +607,33 @@ label:after{
 	right:5px;
 	width:0;
 	height:0;
-	border-top:4px solid rgba(255,255,255,.5);
-	border-bottom:0 solid rgba(255,255,255,.5);
+	border-top:4px solid rgba(255,255,255,1);
+	border-bottom:0 solid rgba(255,255,255,1);
 	border-left:4px solid transparent;
 	border-right:4px solid transparent;
 	transition:border-bottom .1s, border-top .1s .1s;
 }
 
-input:checked ~ label:after{
-	border-top:0 solid rgba(255,255,255,.5);
-	border-bottom:4px solid rgba(255,255,255,.5);
+input.dds-menu-input:checked ~ label.dds-menu-input:after{
+	border-top:0 solid rgba(255,255,255,1);
+	border-bottom:4px solid rgba(255,255,255, 1);
 	transition:border-top .1s, border-bottom .1s .1s;
 }
 
 /*hide the inputs*/
-input{display:none}
+input.dds-menu-input{display:none}
 
-/*show the second levele menu of the selected voice*/
-input:checked ~ ul.submenu{
+/*show the second level menu of the selected voice*/
+input.dds-menu-input:checked ~ ul.dds-submenu{
 	max-height:300px;
 	transition:max-height 0.5s ease-in;
+	max-height: 95px;
+	overflow-y: auto;
+	overflow-x: hidden;
 }
 
 /*style for the second level menu*/
-ul.submenu{
+ul.dds-submenu{
 	max-width:85%;
 	max-height:0;
 	padding:0;
@@ -695,11 +649,11 @@ ul.submenu{
 	transition: all 0.15s ease-in-out;
 }
 
-ul.submenu li{
+ul.dds-submenu li{
 	max-width: 100%;
 }
 
-ul.submenu li a{
+ul.dds-submenu li a{
 	max-width: 100%;
 	display:block;
 	padding:12px;
@@ -712,13 +666,121 @@ ul.submenu li a{
 	text-overflow:ellipsis;
 }
 
-ul.submenu li a:hover{
+ul.dds-submenu li a:hover{
 	background:#371f44;
 	color: #38a3af;
-
 }
-ul.scroll{
-	max-height: 110px;
+/*----- Dropdown -----*/
+/*Style for the first level menu bar*/
+ul.dds-channel-menu{
+	position:fixed;
+	top:0;
+	height:100%;
+	border: none;
+	color: #fff;
+	float: left;
+	margin-right: 1em;
+	position: relative;
+	display: inline-block;
+	vertical-align: middle;
+	font-size: .9em;
+	max-width: 85%;
+	font-size: 1.5em;
+	font-weight: 100;
+	-webkit-transition: all 0.10s ease-in-out;
+	-moz-transition: all 0.10s ease-in-out;
+	transition: all 0.15s ease-in-out;
+	background: #161a1e;
+}
+ul.dds-channel-menu > li{
+	float:left;
+	list-style-type:none;
+	width: 100%;
+}
+ul.dds-channel-menu:hover{
+	color: #38a3af;
+}
+label.dds-channel-menu-input{
+	position:relative;
+	display:block;
+	padding:0 18px 0 12px;
+	line-height:2.6em;
+	transition:background 0.3s;
+	cursor:pointer;
+	overflow:hidden;
+	white-space:nowrap;
+	text-overflow:ellipsis;
+}
+
+label.dds-channel-menu-input:after{
+	content:"";
+	position:absolute;
+	display:block;
+	top:50%;
+	right:5px;
+	width:0;
+	height:0;
+	border-top:4px solid rgba(255,255,255,1);
+	border-bottom:0 solid rgba(255,255,255,1);
+	border-left:4px solid transparent;
+	border-right:4px solid transparent;
+	transition:border-bottom .1s, border-top .1s .1s;
+}
+
+input.dds-channel-menu-input:checked ~ label.dds-channel-menu-input:after{
+	border-top:0 solid rgba(255,255,255,1);
+	border-bottom:4px solid rgba(255,255,255, 1);
+	transition:border-top .1s, border-bottom .1s .1s;
+}
+
+/*hide the inputs*/
+input.dds-channel-menu-input{display:none}
+
+/*show the second level menu of the selected voice*/
+input.dds-channel-menu-input:checked ~ ul.dds-channel-submenu{
+	max-height:300px;
+	transition:max-height 0.5s ease-in;
+	max-height: 250px;
 	overflow-y: auto;
 	overflow-x: hidden;
+}
+
+/*style for the second level menu*/
+ul.dds-channel-submenu{
+	max-width:85%;
+	max-height:0;
+	padding:0;
+	overflow:hidden;
+	list-style-type:none;
+	background:#161a1e;
+	box-shadow:0 0 1px rgba(0,0,0,.3);
+	transition:max-height 0.5s ease-out;
+	position:absolute;
+	min-width:100%;
+	-webkit-transition: all 0.10s ease-in-out;
+	-moz-transition: all 0.10s ease-in-out;
+	transition: all 0.15s ease-in-out;
+	font-size: .8em;
+}
+
+ul.dds-channel-submenu li{
+	max-width: 100%;
+}
+
+ul.dds-channel-submenu li a{
+	max-width: 100%;
+	display:block;
+	padding:12px;
+	color:#ddd;
+	text-decoration:none;
+	box-shadow:0 -1px rgba(0,0,0,.5) inset;
+	transition:background .3s;
+	white-space:nowrap;
+	overflow:hidden;
+	text-overflow:ellipsis;
+}
+
+ul.dds-channel-submenu li a:hover{
+	background:#232930;
+	color: #38a3af;
 }

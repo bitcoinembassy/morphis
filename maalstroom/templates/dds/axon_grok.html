@@ -4,16 +4,30 @@
 		<a href=''><div class='dds-header-dash-icon'>
 			&#x25CF;<br />&#x25CF;<br />&#x25CF;
 		</div></a>
-	<div class='dds-select-channel'>
-		<div class='dds-channel-hash'>#</div>
-		<select>
+	<!--<div class='dds-select-channel'>-->
+		
+		<ul class="dds-channel-menu">
+			<li>
+				<input class="dds-channel-menu-input" id="check01" type="checkbox" name="dds-channel-menu"/>
+				<label class="dds-channel-menu-input" for="check01"><div class='dds-channel-hash'>#</div>{channel_bare}</label>
+				<ul class="dds-channel-submenu">
+					<li><a href="#">#{channel_bare}</a></li>
+					<li><a href="#">#{channel_bare}</a></li>
+					<li><a href="#">#{channel_bare}</a></li>
+					<li><a href="#">#{channel_bare}</a></li>
+					<li><a href="#">#{channel_bare}</a></li>
+					<li><a href="#">#{channel_bare}</a></li>
+				</ul>
+			</li>
+		</ul>
+		<!--<select>
 			<option value='channel'>
 				<span class=''>{channel_bare}&nbsp;</span>
 			</option>
 		</select>
-		</div>
+		</div>-->
 	</div>
-	<div class='dds-statusbar'>You <a href='' class='dds-username'>@{user}</a> have joined the <span class='dds-channel'>{channel}</span> conversation.</div>
+	<div class='dds-statusbar'>You <a href='' class='dds-username'>@{user}</a> have joined the <div class="dds-channel dds-trunc">{channel}</div> conversation.</div>
 	<iframe src='morphis://.dds/axon/synapses/{key}{query}#new' style='height: calc(100% - 246px); width: 100%; border: 0;' seamless='seamless'></iframe>
 	<iframe src='morphis://.dds/synapse/create/{key}{query}' style='width: 100%; height: 165px; border: 0;' seamless='seamless'></iframe>
 </body>
