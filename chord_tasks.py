@@ -3663,11 +3663,12 @@ class ChordTasks(object):
             if not r:
                 log.warning("Invalid Synapse; signature is invalid.")
                 return None
-            self_signed = synapse.signing_key == synapse.target_key
-        else:
-            self_signed = False
+            if synapse.signing_key == synapse.target_key:
+                # Then it is self signed (uploaded to own keyspace), and thus
+                # no further qualifications are needed for acceptance.
+                return synapse
 
-        if not self_signed and not synapse.stamps:
+        if not synapse.stamps:
             # Then it is required to be a POW Synapse.
             dist, direction = synapse.log_distance
 
@@ -3687,7 +3688,7 @@ class ChordTasks(object):
         # Stamped Synapse.
         raise Exception()
         #TODO:YOU_ARE_HERE
-        #return synapse
+        return synapse
 
     def _check_targeted_block(self, data, data_key=None, data_id=None):
         # Check that the hash(header) matches the data_key we expect.
