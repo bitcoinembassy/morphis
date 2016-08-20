@@ -447,7 +447,10 @@ def _process_axon_synapses(req):
         with req.dispatcher.node.db.open_session(True) as sess:
             q = sess.query(DdsPost)\
                 .filter(DdsPost.target_key == axon_addr)\
-                .order_by(desc(and_(DdsPost.signing_key != None, DdsPost.signing_key == DdsPost.target_key)),\
+                .order_by(\
+                    desc(and_(\
+                        DdsPost.signing_key != None,\
+                        DdsPost.signing_key == DdsPost.target_key)),\
                     DdsPost.timestamp)
 
             return q.all()
