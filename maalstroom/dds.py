@@ -199,6 +199,32 @@ def serve_post(dispatcher, rpath):
 
 @asyncio.coroutine
 def _process_root(req):
+    channel_html = yield from _render_channel_html(req)
+
+    template = templates.dds_main[0]
+    template = template.format(\
+        csrf_token=req.dispatcher.client_engine.csrf_token,
+        refresh_url="morphis://" + req.rpath,
+        channels=channel_html,\
+        query=req.query)
+
+    available_idents = yield from dmail.render_dmail_addresses(\
+        req.dispatcher, req.ident, use_key_as_id=True)
+
+    template2 = templates.dds_identbar[0]
+    template2 = template2.format(\
+        current_ident=req.ident_enc, available_idents=available_idents)
+
+    template = template2 + template
+
+    wrapper = templates.dds_wrapper[0]
+    wrapper =\
+        wrapper.format(title="MORPHiS Maalstroom DDS", child=template)
+
+    req.dispatcher.send_content(wrapper)
+
+@asyncio.coroutine
+def _render_channel_html(req, ul_class=None):
     def dbcall():
         with req.dispatcher.node.db.open_session(True) as sess:
             r = sess.query(NodeState)\
@@ -232,7 +258,11 @@ def _process_root(req):
 
         yield from req.dispatcher.loop.run_in_executor(None, dbcall)
 
-    channel_html = "<ul>"
+    if ul_class:
+        channel_html = "<ul class='{}'>".format(ul_class)
+    else:
+        channel_html = "<ul>"
+
     for channel_row in channels_list:
         if channel_row is None:
             channel_html += "<br/>"
@@ -259,27 +289,7 @@ def _process_root(req):
 
     channel_html += "</ul>"
 
-    template = templates.dds_main[0]
-    template = template.format(\
-        csrf_token=req.dispatcher.client_engine.csrf_token,
-        refresh_url="morphis://" + req.rpath,
-        channels=channel_html,\
-        query=req.query)
-
-    available_idents = yield from dmail.render_dmail_addresses(\
-        req.dispatcher, req.ident, use_key_as_id=True)
-
-    template2 = templates.dds_identbar[0]
-    template2 = template2.format(\
-        current_ident=req.ident_enc, available_idents=available_idents)
-
-    template = template2 + template
-
-    wrapper = templates.dds_wrapper[0]
-    wrapper =\
-        wrapper.format(title="MORPHiS Maalstroom DDS", child=template)
-
-    req.dispatcher.send_content(wrapper)
+    return channel_html
 
 @asyncio.coroutine
 def _process_axon_create(dispatcher, req):
@@ -319,13 +329,16 @@ def _process_axon_grok(req):
     username = yield from\
         fetch_display_name(req.dispatcher.node, req.ident, req.ident_enc)
 
+    channel_html = yield from _render_channel_html(req, "dds-channel-submenu")
+
     template = templates.dds_axon_grok[0]
     template = template.format(\
         key=mbase32.encode(key),\
         query=req.query,\
         user=username,\
         channel=arg,\
-        channel_bare=channel_bare)
+        channel_bare=channel_bare,\
+        channel_html=channel_html)
 
     req.dispatcher.send_content(template)
     return
