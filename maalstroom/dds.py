@@ -671,6 +671,10 @@ def _process_synapse_create_post(dispatcher, req):
 @asyncio.coroutine
 def _process_feed_add_post(req):
     dd = yield from req.dispatcher.read_post()
+
+    if not req.dispatcher.check_csrf_token(dd["csrf_token"][0]):
+        return
+
     refresh_url = fia(dd.get("refresh_url"))
 
     name = fia(dd.get("name"))
