@@ -1,0 +1,12 @@
+addr: {addr}<br/>
+path: {path}<br/>
+version: {version}<br/>
+<form class="dds-message" action="morphis://.dds/propedit" method="post" accept-charset="UTF-8 ISO-8859-1">
+    <input type="hidden" name="csrf_token" id="csrf_token" value="{csrf_token}"/>
+    <input type="hidden" name="refresh_url" id="refresh_url" value="{refresh_url}"/>
+    <input type="hidden" name="addr" id="addr" value="{addr}"/>
+    <input type="hidden" name="path" id="path" value="{path}"/>
+    <input type="hidden" name="original_value" id="original_value" value=""/>
+    <textarea class="dds-reply-input" autofocus name="value" id="value" placeholder="value" rows="20">{value}</textarea>
+    <button class="reply" accesskey="a" type="submit">SAVE</button>
+</form>

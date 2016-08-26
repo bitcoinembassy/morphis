@@ -8,6 +8,7 @@ from concurrent import futures
 from datetime import datetime
 import json
 import logging
+import time
 from urllib.parse import parse_qs, quote_plus
 import os
 
@@ -178,6 +179,8 @@ def serve_get(dispatcher, rpath):
     elif req.startswith("/synapse/create/"):
         # Render the Create Synapse entry form.
         yield from _process_synapse_create(mr)
+    elif req.startswith("/propedit/"):
+        yield from _process_propedit(mr)
     else:
         dispatcher.send_error("request: {}".format(req), errcode=400)
 
@@ -194,6 +197,8 @@ def serve_post(dispatcher, rpath):
         yield from _process_synapse_create_post(dispatcher, req)
     elif req == "/feed/add":
         yield from _process_feed_add_post(mr)
+    elif req == "/propedit":
+        yield from _process_propedit_post(mr)
     else:
         dispatcher.send_error("request: {}".format(req), errcode=400)
 
@@ -206,7 +211,8 @@ def _process_root(req):
         csrf_token=req.dispatcher.client_engine.csrf_token,
         refresh_url="morphis://" + req.rpath,
         channels=channel_html,\
-        query=req.query)
+        query=req.query,\
+        current_ident=req.ident_enc)
 
     available_idents = yield from dmail.render_dmail_addresses(\
         req.dispatcher, req.ident, use_key_as_id=True)
@@ -220,6 +226,45 @@ def _process_root(req):
     wrapper = templates.dds_wrapper[0]
     wrapper =\
         wrapper.format(title="MORPHiS Maalstroom DDS", child=template)
+
+    req.dispatcher.send_content(wrapper)
+
+@asyncio.coroutine
+def _process_propedit(req):
+    rstr = req.req[10:]
+    p1 = rstr.find('/')
+    if p1 == -1:
+        addr_enc = rstr
+        path = ""
+    else:
+        addr_enc = rstr[:p1]
+        path = rstr[p1+1:]
+
+    addr = mbase32.decode(addr_enc)
+
+    data_rw = yield from req.dispatcher.node.engine.tasks.send_get_data(\
+        addr, path=path, force_cache=True)
+
+    if data_rw and data_rw.data:
+        value = data_rw.data.decode()
+    else:
+        value = ""
+
+    refresh_url =\
+        "morphis://.dds/propedit/{}/{}{}".format(addr_enc, path, req.query)
+
+    template = templates.dds_propedit[0]
+    template = template.format(\
+        csrf_token=req.dispatcher.client_engine.csrf_token,
+        refresh_url=refresh_url,\
+        addr=addr_enc,\
+        path=path,\
+        version=data_rw.version,\
+        value=value)
+
+    wrapper = templates.dds_wrapper[0]
+    wrapper =\
+        wrapper.format(title="MORPHiS Propedit", child=template)
 
     req.dispatcher.send_content(wrapper)
 
@@ -331,13 +376,22 @@ def _process_axon_grok(req):
 
     channel_html = yield from _render_channel_html(req, "dds-channel-submenu")
 
+    data_rw = yield from req.dispatcher.node.engine.tasks.send_get_data(\
+        key, path="title", force_cache=True)
+
+    if data_rw and data_rw.data:
+        title = data_rw.data.decode()
+    else:
+        title = channel_bare
+
+
     template = templates.dds_axon_grok[0]
     template = template.format(\
         key=mbase32.encode(key),\
         query=req.query,\
         user=username,\
         channel=arg,\
-        channel_bare=channel_bare,\
+        channel_bare=title,\
         channel_html=channel_html)
 
     req.dispatcher.send_content(template)
@@ -703,6 +757,40 @@ def _process_feed_add_post(req):
             sess.commit()
 
     req.dispatcher.loop.run_in_executor(None, dbcall)
+
+    req.dispatcher.send_301(refresh_url)
+
+@asyncio.coroutine
+def _process_propedit_post(req):
+    dd = yield from req.dispatcher.read_post()
+
+    if not req.dispatcher.check_csrf_token(dd["csrf_token"][0]):
+        return
+
+    addr_enc = dd.get("addr")[0]
+    addr = mbase32.decode(addr_enc)
+    path = dd.get("path")[0]
+
+    refresh_url = fia(dd.get("refresh_url"))
+    value = fia(dd.get("value"))
+    prev_value = fia(dd.get("previous_value"))
+
+    if prev_value == value:
+        if log.isEnabledFor(logging.INFO):
+            log.info("No difference was submitted, ignoring POST.")
+        req.dispatcher.send_301(refresh_url)
+        return
+
+    if log.isEnabledFor(logging.INFO):
+        log.info("Updating value of key/path [{}]/[{}], len(value)=[{}]."\
+            .format(addr_enc, path, len(value)))
+
+    dm =\
+        yield from dmail.load_dmail_address(req.dispatcher.node, site_key=addr)
+
+    yield from req.dispatcher.node.engine.tasks.send_store_updateable_key(\
+        value.encode(), rsakey.RsaKey(privdata=dm.site_privatekey),\
+        path.encode(), int(time.time()*1000), store_key=True)
 
     req.dispatcher.send_301(refresh_url)
 
