@@ -292,7 +292,7 @@ class ChordTasks(object):
                     # the cache for next request.
                     asyncio.async(self._send_get_data(\
                         data_key, data_id, orig_data_key, path, path_hash,\
-                        scan_only, True, retry_factor))
+                        scan_only, True, retry_factor), loop=self.loop)
                     return data_rw
             else:
                 return data_rw
