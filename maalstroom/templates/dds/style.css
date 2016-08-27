@@ -26,7 +26,7 @@ html {
 	box-sizing: border-box;
 }
 
-body {
+body#dds {
 	font: .8em 'ralewaylight', sans-serif;
 	line-height: 1.2em;
 	letter-spacing: .03em;
@@ -34,6 +34,7 @@ body {
 	margin: 0 0 0 0;
 	overflow-x: hidden;
 	background-color: #f3f6f8;
+	color: #141c30;
 }
 h1 {
 	font-size: 3em;
@@ -50,13 +51,15 @@ h2 {
 	text-transform: uppercase;
 }
 h3 {
-	font-size: 1.1em;
-	font-weight: normal;
-	letter-spacing: .07em;
+	font-size: 2em;
+	font-weight: 100;
+	letter-spacing: .05em;
+	line-height:1em;
+	margin: 0;
 	text-transform: uppercase;
 }
 p {
-	margin: 0 0 10px 0;
+	margin: 0 0 6px 0;
 }
 p:last-child {
 	margin-bottom: 0;
@@ -85,11 +88,11 @@ iframe {
 }
 /*.dds-channel-wrapper {
  * margin: 0 20px 0 20px;
- } **/
+ * } **/
 .dds-trunc {
 	overflow: hidden;
-	text-overflow: ellipsis;  // IE 6+, FF 7+, Op 11+, Saf 1.3+, Chr 1+
-	-o-text-overflow: ellipsis;  // for Opera 9 & 10
+	text-overflow: ellipsis;
+	-o-text-overflow: ellipsis;
 	white-space: nowrap;
 }
 
@@ -137,14 +140,17 @@ dds header
 
 
 /**********************
-dds status bar
-*********************/
+ d *ds status bar
+ *********************/
 
 .dds-channel {
 	font-weight: bold;
 	max-width: 50%;
 	display: inline-block;
 	vertical-align: top;
+}
+.dds-username{
+	color: #38a3af;
 }
 .dds-statusbar {
 	height: 30px;
@@ -153,20 +159,15 @@ dds status bar
 	padding: 7px 20px 7px 20px;
 	white-space: nowrap;
 }
-.dds-statusbar a:link {
-	color: #38a3af;
+.dds-statusbar a {
 	text-decoration: none;
 	font-weight: bold;
 }
-.dds-statusbar a:visited {
+.dds-statusbar a:link, a:visited {
 	color: #38a3af;
-	text-decoration: none;
-	font-weight: bold;
 }
 .dds-statusbar a:hover {
 	color: #fff;
-	text-decoration: none;
-	font-weight: bold;
 }
 
 
@@ -276,11 +277,6 @@ button.dds-reply-button:active {
 dds post
 ***********************/
 
-.dds-ident-post {
-}
-.dds-ident-post a:link {
-	color:red;
-}
 .dds-post-wrapper {
 	padding: 7px 20px 7px 20px;
 	position: relative;
@@ -299,10 +295,9 @@ dds post
 .dds-post-name {
 	display: inline-block;
 	font-size: 1em;
-	color: #141c30;
-	text-decoration: none;
 	max-width: 45%;
 	float: left;
+	font-weight: bold;
 }
 .dds-post-title {
 	display: inline-block;
@@ -313,20 +308,25 @@ dds post
 	height: 1em;
 	float: left;
 }
-.dds-post a:link,a:visited {
+.dds-post-name a {
 	color: #141c30;
 	text-decoration: none;
-	font-weight: bold;
 }
-a.dds-post:hover {
+.dds-post-name a:link {
+	color: #141c30;
+}
+.dds-post-name  a:visited {
+	color: #141c30;
+}
+.dds-post-name a:hover {
 	color: #38a3af;
-	text-decoration: none;
 }
 .dds-post-time {
 	font-size: .9em;
 	color: #a2a6ab;
 	display: inline-block;
 	font-style: italic;
+	position: absolute;
 }
 .dds-post-reply { 
 	float: right;
@@ -427,8 +427,8 @@ a.dds-post:hover {
 
 
 /************************
-dds refresh text
-***********************/
+ d *ds refresh text
+ ***********************/
 
 .dds-refresh-wrapper {
 	margin: 3px 20px 10px 20px;
@@ -763,13 +763,13 @@ ul.dds-channel-submenu li a:hover {
 	height: 100%;
 	bottom: 0;
 	background: #fff;
-	padding: 3em 25em 2em 10em;
+	padding: 2.5em 25em 2em 4em;
 }
 .blog-header-profile {
-	margin-left: 120px;
+	margin-left: 140px;
 }
 .blog-header-profile-text {
-	padding-top: 1em;
+	padding-top: .8em;
 }
 .blog-header-tabs-wrapper {
 	padding-top: 1em;
@@ -778,9 +778,265 @@ ul.dds-channel-submenu li a:hover {
 	display: inline;
 	padding-right: 1em;
 }
-.blog-user-icon {
+.blog-user-icon-header {
 	float: left;
+}
+.blog-post-user-icon {
+	float: left;
+	margin-right: 8px;
+	margin-top: 2px;
 }
 .blog-header-comments {
 	float: right;
+}
+.blog-post-top-wrapper {
+	margin-top: .4em;
+	margin-bottom: .7em;
+	height: 35px;
+}
+.blog-post-top {
+}
+.blog-post-author {
+	padding-bottom: .1em;
+}
+.blog-header-tabs a {
+	vertical-align: top;
+	background-color: transparent;
+	border: 1px solid #38a3af;
+	border-radius: 25px;
+	color: #38a3af;
+	padding: 8px 15px;
+	text-align: center;
+	text-decoration: none;
+}
+.blog-header-tabs a:link {
+	color: #38a3af;
+}
+.blog-header-tabs a:visited {
+	color: #38a3af;
+}
+.blog-header-tabs a:hover {
+	background: #38a3af;
+	color: #fff;
+}
+.blog-header-content h1 {
+	font-size: 3em;
+	font-weight: 100;
+	letter-spacing: .05em;
+	line-height:1em;
+	margin: 0;
+	text-transform: uppercase;
+}
+.blog-post-short h1 {
+	font-size: 2.2em;
+	font-weight: 100;
+	letter-spacing: .05em;
+	line-height:1em;
+	margin: 0;
+	text-transform: uppercase;
+}
+.blog-post-top a {
+	text-decoration: none;
+}
+.blog-post-short a {
+	text-decoration: none;
+}
+.blog-post-content a:hover {
+	text-decoration: underline;
+	/*background-color: #eee;*/
+}
+.blog-post-short h1 a:link {
+	color: #38a3af;
+}
+.blog-post-short h1 a:visited {
+	color: #38a3af;
+}
+.blog-post-short h1 a:hover {
+	color: #141c30;
+}
+.blog-post-top a:link {
+	color: #38a3af;
+}
+.blog-post-top a:visited {
+	color: #38a3af;
+}
+.blog-post-top a:hover {
+	color: #141c30;
+}
+.blog-post-user {
+	line-height: 1.5em;
+}
+.blog-post-user a {
+	font-weight: bold;
+}
+.blog-post-user-navy a {
+	font-weight: bold;
+	color: #141c30;
+	text-decoration: none;
+}
+.blog-photo-post-wrapper2 {
+	background: #fff;
+	box-shadow: 0 1px 4px rgba(0,0,0,.04);
+	border: 1px solid rgba(0,0,0,.09);
+	border-radius: 3px;
+	width: 600px;
+	margin: 0 auto;
+}
+.blog-photo-post-short2 {
+}
+.blog-photo-post-text2 {
+	padding: 1em 2em;
+}
+.blog-read-more {
+	padding-top: .5em;
+}
+.blog-read-more a {
+	color: #a2a6ab;
+	font-style: italic;
+}
+.blog-read-more a:hover {
+	color: #141c30;
+	font-style: italic;
+	text-decoration: none;
+}
+.blog-post-likes {
+	padding-bottom: 1em;
+	font-weight: bold;
+}
+.blog-photo-post-short2 a {
+	text-decoration: none;
+	font-weight: bold;
+}
+.blog-photo-post-short2 a:link {
+	color: #38a3af;
+}
+.blog-photo-post-short2 a:visited {
+	color: #38a3af;
+}
+.blog-photo-post-short2 a:hover {
+	color: #141c30;
+}
+a.blog-photo-post-tags2 {
+	font-weight: normal;
+}
+.blog-post-id {
+	float: right;
+	font-family: monospace;
+	font-style: italic;
+	font-size: 8pt;
+	color: #a2a6ab;
+	width: 100px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	-o-text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.blog-photo-full img {
+	/*max-width: 100%;
+	max-height: 60px;*/
+	width: 100%;
+	height: 300px;
+}
+.blog-photo-full {
+/*	width: 100%;
+	height: auto;*/
+	padding-bottom: 1.5em;
+}
+.blog-photo-small {
+}
+.blog-photo-small img{
+	max-width: 50%;
+	max-height: 100%;
+	float: left;
+	margin: 0 1.5em 1em 0;
+	border-radius: 10px;
+}
+.blog-clear-div {
+	clear: both;
+}
+.object-fit_cover {
+	object-fit: cover;
+}
+.blog-photo-full img[class] { 
+	width: 100%;
+}
+.blog-post-reply {
+	background-image: url("morphis://.dds/images/icons.png");
+	background-repeat: no-repeat;
+	width:17px;
+	height:15px;
+	float: left;
+	background-position: left top;
+}
+.blog-post-reply:hover {
+	background-image: url("morphis://.dds/images/icons-hover-color.png");
+}
+.blog-post-upvote {
+	background-image: url("morphis://.dds/images/icons-vote.png");
+	background-repeat: no-repeat;
+	width:20px;
+	height:20px;
+	background-position: left top;
+	margin: 2px auto 4px auto;
+}
+.blog-post-upvote:hover {
+	background-image: url("morphis://.dds/images/icons-vote-color.png");
+}
+.blog-post-flag {
+	background-image: url("morphis://.dds/images/icons-vote.png");
+	background-repeat: no-repeat;
+	width:20px;
+	height:20px;
+	background-position: left bottom;
+	margin: 4px auto 0 auto;
+}
+.blog-post-flag:hover {
+	background-image: url("morphis://.dds/images/icons-vote-color.png");
+}
+.blog-post-icons {
+	float: left;
+	margin-right: 5px;
+}
+.blog-post-reply {
+	background-image: url("morphis://.dds/images/icons.png");
+	background-repeat: no-repeat;
+	width:17px;
+	height:15px;
+	background-position: left top;
+}
+.blog-post-reply:hover {
+	background-image: url("morphis://.dds/images/icons-hover-color.png");
+}
+.blog-post-vote {
+	width: 30px;
+	text-align: center;
+	float: left;
+	margin-right: 10px;
+}
+.blog-grey-text {
+	color: #a2a6ab;
+}
+.blog-post-header-left {
+	float: left;
+	width: 60%;
+}
+.blog-post-header-right {
+	float: right;
+	width: 200px;
+}
+.blog-post-header-wrapper {
+	width: 100%;
+	height: 70px;
+}
+.blog-post-title {
+	font-size: 2.2em;
+	font-weight: 100;
+	letter-spacing: .05em;
+	line-height:1em;
+	margin: 0;
+	text-transform: uppercase;
+	max-width: 500px;
+}
+.blog-post-title a:hover {
+	color: #141c30;
 }
