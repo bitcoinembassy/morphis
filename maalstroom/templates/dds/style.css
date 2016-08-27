@@ -140,8 +140,8 @@ dds header
 
 
 /**********************
- d *ds status bar
- *********************/
+dds status bar
+*********************/
 
 .dds-channel {
 	font-weight: bold;
@@ -427,8 +427,8 @@ dds post
 
 
 /************************
- d *ds refresh text
- ***********************/
+dds refresh text
+***********************/
 
 .dds-refresh-wrapper {
 	margin: 3px 20px 10px 20px;
@@ -963,7 +963,7 @@ a.blog-photo-post-tags2 {
 .object-fit_cover {
 	object-fit: cover;
 }
-.blog-photo-full img[class] { 
+.blog-photo-full img[class] {
 	width: 100%;
 }
 .blog-post-reply {
@@ -1047,16 +1047,16 @@ a.blog-photo-post-tags2 {
 	color: #141c30;
 }
 
-/* styles for text block ellipsis */ 
+/* styles for text block ellipsis */
 .blog-post-textblock {
 	/* hide text if it more than N lines  */
 	overflow: hidden;
 	/* for set '...' in absolute position */
-	position: relative; 
+	position: relative;
 	/* use this value to count block height */
 	line-height: 1.2em;
 	/* max-height = line-height (1.2) * lines max number (12) */
-	max-height: 14.4em; 
+	max-height: 14.4em;
 	/* fix problem when last visible word doesn't adjoin right side */
 	text-align: justify;
 	/*margin-right: -1em;*/
@@ -1088,11 +1088,11 @@ a.blog-photo-post-tags2 {
 	/* hide text if it more than N lines  */
 	overflow: hidden;
 	/* for set '...' in absolute position */
-	position: relative; 
+	position: relative;
 	/* use this value to count block height */
 	line-height: 1.2em;
 	/* max-height = line-height (1.2) * lines max number (6) */
-	max-height: 7.2em; 
+	max-height: 7.2em;
 	/* fix problem when last visible word doesn't adjoin right side*/
 	text-align: justify;
 	/*margin-right: -1em;*/
