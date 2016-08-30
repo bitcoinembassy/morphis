@@ -72,7 +72,7 @@ class DdsEngine(object):
             if exists:
                 return
 
-            post = yield from self.fetch_post(synapse, target_key)
+            post = yield from self.fetch_post(synapse)
 
             if not post:
                 if log.isEnabledFor(logging.INFO):
@@ -125,10 +125,23 @@ class DdsEngine(object):
                         process_synapse(synapse),\
                         loop=self.loop))
 
+        if log.isEnabledFor(logging.INFO):
+            log.info("Scanning target_key=[{}]."\
+                .format(mbase32.encode(target_key)))
+
         new_tasks.append(asyncio.async(\
-                self.dpush_engine.scan_targeted_blocks(target_key, 8, key_cb)))
-        new_tasks.append(self.node.engine.tasks.send_get_synapses(\
-            target_key, result_callback=syn_cb, retry_factor=25))
+                self.dpush_engine.scan_targeted_blocks(\
+                    target_key, 8, key_cb),\
+                loop=self.loop))
+        new_tasks.append(asyncio.async(\
+                self.node.engine.tasks.send_get_synapses(\
+                    signing_key=target_key, result_callback=syn_cb,\
+                    retry_factor=25),\
+                loop=self.loop))
+        new_tasks.append(asyncio.async(\
+                self.node.engine.tasks.send_get_synapses(\
+                    target_key, result_callback=syn_cb, retry_factor=25),\
+                loop=self.loop))
 
         tasks = new_tasks.copy()
         new_tasks.clear()
@@ -160,18 +173,15 @@ class DdsEngine(object):
 
     @asyncio.coroutine
     def fetch_post(self, key, target_key=None):
-        if not target_key:
-            # Plain static data.
+        if type(key) is syn.Synapse:
+            # Synapse.
+            obj = key
+            key = obj.synapse_key
             data_rw = yield from\
-                self.node.engine.tasks.send_get_data(bytes(key))
-
-            obj = None
+                self.node.engine.tasks.send_get_data(obj.source_key)
         else:
-            # TargetedBlock or Synapse.
-            if type(key) is syn.Synapse:
-                obj = key
-                key = key.synapse_key
-            else:
+            if target_key:
+                # TargetedData.
                 if type(key) is not bytes:
                     key = bytes(key)
 
@@ -180,13 +190,15 @@ class DdsEngine(object):
                         key, target_key=target_key)
                 obj = data_rw.object
 
-            if obj:
-                if type(obj) is syn.Synapse:
-                    data_rw = yield from\
-                        self.node.engine.tasks.send_get_data(obj.source_key)
-                else:
+                if obj:
                     assert type(obj) is tb.TargetedBlock, type(obj)
                     data_rw.data = data_rw.data[tb.TargetedBlock.BLOCK_OFFSET:]
+
+            else:
+                # Plain static data.
+                obj = None
+                data_rw = yield from\
+                    self.node.engine.tasks.send_get_data(bytes(key))
 
         if not data_rw.data:
             return None
@@ -214,8 +226,9 @@ class DdsEngine(object):
     @asyncio.coroutine
     def save_post(self, key, target_key, obj, data):
         if log.isEnabledFor(logging.INFO):
+            tk_e = mbase32.encode(target_key) if target_key else None
             log.info("Saving DdsPost for key=[{}], target_key=[{}]."\
-                .format(mbase32.encode(key), mbase32.encode(target_key)))
+                .format(mbase32.encode(key), tk_e))
 
         def dbcall():
             with self.db.open_session() as sess:
@@ -225,10 +238,8 @@ class DdsEngine(object):
                 post.data = data
 
                 if obj:
-                    assert target_key
-                    post.target_key = target_key
-
                     if type(obj) is syn.Synapse:
+                        post.target_key = obj.target_key
                         post.synapse_key = obj.synapse_key
                         post.synapse_pow = obj.synapse_pow
                         post.data_key = obj.source_key
@@ -239,6 +250,7 @@ class DdsEngine(object):
                             consts.NODE_ID_BITS - obj.log_distance[0]
                     else:
                         assert type(obj) is tb.TargetedBlock, type(obj)
+                        post.target_key = target_key
                         post.data_key = post.synapse_pow = key
                         post.timestamp = mutil.utc_datetime(0)
                         post.score =\

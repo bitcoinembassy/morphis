@@ -495,9 +495,18 @@ def _process_axon_synapses(req):
         else:
             style = ""
 
+        target_key_enc = mbase32.encode(post.target_key)
+
+        if post.target_key != axon_addr:
+            target_str = "@" + target_key_enc
+        else:
+            target_str = ""
+
         template = templates.dds_synapse_view[0]
         template =\
             template.format(\
+                target_key=target_key_enc,\
+                target_str=target_str,\
                 key=key_enc,\
                 signing_key=signing_key_enc,\
                 signer=signer_name,\
@@ -513,7 +522,10 @@ def _process_axon_synapses(req):
     def dbcall():
         with req.dispatcher.node.db.open_session(True) as sess:
             q = sess.query(DdsPost)\
-                .filter(DdsPost.target_key == axon_addr)\
+                .filter(\
+                    or_(\
+                        DdsPost.target_key == axon_addr,
+                        DdsPost.signing_key == axon_addr))\
                 .order_by(\
                     desc(and_(\
                         DdsPost.signing_key != None,\

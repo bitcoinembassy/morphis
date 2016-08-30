@@ -393,6 +393,7 @@ class SynapseRequest(object):
             class Type(Enum):
                 target = 1
                 source = 2
+                signing = 3
 
             def __init__(self, type_=None, value=None):
                 self.type = type_

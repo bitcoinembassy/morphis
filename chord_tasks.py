@@ -499,9 +499,9 @@ class ChordTasks(object):
 
     @asyncio.coroutine
     def send_get_synapses(\
-            self, target_keys=None, source_key=None, start_timestamp=None,\
-            end_timestamp=None, start_key=None, end_key=None, minimum_pow=8,\
-            result_callback=None, retry_factor=1):
+            self, target_keys=None, source_key=None, signing_key=None,\
+            start_timestamp=None, end_timestamp=None, start_key=None,\
+            end_key=None, minimum_pow=8, result_callback=None, retry_factor=1):
 
         req = syn.SynapseRequest()
         if start_timestamp:
@@ -527,7 +527,7 @@ class ChordTasks(object):
 
                     keys.append(\
                         syn.SynapseRequest.Query(\
-                            syn.SynapseRequest.Query.Key(\
+                            entries=syn.SynapseRequest.Query.Key(\
                                 syn.SynapseRequest.Query.Key.Type.target,\
                                 data_id)))
 
@@ -544,11 +544,11 @@ class ChordTasks(object):
                     syn.SynapseRequest.Query.Type.or_,\
                     [
                         syn.SynapseRequest.Query(\
-                            syn.SynapseRequest.Query.Key(\
+                            entries=syn.SynapseRequest.Query.Key(\
                                 syn.SynapseRequest.Query.Key.Type.target,\
                                 target_id)),\
                         syn.SynapseRequest.Query(\
-                            syn.SynapseRequest.Query.Key(\
+                            entries=syn.SynapseRequest.Query.Key(\
                                 syn.SynapseRequest.Query.Key.Type.source,\
                                 source_id))])
 
@@ -563,15 +563,26 @@ class ChordTasks(object):
                         target_id))
 
                 all_keys.append((target_keys, target_id))
-        else:
+        elif source_key:
             source_id = enc.generate_ID(source_key)
 
             query = syn.SynapseRequest.Query(\
-                syn.SynapseRequest.Query.Key(\
+                entries=syn.SynapseRequest.Query.Key(\
                     syn.SynapseRequest.Query.Key.Type.source,\
                     source_id))
 
             all_keys.append((source_key, source_id))
+        else:
+            assert signing_key
+
+            signing_id = enc.generate_ID(signing_key)
+
+            query = syn.SynapseRequest.Query(\
+                entries=syn.SynapseRequest.Query.Key(\
+                    syn.SynapseRequest.Query.Key.Type.signing,\
+                    signing_id))
+
+            all_keys.append((signing_key, signing_id))
 
         req.query = query
 
