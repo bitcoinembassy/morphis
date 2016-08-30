@@ -530,6 +530,9 @@ def _process_axon_synapses(req):
                     desc(and_(\
                         DdsPost.signing_key != None,\
                         DdsPost.signing_key == DdsPost.target_key)),\
+                    desc(and_(\
+                        DdsPost.signing_key != None,\
+                        DdsPost.target_key != axon_addr)),\
                     DdsPost.timestamp)
 
             return q.all()
