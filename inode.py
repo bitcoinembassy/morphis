@@ -6,7 +6,6 @@ import llog
 import asyncio
 import logging
 import threading
-import queue
 
 import db
 import dds
@@ -42,29 +41,8 @@ def main():
 if __name__ == "__main__":
     threading.Thread(target=main, name="MORPHiS Node", daemon=True).start()
 
-class ExceptionResult(object):
-    def __init__(self, exception):
-        self.exception = exception
-
-@asyncio.coroutine
-def _yield_from(coroutine, result_queue):
-    try:
-        r = yield from coroutine
-        result_queue.put(r)
-    except Exception as e:
-        log.exception(e)
-        result_queue.put(ExceptionResult(e))
-
-def _schedule_yield_from(coroutine, result_queue):
-    task = asyncio.async(_yield_from(coroutine, result_queue))
-
 def yf(coroutine):
-    result_queue = queue.Queue()
-    loop.call_soon_threadsafe(_schedule_yield_from, coroutine, result_queue)
-    r = result_queue.get()
-    if type(r) is ExceptionResult:
-        raise r.exception
-    return r
+    return mutil.yield_from_thread_safe(loop, coroutine)
 
 ## Example usage:
 # To print out contents of [ire6bomibt4q9zp5bpd9wa7wzusxab8h]:

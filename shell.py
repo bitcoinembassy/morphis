@@ -55,7 +55,10 @@ class Shell(cmd.Cmd):
 
         self.out_buffer = bytearray()
 
-        self.shell_locals = {"self": self}
+        def yf(coroutine):
+            return mutil.yield_from_thread_safe(self.loop, coroutine)
+
+        self.shell_locals = {"self": self, "yf": yf}
 
         self._shell_history = []
         self._shell_history_idx = -1
@@ -487,6 +490,25 @@ class Shell(cmd.Cmd):
         except Exception as e:
             log.exception("eval")
             self.writeln("Exception: [{}].".format(e))
+
+    @asyncio.coroutine
+    def do_yf(self, arg):
+        "Yield from python code."
+
+        if not self.peer.engine.node.eval_enabled:
+            self.writeln("Eval is disabled.")
+            return
+
+        def call():
+            try:
+                return eval(arg, globals(), self.shell_locals)
+            except Exception as e:
+                log.exception("eval")
+                self.writeln("Exception: [{}].".format(e))
+
+        r = yield from self.loop.run_in_executor(None, call)
+
+        self.writeln(r)
 
     def do_reload(self, arg):
         "Reload the shell (requires relogin)."

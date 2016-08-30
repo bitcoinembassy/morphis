@@ -10,6 +10,7 @@ import time
 
 import consts
 import mbase32
+from mutil_nocython import yield_from_thread_safe
 
 log = logging.getLogger(__name__)
 
