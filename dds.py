@@ -37,7 +37,8 @@ class DdsEngine(object):
 
     @asyncio.coroutine
     def scan_target_key(self, target_key, post_callback, skip=None):
-        "Returns through post_callback only new posts."
+        "Perpetually scan until task is cancelled. Posts are reported through"\
+        " post_callback only new posts."
         if skip:
             if type(skip) is set:
                 loaded = skip
@@ -129,32 +130,48 @@ class DdsEngine(object):
             log.info("Scanning target_key=[{}]."\
                 .format(mbase32.encode(target_key)))
 
-        new_tasks.append(asyncio.async(\
-                self.dpush_engine.scan_targeted_blocks(\
-                    target_key, 8, key_cb),\
-                loop=self.loop))
-        new_tasks.append(asyncio.async(\
-                self.node.engine.tasks.send_get_synapses(\
+        @asyncio.coroutine
+        def tb_task():
+            while True:
+                yield from self.dpush_engine.scan_targeted_blocks(\
+                    target_key, 8, key_cb)
+                # Old style poll only every 5 minutes.
+                yield from asyncio.sleep(300)
+
+        @asyncio.coroutine
+        def sk_task():
+            while True:
+                yield from self.node.engine.tasks.send_get_synapses(\
                     signing_key=target_key, result_callback=syn_cb,\
-                    retry_factor=25),\
-                loop=self.loop))
-        new_tasks.append(asyncio.async(\
-                self.node.engine.tasks.send_get_synapses(\
-                    target_key, result_callback=syn_cb, retry_factor=25),\
-                loop=self.loop))
+                    retry_factor=25)
+                yield from asyncio.sleep(1)
+
+        @asyncio.coroutine
+        def sy_task():
+            while True:
+                yield from self.node.engine.tasks.send_get_synapses(\
+                    target_key, result_callback=syn_cb, retry_factor=25)
+                yield from asyncio.sleep(1)
+
+        new_tasks.append(asyncio.async(tb_task(), loop=self.loop))
+        new_tasks.append(asyncio.async(sk_task(), loop=self.loop))
+        new_tasks.append(asyncio.async(sy_task(), loop=self.loop))
 
         tasks = new_tasks.copy()
         new_tasks.clear()
 
         while tasks:
-            done, pending = yield from asyncio.wait(\
-                tasks, loop=self.loop, return_when=futures.ALL_COMPLETED)
+            try:
+                done, pending = yield from asyncio.wait(\
+                    tasks, loop=self.loop, return_when=futures.ALL_COMPLETED)
+            except CancelledError as e:
+                for task in new_tasks:
+                    if not task.done():
+                        task.cancel()
+                raise e
 
             tasks = new_tasks.copy()
             new_tasks.clear()
-
-            if pending:
-                tasks.extend(pending)
 
     @asyncio.coroutine
     def check_has_post(self, key):

@@ -114,9 +114,11 @@ class DdsAutoscanProcess(object):
         self._task = None
 
     def add_listener(self, listener):
+        raise Exception("See below FIXME.")
         self._listeners.append(listener)
 
     def remove_listener(self, listener):
+        raise Exception("See below FIXME.")
         self._listeners.remove(listener)
 
     @asyncio.coroutine
@@ -133,5 +135,7 @@ class DdsAutoscanProcess(object):
 
             yield from self.dce.dds_engine.scan_target_key(\
                 self.query.target_key, self._notify_listeners)
+#FIXME: TODO: YOU_ARE_HERE: This (listeners) is broken, as scan_target_key now
+# never returns.
             # Let listeners know that the scan finished.
             yield from self._notify_listeners(None)
