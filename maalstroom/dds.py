@@ -376,8 +376,14 @@ def _process_axon_grok(req):
 
     channel_html = yield from _render_channel_html(req, "dds-channel-submenu")
 
-    data_rw = yield from req.dispatcher.node.engine.tasks.send_get_data(\
-        key, path="title", force_cache=True)
+    #FIXME: Temporarily add a timeout until the cache caches NULL responses.
+    try:
+        data_rw = yield from asyncio.wait_for(\
+            req.dispatcher.node.engine.tasks.send_get_data(\
+                key, path="title", force_cache=True),\
+            0.25)
+    except futures.TimeoutError as e:
+        data_rw = None
 
     if data_rw and data_rw.data:
         title = data_rw.data.decode()
