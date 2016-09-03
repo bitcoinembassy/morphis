@@ -38,7 +38,25 @@ body.blog {
 	background: url("morphis://.dds/images/sayagata-400px.png");
 	background-attachment: fixed;
 }
+body.dds {
+	font: .8em 'ralewaylight', sans-serif;
+	line-height: 1.4em;
+	letter-spacing: .03em;
+	padding: 0;
+	margin: 0 0 0 0;
+	overflow-x: hidden;
+	background-color: #f3f6f8;
+	color: #1c2227;
+}
 .blog a {
+	transition: opacity 0.5s;
+	-webkit-transition: all ease 0.5s;
+	-moz-transition: all ease 0.5s;
+	-o-transition: all ease 0.5s;
+	-ms-transition: all ease 0.5s ;
+	transition: all ease 0.5s ;
+}
+.dds a {
 	transition: opacity 0.5s;
 	-webkit-transition: all ease 0.5s;
 	-moz-transition: all ease 0.5s;
@@ -330,7 +348,7 @@ dds post
 	color: #a2a6ab;
 	display: inline-block;
 	font-style: italic;
-	position: absolute;
+	/*position: absolute;*/
 }
 .dds-post-reply { 
 	float: right;
@@ -815,11 +833,6 @@ ul.dds-channel-submenu li a:hover {
 	margin-right: 8px;
 	margin-top: 2px;
 }
-.blog-post-user-icon-author {
-	float: left;
-	padding: 0 1em 0 1em;
-	opacity: .5;
-}
 .blog-header-comments {
 	float: right;
 }
@@ -1122,7 +1135,7 @@ a.blog-photo-post-tags2 {
 .blog-header-content-wrapper .blog-comment-bubble {
 	position: relative;
 	background-color: #1c2227;
-	padding: 6px 8px;
+	padding: 4px 8px;
 	text-align: center;
 	border-radius: 3px;
 	float: right;
@@ -1130,10 +1143,14 @@ a.blog-photo-post-tags2 {
 	clear: both;
 	margin: 0 0 0 20px;
 }
+.blog-header-right {
+	float: right;
+	margin: .8em 0 1.5em 0;
+}
 .blog-comment-bubble {
 	position: relative;
 	background-color: #1e2329;
-	padding: 6px 8px;
+	padding: 4px 8px;
 	text-align: center;
 	border-radius: 3px;
 	float: right;
@@ -1142,10 +1159,6 @@ a.blog-photo-post-tags2 {
 	opacity:1;
 	transition: opacity 0.5s;
 	color: #f28182;
-}
-.blog-header-right {
-	float: right;
-	padding-top: .8em;
 }
 .blog-comment-bubble:hover {
 	opacity:.75;
@@ -1308,12 +1321,12 @@ span.blog-comment-bubble::after {
 	padding: .3em;
 	height: 29px;
 	border-bottom: 1px dotted #3b3e43;
-	color: #6E6E6E;
+	color: #5A5A5A;
 	font-style: italic;
 }
 .blog-author-current a {
 	text-decoration: none;
-	color: #a3a3a3;
+	color: #7B7B7B;
 	font-style: normal;
 }
 .blog-author-current a:hover {
@@ -1325,4 +1338,72 @@ span.blog-comment-bubble::after {
 .blog-author-current-right {
 	float: right;
 	padding: 0 1em 0 0;
+}
+.blog-header-global-settings {
+	float: left;
+	background: url("morphis://.dds/images/settings2.png");
+	height: 20px;
+	width: 20px;
+	margin-left: .9em;
+	opacity: .7;
+}
+.blog-header-settings {
+	float: left;
+	background: url("morphis://.dds/images/global-settings.png");
+	height: 20px;
+	width: 20px;
+	margin-left: .9em;
+	opacity: .7;
+}
+.blog-header-global-settings:hover {
+	opacity: 1;
+	transition: opacity 0.5s;
+}
+.blog-header-settings:hover {
+	opacity: 1;
+	transition: opacity 0.5s;
+}
+.blog-comment-bubble-header {
+	position: relative;
+	background-color: #858585;
+	padding: 2px 4px;
+	text-align: center;
+	border-radius: 2px;
+	font-size: .8em;
+	margin-left: 1em;
+	opacity:.5;
+	transition: opacity 0.5s;
+	color: #141c30;
+}
+.blog-comment-bubble-header:hover {
+	opacity:1;
+	transition: opacity 0.5s;
+	/*color: #fff;*/
+}
+.blog-comment-bubble-header a {
+	text-decoration: none;
+}
+.blog-comment-bubble-header a:hover {
+	opacity:1;
+	transition: opacity 0.5s;
+}
+span.blog-comment-bubble-header::after {
+	content: "";
+	position: absolute;
+	bottom: -5px;
+	left: 5px;
+	width: 0;
+	height: 0;
+	border-style: solid;
+	border-width: 5px 5px 0 0;
+	border-color: #858585 transparent transparent transparent;
+}
+.blog-post-user-icon-author {
+	float: left;
+	padding: 0 1em 0 1em;
+	opacity: .5;
+	transition: opacity 0.5s;
+}
+.blog-post-user-icon-author:hover {
+	opacity: 1;
 }
