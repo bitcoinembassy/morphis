@@ -181,6 +181,8 @@ def serve_get(dispatcher, rpath):
         yield from _process_synapse_create(mr)
     elif req.startswith("/propedit/"):
         yield from _process_propedit(mr)
+    elif req.startswith("/site/edit/"):
+        yield from _process_site_edit(mr)
     else:
         dispatcher.send_error("request: {}".format(req), errcode=400)
 
@@ -255,12 +257,63 @@ def _process_propedit(req):
 
     template = templates.dds_propedit[0]
     template = template.format(\
-        csrf_token=req.dispatcher.client_engine.csrf_token,
+        csrf_token=req.dispatcher.client_engine.csrf_token,\
         refresh_url=refresh_url,\
         addr=addr_enc,\
         path=path,\
         version=data_rw.version,\
         value=value)
+
+    wrapper = templates.dds_wrapper[0]
+    wrapper =\
+        wrapper.format(title="MORPHiS Propedit", child=template)
+
+    req.dispatcher.send_content(wrapper)
+
+@asyncio.coroutine
+def _process_site_edit(req):
+    rstr = req.req[11:]
+
+    addr_enc = rstr
+    addr = mbase32.decode(addr_enc)
+
+    te = req.dispatcher.node.engine.tasks
+
+    timeout = 0.25
+
+    props =\
+        ("title", "image", "anon_name", "min_anon_pow", "min_unstamped_pow")
+
+    tasks = []
+
+    for prop in props:
+        tasks.append(
+            asyncio.wait_for(\
+                te.send_get_data(addr, prop, force_cache=True), timeout))
+
+    results = yield from asyncio.gather(*tasks, return_exceptions=True)
+
+    out = {}
+    latest_version = 0
+
+    for result, prop in zip(results, props):
+        if not result or isinstance(result, Exception) or not result.data:
+            out[prop] = ""
+        else:
+            if result.version > latest_version:
+                latest_version = result.version
+            out[prop] = result.data.decode()
+
+    refresh_url =\
+        "morphis://.dds/site/edit/{}{}".format(addr_enc, req.query)
+
+    template = templates.dds_site_edit[0]
+    template = template.format(\
+        csrf_token=req.dispatcher.client_engine.csrf_token,\
+        refresh_url=refresh_url,\
+        addr=addr_enc,\
+        version=latest_version,\
+        **out)
 
     wrapper = templates.dds_wrapper[0]
     wrapper =\

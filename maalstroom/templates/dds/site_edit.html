@@ -1,0 +1,19 @@
+<p><h3>DdsSite Settings (These will affect anyone viewing this DdsSite.)</h3></p>
+
+addr: {addr}<br/>
+version: {version}<br/>
+<form class="dds-message" action="morphis://.dds/site/edit" method="post" accept-charset="UTF-8 ISO-8859-1">
+    <input type="hidden" name="csrf_token" id="csrf_token" value="{csrf_token}"/>
+    <input type="hidden" name="refresh_url" id="refresh_url" value="{refresh_url}"/>
+    <input type="hidden" name="addr" id="addr" value="{addr}"/>
+
+    <input type="text" class="dds-reply-input" autofocus name="title" id="title" placeholder="title" rows="20" value="{title}"/>
+    <input type="text" class="dds-reply-input" autofocus name="image" id="image" placeholder="image" rows="20" value="{image}"/>
+    <input type="text" class="dds-reply-input" autofocus name="anon_name" id="anon_name" placeholder="anon_name" rows="20" value="{anon_name}"/>
+    <br/>
+    <input type="text" class="dds-reply-input" autofocus name="min_anon_pow" id="min_anon_pow" placeholder="min_anon_pow" rows="20" value="{min_anon_pow}"/>
+    <input type="text" class="dds-reply-input" autofocus name="min_unstamped_pow" id="min_unstamped_pow" placeholder="min_unstamped_pow" rows="20" value="{min_unstamped_pow}"/>
+    <br/>
+
+    <button class="reply" accesskey="a" type="submit">SAVE</button>
+</form>
