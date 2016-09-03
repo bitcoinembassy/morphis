@@ -201,6 +201,8 @@ def serve_post(dispatcher, rpath):
         yield from _process_feed_add_post(mr)
     elif req == "/propedit":
         yield from _process_propedit_post(mr)
+    elif req == "/site/edit":
+        yield from _process_site_edit_post(mr)
     else:
         dispatcher.send_error("request: {}".format(req), errcode=400)
 
@@ -279,7 +281,7 @@ def _process_site_edit(req):
 
     te = req.dispatcher.node.engine.tasks
 
-    timeout = 0.25
+#    timeout = 0.25
 
     props =\
         ("title", "image", "anon_name", "min_anon_pow", "min_unstamped_pow")
@@ -287,9 +289,9 @@ def _process_site_edit(req):
     tasks = []
 
     for prop in props:
-        tasks.append(
-            asyncio.wait_for(\
-                te.send_get_data(addr, prop, force_cache=True), timeout))
+        tasks.append(\
+#            asyncio.wait_for(\
+                te.send_get_data(addr, prop, force_cache=True))#, timeout))
 
     results = yield from asyncio.gather(*tasks, return_exceptions=True)
 
@@ -320,6 +322,62 @@ def _process_site_edit(req):
         wrapper.format(title="MORPHiS Propedit", child=template)
 
     req.dispatcher.send_content(wrapper)
+
+@asyncio.coroutine
+def _process_site_edit_post(req):
+    dd = yield from req.dispatcher.read_post()
+
+    if not req.dispatcher.check_csrf_token(dd["csrf_token"][0]):
+        return
+
+    addr_enc = dd.get("addr")[0]
+    addr = mbase32.decode(addr_enc)
+    refresh_url = dd.get("refresh_url")[0]
+
+    # Load in the private key for signing any updates.
+    dm =\
+        yield from dmail.load_dmail_address(req.dispatcher.node, site_key=addr)
+    key = rsakey.RsaKey(privdata=dm.site_privatekey)
+
+    props =\
+        ("title", "image", "anon_name", "min_anon_pow", "min_unstamped_pow")
+
+    version = int(time.time()*1000)
+
+    te = req.dispatcher.node.engine.tasks
+
+    @asyncio.coroutine
+    def task(prop):
+        value = dd.get(prop)[0]
+
+        data_rw = yield from te.send_get_data(addr, prop, force_cache=True)
+        if data_rw and data_rw.data:
+            old = data_rw.data.decode()
+            if not old:
+                old = ""
+        else:
+            old = ""
+
+        if old == value:
+            if log.isEnabledFor(logging.INFO):
+                log.info(\
+                    "No difference was submitted for key/path [{}]/[{}]."\
+                        .format(addr_enc, prop))
+            return
+
+        if log.isEnabledFor(logging.INFO):
+            log.info("Updating key/path [{}]/[{}] value to [{}]."\
+                .format(addr_enc, prop, value))
+
+        yield from te.send_store_updateable_key(\
+            value.encode(), key, prop.encode(), version, store_key=True)
+
+        if log.isEnabledFor(logging.INFO):
+            log.info("Key/path [{}]/[{}] updated.".format(addr_enc, prop))
+
+    yield from asyncio.gather(*[task(prop) for prop in props])
+
+    req.dispatcher.send_301(refresh_url)
 
 @asyncio.coroutine
 def _render_channel_html(req, ul_class=None):
