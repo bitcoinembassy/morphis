@@ -1412,3 +1412,14 @@ span.blog-comment-bubble-header::after {
 .blog-post-user-icon-author:hover {
 	opacity: 1;
 }
+.blog-comment-wrapper-reply {
+	padding: 7px 20px 7px 40px;
+	position: relative;
+	height: 100%;
+	-webkit-transition: all 0.10s ease-in-out;
+	-moz-transition: all 0.10s ease-in-out;
+	transition: all 0.15s ease-in-out;
+}
+.blog-comment-wrapper-reply:hover {
+	background-color: #fff;
+}
