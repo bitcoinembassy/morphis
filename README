@@ -22,7 +22,7 @@ This is a developer preview release. As such, it may not work well in your exact
 INSTRUCTIONS
 
 Dependencies:
-    Python >= 2.4.1, PyCrypto (2.6 tested), sqlalchemy (0.9.8 tested).
+    Python >= 3.4.1, PyCrypto (2.6 tested), sqlalchemy (0.9.8 tested).
 
 NOTE: SqlAlchemy 0.9.8 does have a bug and thus you should use the latest, 1.0.8 if you can.
 
