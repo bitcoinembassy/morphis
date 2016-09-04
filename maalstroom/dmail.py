@@ -2092,7 +2092,7 @@ def _create_or_update_contact(node, addr, user, name, first=None, last=None):
     return (yield from node.loop.run_in_executor(None, dbcall))
 
 @asyncio.coroutine
-def get_contact_name(node, addr, anon_name="[Anonymous]"):
+def get_contact_name(node, addr, anon_name="[Unsigned]"):
     assert addr is not None
 
     if not addr:
