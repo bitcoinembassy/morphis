@@ -567,6 +567,21 @@ def _process_axon_read(dispatcher, req):
 def _process_axon_synapses(req):
     axon_addr = mbase32.decode(req.req[15:])
 
+    te = req.dispatcher.node.engine.tasks
+
+    timeout = 0.25
+
+    props =\
+        ("title", "image", "anon_name", "min_anon_pow", "min_unstamped_pow")
+
+    gtask = asyncio.async(\
+        asyncio.gather(*[\
+            asyncio.wait_for(\
+                asyncio.shield(
+                    te.send_get_data(axon_addr, prop, force_cache=True)),\
+                timeout)\
+            for prop in props], return_exceptions=True))
+
     style = "background-color: red" if axon_addr == req.ident == axon_addr\
         else ""
 
@@ -574,6 +589,36 @@ def _process_axon_synapses(req):
         .format(style=style)
 
     req.dispatcher.send_partial_content(template, True)
+
+    def dbcall():
+        with req.dispatcher.node.db.open_session(True) as sess:
+            q = sess.query(DdsPost)\
+                .filter(\
+                    or_(\
+                        DdsPost.target_key == axon_addr,
+                        DdsPost.signing_key == axon_addr))\
+                .order_by(\
+                    desc(and_(\
+                        DdsPost.signing_key != None,\
+                        DdsPost.signing_key == DdsPost.target_key)),\
+                    desc(and_(\
+                        DdsPost.signing_key != None,\
+                        DdsPost.target_key != axon_addr)),\
+                    DdsPost.timestamp)
+
+            return q.all()
+
+    load_task = req.dispatcher.loop.run_in_executor(None, dbcall)
+
+    results, posts = yield from asyncio.gather(gtask, load_task)
+
+    title, image, anon_name, min_anon_pow, min_unstamped_pow =\
+        [result.data\
+            if result and not isinstance(result, Exception) and result.data\
+                else b''\
+                    for result in results]
+
+    anon_name = make_safe_for_html_content(anon_name.decode())
 
     @asyncio.coroutine
     def process_post(post):
@@ -592,16 +637,18 @@ def _process_axon_synapses(req):
 
         key_enc = mbase32.encode(key)
 
-        content = yield from _format_axon(\
-            req.dispatcher.node, post.data, key, key_enc)
+        content = make_safe_for_html_content(post.data)
 
         timestr = mutil.format_human_no_ms_datetime(post.timestamp)
 
         signing_key = post.signing_key if post.signing_key else ""
         signing_key_enc = mbase32.encode(post.signing_key)
 
-        signer_name = yield from fetch_display_name(\
-            req.dispatcher.node, signing_key, signing_key_enc)
+        if signing_key or not anon_name:
+            signer_name = yield from fetch_display_name(\
+                req.dispatcher.node, signing_key, signing_key_enc)
+        else:
+            signer_name = anon_name
 
         if post.signing_key == req.ident:
             style = "background-color: lightblue"
@@ -633,26 +680,6 @@ def _process_axon_synapses(req):
                 style=style)
 
         req.dispatcher.send_partial_content(template)
-
-    def dbcall():
-        with req.dispatcher.node.db.open_session(True) as sess:
-            q = sess.query(DdsPost)\
-                .filter(\
-                    or_(\
-                        DdsPost.target_key == axon_addr,
-                        DdsPost.signing_key == axon_addr))\
-                .order_by(\
-                    desc(and_(\
-                        DdsPost.signing_key != None,\
-                        DdsPost.signing_key == DdsPost.target_key)),\
-                    desc(and_(\
-                        DdsPost.signing_key != None,\
-                        DdsPost.target_key != axon_addr)),\
-                    DdsPost.timestamp)
-
-            return q.all()
-
-    posts = yield from req.dispatcher.loop.run_in_executor(None, dbcall)
 
     for post in posts:
         key = post.synapse_pow if post.synapse_pow else post.data_key
@@ -922,38 +949,3 @@ def _process_propedit_post(req):
         path.encode(), int(time.time()*1000), store_key=True)
 
     req.dispatcher.send_301(refresh_url)
-
-@asyncio.coroutine
-def _format_axon(node, data, key, key_enc=None):
-    result = __format_post(data)
-
-    if not key_enc:
-        key_enc = mbase32.encode(key)
-
-    return result\
-        + "<div style='float: right; font-family: monospace; font-style: italic; font-size: 8pt;"\
-            "color: #a2a6ab; position: absolute; top: .6em; width: 100px; overflow: hidden;"\
-            "text-overflow: ellipsis; -o-text-overflow: ellipsis; white-space: nowrap;"\
-            "padding-right: 10px; padding-bottom: 5px; right: 0.3em;'>#{}</div>".format(key_enc[:32])
-
-def __format_post(data):
-    fr = data.find(b'\r')
-    fn = data.find(b'\n')
-
-    if fr == -1 and fn == -1:
-        return "{}".format(make_safe_for_html_content(data))
-
-    if fr == -1:
-        end = fn
-        start = end + 1
-    elif fn == -1:
-        end = fr
-        start = end + 1
-    else:
-        end = fr
-        start = end + 2
-
-    return "{}<br/>" \
-        "{}"\
-            .format(\
-                data[:end].decode(), make_safe_for_html_content(data[start:]))
