@@ -575,8 +575,6 @@ def _process_axon_synapses(req):
 
     req.dispatcher.send_partial_content(template, True)
 
-    loaded = {}
-
     @asyncio.coroutine
     def process_post(post):
         assert type(post) is DdsPost
@@ -658,7 +656,6 @@ def _process_axon_synapses(req):
 
     for post in posts:
         key = post.synapse_pow if post.synapse_pow else post.data_key
-        loaded.setdefault(key, True)
         yield from process_post(post)
 
     req.dispatcher.send_partial_content(\
