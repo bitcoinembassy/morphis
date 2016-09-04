@@ -516,6 +516,7 @@ dds refresh text
 	-moz-transition: opacity 400ms ease-in;
 	transition: opacity 400ms ease-in;
 	pointer-events: none;
+	display: none;
 }
 .modalDialog-dmail:target {
 	opacity:1;
