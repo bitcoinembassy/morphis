@@ -306,7 +306,7 @@ dds post
 ***********************/
 
 .dds-post-wrapper {
-	padding: 7px 20px 7px 0px;
+	padding: 7px 20px 7px 20px;
 	position: relative;
 	height: 100%;
 	-webkit-transition: all 0.10s ease-in-out;
@@ -796,7 +796,12 @@ ul.dds-channel-submenu li a:hover {
 }
 
 /*BLOG*/
-.blog-post-content {
+.clearfix:after {
+	content: "."; 
+	visibility: hidden; 
+	display: block; 
+	height: 0; 
+	clear: both;	
 }
 .blog-post-content p, .blog-header-profile-text p {
 	margin: 0 0 .7em 0;
@@ -1159,17 +1164,6 @@ a.blog-photo-post-tags2 {
 .blog-post-title a:hover {
 	color: #38a3af;
 }
-.blog-header-content-wrapper .blog-comment-bubble {
-	position: relative;
-	background-color: #1c2227;
-	padding: 4px 8px;
-	text-align: center;
-	border-radius: 3px;
-	float: right;
-	font-size: 1em;
-	clear: both;
-	margin: 0 0 0 20px;
-}
 .blog-header-right {
 	float: right;
 	margin: .8em 0 1.5em 0;
@@ -1500,4 +1494,40 @@ span.blog-comment-bubble-header::after {
 	color: #1c2227;
 	/*background:  url("morphis://.dds/images/stardust.png");*/
 	background: #E6F6F7;
+}
+.profile-comment-bubble-header {
+	position: relative;
+	background-color: #f28182;
+	padding: 4px 8px;
+	text-align: center;
+	border-radius: 3px;
+	float: right;
+	font-size: 1em;
+	margin-right: 15px;
+	opacity:1;
+	transition: opacity 0.5s;
+	color: #f28182;
+}
+.profile-comment-bubble-header:hover {
+	opacity:.75;
+	transition: opacity 0.5s;
+	color: #fff;
+}
+.profile-comment-bubble-header a {
+	text-decoration: none;
+}
+.profile-comment-bubble-header a:hover {
+	opacity:1;
+	transition: opacity 0.5s;
+}
+span.profile-comment-bubble-header::after {
+	content: "";
+	position: absolute;
+	bottom: -8px;
+	left: 8px;
+	width: 0;
+	height: 0;
+	border-style: solid;
+	border-width: 8px 8px 0 0;
+	border-color: #1e2329 transparent transparent transparent;
 }
