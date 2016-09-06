@@ -764,7 +764,7 @@ def _process_synapse_create(req):
     else:
         ident_str = "{} ({})".format(ident_name, req.ident_enc)
 
-    template = templates.dds_create_synapse[0]
+    template = templates.dds_synapse_create[0]
     template = template.format(\
         csrf_token=req.dispatcher.client_engine.csrf_token,\
         message_text="",\
