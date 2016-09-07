@@ -126,10 +126,10 @@ dds header
 
 .dds-header-wrapper {
 	height: 4em;
-	background-color: #161a1e;
+	background-color: #1c2227;
 }
 .dds-header-dash-icon {
-	background-color: #161a1e;
+	background-color: #1c2227;
 	width: 9em;
 	color: #fff;
 	height: 100%;
@@ -308,7 +308,7 @@ dds post
 .dds-post-wrapper {
 	padding: 7px 20px 7px 20px;
 	position: relative;
-	height: 100%;
+	/*height: 100%;*/
 	-webkit-transition: all 0.10s ease-in-out;
 	-moz-transition: all 0.10s ease-in-out;
 	transition: all 0.15s ease-in-out;
@@ -631,8 +631,8 @@ input.dds-menu-input {
 
 /*show the second level menu of the selected voice*/
 input.dds-menu-input:checked ~ ul.dds-submenu {
-	max-height:300px;
-	transition:max-height 0.2s ease-in;
+	max-height: 300px;
+	transition: max-height 0.2s ease-in;
 	max-height: 95px;
 	overflow-y: auto;
 	overflow-x: hidden;
@@ -641,16 +641,16 @@ input.dds-menu-input:checked ~ ul.dds-submenu {
 
 /*style for the second level menu*/
 ul.dds-submenu {
-	max-width:85%;
-	max-height:0;
-	padding:0;
-	overflow:hidden;
-	list-style-type:none;
-	background:#26162f;
-	box-shadow:0 0 1px rgba(0,0,0,.3);
-	transition:max-height 0.5s ease-out;
-	position:absolute;
-	min-width:100%;
+	max-width: 85%;
+	max-height: 0;
+	padding: 0;
+	overflow: hidden;
+	list-style-type: none;
+	background: #26162f;
+	box-shadow: 0 0 1px rgba(0,0,0,.3);
+	transition: max-height 0.5s ease-out;
+	position: absolute;
+	min-width: 100%;
 	-webkit-transition: all 0.10s ease-in-out;
 	-moz-transition: all 0.10s ease-in-out;
 	transition: all 0.15s ease-in-out;
@@ -662,15 +662,15 @@ ul.dds-submenu li {
 
 ul.dds-submenu li a {
 	max-width: 100%;
-	display:block;
-	padding:12px;
-	color:#ddd;
-	text-decoration:none;
-	box-shadow:0 -1px rgba(0,0,0,.5) inset;
-	transition:background .3s;
-	white-space:nowrap;
-	overflow:hidden;
-	text-overflow:ellipsis;
+	display: block;
+	padding: 12px;
+	color: #ddd;
+	text-decoration: none;
+	box-shadow: 0 -1px rgba(0,0,0,.5) inset;
+	transition: background .3s;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 ul.dds-submenu li a:hover {
@@ -679,14 +679,15 @@ ul.dds-submenu li a:hover {
 }
 /*----- Channel Dropdown -----*/
 /*Style for the first level menu bar*/
-ul.dds-channel-menu {
-	position:fixed;
-	top:0;
-	height:100%;
+.dds-header-wrapper ul.dds-channel-menu {
+	position: fixed;
+	top: 0;
+	/*height: 100%;*/
 	border: none;
 	color: #fff;
-	float: left;
-	margin-right: 1em;
+	/*float: left;*/
+	/*margin-right: 1em;*/
+	margin-left: .7em;
 	position: relative;
 	display: inline-block;
 	vertical-align: middle;
@@ -697,7 +698,28 @@ ul.dds-channel-menu {
 	-webkit-transition: all 0.10s ease-in-out;
 	-moz-transition: all 0.10s ease-in-out;
 	transition: all 0.15s ease-in-out;
-	background: #161a1e;
+	background: #1c2227;
+}
+ul.dds-channel-menu {
+	position: fixed;
+	top: 0;
+	/*height: 100%;*/
+	border: none;
+	color: #fff;
+	/*float: left;*/
+	/*margin-right: 1em;*/
+	margin-left: -.3em;
+	position: relative;
+	display: inline-block;
+	vertical-align: middle;
+	font-size: .9em;
+	max-width: 85%;
+	font-size: 1.5em;
+	font-weight: 100;
+	-webkit-transition: all 0.10s ease-in-out;
+	-moz-transition: all 0.10s ease-in-out;
+	transition: all 0.15s ease-in-out;
+	background: #1c2227;
 }
 ul.dds-channel-menu > li {
 	float:left;
@@ -710,7 +732,7 @@ ul.dds-channel-menu:hover {
 label.dds-channel-menu-input {
 	position:relative;
 	display:block;
-	padding:0 18px 0 12px;
+	padding:0 22px 0 0;
 	line-height:2.6em;
 	transition:background 0.3s;
 	cursor:pointer;
@@ -780,7 +802,7 @@ ul.dds-channel-submenu li {
 ul.dds-channel-submenu li a {
 	max-width: 100%;
 	display:block;
-	padding:12px;
+	padding:10px;
 	color:#ddd;
 	text-decoration:none;
 	box-shadow:0 -1px rgba(0,0,0,.5) inset;
@@ -803,12 +825,12 @@ ul.dds-channel-submenu li a:hover {
 	height: 0; 
 	clear: both;	
 }
-.blog-post-content p, .blog-header-profile-text p {
+/*.blog-post-content p, .blog-header-profile-text p {
 	margin: 0 0 .7em 0;
 }
 .blog-post-content p:last-child, .blog-header-profile-text p:last-child {
 	margin-bottom: 0;
-}
+}*/
 .blog-post-content a {
 	color: #38a3af;
 	text-decoration: none;
@@ -834,7 +856,7 @@ ul.dds-channel-submenu li a:hover {
 }
 .blog-header-content-wrapper {
 	box-shadow: 0 4px 2px -2px rgba(0,0,0,.05);
-	height: 100%;
+	height: 145px;
 	bottom: 0;
 	background: #fff;
 }
@@ -842,13 +864,13 @@ ul.dds-channel-submenu li a:hover {
 	margin-left: 130px;
 }
 .blog-header-profile-text {
-/*	padding: 0 0 1.7em 0;*/
+	padding: 0 0 .7em 0;
 	color: #fff;
 }
 .blog-header-tabs-wrapper {
 	padding-top: 1.5em;
 }
-.blog-header-content-wrapper li {
+.blog-header-tabs-text li {
 	display: inline;
 	padding-right: 1em;
 }
@@ -859,6 +881,7 @@ ul.dds-channel-submenu li a:hover {
 }
 .blog-user-icon-header {
 	float: left;
+	padding: 1em 2em 0 1em;
 }
 .blog-post-user-icon {
 	float: left;
@@ -893,7 +916,7 @@ ul.dds-channel-submenu li a:hover {
 	color: #fff;
 }
 .blog-header-tabs-text {
-	margin-top: 12px;
+	margin-top: 10px;
 }
 .blog-header-tabs-text a {
 	color: #fff;
@@ -1166,7 +1189,7 @@ a.blog-photo-post-tags2 {
 }
 .blog-header-right {
 	float: right;
-	margin: .8em 0 1.5em 0;
+	margin: 2em 2em 1.5em 0;
 }
 .blog-comment-bubble {
 	position: relative;
@@ -1327,8 +1350,9 @@ span.blog-comment-bubble::after {
 	margin-left: 100px;
 }
 .blog-header-content {
-	padding: 1.7em 3.5em 1.3em 3.5em;
+	/*padding: .2em 3.5em 1.3em 0;*/
 	background: #1c2227;
+	height: 100%;
 }
 .blog-header-content-wrapper-before {
 	background: url("morphis://.dds/images/art2.png");
@@ -1431,7 +1455,7 @@ span.blog-comment-bubble-header::after {
 .blog-comment-wrapper-reply {
 	padding: 7px 20px 7px 40px;
 	position: relative;
-	height: 100%;
+	/*height: 100%;*/
 	-webkit-transition: all 0.10s ease-in-out;
 	-moz-transition: all 0.10s ease-in-out;
 	transition: all 0.15s ease-in-out;
@@ -1503,7 +1527,7 @@ span.blog-comment-bubble-header::after {
 	border-radius: 3px;
 	float: right;
 	font-size: 1em;
-	margin-left: 20px;
+	margin-left: 1.2em;
 	margin-top: -5px;
 	opacity:1;
 	transition: opacity 0.5s;
