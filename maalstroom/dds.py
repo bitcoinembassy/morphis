@@ -667,6 +667,7 @@ def _process_axon_synapses(req):
         template = templates.dds_synapse_view[0]
         template =\
             template.format(\
+                query=req.query,\
                 target_key=target_key_enc,\
                 target_str=target_str,\
                 key=key_enc,\
