@@ -582,7 +582,7 @@ def _process_axon_synapses(req):
                 timeout)\
             for prop in props], return_exceptions=True))
 
-    style = "background-color: red" if axon_addr == req.ident == axon_addr\
+    style = "background: url('morphis://.dds/images/sayagata-400px.png'); background-attachment: fixed;" if axon_addr == req.ident == axon_addr\
         else ""
 
     template = templates.dds_axon_synapses_start[0]\
@@ -651,11 +651,11 @@ def _process_axon_synapses(req):
             signer_name = anon_name
 
         if post.signing_key == req.ident:
-            style = "background-color: lightblue"
+            style = "box-shadow: 0 1px 4px rgba(0,0,0,.04); border: 1px solid rgba(163, 163, 163,.3); border-radius: 5px; margin: 1em 1em; background: #e6e6e6;"
         elif post.signing_key == axon_addr:
-            style = "background-color: yellow"
+            style = "box-shadow: 0 1px 4px rgba(0,0,0,.04); border: 1px solid rgba(56, 163, 175,.3); border-radius: 5px; margin: 1em 1em; background: #E6F6F7;"
         else:
-            style = ""
+            style = "padding: 0 1em 0 1em;"
 
         target_key_enc = mbase32.encode(post.target_key)
 
