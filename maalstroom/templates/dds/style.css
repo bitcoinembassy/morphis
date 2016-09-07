@@ -858,7 +858,7 @@ ul.dds-channel-submenu li a:hover {
 	text-decoration: underline;
 	/*background-color: #eee;*/
 }
-.dds-post-profile-wrapper {
+.dds-blog-post-wrapper {
 	background: #fff;
 	box-shadow: 0 1px 4px rgba(0,0,0,.04);
 	border: 1px solid rgba(0,0,0,.09);
@@ -1527,7 +1527,7 @@ span.blog-comment-bubble-header::after {
 	width: 100%;
 	margin-top: 0;
 }
-/*.dds-post-upvote {
+.dds-post-upvote {
 	background-image: url("morphis://.dds/images/vote3.png");
 	background-repeat: no-repeat;
 	width:18px;
@@ -1552,8 +1552,8 @@ span.blog-comment-bubble-header::after {
 }
 .dds-post-flag:hover {
 	background-image: url("morphis://.dds/images/vote3-color.png");
-}*/
-.dds-post-upvote {
+}
+/*.dds-post-upvote {
 	width: 20px;
 }
 .dds-post-upvote::before {
@@ -1603,7 +1603,7 @@ span.blog-comment-bubble-header::after {
 }
 .dds-post-flag:hover::after {
 	border-color: #38a3af;
-}
+}*/
 /*.dds-post-flag::before {
 	position: relative;
 	top: .08em;
