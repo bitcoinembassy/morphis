@@ -224,7 +224,7 @@ dds reply footer
 	float: left;
 }
 .dds-reply-wrapper {
-	position: fixed;
+	/*position: fixed;*/
 	left: 0;
 	bottom: 0;
 	height: 165px;
@@ -304,9 +304,25 @@ button.dds-reply-button:active {
 /************************
 dds post
 ***********************/
-
+.dds-post-hash {
+	float: right;
+	font-family: monospace;
+	font-style: italic;
+	font-size: 8pt;
+	color: #a2a6ab;
+	position: absolute;
+	top: .6em;
+	width: 100px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	-o-text-overflow: ellipsis;
+	white-space: nowrap;
+	padding-right: 10px;
+	padding-bottom: 5px;
+	right: 0.3em;
+}
 .dds-post-wrapper {
-	padding: 7px 20px 7px 20px;
+	padding: .5em 1em .5em 1em;
 	position: relative;
 	/*height: 100%;*/
 	-webkit-transition: all 0.10s ease-in-out;
@@ -323,11 +339,11 @@ dds post
 .dds-post-name {
 	display: inline-block;
 	font-size: 1em;
-	max-width: 45%;
+	max-width: 40%;
 	float: left;
 	font-weight: bold;
 }
-.dds-post-name2 a {
+.dds-post-name a {
 	color: #1c2227;
 	text-decoration: none;
 }
@@ -692,7 +708,7 @@ ul.dds-submenu li a:hover {
 	display: inline-block;
 	vertical-align: middle;
 	font-size: .9em;
-	max-width: 85%;
+	max-width: 70%;
 	font-size: 1.5em;
 	font-weight: 100;
 	-webkit-transition: all 0.10s ease-in-out;
@@ -713,7 +729,7 @@ ul.dds-channel-menu {
 	display: inline-block;
 	vertical-align: middle;
 	font-size: .9em;
-	max-width: 85%;
+	max-width: 70%;
 	font-size: 1.5em;
 	font-weight: 100;
 	-webkit-transition: all 0.10s ease-in-out;
@@ -784,7 +800,7 @@ ul.dds-channel-submenu {
 	padding:0;
 	overflow:hidden;
 	list-style-type:none;
-	background:#161a1e;
+	background:#1c2227;
 	box-shadow:0 0 1px rgba(0,0,0,.3);
 	transition:max-height 0.5s ease-out;
 	position:absolute;
@@ -842,17 +858,17 @@ ul.dds-channel-submenu li a:hover {
 	text-decoration: underline;
 	/*background-color: #eee;*/
 }
-.blog-post-short-wrapper {
+.dds-post-profile-wrapper {
 	background: #fff;
 	box-shadow: 0 1px 4px rgba(0,0,0,.04);
 	border: 1px solid rgba(0,0,0,.09);
 	border-radius: 5px;
-	margin: 1.5em 3em;
+	margin: 1em 1em;
 	color: #1c2227;
 }
 
 .blog-post-short {
-	padding: 2em;
+	padding: 1.5em;
 }
 .blog-header-content-wrapper {
 	box-shadow: 0 4px 2px -2px rgba(0,0,0,.05);
@@ -1478,10 +1494,11 @@ span.blog-comment-bubble-header::after {
 	margin: 0 .5em 0 0;
 	float: left;
 	opacity: .3;
+	cursor: pointer;
 }
 .dds-profile-upvote:hover {
-	background-image: url("morphis://.dds/images/icons-vote-color.png");
-	opacity: .5;
+	background-image: url("morphis://.dds/images/vote3-color.png");
+	opacity: 1;
 }
 .dds-profile-flag {
 	background-image: url("morphis://.dds/images/icons-vote.png");
@@ -1492,10 +1509,11 @@ span.blog-comment-bubble-header::after {
 	margin: 0 0 0 .5em;
 	float: left;
 	opacity: .3;
+	cursor: pointer;
 }
 .dds-profile-flag:hover {
-	background-image: url("morphis://.dds/images/icons-vote-color.png");
-	opacity: .5;
+	background-image: url("morphis://.dds/images/vote3-color.png");
+	opacity: 1;
 }
 .dds-profile-grey-text {
 	color: #a2a6ab;
@@ -1503,20 +1521,56 @@ span.blog-comment-bubble-header::after {
 	margin-top: .1em;
 	opacity: .4;
 }
+.dds-post-vote-wrapper {
+	bottom: 0;
+	height: 20px;
+	width: 100%;
+	margin-top: 0;
+}
+.dds-post-upvote {
+	background-image: url("morphis://.dds/images/vote3.png");
+	background-repeat: no-repeat;
+	width:18px;
+	height:20px;
+	background-position: left top;
+	margin: 0 .5em 0 0;
+	float: left;
+	cursor: pointer;
+}
+.dds-post-upvote:hover {
+	background-image: url("morphis://.dds/images/vote3-color.png");
+}
+.dds-post-flag {
+	background-image: url("morphis://.dds/images/vote3.png");
+	background-repeat: no-repeat;
+	width:18px;
+	height:20px;
+	background-position: left bottom;
+	margin: 0 0 0 .2em;
+	float: left;
+	cursor: pointer;
+}
+.dds-post-flag:hover {
+	background-image: url("morphis://.dds/images/vote3-color.png");
+}
+.dds-post-vote-grey-text {
+	color: #a2a6ab;
+	float: left;
+	margin-top: .1em;
+}
 .blog-author-approved {
 	position: relative;
 	z-index: 1;
 	right: 7px;
 	top: 5px;
 }
-.blog-post-short-wrapper-author {
+.dds-post-profile-wrapper-author {
 	background: #fff;
 	box-shadow: 0 1px 4px rgba(0,0,0,.04);
 	border: 1px solid rgba(56, 163, 175,.3);
 	border-radius: 5px;
 	margin: 1.5em 3em;
 	color: #1c2227;
-	/*background:  url("morphis://.dds/images/stardust.png");*/
 	background: #E6F6F7;
 }
 .profile-comment-bubble-header {
