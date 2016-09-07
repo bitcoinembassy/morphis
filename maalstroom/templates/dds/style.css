@@ -284,6 +284,12 @@ button.dds-reply-button {
 	color: #fff;
 	padding: 3px 10px;
 	text-align: center;
+	transition: opacity 0.5s;
+	-webkit-transition: all ease 0.5s;
+	-moz-transition: all ease 0.5s;
+	-o-transition: all ease 0.5s;
+	-ms-transition: all ease 0.5s ;
+	transition: all ease 0.5s ;
 }
 button.dds-reply-button:hover {
 	background: #38a3af;
@@ -399,7 +405,6 @@ dds post
 	height:15px;
 	float: left;
 	background-position: -76px top;
-	margin-left: 5px;
 }
 .dds-vote:hover {
 	background-image: url("morphis://.dds/images/icons-hover-color.png");
