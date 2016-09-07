@@ -1527,7 +1527,7 @@ span.blog-comment-bubble-header::after {
 	width: 100%;
 	margin-top: 0;
 }
-.dds-post-upvote {
+/*.dds-post-upvote {
 	background-image: url("morphis://.dds/images/vote3.png");
 	background-repeat: no-repeat;
 	width:18px;
@@ -1546,19 +1546,19 @@ span.blog-comment-bubble-header::after {
 	width:18px;
 	height:20px;
 	background-position: left bottom;
-	margin: 0  0 0 .3em;
+	margin: 0  0 0 .4em;
 	float: left;
 	cursor: pointer;
 }
 .dds-post-flag:hover {
 	background-image: url("morphis://.dds/images/vote3-color.png");
-}
-/*.dds-post-upvote {
+}*/
+.dds-post-upvote {
 	width: 20px;
 }
 .dds-post-upvote::before {
     position: relative;
-    top: .6em;
+    top: .55em;
     content: "";
     display: inline-block;
     width: 0.6em;
@@ -1570,36 +1570,40 @@ span.blog-comment-bubble-header::after {
 	margin-right: .8em;
 	cursor: pointer;
 }
-
 .dds-post-upvote:hover::before {
 	border-color: #38a3af;
 }
 .dds-post-flag::before {
-	position: relative;
-	top: .6em;
+	position: absolute;
+	top: 4.09em;
 	content: "";
 	display: inline-block;
-	width: 1.1em;
-	height: 1.1em;
+	width: 1em;
+	height: 1em;
 	border-right: 0.2em solid #a2a6ab;
-	transform: rotate(320deg);
+	transform: rotate(315deg);
 	float: left;
-	margin-right: .8em;
 	cursor: pointer;
 }
 .dds-post-flag::after {
-	position: relative;
-	top: .6em;
+	position: absolute;
+	top: 4.09em;
+	left: 8.09em;
 	content: "";
 	display: inline-block;
-	width: 1.1em;
-	height: 1.1em;
+	width: 1em;
+	height: 1em;
 	border-left: 0.2em solid #a2a6ab;
-	transform: rotate(40deg);
+	transform: rotate(45deg);
 	float: left;
-	margin-right: .8em;
 	cursor: pointer;
-}*/
+}
+.dds-post-flag:hover::before {
+	border-color: #38a3af;
+}
+.dds-post-flag:hover::after {
+	border-color: #38a3af;
+}
 /*.dds-post-flag::before {
 	position: relative;
 	top: .08em;
