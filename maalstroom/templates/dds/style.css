@@ -1630,3 +1630,9 @@ span.profile-comment-bubble-header::after {
 	border-width: 8px 8px 0 0;
 	border-color: #38a3af transparent transparent transparent;
 }
+.dds-circle {
+background: #f00;
+width: 200px;
+height: 200px;
+border-radius: 50%;
+}
