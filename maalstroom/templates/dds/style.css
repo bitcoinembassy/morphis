@@ -835,11 +835,11 @@ ul.dds-channel-submenu li a:hover {
 
 /*BLOG*/
 .clearfix:after {
-	content: "."; 
-	visibility: hidden; 
-	display: block; 
-	height: 0; 
-	clear: both;	
+	content: ".";
+	visibility: hidden;
+	display: block;
+	height: 0;
+	clear: both;
 }
 /*.blog-post-content p, .blog-header-profile-text p {
 	margin: 0 0 .7em 0;
