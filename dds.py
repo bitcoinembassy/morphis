@@ -256,7 +256,10 @@ class DdsEngine(object):
 
                 if obj:
                     if type(obj) is syn.Synapse:
-                        post.target_key = obj.target_key
+                        target_keys = obj.target_keys
+                        post.target_key = target_keys[0]
+                        if len(target_keys) > 1:
+                            post.target_key2 = target_keys[1]
                         post.synapse_key = obj.synapse_key
                         post.synapse_pow = obj.synapse_pow
                         post.data_key = obj.source_key

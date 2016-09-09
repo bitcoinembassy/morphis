@@ -565,7 +565,8 @@ def _process_axon_read(dispatcher, req):
 
 @asyncio.coroutine
 def _process_axon_synapses(req):
-    axon_addr = mbase32.decode(req.req[15:])
+    axon_addr_enc = req.req[15:]
+    axon_addr = mbase32.decode(axon_addr_enc)
 
     te = req.dispatcher.node.engine.tasks
 
@@ -665,20 +666,20 @@ def _process_axon_synapses(req):
             target_str = ""
 
         template = templates.dds_synapse_view[0]
-        template =\
-            template.format(\
-                query=req.query,\
-                target_key=target_key_enc,\
-                target_str=target_str,\
-                key=key_enc,\
-                signing_key=signing_key_enc,\
-                signer=signer_name,\
-                content=content,\
-                timestamp=timestr,\
-                relative_time=\
-                    mutil.format_datetime_as_relative(post.timestamp),\
-                score=post.score,\
-                style=style)
+        template = template.format(\
+            axon_addr=axon_addr_enc,\
+            query=req.query,\
+            target_key=target_key_enc,\
+            target_str=target_str,\
+            key=key_enc,\
+            signing_key=signing_key_enc,\
+            signer=signer_name,\
+            content=content,\
+            timestamp=timestr,\
+            relative_time=\
+                mutil.format_datetime_as_relative(post.timestamp),\
+            score=post.score,\
+            style=style)
 
         req.dispatcher.send_partial_content(template)
 
@@ -754,8 +755,18 @@ def fetch_display_name(node, signing_key, signing_key_enc=None):
 
 @asyncio.coroutine
 def _process_synapse_create(req):
-    target_addr = req.req[16:]
-    if req.dispatcher.handle_cache(target_addr):
+    rstr = req.req[16:]
+    p1 = rstr.find('/')
+    if p1 == -1:
+        target_addr_enc = rstr
+        target_addr2_enc = ""
+        reply_str = "Thinks:"
+    else:
+        target_addr_enc = rstr[:p1]
+        target_addr2_enc = rstr[p1+1:]
+        reply_str = "@{}".format(target_addr_enc)
+
+    if req.dispatcher.handle_cache(target_addr_enc):
         return
 
     ident_name =\
@@ -769,13 +780,15 @@ def _process_synapse_create(req):
     template = template.format(\
         csrf_token=req.dispatcher.client_engine.csrf_token,\
         message_text="",\
-        target_addr=target_addr,\
+        reply_str=reply_str,\
+        target_addr=target_addr_enc,\
+        target_addr2=target_addr2_enc,\
         ident=req.ident_enc,\
         ident_str=ident_str,\
         query=req.query)
 
-#    template =\
-#        templates.dds_wrapper[0].format(title="DDS Post Box", child=template)
+    template =\
+        templates.dds_wrapper[0].format(title="DDS Post Box", child=template)
 
     req.dispatcher.send_content(template)
 
@@ -789,14 +802,7 @@ def _process_synapse_create_post(dispatcher, req):
     if not dispatcher.check_csrf_token(dd["csrf_token"][0]):
         return
 
-#    content = fia(dd["content"])
-    content = None
-    content2 = fia(dd.get("content2"))
-
-    if not content:
-        content = content2
-    elif content2:
-        content = content + "\r\n" + content2
+    content = fia(dd["content"])
 
     if not content:
         dispatcher.send_error("No content.", errcode=400)
@@ -837,9 +843,10 @@ def _process_synapse_create_post(dispatcher, req):
 
     yield from content_key_ready.wait()
 
-    target_addr = fia(dd["target_addr"])
+    target_addr_enc = fia(dd["target_addr"])
+    target_addr2_enc = fia(dd["target_addr2"])
 
-    if not target_addr:
+    if not target_addr_enc:
         resp =\
             "Resulting&nbsp;<a href='morphis://.dds/axon/read/{axon_addr}'>"\
                 "Axon</a>&nbsp;Address:<br/>{axon_addr}"\
@@ -848,9 +855,14 @@ def _process_synapse_create_post(dispatcher, req):
         dispatcher.send_content(resp)
         return
 
-    target_addr = mbase32.decode(target_addr)
+    target_addr = mbase32.decode(target_addr_enc)
 
-    synapse = syn.Synapse.for_target(target_addr, content_key)
+    if not target_addr2_enc:
+        synapse = syn.Synapse.for_target(target_addr, content_key)
+    else:
+        target_addr2 = mbase32.decode(target_addr2_enc)
+        synapse =\
+            syn.Synapse.for_targets((target_addr2, target_addr), content_key)
 
     ident_enc = fia(dd["ident"])
     if ident_enc:

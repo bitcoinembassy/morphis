@@ -259,6 +259,7 @@ def _init_daos(Base, d):
 
         id = Column(Integer, primary_key=True)
         target_key = Column(LargeBinary, nullable=True)
+        target_key2 = Column(LargeBinary, nullable=True)
         synapse_key = Column(LargeBinary, nullable=True)
         synapse_pow = Column(LargeBinary, nullable=True)
         data_key = Column(LargeBinary, nullable=False)
@@ -269,6 +270,7 @@ def _init_daos(Base, d):
         score = Column(Integer, nullable=True)
 
     Index("ddspost__target_key", DdsPost.target_key)
+    Index("ddspost__target_key", DdsPost.target_key2)
     Index("ddspost__synapse_key", DdsPost.synapse_key)
     Index("ddspost__synapse_pow", DdsPost.synapse_pow)
     Index("ddspost__data_key", DdsPost.data_key)
@@ -473,6 +475,10 @@ class Db():
             version = 4.95
 
         if version == 4.95:
+            _upgrade_5_dev5_to_5dev6(self)
+            version = 4.96
+
+        if version == 4.96:
             _upgrade_5_dev(self)
 
 #        if version == 4:
@@ -826,6 +832,24 @@ def _upgrade_5_dev4_to_5dev5(db):
             .delete(synchronize_session=False)
 
         _update_node_state(sess, 4.95)
+
+        sess.commit()
+
+    log.warning("NOTE: Database schema upgraded.")
+
+def _upgrade_5_dev5_to_5dev6(db):
+    log.warning(\
+        "NOTE: Upgrading database schema from version 5-dev5 to 5-dev6.")
+
+    t_bytea = "BLOB" if db.is_sqlite else "bytea"
+
+    with db.open_session() as sess:
+        sess.execute(\
+            "ALTER TABLE ddspost add column target_key2 {}".format(t_bytea))
+        sess.execute(\
+            "CREATE INDEX ddspost__target_key2 ON ddspost (target_key2)")
+
+        _update_node_state(sess, 4.96)
 
         sess.commit()
 

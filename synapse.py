@@ -27,6 +27,12 @@ class Synapse(object):
     def for_target(target_key, source_key, difficulty=MIN_DIFFICULTY):
         return Synapse(None, target_key, source_key, difficulty)
 
+    @staticmethod
+    def for_targets(target_keys, source_key, difficulty=MIN_DIFFICULTY):
+        syn = Synapse(None, None, source_key, difficulty)
+        syn.target_keys.extend(target_keys)
+        return syn
+
     def __init__(self, buf=None, target_key=None, source_key=None,\
             difficulty=MIN_DIFFICULTY):
         self.buf = buf
