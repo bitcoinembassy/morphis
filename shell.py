@@ -635,17 +635,23 @@ class Shell(cmd.Cmd):
 
         self.writeln("send_get_targeted_data(..) took: {}.".format(diff))
 
+        synapses = []
+
         if data_rw and data_rw.data is not None:
             self.writeln("len(data): {}".format(len(data_rw.data)))
             for data in data_rw.data:
                 self.writeln("data:")
-                if hasattr(data, "buf"):
+                if type(data) is synapse.Synapse:
+                    synapses.append(data)
                     self.writeln(hex_dump(data.buf))
                 else:
                     self.writeln("type: {}".format(type(data)))
                 self.writeln("")
         else:
             self.writeln("Not found.")
+
+        if synapses:
+            self.shell_locals["synapses"] = synapses
 
     @asyncio.coroutine
     def do_gd(self, arg):
