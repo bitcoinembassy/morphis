@@ -13,6 +13,7 @@ from urllib.parse import parse_qs, quote_plus
 import os
 
 from sqlalchemy import or_, and_, desc
+from sqlalchemy.orm import joinedload
 
 import consts
 from db import User, DdsPost, NodeState
@@ -593,10 +594,13 @@ def _process_axon_synapses(req):
 
     def dbcall():
         with req.dispatcher.node.db.open_session(True) as sess:
+#                .options(joinedload("children"))\
             q = sess.query(DdsPost)\
                 .filter(\
                     or_(\
-                        DdsPost.target_key == axon_addr,
+                        or_(\
+                            DdsPost.target_key == axon_addr,\
+                            DdsPost.target_key2 == axon_addr),\
                         DdsPost.signing_key == axon_addr))\
                 .order_by(\
                     desc(and_(\
@@ -604,10 +608,15 @@ def _process_axon_synapses(req):
                         DdsPost.signing_key == DdsPost.target_key)),\
                     desc(and_(\
                         DdsPost.signing_key != None,\
-                        DdsPost.target_key != axon_addr)),\
+                        DdsPost.target_key != axon_addr,\
+                        DdsPost.target_key2 != axon_addr)),\
                     DdsPost.timestamp)
 
-            return q.all()
+            r = q.all()
+
+            sess.expunge_all()
+
+            return r
 
     load_task = req.dispatcher.loop.run_in_executor(None, dbcall)
 
@@ -622,19 +631,12 @@ def _process_axon_synapses(req):
     anon_name = make_safe_for_html_content(anon_name.decode())
 
     @asyncio.coroutine
-    def process_post(post):
+    def process_post(post, depth=0):
         assert type(post) is DdsPost
 
         key = post.synapse_key
         if not key:
             key = post.data_key
-
-        if not post:
-            if log.isEnabledFor(logging.INFO):
-                log.info(\
-                    "Post data not found for found key [{}]."\
-                        .format(mbase32.encode(key)))
-            return
 
         key_enc = mbase32.encode(key)
 
@@ -665,6 +667,9 @@ def _process_axon_synapses(req):
         else:
             target_str = ""
 
+#        if depth:
+#            style += "margin-left: {}px;".format(depth * 50)
+
         template = templates.dds_synapse_view[0]
         template = template.format(\
             axon_addr=axon_addr_enc,\
@@ -683,8 +688,12 @@ def _process_axon_synapses(req):
 
         req.dispatcher.send_partial_content(template)
 
+#        if not depth:
+#            for post in post.children:
+#                yield from process_post(post, depth + 1)
+
+    #TODO: Optimize by moving this into above gather.
     for post in posts:
-        key = post.synapse_pow if post.synapse_pow else post.data_key
         yield from process_post(post)
 
     req.dispatcher.send_partial_content(\
@@ -862,7 +871,7 @@ def _process_synapse_create_post(dispatcher, req):
     else:
         target_addr2 = mbase32.decode(target_addr2_enc)
         synapse =\
-            syn.Synapse.for_targets((target_addr2, target_addr), content_key)
+            syn.Synapse.for_targets((target_addr, target_addr2), content_key)
 
     ident_enc = fia(dd["ident"])
     if ident_enc:

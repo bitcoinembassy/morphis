@@ -258,7 +258,8 @@ def _init_daos(Base, d):
         __tablename__ = "ddspost"
 
         id = Column(Integer, primary_key=True)
-        target_key = Column(LargeBinary, nullable=True)
+        target_key = Column(\
+            LargeBinary, ForeignKey("ddspost.synapse_key"), nullable=True)
         target_key2 = Column(LargeBinary, nullable=True)
         synapse_key = Column(LargeBinary, nullable=True)
         synapse_pow = Column(LargeBinary, nullable=True)
@@ -268,6 +269,7 @@ def _init_daos(Base, d):
         timestamp = Column(UtcDateTime, nullable=False)
         first_seen = Column(UtcDateTime, nullable=False)
         score = Column(Integer, nullable=True)
+        children = relationship("DdsPost", cascade="all, delete-orphan")
 
     Index("ddspost__target_key", DdsPost.target_key)
     Index("ddspost__target_key", DdsPost.target_key2)
