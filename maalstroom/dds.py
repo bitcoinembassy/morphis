@@ -170,9 +170,9 @@ def serve_get(dispatcher, rpath):
         # Render the Grok View; which shows the Axon, SynapseS and Synapse
         # create form.
         yield from _process_axon_grok(mr)
-    elif req.startswith("/axon/read/"):
-        # Render an individual Axon.
-        yield from _process_axon_read(dispatcher, req[11:])
+#    elif req.startswith("/axon/read/"):
+#        # Render an individual Axon.
+#        yield from _process_axon_read(dispatcher, req[11:])
     elif req.startswith("/axon/synapses/"):
         # Scan for and render SynapseS connected to the requested Axon.
         yield from _process_axon_synapses(mr)
@@ -514,54 +514,54 @@ def _process_axon_grok(req):
     req.dispatcher.send_content(template)
     return
 
-@asyncio.coroutine
-def _process_axon_read(dispatcher, req):
-    p0 = req.find('/')
-
-    if p0 > -1:
-        # Then the request is for a TargetedBlock.
-        key = mbase32.decode(req[:p0])
-        target_key = mbase32.decode(req[p0+1:])
-    else:
-        # Then the request is not for a TargetedBlock.
-        key = mbase32.decode(req)
-        target_key = None
-
-    dds_engine = DdsEngine(dispatcher.node)
-    post = yield from dds_engine.load_post(key)
-    if not post:
-        post = yield from dds_engine.fetch_post(key, target_key)
-
-    if not post:
-        dispatcher.send_content("Not found on the network at the moment.")
-        return
-
-    key_enc = mbase32.encode(key)
-
-    content = yield from _format_axon(dispatcher.node, post.data, key, key_enc)
-
-    timestr = mutil.format_human_no_ms_datetime(post.timestamp)
-
-    template = templates.dds_synapse_view[0]
-    template = template.format(\
-        key=key_enc,\
-        signing_key="",\
-        signer="<TODO>",\
-        content=content,\
-        timestamp=timestr,\
-        relative_time=mutil.format_datetime_as_relative(post.timestamp),\
-        score=post.score)
-
-    msg = "<head><link rel='stylesheet' href='morphis://.dds/style.css'>"\
-        "</link></head><body style='height: 80%; padding:0;margin:0;'>{}"\
-        "</body>"\
-            .format(template)
-
-    content_type = "text/html; charset={}"\
-        .format(dispatcher.get_accept_charset())
-
-    dispatcher.send_content(msg, content_type=content_type)
-    return
+#@asyncio.coroutine
+#def _process_axon_read(dispatcher, req):
+#    p0 = req.find('/')
+#
+#    if p0 > -1:
+#        # Then the request is for a TargetedBlock.
+#        key = mbase32.decode(req[:p0])
+#        target_key = mbase32.decode(req[p0+1:])
+#    else:
+#        # Then the request is not for a TargetedBlock.
+#        key = mbase32.decode(req)
+#        target_key = None
+#
+#    dds_engine = DdsEngine(dispatcher.node)
+#    post = yield from dds_engine.load_post(key)
+#    if not post:
+#        post = yield from dds_engine.fetch_post(key, target_key)
+#
+#    if not post:
+#        dispatcher.send_content("Not found on the network at the moment.")
+#        return
+#
+#    key_enc = mbase32.encode(key)
+#
+#    content = yield from _format_axon(dispatcher.node, post.data, key, key_enc)
+#
+#    timestr = mutil.format_human_no_ms_datetime(post.timestamp)
+#
+#    template = templates.dds_synapse_view[0]
+#    template = template.format(\
+#        key=key_enc,\
+#        signing_key="",\
+#        signer="<TODO>",\
+#        content=content,\
+#        timestamp=timestr,\
+#        relative_time=mutil.format_datetime_as_relative(post.timestamp),\
+#        score=post.score)
+#
+#    msg = "<head><link rel='stylesheet' href='morphis://.dds/style.css'>"\
+#        "</link></head><body style='height: 80%; padding:0;margin:0;'>{}"\
+#        "</body>"\
+#            .format(template)
+#
+#    content_type = "text/html; charset={}"\
+#        .format(dispatcher.get_accept_charset())
+#
+#    dispatcher.send_content(msg, content_type=content_type)
+#    return
 
 @asyncio.coroutine
 def _process_axon_synapses(req):
