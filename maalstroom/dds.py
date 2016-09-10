@@ -681,7 +681,12 @@ def _process_axon_synapses(req):
 #        if depth:
 #            style += "margin-left: {}px;".format(depth * 50)
 
-        template = templates.dds_synapse_view[0]
+        if not post.target_key2\
+                and post.signing_key == post.target_key == axon_addr:
+            template = templates.dds_synapse_view_blog[0]
+        else:
+            template = templates.dds_synapse_view[0]
+
         template = template.format(\
             axon_addr=axon_addr_enc,\
             query=req.query,\

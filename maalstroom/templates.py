@@ -442,6 +442,7 @@ if not initialized_template:
     dds_synapse_create = load("dds/synapse_create.html", True)
     dds_axon_synapses_start = load("dds/axon_synapses_start.html", True)
     dds_synapse_view = load("dds/synapse_view.html", True)
+    dds_synapse_view_blog = load("dds/synapse_view_blog.html", True)
     dds_propedit = load("dds/propedit.html", True)
     dds_site_edit = load("dds/site_edit.html", True)
 
