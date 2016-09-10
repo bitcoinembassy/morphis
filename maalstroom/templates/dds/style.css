@@ -417,6 +417,9 @@ dds post
 	float: right;
 	margin-right: 100px;
 }
+.dds-post:target {
+    background-color: yellow;
+}
 .dds-post .dds-icon-button {
 	visibility: hidden;
 }

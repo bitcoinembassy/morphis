@@ -664,8 +664,16 @@ def _process_axon_synapses(req):
 
         if post.target_key != axon_addr:
             target_str = "@" + target_key_enc
+            if post.target_key2:
+                target_key_link = "#" + target_key_enc
+                target_key_link_target = "_self"
+            else:
+                target_key_link = "morphis://.dds/axon/grok/" + target_key_enc
+                target_key_link_target = "parent"
         else:
             target_str = ""
+            target_key_link = ""
+            target_key_link_target = ""
 
 #        if depth:
 #            style += "margin-left: {}px;".format(depth * 50)
@@ -675,6 +683,8 @@ def _process_axon_synapses(req):
             axon_addr=axon_addr_enc,\
             query=req.query,\
             target_key=target_key_enc,\
+            target_key_link=target_key_link,\
+            target_key_link_target=target_key_link_target,\
             target_str=target_str,\
             key=key_enc,\
             signing_key=signing_key_enc,\
