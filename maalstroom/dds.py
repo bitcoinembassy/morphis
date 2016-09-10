@@ -29,7 +29,7 @@ from morphisblock import MorphisBlock
 from mutil import fia, hex_dump, make_safe_for_html_content
 import mutil
 import rsakey
-import synapse as syn
+import synapse
 import sshtype
 
 log = logging.getLogger(__name__)
@@ -180,6 +180,8 @@ def serve_get(dispatcher, rpath):
     elif req.startswith("/synapse/create/"):
         # Render the Create Synapse entry form.
         yield from _process_synapse_create(mr)
+    elif req.startswith("/synapse/stamp/"):
+        yield from _process_synapse_stamp(mr)
     elif req.startswith("/propedit/"):
         yield from _process_propedit(mr)
     elif req.startswith("/site/edit/"):
@@ -820,6 +822,25 @@ def _process_synapse_create(req):
     req.dispatcher.send_content(template)
 
 @asyncio.coroutine
+def _process_synapse_stamp(req):
+    synapse_key_enc = req.req[15:]
+    synapse_key = mbase32.decode(synapse_key_enc)
+
+    data_rw = yield from\
+        req.dispatcher.node.engine.tasks.send_get_data(synapse_key)
+
+    if not data_rw or not data_rw.data:
+        dispatcher.send_error("request: {}".format(req), errcode=400)
+
+    syn = data_rw.object
+
+    if type(syn) is not synapse.Synapse:
+        dispatcher.send_error("request: {}".format(req), errcode=400)
+
+    req.dispatcher.send_content("hello")
+    #TODO: YOU_ARE_HERE
+
+@asyncio.coroutine
 def _process_synapse_create_post(dispatcher, req):
     dd = yield from dispatcher.read_post()
     if not dd:
@@ -885,11 +906,11 @@ def _process_synapse_create_post(dispatcher, req):
     target_addr = mbase32.decode(target_addr_enc)
 
     if not target_addr2_enc:
-        synapse = syn.Synapse.for_target(target_addr, content_key)
+        synapse = synapse.Synapse.for_target(target_addr, content_key)
     else:
         target_addr2 = mbase32.decode(target_addr2_enc)
-        synapse =\
-            syn.Synapse.for_targets((target_addr, target_addr2), content_key)
+        synapse = synapse.Synapse.for_targets(\
+            (target_addr, target_addr2), content_key)
 
     ident_enc = fia(dd["ident"])
     if ident_enc:
