@@ -596,20 +596,23 @@ def _process_axon_synapses(req):
         with req.dispatcher.node.db.open_session(True) as sess:
 #                .options(joinedload("children"))\
             q = sess.query(DdsPost)\
-                .filter(\
-                    or_(\
-                        or_(\
-                            DdsPost.target_key == axon_addr,\
-                            DdsPost.target_key2 == axon_addr),\
-                        DdsPost.signing_key == axon_addr))\
+                .filter(or_(\
+                    DdsPost.target_key == axon_addr,\
+                    DdsPost.target_key2 == axon_addr,\
+                    DdsPost.signing_key == axon_addr))\
                 .order_by(\
                     desc(and_(\
                         DdsPost.signing_key != None,\
-                        DdsPost.signing_key == DdsPost.target_key)),\
-                    desc(and_(\
-                        DdsPost.signing_key != None,\
-                        DdsPost.target_key != axon_addr,\
-                        DdsPost.target_key2 != axon_addr)),\
+                        DdsPost.signing_key == axon_addr,\
+                        DdsPost.signing_key == DdsPost.target_key,\
+                        DdsPost.target_key2 == None)),\
+                    desc(or_(\
+                        and_(\
+                            DdsPost.target_key != axon_addr,\
+                            DdsPost.target_key2 != axon_addr),\
+                        and_(\
+                            DdsPost.target_key != axon_addr,\
+                            DdsPost.target_key2 == None))),\
                     DdsPost.timestamp)
 
             r = q.all()
