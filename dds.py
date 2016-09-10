@@ -60,8 +60,8 @@ class DdsEngine(object):
             post = yield from self.fetch_post(key, target_key)
 
             if not post:
-                if log.isEnabledFor(logging.INFO):
-                    log.info("Data not found for found targeted key [{}]."\
+                if log.isEnabledFor(logging.DEBUG):
+                    log.debug("Data not found for found targeted key [{}]."\
                         .format(mbase32.encode(key)))
                 return
 
@@ -76,8 +76,8 @@ class DdsEngine(object):
             post = yield from self.fetch_post(synapse)
 
             if not post:
-                if log.isEnabledFor(logging.INFO):
-                    log.info("Synapse content not found for key [{}]."\
+                if log.isEnabledFor(logging.DEBUG):
+                    log.debug("Synapse content not found for key [{}]."\
                         .format(mbase32.encode(synapse.source_key)))
                 return
 
@@ -91,8 +91,8 @@ class DdsEngine(object):
                 key = bytes(key)
 
             if key in loaded:
-                if log.isEnabledFor(logging.INFO):
-                    log.info("Skipping already loaded TargetedBlock/Synapse"\
+                if log.isEnabledFor(logging.DEBUG):
+                    log.debug("Skipping already loaded TargetedBlock/Synapse"\
                         " for key=[{}].".format(mbase32.encode(key)))
                 return
 
@@ -113,8 +113,8 @@ class DdsEngine(object):
                     key = bytes(key)
 
                 if key in loaded:
-                    if log.isEnabledFor(logging.INFO):
-                        log.info(\
+                    if log.isEnabledFor(logging.DEBUG):
+                        log.debug(\
                             "Skipping already loaded Synapse for key=[{}]."\
                                 .format(mbase32.encode(key)))
                     continue
@@ -126,8 +126,8 @@ class DdsEngine(object):
                         process_synapse(synapse),\
                         loop=self.loop))
 
-        if log.isEnabledFor(logging.INFO):
-            log.info("Scanning target_key=[{}]."\
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("Scanning target_key=[{}]."\
                 .format(mbase32.encode(target_key)))
 
         @asyncio.coroutine

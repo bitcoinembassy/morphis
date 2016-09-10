@@ -62,8 +62,8 @@ class DpushEngine(object):
     def scan_targeted_blocks(\
             self, target, significant_bits, key_callback, retry_factor=25):
         "Scans the network for TargetedBlockS matching requested details."
-        if log.isEnabledFor(logging.INFO):
-            log.info("Scanning for TargetedBlockS for target=[{}]."\
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("Scanning for TargetedBlockS for target=[{}]."\
                 .format(mbase32.encode(target)))
 
         start = target
@@ -76,12 +76,12 @@ class DpushEngine(object):
             key = data_rw.data_key
 
             if not key:
-                if log.isEnabledFor(logging.INFO):
-                    log.info("send_find_key(..) returned no more results.")
+                if log.isEnabledFor(logging.DEBUG):
+                    log.debug("send_find_key(..) returned no more results.")
                 break
 
-            if log.isEnabledFor(logging.INFO):
-                log.info("Found TargetedBlock (key=[{}])."\
+            if log.isEnabledFor(logging.DEBUG):
+                log.debug("Found TargetedBlock (key=[{}])."\
                     .format(mbase32.encode(key)))
 
             if key_callback:

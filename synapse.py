@@ -79,8 +79,8 @@ class Synapse(object):
         self._synapse_key =\
             enc.generate_ID(self.buf[:self.nonce_offset])
 
-        if log.isEnabledFor(logging.INFO):
-            log.info(\
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug(\
                 "synapse_key=[{}].".format(mbase32.encode(self._synapse_key)))
 
         return self._synapse_key
@@ -96,8 +96,8 @@ class Synapse(object):
         self._synapse_pow =\
             enc.generate_ID(self.buf[:self.nonce_offset + Synapse.NONCE_SIZE])
 
-        if log.isEnabledFor(logging.INFO):
-            log.info(\
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug(\
                 "synapse_pow=[{}].".format(mbase32.encode(self._synapse_pow)))
 
         return self._synapse_pow
@@ -110,8 +110,8 @@ class Synapse(object):
         self._log_distance =\
             mutil.calc_log_distance(self.target_key, self.synapse_pow)
 
-        if log.isEnabledFor(logging.INFO):
-            log.info("log_distance=[{}].".format(self._log_distance))
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("log_distance=[{}].".format(self._log_distance))
 
         return self._log_distance
 
