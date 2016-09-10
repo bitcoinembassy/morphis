@@ -333,7 +333,7 @@ dds post
 	background-color: #fff;
 }
 .dds-post-content {
-	margin-left: 45px;
+	margin-left: 55px;
 	line-height: 1.4em;
 }
 .dds-post-name {
@@ -1681,8 +1681,42 @@ span.profile-comment-bubble-header::after {
 	border-color: #38a3af transparent transparent transparent;
 }
 .dds-circle {
-background: #f00;
-width: 200px;
-height: 200px;
-border-radius: 50%;
+	background: #f00;
+	width: 200px;
+	height: 200px;
+	border-radius: 50%;
+}
+.dds-approve-wrapper {
+	float: left;
+	margin-right: 5px;
+}
+.dds-approve-user {
+	background-image: url("morphis://.dds/images/check3.png");
+	background-size: 15px;
+	height: 15px;
+	width: 15px;
+	margin-bottom: 4px;
+	opacity: .3;
+}
+.dds-approve-msg {
+	background-image: url("morphis://.dds/images/check3.png");
+	background-size: 15px;
+	height: 15px;
+	width: 15px;
+	opacity: .3;
+}
+.dds-approve-user:hover {
+	background-image: url("morphis://.dds/images/check3.png");
+	background-size: 15px;
+	height: 15px;
+	width: 15px;
+	margin-bottom: 3px;
+	opacity: 1;
+}
+.dds-approve-msg:hover {
+	background-image: url("morphis://.dds/images/check3.png");
+	background-size: 15px;
+	height: 15px;
+	width: 15px;
+	opacity: 1;
 }
