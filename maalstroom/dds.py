@@ -13,6 +13,7 @@ from urllib.parse import parse_qs, quote_plus
 import os
 
 from sqlalchemy import or_, and_, desc
+from sqlalchemy.orm import joinedload
 
 import consts
 from db import User, DdsPost, NodeState
@@ -170,9 +171,9 @@ def serve_get(dispatcher, rpath):
         # Render the Grok View; which shows the Axon, SynapseS and Synapse
         # create form.
         yield from _process_axon_grok(mr)
-    elif req.startswith("/axon/read/"):
-        # Render an individual Axon.
-        yield from _process_axon_read(dispatcher, req[11:])
+#    elif req.startswith("/axon/read/"):
+#        # Render an individual Axon.
+#        yield from _process_axon_read(dispatcher, req[11:])
     elif req.startswith("/axon/synapses/"):
         # Scan for and render SynapseS connected to the requested Axon.
         yield from _process_axon_synapses(mr)
@@ -514,58 +515,59 @@ def _process_axon_grok(req):
     req.dispatcher.send_content(template)
     return
 
-@asyncio.coroutine
-def _process_axon_read(dispatcher, req):
-    p0 = req.find('/')
-
-    if p0 > -1:
-        # Then the request is for a TargetedBlock.
-        key = mbase32.decode(req[:p0])
-        target_key = mbase32.decode(req[p0+1:])
-    else:
-        # Then the request is not for a TargetedBlock.
-        key = mbase32.decode(req)
-        target_key = None
-
-    dds_engine = DdsEngine(dispatcher.node)
-    post = yield from dds_engine.load_post(key)
-    if not post:
-        post = yield from dds_engine.fetch_post(key, target_key)
-
-    if not post:
-        dispatcher.send_content("Not found on the network at the moment.")
-        return
-
-    key_enc = mbase32.encode(key)
-
-    content = yield from _format_axon(dispatcher.node, post.data, key, key_enc)
-
-    timestr = mutil.format_human_no_ms_datetime(post.timestamp)
-
-    template = templates.dds_synapse_view[0]
-    template = template.format(\
-        key=key_enc,\
-        signing_key="",\
-        signer="<TODO>",\
-        content=content,\
-        timestamp=timestr,\
-        relative_time=mutil.format_datetime_as_relative(post.timestamp),\
-        score=post.score)
-
-    msg = "<head><link rel='stylesheet' href='morphis://.dds/style.css'>"\
-        "</link></head><body style='height: 80%; padding:0;margin:0;'>{}"\
-        "</body>"\
-            .format(template)
-
-    content_type = "text/html; charset={}"\
-        .format(dispatcher.get_accept_charset())
-
-    dispatcher.send_content(msg, content_type=content_type)
-    return
+#@asyncio.coroutine
+#def _process_axon_read(dispatcher, req):
+#    p0 = req.find('/')
+#
+#    if p0 > -1:
+#        # Then the request is for a TargetedBlock.
+#        key = mbase32.decode(req[:p0])
+#        target_key = mbase32.decode(req[p0+1:])
+#    else:
+#        # Then the request is not for a TargetedBlock.
+#        key = mbase32.decode(req)
+#        target_key = None
+#
+#    dds_engine = DdsEngine(dispatcher.node)
+#    post = yield from dds_engine.load_post(key)
+#    if not post:
+#        post = yield from dds_engine.fetch_post(key, target_key)
+#
+#    if not post:
+#        dispatcher.send_content("Not found on the network at the moment.")
+#        return
+#
+#    key_enc = mbase32.encode(key)
+#
+#    content = yield from _format_axon(dispatcher.node, post.data, key, key_enc)
+#
+#    timestr = mutil.format_human_no_ms_datetime(post.timestamp)
+#
+#    template = templates.dds_synapse_view[0]
+#    template = template.format(\
+#        key=key_enc,\
+#        signing_key="",\
+#        signer="<TODO>",\
+#        content=content,\
+#        timestamp=timestr,\
+#        relative_time=mutil.format_datetime_as_relative(post.timestamp),\
+#        score=post.score)
+#
+#    msg = "<head><link rel='stylesheet' href='morphis://.dds/style.css'>"\
+#        "</link></head><body style='height: 80%; padding:0;margin:0;'>{}"\
+#        "</body>"\
+#            .format(template)
+#
+#    content_type = "text/html; charset={}"\
+#        .format(dispatcher.get_accept_charset())
+#
+#    dispatcher.send_content(msg, content_type=content_type)
+#    return
 
 @asyncio.coroutine
 def _process_axon_synapses(req):
-    axon_addr = mbase32.decode(req.req[15:])
+    axon_addr_enc = req.req[15:]
+    axon_addr = mbase32.decode(axon_addr_enc)
 
     te = req.dispatcher.node.engine.tasks
 
@@ -592,21 +594,32 @@ def _process_axon_synapses(req):
 
     def dbcall():
         with req.dispatcher.node.db.open_session(True) as sess:
+#                .options(joinedload("children"))\
             q = sess.query(DdsPost)\
-                .filter(\
-                    or_(\
-                        DdsPost.target_key == axon_addr,
-                        DdsPost.signing_key == axon_addr))\
+                .filter(or_(\
+                    DdsPost.target_key == axon_addr,\
+                    DdsPost.target_key2 == axon_addr,\
+                    DdsPost.signing_key == axon_addr))\
                 .order_by(\
                     desc(and_(\
                         DdsPost.signing_key != None,\
-                        DdsPost.signing_key == DdsPost.target_key)),\
-                    desc(and_(\
-                        DdsPost.signing_key != None,\
-                        DdsPost.target_key != axon_addr)),\
+                        DdsPost.signing_key == axon_addr,\
+                        DdsPost.signing_key == DdsPost.target_key,\
+                        DdsPost.target_key2 == None)),\
+                    desc(or_(\
+                        and_(\
+                            DdsPost.target_key != axon_addr,\
+                            DdsPost.target_key2 != axon_addr),\
+                        and_(\
+                            DdsPost.target_key != axon_addr,\
+                            DdsPost.target_key2 == None))),\
                     DdsPost.timestamp)
 
-            return q.all()
+            r = q.all()
+
+            sess.expunge_all()
+
+            return r
 
     load_task = req.dispatcher.loop.run_in_executor(None, dbcall)
 
@@ -621,19 +634,12 @@ def _process_axon_synapses(req):
     anon_name = make_safe_for_html_content(anon_name.decode())
 
     @asyncio.coroutine
-    def process_post(post):
+    def process_post(post, depth=0):
         assert type(post) is DdsPost
 
         key = post.synapse_key
         if not key:
             key = post.data_key
-
-        if not post:
-            if log.isEnabledFor(logging.INFO):
-                log.info(\
-                    "Post data not found for found key [{}]."\
-                        .format(mbase32.encode(key)))
-            return
 
         key_enc = mbase32.encode(key)
 
@@ -661,29 +667,46 @@ def _process_axon_synapses(req):
 
         if post.target_key != axon_addr:
             target_str = "@" + target_key_enc
+            if post.target_key2:
+                target_key_link = "#" + target_key_enc
+                target_key_link_target = "_self"
+            else:
+                target_key_link = "morphis://.dds/axon/grok/" + target_key_enc
+                target_key_link_target = "parent"
         else:
             target_str = ""
+            target_key_link = ""
+            target_key_link_target = ""
+
+#        if depth:
+#            style += "margin-left: {}px;".format(depth * 50)
 
         template = templates.dds_synapse_view[0]
-        template =\
-            template.format(\
-                query=req.query,\
-                target_key=target_key_enc,\
-                target_str=target_str,\
-                key=key_enc,\
-                signing_key=signing_key_enc,\
-                signer=signer_name,\
-                content=content,\
-                timestamp=timestr,\
-                relative_time=\
-                    mutil.format_datetime_as_relative(post.timestamp),\
-                score=post.score,\
-                style=style)
+        template = template.format(\
+            axon_addr=axon_addr_enc,\
+            query=req.query,\
+            target_key=target_key_enc,\
+            target_key_link=target_key_link,\
+            target_key_link_target=target_key_link_target,\
+            target_str=target_str,\
+            key=key_enc,\
+            signing_key=signing_key_enc,\
+            signer=signer_name,\
+            content=content,\
+            timestamp=timestr,\
+            relative_time=\
+                mutil.format_datetime_as_relative(post.timestamp),\
+            score=post.score,\
+            style=style)
 
         req.dispatcher.send_partial_content(template)
 
+#        if not depth:
+#            for post in post.children:
+#                yield from process_post(post, depth + 1)
+
+    #TODO: Optimize by moving this into above gather.
     for post in posts:
-        key = post.synapse_pow if post.synapse_pow else post.data_key
         yield from process_post(post)
 
     req.dispatcher.send_partial_content(\
@@ -754,8 +777,18 @@ def fetch_display_name(node, signing_key, signing_key_enc=None):
 
 @asyncio.coroutine
 def _process_synapse_create(req):
-    target_addr = req.req[16:]
-    if req.dispatcher.handle_cache(target_addr):
+    rstr = req.req[16:]
+    p1 = rstr.find('/')
+    if p1 == -1:
+        target_addr_enc = rstr
+        target_addr2_enc = ""
+        reply_str = "Thinks:"
+    else:
+        target_addr_enc = rstr[:p1]
+        target_addr2_enc = rstr[p1+1:]
+        reply_str = "@{}".format(target_addr_enc)
+
+    if req.dispatcher.handle_cache(target_addr_enc):
         return
 
     ident_name =\
@@ -769,13 +802,15 @@ def _process_synapse_create(req):
     template = template.format(\
         csrf_token=req.dispatcher.client_engine.csrf_token,\
         message_text="",\
-        target_addr=target_addr,\
+        reply_str=reply_str,\
+        target_addr=target_addr_enc,\
+        target_addr2=target_addr2_enc,\
         ident=req.ident_enc,\
         ident_str=ident_str,\
         query=req.query)
 
-#    template =\
-#        templates.dds_wrapper[0].format(title="DDS Post Box", child=template)
+    template =\
+        templates.dds_wrapper[0].format(title="DDS Post Box", child=template)
 
     req.dispatcher.send_content(template)
 
@@ -789,14 +824,7 @@ def _process_synapse_create_post(dispatcher, req):
     if not dispatcher.check_csrf_token(dd["csrf_token"][0]):
         return
 
-#    content = fia(dd["content"])
-    content = None
-    content2 = fia(dd.get("content2"))
-
-    if not content:
-        content = content2
-    elif content2:
-        content = content + "\r\n" + content2
+    content = fia(dd["content"])
 
     if not content:
         dispatcher.send_error("No content.", errcode=400)
@@ -837,9 +865,10 @@ def _process_synapse_create_post(dispatcher, req):
 
     yield from content_key_ready.wait()
 
-    target_addr = fia(dd["target_addr"])
+    target_addr_enc = fia(dd["target_addr"])
+    target_addr2_enc = fia(dd["target_addr2"])
 
-    if not target_addr:
+    if not target_addr_enc:
         resp =\
             "Resulting&nbsp;<a href='morphis://.dds/axon/read/{axon_addr}'>"\
                 "Axon</a>&nbsp;Address:<br/>{axon_addr}"\
@@ -848,9 +877,14 @@ def _process_synapse_create_post(dispatcher, req):
         dispatcher.send_content(resp)
         return
 
-    target_addr = mbase32.decode(target_addr)
+    target_addr = mbase32.decode(target_addr_enc)
 
-    synapse = syn.Synapse.for_target(target_addr, content_key)
+    if not target_addr2_enc:
+        synapse = syn.Synapse.for_target(target_addr, content_key)
+    else:
+        target_addr2 = mbase32.decode(target_addr2_enc)
+        synapse =\
+            syn.Synapse.for_targets((target_addr, target_addr2), content_key)
 
     ident_enc = fia(dd["ident"])
     if ident_enc:

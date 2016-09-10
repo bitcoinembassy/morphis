@@ -1,13 +1,13 @@
-<div class="dds-post" style="{style}">
+<div class="dds-post" id="{key}" style="{style}">
 	<div class="dds-post-wrapper">
 		<div class="dds-user-icon"><img src="morphis://.dds/images/user-img.png"></div>
 		<div class="dds-post-content">
 			<div class="dds-post-name dds-trunc"><a href="morphis://.dds/axon/grok/{signing_key}" target="_parent" title="{signing_key}">{signer}</a></div>
-			<div class="dds-post-name dds-trunc" style="color: gray;">&nbsp;<a href="morphis://.dds/axon/grok/{target_key}" target="_parent" title="{target_key}">{target_str}</a></div>
+			<div class="dds-post-name dds-trunc" style="color: gray;">&nbsp;<a href="{target_key_link}" target="{target_key_link_target}" title="{target_key}">{target_str}</a></div>
 			<div class="dds-post-title">&nbsp;</div>
 			<div class="dds-post-time">{relative_time} ({timestamp})</div>
 				<div class="dds-post-icons">
-					<a href="morphis://.dds/synapse/create/{key}{query}" target="post_frame"><div class="dds-reply dds-icon-button"></div></a>
+					<a href="morphis://.dds/synapse/create/{key}/{axon_addr}{query}" target="post_frame"><div class="dds-reply dds-icon-button"></div></a>
 					<a href="#openModal"><div class="dds-dmail dds-icon-button"></div></a>
 				</div>
 				<div id="openModal" class="modalDialog-dmail">
@@ -17,7 +17,7 @@
                     </div>
 				</div>
 				<div class="dds-post-text">
-					<div class="dds-post-hash"><a href="">#{key}</a></div>
+					<div class="dds-post-hash"><a href="{key}{query}">#{key}</a></div>
                     {content}
                 </div>
 				<div class="dds-post-bottom-icons">

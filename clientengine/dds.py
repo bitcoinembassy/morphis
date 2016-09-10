@@ -7,8 +7,6 @@ import asyncio
 import logging
 import time
 
-from sqlalchemy.orm import joinedload
-
 import base58
 from db import DmailAddress
 import dhgroup14
