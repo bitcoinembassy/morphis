@@ -721,7 +721,7 @@ def _process_axon_synapses(req):
         elif stamp:
             style = "box-shadow: 0 1px 4px rgba(0,0,0,.04); border: 1px solid rgba(56, 163, 175,.3); border-radius: 5px; margin: 1em 1em; background: #06F607;"
         else:
-            style = "padding: 0 1em 0 1em;"
+            style = ""
 
         target_key_enc = mbase32.encode(post.target_key)
 
