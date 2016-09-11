@@ -1,15 +1,88 @@
 <div class="dds-post" id="{key}" style="{style}">
 	<div class="dds-post-wrapper">
+		<div class="dds-approve-wrapper1">
+			<a href=""><div class="dds-approve-user1"></div></a>
+			<a href=""><div class="dds-approve-msg1"></div></a>
+		</div>
+		<div class="dds-user-icon"><img src="morphis://.dds/images/user-img.png"></div>
+		<div class="dds-post-content">
+			<div class="dds-post-name dds-trunc"><a href="morphis://.dds/axon/grok/{signing_key}" target="_parent" title="{signing_key}">{signer}</a></div>
+			<div class="dds-post-name dds-trunc" style="color: gray;">&nbsp;<a href="{target_key_link}" {target_key_link_target_attr} title="{target_key}">{target_str}</a></div>
+			<div class="dds-post-title">&nbsp;</div>
+			<div class="dds-post-time">{relative_time} ({timestamp})</div>
+				<div class="dds-post-icons">
+					<a href="morphis://.dds/synapse/create/{key}/{axon_addr}{query}" target="post_frame"><div class="dds-reply dds-icon-button"></div></a>
+					<a href="#openModal"><div class="dds-dmail dds-icon-button"></div></a>
+				</div>
+				<div id="openModal" class="modalDialog-dmail">
+                    <div>
+                        <a href="#close" title="Close" class="close">&#x2715;</a>
+                        <!--iframe id="dmail-message" src="morphis://.dmail/compose/" height="100%" width="100%"></iframe-->
+                    </div>
+				</div>
+				<div class="dds-post-text">
+					<div class="dds-post-hash"><a href="{key}{query}">#{key}</a></div>
+                    {content}
+                </div>
+				<div class="dds-post-bottom-icons">
+					<div class="dds-post-vote-wrapper">
+						<div class="dds-post-upvote"></div>
+						<div class="dds-post-vote-grey-text">{score}</div>
+						<div class="dds-post-flag"></div>
+					</div>
+				</div>
+		</div>
+	</div>
+</div>
+<div class="dds-post" id="{key}" style="{style}">
+	<div class="dds-post-wrapper">
+		<div class="dds-user-icon"><img src="morphis://.dds/images/user-img.png"></div>
 		<div class="dds-approve-wrapper">
 			<a href="morphis://.dds/stamp/signer/{key}{query}"><div class="dds-approve-user"></div></a>
 			<a href="morphis://.dds/stamp/synapse/{key}{query}"><div class="dds-approve-msg"></div></a>
 		</div>
-		<div class="dds-user-icon"><img src="morphis://.dds/images/user-img.png"></div>
 		<div class="dds-post-content">
 			<div class="dds-post-name dds-trunc"><a href="morphis://.dds/axon/grok/{signing_key}" target="_parent" title="{signing_key}{query}">{signer}</a></div>
 			<div class="dds-post-name dds-trunc" style="color: gray;">&nbsp;<a href="{target_key_link}" {target_key_link_target_attr} title="{target_key}">{target_str}</a></div>
 			<div class="dds-post-title">&nbsp;</div>
 			<div class="dds-post-time">{relative_time} ({timestamp})</div>
+				<div class="dds-post-icons">
+					<a href="morphis://.dds/synapse/create/{key}/{axon_addr}{query}" target="post_frame"><div class="dds-reply dds-icon-button"></div></a>
+					<a href="#openModal"><div class="dds-dmail dds-icon-button"></div></a>
+				</div>
+				<div id="openModal" class="modalDialog-dmail">
+                    <div>
+                        <a href="#close" title="Close" class="close">&#x2715;</a>
+                        <!--iframe id="dmail-message" src="morphis://.dmail/compose/" height="100%" width="100%"></iframe-->
+                    </div>
+				</div>
+				<div class="dds-post-text">
+					<div class="dds-post-hash"><a href="{key}{query}">#{key}</a></div>
+                    {content}
+                </div>
+				<div class="dds-post-bottom-icons">
+					<div class="dds-post-vote-wrapper">
+						<div class="dds-post-upvote"></div>
+						<div class="dds-post-vote-grey-text">{score}</div>
+						<div class="dds-post-flag"></div>
+					</div>
+				</div>
+		</div>
+	</div>
+</div>
+<div class="dds-post" id="{key}" style="{style}">
+	<div class="dds-post-wrapper">
+		<div class="dds-user-icon"><img src="morphis://.dds/images/user-img.png"></div>
+		<div class="dds-post-content">
+			<div class="dds-post-name dds-trunc"><a href="morphis://.dds/axon/grok/{signing_key}" target="_parent" title="{signing_key}">{signer}</a></div>
+			<div class="dds-post-name dds-trunc"><a href="{target_key_link}" {target_key_link_target_attr} title="{target_key}">{target_str}</a></div>
+			<!--<div class="dds-post-title">&nbsp;</div>-->
+			<div class="dds-approve-wrapper2">
+				<a href=""><div class="dds-approve-user2"></div></a>
+				<a href=""><div class="dds-approve-msg2"></div></a>
+			</div>
+			<div class="dds-post-time">{relative_time} ({timestamp})</div>
+			
 				<div class="dds-post-icons">
 					<a href="morphis://.dds/synapse/create/{key}/{axon_addr}{query}" target="post_frame"><div class="dds-reply dds-icon-button"></div></a>
 					<a href="#openModal"><div class="dds-dmail dds-icon-button"></div></a>

@@ -121,8 +121,8 @@ iframe {
 
 
 /*********************
-dds header
-**********************/
+ d *ds header
+ **********************/
 
 .dds-header-wrapper {
 	height: 4em;
@@ -162,8 +162,8 @@ dds header
 
 
 /**********************
-dds status bar
-*********************/
+ d *ds status bar
+ *********************/
 
 .dds-channel {
 	font-weight: bold;
@@ -194,8 +194,8 @@ dds status bar
 
 
 /***********************
-dds reply footer
-**********************/
+ d *ds reply footer
+ **********************/
 
 .dds-reply-accesskey-text {
 	color: #725880;
@@ -302,8 +302,8 @@ button.dds-reply-button:active {
 
 
 /************************
-dds post
-***********************/
+ d *ds post
+ ***********************/
 .dds-post-hash {
 	float: right;
 	font-family: monospace;
@@ -339,7 +339,7 @@ dds post
 .dds-post-name {
 	display: inline-block;
 	font-size: 1em;
-	max-width: 40%;
+	max-width: 25%;
 	float: left;
 	font-weight: bold;
 }
@@ -418,7 +418,7 @@ dds post
 	margin-right: 100px;
 }
 .dds-post:target {
-    background-color: yellow;
+	background-color: yellow;
 }
 .dds-post .dds-icon-button {
 	visibility: hidden;
@@ -489,12 +489,15 @@ dds post
 }
 .dds-user-icon {
 	float: left;
+	position: relative;
+	padding-left: .3em;
+	
 }
 
 
 /************************
-dds refresh text
-***********************/
+ d *ds refresh text
+ ***********************/
 
 .dds-refresh-wrapper {
 	margin: 3px 20px 10px 20px;
@@ -790,7 +793,7 @@ input.dds-channel-menu-input {
 input.dds-channel-menu-input:checked ~ ul.dds-channel-submenu {
 	max-height: 300px;
 	transition: max-height 0.2s ease-in;
-	max-height: 250px;
+	min-width: 300px;
 	overflow-y: auto;
 	overflow-x: hidden;
 	z-index: 999;
@@ -845,11 +848,11 @@ ul.dds-channel-submenu li a:hover {
 	clear: both;
 }
 /*.blog-post-content p, .blog-header-profile-text p {
-	margin: 0 0 .7em 0;
-}
-.blog-post-content p:last-child, .blog-header-profile-text p:last-child {
-	margin-bottom: 0;
-}*/
+ * margin: 0 0 .7em 0;
+ } *
+ .blog-post-content p:last-child, .blog-header-profile-text p:last-child {
+ margin-bottom: 0;
+ }*/
 .blog-post-content a {
 	color: #38a3af;
 	text-decoration: none;
@@ -1557,70 +1560,70 @@ span.blog-comment-bubble-header::after {
 	background-image: url("morphis://.dds/images/vote3-color.png");
 }
 /*.dds-post-upvote {
-	width: 20px;
-}
-.dds-post-upvote::before {
-    position: relative;
-    top: .55em;
-    content: "";
-    display: inline-block;
-    width: 0.6em;
-    height: 0.6em;
-	border-right: 0.2em solid #a2a6ab;
-	border-top: 0.2em solid #a2a6ab;
-    transform: rotate(320deg);
-	float: left;
-	margin-right: .8em;
-	cursor: pointer;
-}
-.dds-post-upvote:hover::before {
-	border-color: #38a3af;
-}
-.dds-post-flag::before {
-	position: absolute;
-	top: 4.09em;
-	content: "";
-	display: inline-block;
-	width: 1em;
-	height: 1em;
-	border-right: 0.2em solid #a2a6ab;
-	transform: rotate(315deg);
-	float: left;
-	cursor: pointer;
-}
-.dds-post-flag::after {
-	position: absolute;
-	top: 4.09em;
-	left: 8.09em;
-	content: "";
-	display: inline-block;
-	width: 1em;
-	height: 1em;
-	border-left: 0.2em solid #a2a6ab;
-	transform: rotate(45deg);
-	float: left;
-	cursor: pointer;
-}
-.dds-post-flag:hover::before {
-	border-color: #38a3af;
-}
-.dds-post-flag:hover::after {
-	border-color: #38a3af;
-}*/
+ * width: 20px;
+ } *
+ .dds-post-upvote::before {
+ position: relative;
+ top: .55em;
+ content: "";
+ display: inline-block;
+ width: 0.6em;
+ height: 0.6em;
+ border-right: 0.2em solid #a2a6ab;
+ border-top: 0.2em solid #a2a6ab;
+ transform: rotate(320deg);
+ float: left;
+ margin-right: .8em;
+ cursor: pointer;
+ }
+ .dds-post-upvote:hover::before {
+ border-color: #38a3af;
+ }
+ .dds-post-flag::before {
+ position: absolute;
+ top: 4.09em;
+ content: "";
+ display: inline-block;
+ width: 1em;
+ height: 1em;
+ border-right: 0.2em solid #a2a6ab;
+ transform: rotate(315deg);
+ float: left;
+ cursor: pointer;
+ }
+ .dds-post-flag::after {
+ position: absolute;
+ top: 4.09em;
+ left: 8.09em;
+ content: "";
+ display: inline-block;
+ width: 1em;
+ height: 1em;
+ border-left: 0.2em solid #a2a6ab;
+ transform: rotate(45deg);
+ float: left;
+ cursor: pointer;
+ }
+ .dds-post-flag:hover::before {
+ border-color: #38a3af;
+ }
+ .dds-post-flag:hover::after {
+ border-color: #38a3af;
+ }*/
 /*.dds-post-flag::before {
-	position: relative;
-	top: .08em;
-	content: "✕";
-	float: left;
-	cursor: pointer;
-	width: .5em;
-	height: .5em;
-	font-size: 1.38em;
-	margin-left: .3em;
-}
-.dds-post-flag:hover::before {
-	color: #38a3af;
-}*/
+ * position: relative;
+ * top: .08em;
+ * content: "✕";
+ * float: left;
+ * cursor: pointer;
+ * width: .5em;
+ * height: .5em;
+ * font-size: 1.38em;
+ * margin-left: .3em;
+ } *
+ .dds-post-flag:hover::before {
+ color: #38a3af;
+ }*/
 
 .dds-post-vote-grey-text {
 	color: #a2a6ab;
@@ -1686,37 +1689,76 @@ span.profile-comment-bubble-header::after {
 	height: 200px;
 	border-radius: 50%;
 }
+.dds-approve-wrapper1 {
+	float: left;
+}
+.dds-approve-user1 {
+	background-image: url("morphis://.dds/images/check3.png");
+	background-size: 15px;
+	height: 15px;
+	width: 15px;
+}
+.dds-approve-msg1 {
+	background-image: url("morphis://.dds/images/check3.png");
+	background-size: 15px;
+	height: 15px;
+	width: 15px;
+	margin-top: .5em;
+}
+.dds-approve-user1:hover {
+	background-image: url("morphis://.dds/images/check3.png");
+}
+.dds-approve-msg1:hover {
+	background-image: url("morphis://.dds/images/check3.png");
+}
 .dds-approve-wrapper {
 	float: left;
-	margin-right: 5px;
+	position: absolute;
+	padding-top: 1.8em;
 }
 .dds-approve-user {
 	background-image: url("morphis://.dds/images/check3.png");
 	background-size: 15px;
 	height: 15px;
 	width: 15px;
-	margin-bottom: 4px;
-	opacity: .3;
+	float: left;
 }
 .dds-approve-msg {
 	background-image: url("morphis://.dds/images/check3.png");
 	background-size: 15px;
 	height: 15px;
 	width: 15px;
-	opacity: .3;
+	float: left;
+	margin-left: .5em;
 }
 .dds-approve-user:hover {
 	background-image: url("morphis://.dds/images/check3.png");
-	background-size: 15px;
-	height: 15px;
-	width: 15px;
-	margin-bottom: 3px;
-	opacity: 1;
 }
 .dds-approve-msg:hover {
+	background-image: url("morphis://.dds/images/check3.png");
+}
+.dds-approve-wrapper2 {
+	float: left;
+	margin: 0 .5em 0 .5em
+}
+.dds-approve-user2 {
 	background-image: url("morphis://.dds/images/check3.png");
 	background-size: 15px;
 	height: 15px;
 	width: 15px;
-	opacity: 1;
+	float: left;
+}
+.dds-approve-msg2 {
+	background-image: url("morphis://.dds/images/check3.png");
+	background-size: 15px;
+	height: 15px;
+	width: 15px;
+	float: left;
+	margin-left: .5em;
+}
+.dds-approve-user2:hover {
+	background-image: url("morphis://.dds/images/check3.png");
+}
+.dds-approve-msg2:hover {
+	background-image: url("morphis://.dds/images/check3.png");
 }
