@@ -109,8 +109,8 @@ iframe {
 .dds-wrapper {
 }
 /*.dds-channel-wrapper {
- * margin: 0 20px 0 20px;
- * } **/
+	margin: 0 20px 0 20px;
+} */
 .dds-trunc {
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -120,9 +120,7 @@ iframe {
 
 
 
-/*********************
- d *ds header
- **********************/
+/*dds header*/
 
 .dds-header-wrapper {
 	height: 4em;
@@ -161,9 +159,7 @@ iframe {
 }
 
 
-/**********************
- d *ds status bar
- *********************/
+/*dds status bar*/
 
 .dds-channel {
 	font-weight: bold;
@@ -193,9 +189,7 @@ iframe {
 }
 
 
-/***********************
- d *ds reply footer
- **********************/
+/*dds reply footer*/
 
 .dds-reply-accesskey-text {
 	color: #725880;
@@ -301,9 +295,7 @@ button.dds-reply-button:active {
 }
 
 
-/************************
- d *ds post
- ***********************/
+/*dds post*/
 .dds-post-hash {
 	float: right;
 	font-family: monospace;
@@ -494,9 +486,7 @@ button.dds-reply-button:active {
 }
 
 
-/************************
- d *ds refresh text
- ***********************/
+/*dds refresh text*/
 
 .dds-refresh-wrapper {
 	margin: 3px 20px 10px 20px;
@@ -583,7 +573,7 @@ a.close {
 }
 
 
-/*----- User Dropdown -----*/
+/*User Dropdown*/
 /*Style for the first level menu bar*/
 ul.dds-menu {
 	position:fixed;
@@ -698,7 +688,7 @@ ul.dds-submenu li a:hover {
 	background:#371f44;
 	color: #38a3af;
 }
-/*----- Channel Dropdown -----*/
+/*Channel Dropdown*/
 /*Style for the first level menu bar*/
 .dds-header-wrapper ul.dds-channel-menu {
 	position: fixed;
