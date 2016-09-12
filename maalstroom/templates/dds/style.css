@@ -47,6 +47,7 @@ body.dds {
 	overflow-x: hidden;
 	background-color: #f3f6f8;
 	color: #1c2227;
+	min-height: 100%;
 }
 .blog a {
 	transition: opacity 0.5s;
@@ -122,10 +123,7 @@ iframe {
 
 /*dds header*/
 
-.dds-header-wrapper {
-	height: 4em;
-	background-color: #1c2227;
-}
+
 .dds-header-dash-icon {
 	background-color: #1c2227;
 	width: 9em;
@@ -1711,4 +1709,212 @@ span.profile-comment-bubble-header::after {
 }
 .score-color {
 	background: #DBD9A8;
+}
+
+/* DASHBOARD */
+/*.navigation {
+	width: 100%;
+	height: 100%;
+	position: fixed;
+	top: 0;
+	right: 0;
+	bottom: 0;
+	left: 0;
+	z-index: 0;
+	list-style: none;
+	background: #1c2227;
+}
+
+.nav-item {
+	width: 200px;
+	border-top: 1px solid #1c2227;
+	border-bottom: 1px solid #000;
+}
+.nav-item a {
+	display: block;
+	padding: 1em;
+	background: #1c2227;
+	color: white;
+	font-size: 1.2em;
+	text-decoration: none;
+	transition: color 0.2s, background 0.5s;
+}
+.nav-item a:hover {
+	color: #c74438;
+}
+
+.site-wrap {
+	min-height: 100%;
+	min-width: 100%;
+	width: 100%;
+	background-color: #f3f6f8;
+	position: relative;
+	top: 0;
+	bottom: 100%;
+	float: right;
+	right: 0;
+	z-index: 1;
+	-moz-transition: all 0.4s ease 0s;
+	-o-transition: all 0.4s ease 0s;
+	-webkit-transition: all 0.4s ease 0s;
+	transition: all 0.4s ease 0s;
+}
+.nav-trigger {
+	position: absolute;
+	clip: rect(0, 0, 0, 0);
+}
+label[for="nav-trigger"] {
+	position: fixed;
+	left: 13px;
+	top: 15px;
+	z-index: 2;
+	height: 20px;
+	width: 5px;
+	cursor: pointer;
+	background-image: url("morphis://.dds/images/dots.png");
+	background-repeat: no-repeat;
+	background-size: contain;
+	-moz-transition: all 0.4s ease 0s;
+	-o-transition: all 0.4s ease 0s;
+	-webkit-transition: all 0.4s ease 0s;
+	transition: all 0.4s ease 0s;
+}
+
+.nav-trigger + label, .site-wrap {
+}
+.nav-trigger:checked + label {
+	left: 215px;
+}
+.nav-trigger:checked ~ .site-wrap {
+	min-width: calc(100% - 200px);
+	box-shadow: 0 0 5px 5px rgba(0, 0, 0, 0.5);
+	width: calc(100% - 200px);
+}
+.nav-trigger:checked + label {
+	left: 215px;
+	-webkit-transform: rotate(90deg);
+	-moz-transform: rotate(90deg);
+	-o-transform: rotate(90deg);
+	-ms-transform: rotate(90deg);
+	transform: rotate(90deg);
+}*/
+/*.dds-header-dash-icon {
+	width: 9em;
+	color: #fff;
+	height: 100%;
+	float: left;
+	font-size: .35em;
+	line-height:1.6em;
+	text-align: center;
+	-webkit-transition: all 0.10s ease-in-out;
+	-moz-transition: all 0.10s ease-in-out;
+	transition: all 0.15s ease-in-out;
+	display: block;
+	margin-left:-10px;
+}
+.dds-header-dash-icon:hover {
+	margin-left: 0px;
+	background-color: #3b3e43;
+	display: block;
+}*/
+.dds-header-wrapper {
+	height: 4em;
+	background-color: #1c2227;
+}
+.main-header {
+	padding: 0 0 0 20px;
+	position: fixed;
+	width: 100%;
+	left: 0;
+	transition: all 0.3s ease;
+}
+.icon a {
+	position: absolute;
+	left: 0;
+	top: 0;
+	color: white;
+	font-size: .35em;
+	line-height:1.6em;
+	text-align: center;
+	background-color: #1c2227;
+	height: 100%;
+	width: 6em;
+	padding-top: 15px;
+	text-decoration: none;
+/*	-webkit-transition: all 0.10s ease-in-out;
+	-moz-transition: all 0.10s ease-in-out;
+	transition: all 0.15s ease-in-out;
+	display: block;
+	margin-left:-10px;
+	float: left;*/
+}
+.icon a:hover {
+	margin-left: 0px;
+	background-color: #3b3e43;
+	display: block;
+}
+.page-wrap {
+	float: right;
+	width: 100%;
+	transition: width 0.3s ease;
+}
+
+.site-nav {
+	position: fixed;
+	top: 0;
+	width: 0;
+	height: 100%;
+	background-color: #1c2227;
+	overflow-y: auto;
+	transition: width 0.3s ease;
+	white-space: nowrap;
+	text-transform: uppercase;
+}
+
+.site-nav a {
+	display: block;
+	border-bottom: 1px solid #666;
+	color: white;
+	padding: 34px;
+}
+
+.site-nav a:hover,
+.site-nav a:focus {
+	background: #333;
+}
+
+.site-nav:after {
+	content: "";
+	position: absolute;
+	top: 0;
+	right: 0;
+	height: 100%;
+	width: 4px;
+	background: linear-gradient(to right, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.4));
+}
+
+.content {
+	padding: 100px 20px 20px 20px;
+	max-width: 900px;
+}
+
+.close-menu {
+	display: none;
+}
+
+#site-nav:target {
+width: 30%;
+}
+
+#site-nav:target + .page-wrap {
+width: 70%;
+}
+
+#site-nav:target + .page-wrap .close-menu {
+display: block;
+}
+
+#site-nav:target + .page-wrap .main-header {
+width: 70%;
+left: 30%;
 }
