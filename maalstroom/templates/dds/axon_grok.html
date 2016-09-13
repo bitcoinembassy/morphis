@@ -18,9 +18,85 @@
 <label for="nav-trigger"></label>
 <div class="site-wrap">-->
 <nav class="site-nav" id="site-nav">
-	<a href="#">Dmail</a>
-    <a href="#">DDS</a>
-    <a href="#">Upload</a>
+  <!--<div class="tabs">
+    <div class="tab">
+      <input type="radio" name="css-tabs" id="tab-1" checked class="tab-switch">
+      <label for="tab-1" class="tab-label">DDS</label>
+      <div class="tab-content">
+		<div class="dashboard-user-status-icon"></div>
+		<div class="dashboard-active-user">{user}</div>
+			<div class="dashboard-active-convo-wrapper">
+				<div class="dashboard-active-convo-title">Active conversations (6)</div>
+				<ul class="dashboard-convo-list">
+					<li>morphis-dev</li>
+					<li>bitcoin-dev</li>
+					<li>math</li>
+				</ul>
+				<ul class="dashboard-convo-list">
+					<li>morphis-dev</li>
+					<li>bitcoin-dev</li>
+					<li>bitcoin-dev</li>
+				</ul>
+			</div>
+      </div>
+    </div>
+    <div class="tab">
+      <input type="radio" name="css-tabs" id="tab-2" class="tab-switch">
+      <label for="tab-2" class="tab-label">DMAIL</label>
+      <div class="tab-content">Quisque rhoncus justo vitae augue scelerisque auctor. Morbi non lorem nec tortor volutpat bibendum vel ac nisl.  </div>
+    </div>
+    <div class="tab">
+      <input type="radio" name="css-tabs" id="tab-3" class="tab-switch">
+      <label for="tab-3" class="tab-label">UPLOAD</label>
+      <div class="tab-content">Donec vitae risus aliquet, mollis enim et, dignissim lectus. Duis nibh nibh, rutrum at cursus sit amet, placerat eget justo. .</div>
+    </div>
+  </div>-->
+  <div class="tabs">
+    <!-- Radio button and lable for #tab-content1 -->
+    <input type="radio" name="tabs" id="tab1" checked >
+    <label for="tab1">
+        <span class="tab-icon-dds">DDS</span>
+    </label>
+    <!-- Radio button and lable for #tab-content2 -->
+    <input type="radio" name="tabs" id="tab2">
+    <label for="tab2">
+        <span class="tab-icon-dmail">Dmail</span>
+    </label>
+    <!-- Radio button and lable for #tab-content3 -->
+    <input type="radio" name="tabs" id="tab3">
+    <label for="tab3">
+        <span class="tab-icon-upload">Upload</span>
+    </label>
+    <div id="tab-content1" class="tab-content">
+        <h3><!-- Tab title here --></h3>
+       <div class="dashboard-user-self-status-icon-active"></div>
+		<div class="dashboard-active-user">{user}</div>
+			<div class="dashboard-active-convo-wrapper">
+				<div class="dashboard-active-convo-title">Active conversations (6)</div>
+				<ul class="dashboard-convo-list">
+					<li class="dashboard-icon-chat-group"><a href=""><b>morphis-dev</b></a></li>
+					<li class="dashboard-icon-chat-group"><a href="">bitcoin-dev</a></li>
+					<li class="dashboard-icon-chat-group"><a href="">math</a></li>
+					<li class="dashboard-icon-chat-group-lock"><a href="">privateGroup</a></li>
+					<li class="dashboard-icon-chat-blog"><a href="">bob's blog</a></li>
+				</ul>
+				<hr class="thin-line"></hr>
+				<div class="dashboard-active-convo-title">Private conversations (6)</div>
+				<ul class="dashboard-convo-list">
+					<li class="dashboard-active-user"><a href=""><div class="dashboard-user-status-icon-active"></div>bob</a></li>
+					<li class="dashboard-inactive-user"><a href=""><div class="dashboard-user-status-icon-inactive"></div>friend</a></li>
+				</ul>
+			</div>
+    </div> <!-- #tab-content1 -->
+    <div id="tab-content2" class="tab-content">
+        <h3><!-- Tab title here --></h3>
+        <p><!-- Tab content here --></p>
+    </div> <!-- #tab-content2 -->
+    <div id="tab-content3" class="tab-content">
+        <h3><!-- Tab title here --></h3>
+        <p><!-- Tab content here --></p>
+    </div> <!-- #tab-content3 -->
+</div>
 </nav>
 
 <div class="page-wrap">
