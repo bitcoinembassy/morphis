@@ -20,7 +20,7 @@ log = logging.getLogger(__name__)
 
 # Data Object.
 class Synapse(object):
-    NONCE_SIZE = 8
+    NONCE_SIZE = 8 # bytes. #FIXME: This becomes mpint to prevent a B.G.E.
     MIN_DIFFICULTY = 8 # bits.
 
     @staticmethod
@@ -298,6 +298,95 @@ class Synapse(object):
         end = offset + Synapse.NONCE_SIZE
         start = end - lenn
         self.nonce = data[start:end] = nonce_bytes
+
+class Stamp(object):
+    @staticmethod
+    def stamp_signer(synapse, key, version=1):
+        self.version = version
+        self.key = key
+        self.signed_key = synapse.signing_key
+
+    @staticmethod
+    def stamp_message(synapse, key, version=1):
+        self.version = version
+        self.key = key
+        self.signed_key = synapse.synapse_key
+
+    def __init__(self, buf=None):
+        self.buf = buf
+
+        self.version = None
+        self.signature = None
+        self.nonce = None
+        self.key = None
+        self._pubkey = None
+
+        self._signed_data_end_idx = None
+        self._pow_data_end_idx = None
+
+        self._stamp_key = None
+
+        if buf:
+            self.parse_from(buf, 0)
+
+    @property
+    def stamp_key(self):
+        if self._stamp_key:
+            return self._stamp_key
+
+        if not self.buf:
+            raise Exception("_stamp_key is not set and self.buf is empty.")
+
+        self._stamp_key =\
+            enc.generate_ID(self.buf[:self._signed_data_end_idx])
+
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug(\
+                "stamp_key=[{}].".format(mbase32.encode(self._stamp_key)))
+
+        return self._stamp_key
+
+    @property
+    def stamp_pow(self):
+        if self._stamp_pow:
+            return self._stamp_pow
+
+        if not self.buf:
+            raise Exception("_stamp_pow is not set and self.buf is empty.")
+
+        self._stamp_pow =\
+            enc.generate_ID(self.buf[:self._pow_data_end_idx])
+
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug(\
+                "stamp_pow=[{}].".format(mbase32.encode(self._stamp_pow)))
+
+        return self._stamp_pow
+
+    def encode(self):
+        if not self.buf:
+            self.buf = nbuf = bytearray()
+        else:
+            nbuf = self.buf
+            nbuf.clear()
+
+        self.encode_onto(nbuf)
+
+        return nbuf
+
+    def encode_onto(self, nbuf):
+        sshtype.encode_mpint_onto(nbuf, int(self.start_timestamp*1000))
+
+        nbuf += b' ' * Synapse.NONCE_SIZE
+        nonce_bytes = yield from\
+            self._calculate_nonce(nbuf, nonce_offset, self.difficulty)
+        self._store_nonce(nbuf, nonce_bytes, nonce_offset)
+
+    def parse(self):
+        pass
+
+    def parse_from(self, buf, i):
+        pass
 
 # DHT API Objects.
 class SynapseRequest(object):
