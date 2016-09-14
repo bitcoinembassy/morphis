@@ -837,7 +837,7 @@ def _process_synapse_stamp(req):
     if type(syn) is not synapse.Synapse:
         dispatcher.send_error("request: {}".format(req), errcode=400)
 
-    req.dispatcher.send_content("hello")
+    req.dispatcher.send_204()
     #TODO: YOU_ARE_HERE
 
 @asyncio.coroutine
@@ -906,10 +906,10 @@ def _process_synapse_create_post(dispatcher, req):
     target_addr = mbase32.decode(target_addr_enc)
 
     if not target_addr2_enc:
-        synapse = synapse.Synapse.for_target(target_addr, content_key)
+        syn = synapse.Synapse.for_target(target_addr, content_key)
     else:
         target_addr2 = mbase32.decode(target_addr2_enc)
-        synapse = synapse.Synapse.for_targets(\
+        syn = synapse.Synapse.for_targets(\
             (target_addr, target_addr2), content_key)
 
     ident_enc = fia(dd["ident"])
@@ -919,9 +919,9 @@ def _process_synapse_create_post(dispatcher, req):
             dmail.load_dmail_address(dispatcher.node, site_key=ident_addr)
         signing_key =\
             rsakey.RsaKey(privdata=ident_dmail_address.site_privatekey)
-        synapse.key = signing_key
+        syn.key = signing_key
 
-    yield from dispatcher.node.engine.tasks.send_store_synapse(synapse)
+    yield from dispatcher.node.engine.tasks.send_store_synapse(syn)
 
     storing_nodes =\
         yield from asyncio.wait_for(content_task, None, loop=dispatcher.loop)
@@ -934,7 +934,7 @@ def _process_synapse_create_post(dispatcher, req):
         "Resulting&nbsp;<a href='morphis://.dds/axon/read/{synapse_addr}/"\
             "{target_addr}'>Synapse</a>&nbsp;Address:<br/>{synapse_addr}"\
                  .format(\
-                    synapse_addr=mbase32.encode(synapse.synapse_pow),\
+                    synapse_addr=mbase32.encode(syn.synapse_pow),\
                     target_addr=mbase32.encode(target_addr))
 
     dispatcher.send_content(resp)
