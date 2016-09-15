@@ -534,7 +534,11 @@ def _process_axon_grok(req):
         channel_bare=title,\
         channel_html=channel_html)
 
-    req.dispatcher.send_content(template)
+    wrapper = templates.dds_wrapper[0]
+    wrapper =\
+        wrapper.format(title="MORPHiS Maalstroom DDS", child=template)
+
+    req.dispatcher.send_content(wrapper)
     return
 
 #@asyncio.coroutine

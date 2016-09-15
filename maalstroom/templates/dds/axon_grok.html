@@ -1,145 +1,72 @@
-<head><link rel='stylesheet' href='morphis://.dds/style.css'></link></head>
-<body class="dds">
-
-<!--<ul class="navigation">
-  <li class="nav-item"><a href="#">Home</a>
-  </li>
-  <li class="nav-item"><a href="#">Portfolio</a>
-  </li>
-  <li class="nav-item"><a href="#">About</a>
-  </li>
-  <li class="nav-item"><a href="#">Blog</a>
-  </li>
-  <li class="nav-item"><a href="#">Contact</a>
-  </li>
-</ul>
-
-<input type="checkbox" id="nav-trigger" class="nav-trigger" />
-<label for="nav-trigger"></label>
-<div class="site-wrap">-->
 <nav class="site-nav" id="site-nav">
-  <!--<div class="tabs">
-    <div class="tab">
-      <input type="radio" name="css-tabs" id="tab-1" checked class="tab-switch">
-      <label for="tab-1" class="tab-label">DDS</label>
-      <div class="tab-content">
-		<div class="dashboard-user-status-icon"></div>
-		<div class="dashboard-active-user">{user}</div>
-			<div class="dashboard-active-convo-wrapper">
-				<div class="dashboard-active-convo-title">Active conversations (6)</div>
-				<ul class="dashboard-convo-list">
-					<li>morphis-dev</li>
-					<li>bitcoin-dev</li>
-					<li>math</li>
-				</ul>
-				<ul class="dashboard-convo-list">
-					<li>morphis-dev</li>
-					<li>bitcoin-dev</li>
-					<li>bitcoin-dev</li>
-				</ul>
+	<div class="dashboard-footer-wrapper">
+		<div class="tabs">
+			<input type="radio" name="tabs" id="tab1" checked >
+			<label for="tab1"><span class="tab-icon-dds">DDS</span></label>
+			<input type="radio" name="tabs" id="tab2">
+			<label for="tab2"><span class="tab-icon-dmail">Dmail</span></label>
+			<input type="radio" name="tabs" id="tab3">
+			<label for="tab3"><span class="tab-icon-upload">Upload</span></label>
+			<div id="tab-content1" class="tab-content">
+				<div class="dashboard-user-icon"><img src="http://localhost:4251/.dds/images/user-img.png" height="28px" width="28px"></div>
+				<div class="dashboard-user-self-status-icon-active"></div>
+					<ul class="dashboard-user-menu">
+						<li>
+							<input class="dashboard-user-menu-input" id="check02" type="checkbox" name="dashboard-user-menu"/>
+							<label class="dashboard-user-menu-input" for="check02">{user}</label>
+							<ul class="dashboard-user-submenu">
+								<li><a href="#">user</a></li>
+								<li><a href="#">userrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr</a></li>
+								<li><a href="#">user</a></li>
+								<li><a href="#">user</a></li>
+							</ul>
+						</li>
+					</ul>
+				<div class="dashboard-active-convo-wrapper">
+					<div class="dashboard-active-convo-title">Active conversations (6)</div>
+					<ul class="dashboard-convo-list">
+						<li class="dashboard-icon-chat-group dds-trunc"><a href=""><b>morphis-dev</b></a></li>
+						<li class="dashboard-icon-chat-group dds-trunc"><a href="">bitcoin-dev</a></li>
+						<li class="dashboard-icon-chat-group dds-trunc"><a href="">math</a></li>
+						<li class="dashboard-icon-chat-group-lock dds-trunc"><a href="">privateGroup</a></li>
+						<li class="dashboard-icon-chat-blog dds-trunc"><a href="">bob's blog</a></li>
+					</ul>
+					<hr class="thin-line"></hr>
+					<div class="dashboard-active-convo-title">Private conversations (6)</div>
+					<ul class="dashboard-convo-list">
+						<li class="dashboard-active-user"><a href=""><div class="dashboard-user-status-icon-active"></div>bob</a></li>
+						<li class="dashboard-inactive-user"><a href=""><div class="dashboard-user-status-icon-inactive"></div>OfflineFriend</a></li>
+					</ul>
+				</div>
 			</div>
-      </div>
-    </div>
-    <div class="tab">
-      <input type="radio" name="css-tabs" id="tab-2" class="tab-switch">
-      <label for="tab-2" class="tab-label">DMAIL</label>
-      <div class="tab-content">Quisque rhoncus justo vitae augue scelerisque auctor. Morbi non lorem nec tortor volutpat bibendum vel ac nisl.  </div>
-    </div>
-    <div class="tab">
-      <input type="radio" name="css-tabs" id="tab-3" class="tab-switch">
-      <label for="tab-3" class="tab-label">UPLOAD</label>
-      <div class="tab-content">Donec vitae risus aliquet, mollis enim et, dignissim lectus. Duis nibh nibh, rutrum at cursus sit amet, placerat eget justo. .</div>
-    </div>
-  </div>-->
-  <div class="tabs">
-    <!-- Radio button and lable for #tab-content1 -->
-    <input type="radio" name="tabs" id="tab1" checked >
-    <label for="tab1">
-        <span class="tab-icon-dds">DDS</span>
-    </label>
-    <!-- Radio button and lable for #tab-content2 -->
-    <input type="radio" name="tabs" id="tab2">
-    <label for="tab2">
-        <span class="tab-icon-dmail">Dmail</span>
-    </label>
-    <!-- Radio button and lable for #tab-content3 -->
-    <input type="radio" name="tabs" id="tab3">
-    <label for="tab3">
-        <span class="tab-icon-upload">Upload</span>
-    </label>
-    <div id="tab-content1" class="tab-content">
-        <h3><!-- Tab title here --></h3>
-       <div class="dashboard-user-self-status-icon-active"></div>
-		<div class="dashboard-active-user">{user}</div>
-			<div class="dashboard-active-convo-wrapper">
-				<div class="dashboard-active-convo-title">Active conversations (6)</div>
-				<ul class="dashboard-convo-list">
-					<li class="dashboard-icon-chat-group"><a href=""><b>morphis-dev</b></a></li>
-					<li class="dashboard-icon-chat-group"><a href="">bitcoin-dev</a></li>
-					<li class="dashboard-icon-chat-group"><a href="">math</a></li>
-					<li class="dashboard-icon-chat-group-lock"><a href="">privateGroup</a></li>
-					<li class="dashboard-icon-chat-blog"><a href="">bob's blog</a></li>
-				</ul>
-				<hr class="thin-line"></hr>
-				<div class="dashboard-active-convo-title">Private conversations (6)</div>
-				<ul class="dashboard-convo-list">
-					<li class="dashboard-active-user"><a href=""><div class="dashboard-user-status-icon-active"></div>bob</a></li>
-					<li class="dashboard-inactive-user"><a href=""><div class="dashboard-user-status-icon-inactive"></div>friend</a></li>
-				</ul>
+			<div id="tab-content2" class="tab-content">
+				<p><!-- Tab content here --></p>
 			</div>
-    </div> <!-- #tab-content1 -->
-    <div id="tab-content2" class="tab-content">
-        <h3><!-- Tab title here --></h3>
-        <p><!-- Tab content here --></p>
-    </div> <!-- #tab-content2 -->
-    <div id="tab-content3" class="tab-content">
-        <h3><!-- Tab title here --></h3>
-        <p><!-- Tab content here --></p>
-    </div> <!-- #tab-content3 -->
-</div>
+			<div id="tab-content3" class="tab-content">
+				<p><!-- Tab content here --></p>
+			</div>
+		</div><div class="dashboard-footer-push"></div>
+	</div>
+	<div class ="dashboard-footer"><div class="magnifying-glass"></div><div class="dashboard-search"><input type="text" name="search" placeholder="Explore..."></div></div>
 </nav>
 
 <div class="page-wrap">
-	
 	<div class='dds-header-wrapper'>
-	<header class="main-header">
-	<div class="icon">
-		<a href="#site-nav">&#x25CF;<br />&#x25CF;<br />&#x25CF;</a>
-		<a href="#" class="close-menu">&#x25CF;<br />&#x25CF;<br />&#x25CF;</a>
-	</div>
-		<!--<a href=''><div class='dds-header-dash-icon'>
-			&#x25CF;<br />&#x25CF;<br />&#x25CF;
-		</div></a>-->
-		<ul class="dds-channel-menu">
-			<li>
-				<input class="dds-channel-menu-input" id="check01" type="checkbox" name="dds-channel-menu"/>
-				<label class="dds-channel-menu-input" for="check01"><div class='dds-channel-hash'>#</div>{channel_bare}</label>
-                {channel_html}
-			</li>
-		</ul>
-	 </header>
+		<header class="main-header">
+			<div class="icon">
+				<a href="#site-nav">&#x25CF;<br />&#x25CF;<br />&#x25CF;</a>
+				<a href="#" class="close-menu">&#x25CF;<br />&#x25CF;<br />&#x25CF;</a>
+			</div>
+			<ul class="dds-channel-menu">
+				<li>
+					<input class="dds-channel-menu-input" id="check01" type="checkbox" name="dds-channel-menu"/>
+					<label class="dds-channel-menu-input" for="check01"><div class='dds-channel-hash'>#</div>{channel_bare}</label>
+					{channel_html}
+				</li>
+			</ul>
+		</header>
 	 </div>
-
-<div class='dds-statusbar'>You <a href='' class='dds-username'>@{user}</a> have joined the <div class="dds-channel dds-trunc">{channel}</div> conversation.</div>
-
-<iframe src='morphis://.dds/axon/synapses/{key}{query}#new' style='height: calc(100% - 246px); width: 100%; border: 0;' seamless='seamless'></iframe>
-<iframe src='morphis://.dds/synapse/create/{key}{query}' style='width: 100%; height: 165px; border: 0;' seamless='seamless' name='post_frame'></iframe>
-
-  </div>
-<!--	<div class='dds-header-wrapper'>
-		<a href=''><div class='dds-header-dash-icon'>
-			&#x25CF;<br />&#x25CF;<br />&#x25CF;
-		</div></a>
-		<ul class="dds-channel-menu">
-			<li>
-				<input class="dds-channel-menu-input" id="check01" type="checkbox" name="dds-channel-menu"/>
-				<label class="dds-channel-menu-input" for="check01"><div class='dds-channel-hash'>#</div>{channel_bare}</label>
-                {channel_html}
-			</li>
-		</ul>
-	</div>
 	<div class='dds-statusbar'>You <a href='' class='dds-username'>@{user}</a> have joined the <div class="dds-channel dds-trunc">{channel}</div> conversation.</div>
-<iframe src='morphis://.dds/axon/synapses/{key}{query}#new' style='height: calc(100% - 246px); width: 100%; border: 0;' seamless='seamless'></iframe>
-<iframe src='morphis://.dds/synapse/create/{key}{query}' style='width: 100%; height: 165px; border: 0;' seamless='seamless' name='post_frame'></iframe>-->
-<!--</div>-->
-</body>
+	<iframe src='morphis://.dds/axon/synapses/{key}{query}#new' style='height: calc(100% - 246px); width: 100%; border: 0;' seamless='seamless'></iframe>
+	<iframe src='morphis://.dds/synapse/create/{key}{query}' style='width: 100%; height: 165px; border: 0;' seamless='seamless' name='post_frame'></iframe>
+</div>
