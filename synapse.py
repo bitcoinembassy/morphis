@@ -213,8 +213,9 @@ class Synapse(object):
         i, self.signature_type = sshtype.parse_string_from(self.buf, i)
         if self.signature_type:
             # For now we only support rsassa_pss.
-            assert\
-                self.signature_type == rsakey.RSASSA_PSS, self.signature_type
+            if self.signature_type != rsakey.RSASSA_PSS:
+                raise Exception(\
+                    "Invalid signature_type [{}].".format(self.signature_type))
             sig_bin_len = struct.unpack_from(">L", self.buf, i)[0]
             i += 4 + sig_bin_len
         else:
@@ -315,6 +316,7 @@ class Stamp(object):
 
         self._signed_data_end_idx = None
         self._pow_data_end_idx = None
+
         self._log_distance = None
 
         if buf:
@@ -344,7 +346,8 @@ class Stamp(object):
 
         assert self.buf
 
-        self._pubkey = self.buf[self._pubkey_offset:]
+        self._pubkey =\
+            self.buf[self._pubkey_offset:self._pubkey_offset+self._pubkey_len]
 
         return self._pubkey
 
@@ -387,7 +390,7 @@ class Stamp(object):
 
     def encode_onto(self, nbuf):
         assert len(self.signed_key) == consts.NODE_ID_BYTES
-        sshtype.encode_binary_onto(nbuf, self.signed_key)
+        nbuf += self.signed_key
 
         sshtype.encode_mpint_onto(nbuf, self.version)
 
@@ -411,10 +414,9 @@ class Stamp(object):
                     self.signed_key, self.difficulty, nbuf, len(nbuf),\
                     consts.MIN_NONCE_SIZE))
 
-        self._pubkey_offset = len(nbuf)
+        self._pubkey_offset = len(nbuf) + 4
         if self._pubkey:
-            nbuf += struct.pack(">L", len(self._pubkey))
-            nbuf += self._pubkey
+            nbuf += sshtype.encode_binary_onto(nbuf, self._pubkey)
         elif self.key:
             offset = len(nbuf)
             nbuf += consts.NULL_LONG
@@ -424,10 +426,35 @@ class Stamp(object):
             raise Exception()
 
     def parse(self):
-        pass
+        self.parse_from(self.buf, 0)
 
     def parse_from(self, buf, i):
-        pass
+        self.signed_key = buf[i:consts.NODE_ID_BYTES]
+        i += consts.NODE_ID_BYTES
+
+        i, self.version = sshtype.parse_mpint_from(buf, i)
+
+        self._signed_data_end_idx = i
+
+        self.signature_offset = i
+        i, self.signature_type = sshtype.parse_string_from(self.buf, i)
+        # For now we only support rsassa_pss.
+        if self.signature_type != rsakey.RSASSA_PSS:
+            raise Exception(\
+                "Invalid signature_type [{}].".format(self.signature_type))
+        sig_bin_len = struct.unpack_from(">L", self.buf, i)[0]
+        i += 4 + sig_bin_len
+
+        self._pow_data_end_idx = i
+
+        i, self.nonce = sshtype.parse_binary_from(buf, i)
+
+        self.pubkey_len = struct.unpack_from(">L", self.buf, i)[0]
+        i += 4
+        self._pubkey_offset = i
+        i += self._pubkey_len
+
+        return i, self
 
 # DHT API Objects.
 class SynapseRequest(object):
