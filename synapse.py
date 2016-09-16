@@ -20,8 +20,9 @@ log = logging.getLogger(__name__)
 
 # Data Object.
 class Synapse(object):
-    NONCE_SIZE = 8 # bytes. #FIXME: This becomes mpint to prevent a B.G.E.
-    MIN_DIFFICULTY = 8 # bits.
+    #FIXME: NONCE_SIZE becomes dynamic to prevent a B.G.E.
+    NONCE_SIZE = consts.MIN_NONCE_SIZE # bytes.
+    MIN_DIFFICULTY = consts.MIN_DIFFICULTY # bits.
 
     @staticmethod
     def for_target(target_key, source_key, difficulty=MIN_DIFFICULTY):
@@ -301,19 +302,24 @@ class Synapse(object):
 
 class Stamp(object):
     @staticmethod
-    def stamp_signer(synapse, key, version=1):
-        self.version = version
-        self.key = key
-        self.signed_key = synapse.signing_key
+    def stamp_signer(\
+            synapse, key, version=1, difficulty=consts.MIN_DIFFICULTY):
+        stamp = Stamp(synapse.signing_key)
+        stamp.version = version
+        stamp.key = key
+
+        self.difficulty = difficulty
 
     @staticmethod
     def stamp_message(synapse, key, version=1):
-        self.version = version
-        self.key = key
-        self.signed_key = synapse.synapse_key
+        stamp = Stamp(synapse.synapse_key)
+        stamp.version = version
+        stamp.key = key
 
-    def __init__(self, buf=None):
+    def __init__(self, signed_key, buf=None):
         self.buf = buf
+
+        self.signed_key = signed_key
 
         self.version = None
         self.signature = None
@@ -363,6 +369,31 @@ class Stamp(object):
 
         return self._stamp_pow
 
+    @property
+    def pubkey(self):
+        if self._pubkey:
+            return self._pubkey
+
+        assert self.buf
+
+        self._pubkey =\
+            self.buf[self.pubkey_offset:self.pubkey_offset+self.pubkey_len]
+
+        return self._pubkey
+
+    @pubkey.setter
+    def pubkey(self, value):
+        self._pubkey = value
+
+    @property
+    def signing_key(self):
+        if self._signing_key:
+            return self._signing_key
+
+        self._signing_key = enc.generate_ID(self.pubkey)
+
+        return self._signing_key
+
     def encode(self):
         if not self.buf:
             self.buf = nbuf = bytearray()
@@ -375,12 +406,35 @@ class Stamp(object):
         return nbuf
 
     def encode_onto(self, nbuf):
-        sshtype.encode_mpint_onto(nbuf, int(self.start_timestamp*1000))
+        sshtype.encode_mpint_onto(nbuf, self.version)
 
-        nbuf += b' ' * Synapse.NONCE_SIZE
-        nonce_bytes = yield from\
-            self._calculate_nonce(nbuf, nonce_offset, self.difficulty)
-        self._store_nonce(nbuf, nonce_bytes, nonce_offset)
+        if self.signature:
+            nbuf += self.signature
+        elif self.key:
+            tbuf = self.signed_key + nbuf
+            # Will be one string and one binary.
+            self.key.generate_rsassa_pss_sig(tbuf, nbuf)
+
+        #FIXME: Make this nonce stuff use some new dynamic sizing API.
+        struct.pack(">L", consts.MIN_NONCE_SIZE)
+        nbuf += b' ' * consts.MIN_NONCE_SIZE
+        nbuf[len(nbuf)-consts.MIN_NONCE_SIZE:] = yield from\
+            asyncio.get_event_loop().run_in_executor(\
+                None,\
+                brute.generate_targeted_block(\
+                    self.signed_key, self.difficulty, nbuf, len(nbuf),\
+                    consts.MIN_NONCE_SIZE))
+
+        if self._pubkey:
+            nbuf += struct.pack(">L", len(self._pubkey))
+            nbuf += self._pubkey
+        elif self.key:
+            offset = len(nbuf)
+            nbuf += consts.NULL_LONG
+            self.key.encode_pubkey_onto(nbuf)
+            struct.pack_into(">L", nbuf, offset, len(nbuf) - offset - 4)
+        else:
+            raise Exception()
 
     def parse(self):
         pass
