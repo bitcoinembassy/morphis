@@ -301,56 +301,24 @@ class Synapse(object):
         self.nonce = data[start:end] = nonce_bytes
 
 class Stamp(object):
-    @staticmethod
-    def stamp_signer(\
-            synapse, key, version=1, difficulty=consts.MIN_DIFFICULTY):
-        stamp = Stamp(synapse.signing_key)
-        stamp.version = version
-        stamp.key = key
-
-        self.difficulty = difficulty
-
-    @staticmethod
-    def stamp_message(synapse, key, version=1):
-        stamp = Stamp(synapse.synapse_key)
-        stamp.version = version
-        stamp.key = key
-
     def __init__(self, signed_key, buf=None):
         self.buf = buf
 
         self.signed_key = signed_key
-
-        self.version = None
+        self.version = 1
         self.signature = None
         self.nonce = None
         self.key = None
         self._pubkey = None
 
+        self.difficulty = consts.MIN_DIFFICULTY
+
         self._signed_data_end_idx = None
         self._pow_data_end_idx = None
-
-        self._stamp_key = None
+        self._log_distance = None
 
         if buf:
             self.parse_from(buf, 0)
-
-    @property
-    def stamp_key(self):
-        if self._stamp_key:
-            return self._stamp_key
-
-        if not self.buf:
-            raise Exception("_stamp_key is not set and self.buf is empty.")
-
-        self._stamp_key =\
-            enc.generate_ID(self.buf[:self._signed_data_end_idx])
-
-        if log.isEnabledFor(logging.DEBUG):
-            log.debug(\
-                "stamp_key=[{}].".format(mbase32.encode(self._stamp_key)))
-
-        return self._stamp_key
 
     @property
     def stamp_pow(self):
@@ -376,8 +344,7 @@ class Stamp(object):
 
         assert self.buf
 
-        self._pubkey =\
-            self.buf[self.pubkey_offset:self.pubkey_offset+self.pubkey_len]
+        self._pubkey = self.buf[self._pubkey_offset:]
 
         return self._pubkey
 
@@ -394,6 +361,19 @@ class Stamp(object):
 
         return self._signing_key
 
+    @property
+    def log_distance(self):
+        if self._log_distance:
+            return self._log_distance
+
+        self._log_distance =\
+            mutil.calc_log_distance(self.signed_key, self.stamp_pow)
+
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("log_distance=[{}].".format(self._log_distance))
+
+        return self._log_distance
+
     def encode(self):
         if not self.buf:
             self.buf = nbuf = bytearray()
@@ -406,14 +386,20 @@ class Stamp(object):
         return nbuf
 
     def encode_onto(self, nbuf):
+        assert len(self.signed_key) == consts.NODE_ID_BYTES
+        sshtype.encode_binary_onto(nbuf, self.signed_key)
+
         sshtype.encode_mpint_onto(nbuf, self.version)
+
+        self._signed_data_end_idx = len(nbuf)
 
         if self.signature:
             nbuf += self.signature
         elif self.key:
-            tbuf = self.signed_key + nbuf
             # Will be one string and one binary.
-            self.key.generate_rsassa_pss_sig(tbuf, nbuf)
+            self.key.generate_rsassa_pss_sig(nbuf, nbuf)
+
+        self._pow_data_end_idx = len(nbuf)
 
         #FIXME: Make this nonce stuff use some new dynamic sizing API.
         struct.pack(">L", consts.MIN_NONCE_SIZE)
@@ -425,6 +411,7 @@ class Stamp(object):
                     self.signed_key, self.difficulty, nbuf, len(nbuf),\
                     consts.MIN_NONCE_SIZE))
 
+        self._pubkey_offset = len(nbuf)
         if self._pubkey:
             nbuf += struct.pack(">L", len(self._pubkey))
             nbuf += self._pubkey
