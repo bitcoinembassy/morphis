@@ -830,12 +830,12 @@ def _process_synapse_stamp(req):
         req.dispatcher.node.engine.tasks.send_get_data(synapse_key)
 
     if not data_rw or not data_rw.data:
-        dispatcher.send_error("request: {}".format(req), errcode=400)
+        req.dispatcher.send_error("request: {}".format(req), errcode=400)
 
     syn = data_rw.object
 
     if type(syn) is not synapse.Synapse:
-        dispatcher.send_error("request: {}".format(req), errcode=400)
+        req.dispatcher.send_error("request: {}".format(req), errcode=400)
 
     req.dispatcher.send_204()
     #TODO: YOU_ARE_HERE

@@ -164,7 +164,7 @@ class DdsEngine(object):
             try:
                 done, pending = yield from asyncio.wait(\
                     tasks, loop=self.loop, return_when=futures.ALL_COMPLETED)
-            except CancelledError as e:
+            except asyncio.CancelledError as e:
                 for task in new_tasks:
                     if not task.done():
                         task.cancel()
