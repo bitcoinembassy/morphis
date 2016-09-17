@@ -279,7 +279,7 @@ input[type="text"]:focus, textarea:focus {
 	float: right;
 	white-space: nowrap;
 }
-button.dds-reply-button {
+button.dds-button {
 	vertical-align: top;
 	background-color: transparent;
 	border: 1px solid #fff;
@@ -294,12 +294,12 @@ button.dds-reply-button {
 	-ms-transition: all ease 0.5s ;
 	transition: all ease 0.5s ;
 }
-button.dds-reply-button:hover {
+button.dds-button:hover {
 	background: #38a3af;
 	cursor: pointer;
 	color: #fff;
 }
-button.dds-reply-button:active {
+button.dds-button:active {
 	border: 1px solid;
 }
 
@@ -1518,6 +1518,7 @@ span.blog-comment-bubble-header::after {
 	height:8px;
 	background-position: -2px -5px;
 	/*margin: 2px auto 4px auto;*/
+	cursor: pointer;
 }
 .dds-post-upvote:hover {
 	background-image: url("morphis://.dds/images/vote3-color.png");
@@ -1530,6 +1531,7 @@ span.blog-comment-bubble-header::after {
 	height:10px;
 	background-position: -2px -22px;
 	/*margin: 4px auto 0 auto;*/
+	cursor: pointer;
 }
 .dds-post-flag:hover {
 	background-image: url("morphis://.dds/images/vote3-color.png");
@@ -1690,114 +1692,8 @@ span.profile-comment-bubble-header::after {
 .score-color {
 	background: #DBD9A8;
 }
-
 /* DASHBOARD */
 
-/*.navigation {
-	width: 100%;
-	height: 100%;
-	position: fixed;
-	top: 0;
-	right: 0;
-	bottom: 0;
-	left: 0;
-	z-index: 0;
-	list-style: none;
-	background: #1c2227;
-}
-
-.nav-item {
-	width: 200px;
-	border-top: 1px solid #1c2227;
-	border-bottom: 1px solid #000;
-}
-.nav-item a {
-	display: block;
-	padding: 1em;
-	background: #1c2227;
-	color: white;
-	font-size: 1.2em;
-	text-decoration: none;
-	transition: color 0.2s, background 0.5s;
-}
-.nav-item a:hover {
-	color: #c74438;
-}
-
-.site-wrap {
-	min-height: 100%;
-	min-width: 100%;
-	width: 100%;
-	background-color: #f3f6f8;
-	position: relative;
-	top: 0;
-	bottom: 100%;
-	float: right;
-	right: 0;
-	z-index: 1;
-	-moz-transition: all 0.4s ease 0s;
-	-o-transition: all 0.4s ease 0s;
-	-webkit-transition: all 0.4s ease 0s;
-	transition: all 0.4s ease 0s;
-}
-.nav-trigger {
-	position: absolute;
-	clip: rect(0, 0, 0, 0);
-}
-label[for="nav-trigger"] {
-	position: fixed;
-	left: 13px;
-	top: 15px;
-	z-index: 2;
-	height: 20px;
-	width: 5px;
-	cursor: pointer;
-	background-image: url("morphis://.dds/images/dots.png");
-	background-repeat: no-repeat;
-	background-size: contain;
-	-moz-transition: all 0.4s ease 0s;
-	-o-transition: all 0.4s ease 0s;
-	-webkit-transition: all 0.4s ease 0s;
-	transition: all 0.4s ease 0s;
-}
-
-.nav-trigger + label, .site-wrap {
-}
-.nav-trigger:checked + label {
-	left: 215px;
-}
-.nav-trigger:checked ~ .site-wrap {
-	min-width: calc(100% - 200px);
-	box-shadow: 0 0 5px 5px rgba(0, 0, 0, 0.5);
-	width: calc(100% - 200px);
-}
-.nav-trigger:checked + label {
-	left: 215px;
-	-webkit-transform: rotate(90deg);
-	-moz-transform: rotate(90deg);
-	-o-transform: rotate(90deg);
-	-ms-transform: rotate(90deg);
-	transform: rotate(90deg);
-}*/
-/*.dds-header-dash-icon {
-	width: 9em;
-	color: #fff;
-	height: 100%;
-	float: left;
-	font-size: .35em;
-	line-height:1.6em;
-	text-align: center;
-	-webkit-transition: all 0.10s ease-in-out;
-	-moz-transition: all 0.10s ease-in-out;
-	transition: all 0.15s ease-in-out;
-	display: block;
-	margin-left:-10px;
-}
-.dds-header-dash-icon:hover {
-	margin-left: 0px;
-	background-color: #3b3e43;
-	display: block;
-}*/
 .dds-header-wrapper {
 	height: 4em;
 	background-color: #1c2227;
@@ -1949,6 +1845,12 @@ left: 25%;
 	width: 100%;
 	float: left;
 	padding: 15px;
+	color: #fff;
+}
+.tab-content-dmail {
+	display: none;
+	width: 100%;
+	float: left;
 	color: #fff;
 }
 .tab-content * {
@@ -2150,7 +2052,7 @@ label.dashboard-user-menu-input{
 	white-space:nowrap;
 	text-overflow:ellipsis;
 	font-weight: 100;
-	font-size: 1.5em;
+	font-size: 1.3em;
 }
 
 label.dashboard-user-menu-input:after {
@@ -2235,4 +2137,236 @@ ul.dashboard-user-submenu li a:hover {
 	position: relative;
 	padding-right: .8em;
 	top: -5;
+}
+input[type="file"] {
+	width: 100%;
+	margin-top: 1em;
+	opacity: .4;
+	cursor: pointer;
+}
+/*
+input[type="file"] {
+	display: none;
+}
+.custom-file-upload {
+	border: 1px solid #ccc;
+	display: inline-block;
+	padding: 6px 12px;
+	cursor: pointer;
+	margin-top: 1em;
+	-webkit-transition: background ease 0.5s;
+	-moz-transition: background ease 0.5s;
+	-o-transition: background ease 0.5s;
+	-ms-transition: background ease 0.5s ;
+	transition: background ease 0.5s ;
+}
+.custom-file-upload:hover {
+	background: #f28182;
+}*/
+.dashboard-upload-icon {
+	background-image: url("morphis://.dds/images/upload_cloud.png");
+	height: 15px;
+	width: 20px;
+	background-size: contain;
+	float: left;
+	margin-right: .5em;
+	margin-top: .05em;
+}
+.dashboard-upload {
+	background: transparent;
+	color: white;
+	border: 1px solid white;
+	padding: .5em;
+	cursor: pointer;
+}
+.dashboard-upload-button {
+	margin: .5em auto;
+	width: 100%;
+}
+.dashboard-hr-pad {
+	padding-left: 1.2em;
+	padding-bottom: .5em;
+	padding-top: .5em;
+	padding-right: 1.2em;
+}
+/*Dashboard DMAIL*/
+.dashboard-dmail-header {
+	padding: 15px;
+}
+.mailboxes {
+}
+.mailbox-trunc {
+	overflow: hidden;
+	text-overflow: ellipsis;  // IE 6+, FF 7+, Op 11+, Saf 1.3+, Chr 1+
+	-o-text-overflow: ellipsis;  // for Opera 9 & 10
+	white-space: nowrap;
+	padding: 0;
+	margin: 0;
+	display: block;
+	font-size: 1.3em;
+	font-weight: 100;
+	line-height: 1.5em;
+}
+.active-notify {
+	float: right;
+	height: 17px;
+	border-radius: 10px;
+	border: 1px solid #141c30;
+	background-color: #39a3af;
+	margin: 0 auto;
+	-moz-box-shadow:    inset 1px 1px 2px #47525e;
+	-webkit-box-shadow: inset 1px 1px 2px #47525e;
+	box-shadow:         inset 1px 1px 2px #47525e;
+	font-size: 9px;
+	padding-left: 6px;
+	padding-right: 7px;
+	padding-top: 2px;
+	color: #ffffff;
+	font-weight: bold;
+}
+.inactive-notify {
+	float: right;
+	height: 17px;
+	border-radius: 10px;
+	border: 1px solid #b6b6b6;
+	background-color: #b6b6b6;
+	margin: 0 auto;
+	font-size: 9px;
+	padding-left: 6px;
+	padding-right: 7px;
+	padding-top: 2px;
+	color: #ffffff;
+	font-weight: bold;
+}
+.mailbox-pad {
+	padding: .5em 1.2em .5em 3em;
+}
+.inbox-icon-active {
+	background: url("morphis://.dmail/images/inbox_white.png") no-repeat center left;
+	background-position: 1.2em;
+}
+.inbox-icon {
+	background: url("morphis://.dmail/images/inbox_white.png") no-repeat center left;
+	opacity: .3;
+	background-position: 1.2em;
+}
+.inbox-icon:hover {
+	background: url("morphis://.dmail/images/inbox_white.png") no-repeat center left;
+	opacity: 1;
+	background-position: 1.2em;
+}
+.sent-icon {
+	background: url("morphis://.dmail/images/sent_white.png") no-repeat center left;
+	opacity: .3;
+	background-position: 1.2em;
+}
+.sent-icon:hover {
+	background: url("morphis://.dmail/images/sent_white.png") no-repeat center left;
+	opacity: 1;
+	background-position: 1.2em;
+}
+.drafts-icon {
+	background: url("morphis://.dmail/images/draft_white.png") no-repeat center left;
+	opacity: .3;
+	background-position: 1.2em;
+}
+.drafts-icon:hover {
+	background: url("morphis://.dmail/images/draft_white.png") no-repeat center left;
+	opacity: 1;
+	background-position: 1.2em;
+}
+.tag-icon {
+	background: url("morphis://.dmail/images/tags_white.png") no-repeat center left;
+	background-position: 1.2em;
+}
+.tag-icon:hover {
+	background: url("morphis://.dmail/images/tags_white.png") no-repeat center left;
+	background-position: 1.2em;
+}
+.bullet {
+	background: url("morphis://.dmail/images/bullet_white.png") no-repeat center left;
+	opacity: .3;
+	background-position: 1.2em;
+}
+.bullet:hover {
+	background: url("morphis://.dmail/images/bullet_white.png") no-repeat center left;
+	opacity: 1;
+	background-position: 1.2em;
+}
+.bullet.active_tag {
+	background: url("morphis://.dmail/images/bullet_white.png") no-repeat center left;
+	opacity: 1;
+	background-position: 1.2em;
+}
+.mailbox-list ul {
+	margin-top: 1em;
+}
+.mailbox-list li {
+	list-style: none;
+	transition: opacity 0.5s;
+	-webkit-transition: all ease 0.5s;
+	-moz-transition: all ease 0.5s;
+	-o-transition: all ease 0.5s;
+	-ms-transition: all ease 0.5s ;
+	transition: all ease 0.5s ;
+}
+.active-mailbox {
+	background-color: #3b2348;
+	opacity: 1;
+}
+.active-mailbox a:link {
+	color: #ffffff;
+}
+.mailbox-list li:hover {
+	background-color: #2c2337;
+	color: white;
+}
+.mailbox-list li:hover a {
+	color: #ffffff;
+}
+.divider {
+	background: url("morphis://.dmail/images/divider.gif") no-repeat top left;
+	width: 163px;
+	height: 5px;
+	margin-left: 2.5em;
+}
+.tag-head li {
+	padding-bottom: .4em;
+	padding-top: .1em;
+	padding-right: .6em;
+	list-style: none;
+}
+.tag-head li:hover {
+	background-color: #38A3AF;
+}
+.tag-head li:hover a {
+	color: #ffffff;
+}
+.tag-head a:visited {
+	color: #141c30;
+}
+.tag-list li {
+	padding-top: .2em;
+	padding-bottom: .2em;
+	padding-right: 2em;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;  // IE 6+, FF 7+, Op 11+, Saf 1.3+, Chr 1+
+	-o-text-overflow: ellipsis;  // for Opera 9 & 10
+	display: block;
+}
+.tag-list li:hover {
+	background-color: #38A3AF;
+}
+.tag-list li:hover a {
+	color: #ffffff;
+}
+.tag-list a:visited {
+	color: #141c30;
+}
+.tag-list li.active_tag {
+	background-color: #38A3AF;
+}
+.tag-list li.active_tag a {
+	color: #ffffff;
 }

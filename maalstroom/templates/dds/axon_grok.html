@@ -12,8 +12,8 @@
 				<div class="dashboard-user-self-status-icon-active"></div>
 					<ul class="dashboard-user-menu">
 						<li>
-							<input class="dashboard-user-menu-input" id="check02" type="checkbox" name="dashboard-user-menu"/>
-							<label class="dashboard-user-menu-input" for="check02">{user}</label>
+							<input class="dashboard-user-menu-input" id="user-status" type="checkbox" name="dashboard-user-menu"/>
+							<label class="dashboard-user-menu-input" for="user-status">{user}</label>
 							<ul class="dashboard-user-submenu">
 								<li><a href="#">user</a></li>
 								<li><a href="#">userrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr</a></li>
@@ -39,14 +39,70 @@
 					</ul>
 				</div>
 			</div>
-			<div id="tab-content2" class="tab-content">
-				<p><!-- Tab content here --></p>
+			<div id="tab-content2" class="tab-content-dmail">
+				<div class="dashboard-convo-list">
+					<div class="dashboard-dmail-header">
+						<p class="mailboxes">MAILBOXES FOR</p>
+						<ul class="dashboard-user-menu">
+							<li>
+								<input class="dashboard-user-menu-input" id="dmail-address" type="checkbox" name="dashboard-user-menu"/>
+								<label class="dashboard-user-menu-input" for="dmail-address">{user}</label>
+								<ul class="dashboard-user-submenu">
+									<li><a href="#">dmail</a></li>
+									<li><a href="#">dmail2</a></li>
+									<li><a href="#">dmail3</a></li>
+									<li><a href="#">dmail4</a></li>
+								</ul>
+							</li>
+						</ul>
+					</div>
+					<span class="mailbox-list">
+						<ul>
+							<li class="inbox-icon active-mailbox"><a href="morphis://.dmail/wrapper/mem6zt7961nhya8icgrwyk6ok3eah5e3jed31djndzay6yai1keyt1gppprksb5tz6ptpcjxr17g8s9nec79s8uodxtuz9jtrwcsiji/Inbox" style="display:block"><div class="mailbox-pad">Inbox<div class=""></div></div></a></li>
+							<li class="inbox-icon "><a href="morphis://.dmail/wrapper/mem6zt7961nhya8icgrwyk6ok3eah5e3jed31djndzay6yai1keyt1gppprksb5tz6ptpcjxr17g8s9nec79s8uodxtuz9jtrwcsiji/Outbox" style="display:block"><div class="mailbox-pad">Outbox<div class=""></div></div></a></li>
+							<li class="sent-icon "><a href="morphis://.dmail/wrapper/mem6zt7961nhya8icgrwyk6ok3eah5e3jed31djndzay6yai1keyt1gppprksb5tz6ptpcjxr17g8s9nec79s8uodxtuz9jtrwcsiji/Sent" style="display:block"><div class="mailbox-pad">Sent<div class=""></div></div></a></li>
+							<li class="drafts-icon "><a href="morphis://.dmail/wrapper/mem6zt7961nhya8icgrwyk6ok3eah5e3jed31djndzay6yai1keyt1gppprksb5tz6ptpcjxr17g8s9nec79s8uodxtuz9jtrwcsiji/Drafts" style="display:block"><div class="mailbox-pad">Drafts<div class=""></div></div></a></li>
+							<li class="drafts-icon "><a href="morphis://.dmail/wrapper/mem6zt7961nhya8icgrwyk6ok3eah5e3jed31djndzay6yai1keyt1gppprksb5tz6ptpcjxr17g8s9nec79s8uodxtuz9jtrwcsiji/Trash" style="display:block"><div class="mailbox-pad">Trash<div class="inactive-notify">1</div></div></a></li>
+						</ul>
+					</span>
+					<div class="dashboard-hr-pad"><hr class="style2"></hr></div>
+					<ul>
+						<form target="_self" action="morphis://.dmail/create_tag" method="get" accept-charset="UTF-8 ISO-8859-1">
+							<input name="csrf_token" value="4mD9vs5BAZhUWC11QqiTewJyanxbzuhNJPWZaj1qjsnJ5mvt9gykLkt7AVzKAbgbeSpKzwihci1v8cQa7BvcjJyy" type="hidden">
+							<input name="redirect" value="morphis://.dmail/aside/mem6zt7961nhya8icgrwyk6ok3eah5e3jed31djndzay6yai1keyt1gppprksb5tz6ptpcjxr17g8s9nec79s8uodxtuz9jtrwcsiji/Inbox" type="hidden">
+							<span class="tag-head">
+								<li class="tag-icon">
+									<span class="tag-text-pad">
+										<input class="tag-text" name="tag_name" placeholder="ADD TAG" type="text">
+										<button class="add-tag" value="send" name="add-tag" type="submit">+</button>
+									</span>
+								</li>
+							</span>
+						</form>
+						<span class="tag-list">
+							<li class="bullet">
+								<span class="mailbox-pad">
+									<a href="morphis://.dmail/wrapper/mem6zt7961nhya8icgrwyk6ok3eah5e3jed31djndzay6yai1keyt1gppprksb5tz6ptpcjxr17g8s9nec79s8uodxtuz9jtrwcsiji/Sam">Sam</a>
+								</span>
+							</li>
+						</span>
+					</ul>
+				</div>
 			</div>
 			<div id="tab-content3" class="tab-content">
-				<p><!-- Tab content here --></p>
+				<p>Select the file to upload below:</p>
+				<form action="upload" method="post" enctype="multipart/form-data">
+					<input type="file" name="fileToUpload" id="fileToUpload" class="inputfile"/>
+					<!--<label for="file">Choose a file</label>-->
+					<!--<input type="file" name="file" id="file" />
+					<label for="file" class="custom-file-upload"><div class="dashboard-upload-icon"></div>Choose a file</label>-->
+					<button type="submit" name="submit" class="dds-button dashboard-upload-button">Upload</button>
+					<hr class="thin-line"></hr>
+					other stuff...
+				</form>
 			</div>
 		</div><div class="dashboard-footer-push"></div>
-	</div>
+	 </div>
 	<div class ="dashboard-footer"><div class="magnifying-glass"></div><div class="dashboard-search"><input type="text" name="search" placeholder="Explore..."></div></div>
 </nav>
 
