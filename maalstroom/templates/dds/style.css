@@ -2185,8 +2185,8 @@ input[type="file"] {
 }
 .dashboard-hr-pad {
 	padding-left: 1.2em;
-	padding-bottom: .5em;
-	padding-top: .5em;
+	padding-bottom: 1em;
+	padding-top: 1em;
 	padding-right: 1.2em;
 }
 /*Dashboard DMAIL*/
@@ -2298,9 +2298,6 @@ input[type="file"] {
 	opacity: 1;
 	background-position: 1.2em;
 }
-.mailbox-list ul {
-	margin-top: 1em;
-}
 .mailbox-list li {
 	list-style: none;
 	transition: opacity 0.5s;
@@ -2323,12 +2320,6 @@ input[type="file"] {
 }
 .mailbox-list li:hover a {
 	color: #ffffff;
-}
-.divider {
-	background: url("morphis://.dmail/images/divider.gif") no-repeat top left;
-	width: 163px;
-	height: 5px;
-	margin-left: 2.5em;
 }
 .tag-head li {
 	padding-bottom: .4em;
