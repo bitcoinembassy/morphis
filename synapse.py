@@ -179,8 +179,8 @@ class Synapse(object):
             self._calculate_nonce(nbuf, nonce_offset, self.difficulty)
         self._store_nonce(nbuf, nonce_bytes, nonce_offset)
 
-        if self.stamps:
-            nbuf += self.stamps
+        for stamp in self.stamps:
+            stamp.encode_onto(nbuf)
 
         return nbuf
 
@@ -231,7 +231,11 @@ class Synapse(object):
         i = end
 
         if i < len(self.buf):
-            self.stamps = self.buf[i:]
+            stamps = self.stamps
+            if stamps: stamps.clear()
+            while i < len(self.buf):
+                i, stamp = Stamp().parse_from(self.buf[i:])
+                stamps.append(stamp)
 
     def is_signed(self):
         return self.pubkey or self.signature_type is not None
@@ -244,6 +248,11 @@ class Synapse(object):
 
         return self.key.verify_rsassa_pss_sig(
             self.buf[:self.signature_offset], self.buf, self.signature_offset)
+
+    def check_stamps(self):
+        assert self.stamps
+        #TODO: YOU_ARE_HERE
+        raise Exception()
 
     @property
     def pubkey(self):
@@ -304,14 +313,14 @@ class Synapse(object):
         self.nonce = data[start:end] = nonce_bytes
 
 class Stamp(object):
-    def __init__(self, signed_key, buf=None):
+    def __init__(self, signed_key=None, key=None):
         self.buf = buf
 
         self.signed_key = signed_key
         self.version = 1
         self.signature = None
         self.nonce = None
-        self.key = None
+        self.key = key
         self._pubkey = None
 
         self.difficulty = consts.MIN_DIFFICULTY
@@ -320,9 +329,6 @@ class Stamp(object):
         self._pow_data_end_idx = None
 
         self._log_distance = None
-
-        if buf:
-            self.parse_from(buf, 0)
 
     @property
     def stamp_pow(self):
