@@ -682,6 +682,14 @@ class ChordTasks(object):
                     max_retries, enc.generate_ID(synapse.synapse_key),\
                     for_data=True, data_msg=sdmsg, retry_factor=retry_factor),\
                 loop=self.loop))
+        if store_key:
+            # Store the synapse_key itself (for find_key operations).
+            tasks.append(\
+                asyncio.async(\
+                    mutil.retry_until(self.send_store_key, min_storing_nodes,\
+                        max_retries, data, synapse.synapse_key, targeted=True,\
+                        retry_factor=retry_factor),\
+                    loop=self.loop))
 
         if synapse.nonce:
             # Store for synapse_pow (PoW key of synapse).
@@ -719,12 +727,13 @@ class ChordTasks(object):
                     for_data=True, data_msg=sdmsg, retry_factor=retry_factor),\
                 loop=self.loop))
 
-        # Store the synapse_key itself (for find_key operations).
-        if store_key:
+        if synapse.signing_key:
+            # Store for signing key.
             tasks.append(\
                 asyncio.async(\
-                    mutil.retry_until(self.send_store_key, min_storing_nodes,\
-                        max_retries, data, synapse.synapse_key, targeted=True,\
+                    mutil.retry_until(self.send_find_node, min_storing_nodes,\
+                        max_retries, enc.generate_ID(synapse.signing_key),\
+                        for_data=True, data_msg=sdmsg,\
                         retry_factor=retry_factor),\
                     loop=self.loop))
 
