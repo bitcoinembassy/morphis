@@ -163,10 +163,7 @@ class Synapse(object):
             sshtype.encode_string_onto(nbuf, "")
 
         if self._pubkey:
-            offset = len(nbuf)
-            nbuf += consts.NULL_LONG
-            nbuf += self._pubkey
-            struct.pack_into(">L", nbuf, offset, len(nbuf) - offset - 4)
+            sshtype.encode_binary_onto(nbuf, self._pubkey)
         elif self.key:
             offset = len(nbuf)
             nbuf += consts.NULL_LONG
@@ -237,7 +234,7 @@ class Synapse(object):
             self.stamps = self.buf[i:]
 
     def is_signed(self):
-        return self.signature_type is not None
+        return self.pubkey or self.signature_type is not None
 
     def check_signature(self):
         assert self.buf and self.is_signed
@@ -253,8 +250,13 @@ class Synapse(object):
         if self._pubkey:
             return self._pubkey
 
-        self._pubkey =\
-            self.buf[self.pubkey_offset:self.pubkey_offset+self.pubkey_len]
+        if self.key:
+            # Try this first as buf could be filled but offsets are only filled
+            # by parse and not encode.
+            self._pubkey = self.key.asbytes()
+        else:
+            self._pubkey =\
+                self.buf[self.pubkey_offset:self.pubkey_offset+self.pubkey_len]
 
         return self._pubkey
 
