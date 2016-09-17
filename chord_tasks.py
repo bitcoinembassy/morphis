@@ -3652,26 +3652,24 @@ class ChordTasks(object):
                 # no further qualifications are needed for acceptance.
                 return synapse
 
-        if not synapse.stamps:
-            # Then it is required to be a POW Synapse.
-            dist, direction = synapse.log_distance
+        dist, direction = synapse.log_distance
+        if direction < 0\
+                or dist\
+                    > (consts.NODE_ID_BITS - syn.Synapse.MIN_DIFFICULTY):
+            log.warning(\
+                "Invalid Synapse; PoW is insufficient ({}/{}/{}/{})."\
+                    .format(\
+                        direction, dist,\
+                        mbase32.encode(synapse.target_key),\
+                        mbase32.encode(synapse.synapse_pow)))
+            return None
 
-            if direction < 0\
-                    or dist\
-                        > (consts.NODE_ID_BITS - syn.Synapse.MIN_DIFFICULTY):
-                log.warning(\
-                    "Invalid Synapse; PoW is insufficient ({}/{}/{}/{})."\
-                        .format(\
-                            direction, dist,\
-                            mbase32.encode(synapse.target_key),\
-                            mbase32.encode(synapse.synapse_pow)))
+        if synapse.stamps:
+            # Stamped Synapse.
+            if not synapse.check_stamps():
+                log.warning("Invalid Synapse; StampS are invalid.")
                 return None
 
-            return synapse
-
-        # Stamped Synapse.
-        raise Exception()
-        #TODO:YOU_ARE_HERE
         return synapse
 
     def _check_targeted_block(self, data, data_key=None, data_id=None):
