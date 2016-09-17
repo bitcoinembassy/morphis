@@ -727,7 +727,7 @@ class ChordTasks(object):
                     for_data=True, data_msg=sdmsg, retry_factor=retry_factor),\
                 loop=self.loop))
 
-        if synapse.signing_key:
+        if synapse.is_signed():
             # Store for signing key.
             tasks.append(\
                 asyncio.async(\
