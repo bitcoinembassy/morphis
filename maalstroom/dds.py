@@ -903,6 +903,10 @@ def _process_synapse_create_post(dispatcher, req):
         dispatcher.send_content(resp)
         return
 
+    if log.isEnabledFor(logging.INFO):
+        log.info("Storing Synapse for content key [{}]."\
+            .format(mbase32.encode(content_key)))
+
     target_addr = mbase32.decode(target_addr_enc)
 
     if not target_addr2_enc:
