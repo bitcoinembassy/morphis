@@ -1,6 +1,7 @@
 import llog
 
 import asyncio
+import itertools
 import logging
 import queue
 
@@ -32,5 +33,41 @@ def yield_from_thread_safe(loop, coroutine):
     if type(r) is ExceptionResult:
         raise r.exception
     return r
+
+if log.isEnabledFor(logging.INFO):
+    task_id_seq = itertools.count()
+
+@asyncio.coroutine
+def retry_until(func, amount, max_retries, *args, **kwargs):
+    total = 0
+    if log.isEnabledFor(logging.INFO):
+        task_id = task_id_seq.__next__()
+
+    retry_factor = kwargs.get("retry_factor", 5)
+    total_max_retries = retry_factor + max_retries
+
+    while True:
+        total += yield from func(*args, **kwargs)
+
+        if total >= amount:
+            return total
+
+        retry_factor += 1
+
+        if retry_factor >= total_max_retries:
+            if "task_id" not in locals():
+                task_id = None
+
+            log.warning(\
+                "Retry task (id=[{}]) reached max_retries ({})"\
+                " with total=[{}]."\
+                    .format(task_id, max_retries, total))
+            return total
+
+        kwargs["retry_factor"] = retry_factor
+
+        if log.isEnabledFor(logging.INFO):
+            log.info("Retrying task_id=[{}] with retry_factor=[{}]."\
+                .format(task_id, retry_factor))
 ##.
 

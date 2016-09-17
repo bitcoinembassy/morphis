@@ -8,7 +8,6 @@ from collections import namedtuple
 from concurrent import futures
 from datetime import datetime
 import functools
-import itertools
 import logging
 import math
 import os
@@ -671,44 +670,6 @@ class ChordTasks(object):
         sdmsg.data = data
         sdmsg.targeted = True
 
-        if log.isEnabledFor(logging.INFO):
-            task_id_seq = itertools.count()
-
-        @asyncio.coroutine
-        def retry_until(func, amount, *args, **kwargs):
-            nonlocal task_id_seq, max_retries
-
-            total = 0
-            if log.isEnabledFor(logging.INFO):
-                task_id = task_id_seq.__next__()
-
-            retry_factor = kwargs.get("retry_factor", 5)
-            total_max_retries = retry_factor + max_retries
-
-            while True:
-                total += yield from func(*args, **kwargs)
-
-                if total >= amount:
-                    return total
-
-                retry_factor += 1
-
-                if retry_factor >= total_max_retries:
-                    if "task_id" not in locals():
-                        task_id = None
-
-                    log.warning(\
-                        "Retry task (id=[{}]) reached max_retries ({})"\
-                        " with total=[{}]."\
-                            .format(task_id, max_retries, total))
-                    return total
-
-                kwargs["retry_factor"] = retry_factor
-
-                if log.isEnabledFor(logging.INFO):
-                    log.info("Retrying task_id=[{}] with retry_factor=[{}]."\
-                        .format(task_id, retry_factor))
-
         tasks = []
 
         #NOTE: We use the hashes of the keys as the IDs (DHT Key) due to the
@@ -717,24 +678,26 @@ class ChordTasks(object):
         # Store for synapse_key (natural key of synapse).
         tasks.append(\
             asyncio.async(\
-                retry_until(self.send_find_node, min_storing_nodes,\
-                    enc.generate_ID(synapse.synapse_key), for_data=True,\
-                    data_msg=sdmsg, retry_factor=retry_factor),\
+                mutil.retry_until(self.send_find_node, min_storing_nodes,\
+                    max_retries, enc.generate_ID(synapse.synapse_key),\
+                    for_data=True, data_msg=sdmsg, retry_factor=retry_factor),\
                 loop=self.loop))
 
         if synapse.nonce:
             # Store for synapse_pow (PoW key of synapse).
             tasks.append(\
                 asyncio.async(\
-                    retry_until(self.send_find_node, min_storing_nodes,\
-                        enc.generate_ID(synapse.synapse_pow), for_data=True,\
-                        data_msg=sdmsg, retry_factor=retry_factor),\
+                    mutil.retry_until(self.send_find_node, min_storing_nodes,\
+                        max_retries, enc.generate_ID(synapse.synapse_pow),\
+                        for_data=True, data_msg=sdmsg,\
+                        retry_factor=retry_factor),\
                     loop=self.loop))
             if store_key:
                 tasks.append(\
                     asyncio.async(\
-                        retry_until(self.send_store_key, min_storing_nodes,\
-                            data, synapse.synapse_pow, targeted=True,\
+                        mutil.retry_until(self.send_store_key,\
+                            min_storing_nodes, max_retries, data,\
+                            synapse.synapse_pow, targeted=True,\
                             retry_factor=retry_factor),\
                         loop=self.loop))
 
@@ -742,25 +705,26 @@ class ChordTasks(object):
         for target_key in synapse.target_keys:
             tasks.append(\
                 asyncio.async(\
-                    retry_until(self.send_find_node, min_storing_nodes,\
-                        enc.generate_ID(target_key), for_data=True,\
-                        data_msg=sdmsg, retry_factor=retry_factor),\
+                    mutil.retry_until(self.send_find_node, min_storing_nodes,\
+                        max_retries, enc.generate_ID(target_key),\
+                        for_data=True, data_msg=sdmsg,\
+                        retry_factor=retry_factor),\
                     loop=self.loop))
 
         # Store for source_key.
         tasks.append(\
             asyncio.async(\
-                retry_until(self.send_find_node, min_storing_nodes,\
-                    enc.generate_ID(synapse.source_key), for_data=True,\
-                    data_msg=sdmsg, retry_factor=retry_factor),\
+                mutil.retry_until(self.send_find_node, min_storing_nodes,\
+                    max_retries, enc.generate_ID(synapse.source_key),\
+                    for_data=True, data_msg=sdmsg, retry_factor=retry_factor),\
                 loop=self.loop))
 
         # Store the synapse_key itself (for find_key operations).
         if store_key:
             tasks.append(\
                 asyncio.async(\
-                    retry_until(self.send_store_key, min_storing_nodes,\
-                        data, synapse.synapse_key, targeted=True,\
+                    mutil.retry_until(self.send_store_key, min_storing_nodes,\
+                        max_retries, data, synapse.synapse_key, targeted=True,\
                         retry_factor=retry_factor),\
                     loop=self.loop))
 
