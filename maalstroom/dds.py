@@ -826,6 +826,7 @@ def _process_synapse_stamp(req):
     synapse_key_enc = req.req[15:]
     synapse_key = mbase32.decode(synapse_key_enc)
 
+    # Fetch Synapse object from the DHT.
     data_rw = yield from\
         req.dispatcher.node.engine.tasks.send_get_data(synapse_key)
 
@@ -837,8 +838,23 @@ def _process_synapse_stamp(req):
     if type(syn) is not synapse.Synapse:
         req.dispatcher.send_error("request: {}".format(req), errcode=400)
 
+    # Load private key.
+    ident_dmail_address = yield from dmail.load_dmail_address(\
+        dispatcher.node, site_key=req.ident)
+
+    signing_key =\
+        rsakey.RsaKey(privdata=ident_dmail_address.site_privatekey)
+
+    # Create new stamp.
+    syn.stamps = [synapse.Stamp(synapse.synapse_key, signing_key)]
+
+    if log.isEnabledFor(logging.INFO):
+        log.info("Uploading newly StampPed Synapse.")
+
+    # Upload StampPed Synapse back to DHT.
+    yield from dispatcher.node.engine.tasks.send_store_synapse(syn)
+
     req.dispatcher.send_204()
-    #TODO: YOU_ARE_HERE
 
 @asyncio.coroutine
 def _process_synapse_create_post(dispatcher, req):
