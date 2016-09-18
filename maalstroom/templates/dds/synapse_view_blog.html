@@ -7,17 +7,17 @@
 		</div>
 		<div class="blog-post-header-right">
 			<a href=""><span class="blog-comment-bubble">30</span></a>
-			<div class="blog-post-id"><a href="">#{key}</a></div>
+			<div class="blog-post-id"><a href="{key}{query}">#{key}</a></div>
 		</div>
 		<div class="blog-post-title-fullpg">
-			<a href="">blog post</a>
+			<a href="{key}{query}">blog post</a>
 		</div>
 		<div class="blog-post-top-wrapper">
 			<div class="blog-post-user-icon">
 				<img src="morphis://.dds/images/user-img2.png">
 			</div>
 			<div class="blog-post-top">
-				<div class="dds-post-name dds-trunc"><a href="morphis://.dds/axon/grok/{signing_key}" target="_parent" title="{signing_key}">{signer}</a>
+				<div class="dds-post-name dds-trunc"><a href="morphis://.dds/axon/grok/{signing_key}{query}" target="_parent" title="{signing_key}">{signer}</a>
 				</div>
 				<div class="dds-post-time">{relative_time} ({timestamp})
 				</div>
@@ -27,7 +27,7 @@
 			<!--div class="blog-photo-full-header"><img class="object-fit_cover" src="morphis://.dds/images/galaxyglaze.jpg"></div-->
 			<!--<div class="blog-photo-small-left-header"><img src="morphis://.dds/images/photo-post-lg.jpeg"></div>-->
 			<p>{content}</p>
-			<div class="blog-read-more"><a href="">Continue Reading...</a></div>
+			<div class="blog-read-more"><a href="{key}{query}">Continue Reading...</a></div>
 		</div>
 	</div>
 </div>
