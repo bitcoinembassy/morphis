@@ -948,6 +948,9 @@ def _process_synapse_create_post(dispatcher, req):
     storing_nodes =\
         yield from asyncio.wait_for(content_task, None, loop=dispatcher.loop)
 
+    if log.isEnabledFor(logging.INFO):
+        log.info("Stored Synapse (synapse_key=[{}]."\
+            .format(mbase32.encode(syn.synapse_key)))
     if storing_nodes < 5:
         log.warning(\
             "Only [{}] storing nodes for content.".format(storing_nodes))
