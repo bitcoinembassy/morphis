@@ -314,8 +314,6 @@ class Synapse(object):
 
 class Stamp(object):
     def __init__(self, signed_key=None, key=None):
-        self.buf = buf
-
         self.signed_key = signed_key
         self.version = 1
         self.signature = None
