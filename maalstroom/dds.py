@@ -846,7 +846,7 @@ def _process_synapse_stamp(req):
         rsakey.RsaKey(privdata=ident_dmail_address.site_privatekey)
 
     # Create new stamp.
-    syn.stamps = [synapse.Stamp(synapse.synapse_key, signing_key)]
+    syn.stamps = [synapse.Stamp(syn.synapse_key, signing_key)]
 
     if log.isEnabledFor(logging.INFO):
         log.info("Uploading newly StampPed Synapse.")
