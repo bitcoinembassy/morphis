@@ -343,7 +343,6 @@ button.dds-button:active {
 	max-width: 25%;
 	float: left;
 	font-weight: bold;
-	height: 15px;
 }
 .dds-post-name a {
 	color: #1c2227;
@@ -2009,7 +2008,7 @@ display: block;
 .dashboard-search input {
 	padding:5px;
 	width: 70%;
-	border: 1px solid #371f44;
+	border: 1px solid #1c2227;
 	border-radius: 4px;
 	font: 11px 'ralewaylight', sans-serif;
 }
@@ -2194,6 +2193,9 @@ input[type="file"] {
 	padding: 15px;
 }
 .mailboxes {
+	opacity: .3;
+	letter-spacing: .1em;
+	padding-bottom: .2em;
 }
 .mailbox-trunc {
 	overflow: hidden;
@@ -2220,7 +2222,6 @@ input[type="file"] {
 	font-size: 9px;
 	padding-left: 6px;
 	padding-right: 7px;
-	padding-top: 2px;
 	color: #ffffff;
 	font-weight: bold;
 }
@@ -2234,12 +2235,11 @@ input[type="file"] {
 	font-size: 9px;
 	padding-left: 6px;
 	padding-right: 7px;
-	padding-top: 2px;
 	color: #ffffff;
 	font-weight: bold;
 }
 .mailbox-pad {
-	padding: .5em 1.2em .5em 3em;
+	padding: .5em 1.2em .5em 3.3em;
 }
 .inbox-icon-active {
 	background: url("morphis://.dmail/images/inbox_white.png") no-repeat center left;
@@ -2251,37 +2251,47 @@ input[type="file"] {
 	background-position: 1.2em;
 }
 .inbox-icon:hover {
-	background: url("morphis://.dmail/images/inbox_white.png") no-repeat center left;
 	opacity: 1;
+}
+.outbox-icon {
+	background: url("morphis://.dmail/images/outbox_white.png") no-repeat center left;
+	opacity: .3;
 	background-position: 1.2em;
+}
+.outbox-icon:hover {
+	opacity: 1;
 }
 .sent-icon {
 	background: url("morphis://.dmail/images/sent_white.png") no-repeat center left;
 	opacity: .3;
-	background-position: 1.2em;
+	background-position: 1em;
 }
 .sent-icon:hover {
-	background: url("morphis://.dmail/images/sent_white.png") no-repeat center left;
 	opacity: 1;
-	background-position: 1.2em;
 }
 .drafts-icon {
 	background: url("morphis://.dmail/images/draft_white.png") no-repeat center left;
 	opacity: .3;
-	background-position: 1.2em;
+	background-position: 1.35em;
 }
 .drafts-icon:hover {
-	background: url("morphis://.dmail/images/draft_white.png") no-repeat center left;
 	opacity: 1;
+}
+.trash-icon {
+	background: url("morphis://.dmail/images/trash_white_in.png") no-repeat center left;
+	opacity: .3;
 	background-position: 1.2em;
+}
+.trash-icon:hover {
+	opacity: 1;
 }
 .tag-icon {
 	background: url("morphis://.dmail/images/tags_white.png") no-repeat center left;
-	background-position: 1.2em;
-}
-.tag-icon:hover {
-	background: url("morphis://.dmail/images/tags_white.png") no-repeat center left;
-	background-position: 1.2em;
+	background-position: 1.2em 1.1em;
+	height: 35px;
+	width: 35px;
+	opacity: .3;
+	float: left;
 }
 .bullet {
 	background: url("morphis://.dmail/images/bullet_white.png") no-repeat center left;
@@ -2289,9 +2299,7 @@ input[type="file"] {
 	background-position: 1.2em;
 }
 .bullet:hover {
-	background: url("morphis://.dmail/images/bullet_white.png") no-repeat center left;
 	opacity: 1;
-	background-position: 1.2em;
 }
 .bullet.active_tag {
 	background: url("morphis://.dmail/images/bullet_white.png") no-repeat center left;
@@ -2327,14 +2335,8 @@ input[type="file"] {
 	padding-right: .6em;
 	list-style: none;
 }
-.tag-head li:hover {
-	background-color: #38A3AF;
-}
 .tag-head li:hover a {
 	color: #ffffff;
-}
-.tag-head a:visited {
-	color: #141c30;
 }
 .tag-list li {
 	padding-top: .2em;
@@ -2360,4 +2362,30 @@ input[type="file"] {
 }
 .tag-list li.active_tag a {
 	color: #ffffff;
+}
+.tag-text-pad {
+	padding-left: 4.8em;
+}
+button.add-tag {
+	background: transparent;
+	width: 22px;
+	height: 22px;
+	border-radius: 50%;
+	border: 1px solid #fff;
+	margin: .3em .5em 0 0;
+	color: #fff;
+	font-size: .8em;
+	cursor: pointer;
+	opacity: .3;
+	transition: opacity 0.5s;
+	-webkit-transition: all ease 0.5s;
+	-moz-transition: all ease 0.5s;
+	-o-transition: all ease 0.5s;
+	-ms-transition: all ease 0.5s ;
+	transition: all ease 0.5s ;
+	line-height: 1.65em;
+	padding-right: .015em;
+}
+button.add-tag:hover {
+	opacity: 1;
 }

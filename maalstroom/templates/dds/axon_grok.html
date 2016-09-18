@@ -59,33 +59,34 @@
 					<span class="mailbox-list">
 						<ul>
 							<li class="inbox-icon active-mailbox"><a href="" style="display:block"><div class="mailbox-pad">Inbox<div class=""></div></div></a></li>
-							<li class="inbox-icon "><a href="" style="display:block"><div class="mailbox-pad">Outbox<div class=""></div></div></a></li>
+							<li class="outbox-icon "><a href="" style="display:block"><div class="mailbox-pad">Outbox<div class=""></div></div></a></li>
 							<li class="sent-icon "><a href="" style="display:block"><div class="mailbox-pad">Sent<div class=""></div></div></a></li>
 							<li class="drafts-icon "><a href="" style="display:block"><div class="mailbox-pad">Drafts<div class=""></div></div></a></li>
-							<li class="drafts-icon "><a href="" style="display:block"><div class="mailbox-pad">Trash<div class="inactive-notify">1</div></div></a></li>
+							<li class="trash-icon "><a href="" style="display:block"><div class="mailbox-pad">Trash<div class="inactive-notify">1</div></div></a></li>
 						</ul>
 					</span>
-					<div class="dashboard-hr-pad"><hr class="style2"></hr></div>
+					<div class="dashboard-hr-pad">
+						<hr class="style2"></hr>
+					</div>
 					<ul>
 						<form target="_self" action="morphis://.dmail/create_tag" method="get" accept-charset="UTF-8 ISO-8859-1">
-							<input name="csrf_token" value="4mD9vs5BAZhUWC11QqiTewJyanxbzuhNJPWZaj1qjsnJ5mvt9gykLkt7AVzKAbgbeSpKzwihci1v8cQa7BvcjJyy" type="hidden">
-							<input name="redirect" value="morphis://.dmail/aside/mem6zt7961nhya8icgrwyk6ok3eah5e3jed31djndzay6yai1keyt1gppprksb5tz6ptpcjxr17g8s9nec79s8uodxtuz9jtrwcsiji/Inbox" type="hidden">
-							<span class="tag-head">
-								<li class="tag-icon">
-									<span class="tag-text-pad">
-										<input class="tag-text" name="tag_name" placeholder="ADD TAG" type="text">
-										<button class="add-tag" value="send" name="add-tag" type="submit">+</button>
-									</span>
+							<input type="hidden" name="csrf_token" value=""/>
+							<input type="hidden" name="redirect" value=""/>
+								<div class="tag-icon"></div>
+									<div class="mailbox-pad">
+										<div class="dashboard-search">
+											<input class="tag-text" type="text" name="tag_name" placeholder="Add new tag"/>
+											<button class="add-tag" value="send" name="add-tag" type="submit">+</button>
+										</div>
+										
+									</div>
 								</li>
-							</span>
 						</form>
-						<span class="tag-list">
-							<li class="bullet">
-								<span class="mailbox-pad">
-									<a href="morphis://.dmail/wrapper/mem6zt7961nhya8icgrwyk6ok3eah5e3jed31djndzay6yai1keyt1gppprksb5tz6ptpcjxr17g8s9nec79s8uodxtuz9jtrwcsiji/Sam">Sam</a>
-								</span>
-							</li>
-						</span>
+						<span class="mailbox-list">
+						<ul>
+							<li class="bullet"><a href="" style="display:block"><div class="mailbox-pad">Bob<div class=""></div></div></a></li>
+						</ul>
+					</span>
 					</ul>
 				</div>
 			</div>
