@@ -857,7 +857,11 @@ class ChordTasks(object):
         fnmsg.node_id = node_id
         fnmsg.data_mode = data_mode
         if data_msg_type is cp.ChordStoreData:
-            fnmsg.version = data_msg.version
+            if data_msg.targeted and data_msg.data[:16] != MorphisBlock.UUID:
+                # Signal we are storing a Synapse to the other end.
+                fnmsg.version = -1
+            else:
+                fnmsg.version = data_msg.version
         if significant_bits:
             fnmsg.significant_bits = significant_bits
             if target_key:
@@ -1207,12 +1211,16 @@ class ChordTasks(object):
                     else:
                         assert data_mode is cp.DataMode.store
 
-                        will_store, need_pruning =\
-                            yield from self._check_do_want_data(\
-                                node_id, fnmsg.version)
+                        if fnmsg.version == -1:
+                            will_store = True
+                            need_pruning = False
+                        else:
+                            will_store, need_pruning =\
+                                yield from self._check_do_want_data(\
+                                    node_id, fnmsg.version)
 
-                        if not will_store:
-                            continue
+                            if not will_store:
+                                continue
 
                         log.info("We are choosing to additionally store the"\
                             " data locally.")
@@ -2097,10 +2105,13 @@ class ChordTasks(object):
         # Free memory? We no longer need this, and we may be tunneling for
         # some time.
         pt = None
+        #.
 
         will_store = False
         need_pruning = False
         data_present = False
+        synapse_store_mode = False
+
         if fnmsg.data_mode.value:
             # In for_data mode we respond with two packets.
             if fnmsg.data_mode is cp.DataMode.get:
@@ -2128,9 +2139,15 @@ class ChordTasks(object):
 
                 peer.protocol.write_channel_data(local_cid, pmsg.encode())
             elif fnmsg.data_mode is cp.DataMode.store:
-                will_store, need_pruning =\
-                    yield from self._check_do_want_data(\
-                        fnmsg.node_id, fnmsg.version)
+                if fnmsg.version == -1:
+                    # Synapse Multi-index/Shared-keyspace Request Mode.
+                    will_store = True
+                    need_pruning = False
+                    synapse_store_mode = True
+                else:
+                    will_store, need_pruning =\
+                        yield from self._check_do_want_data(\
+                            fnmsg.node_id, fnmsg.version)
 
                 imsg = cp.ChordStorageInterest()
                 imsg.will_store = will_store
@@ -2191,6 +2208,12 @@ class ChordTasks(object):
                         r = yield from self._store_synapse(\
                             peer, fnmsg.node_id, rmsg, need_pruning)
                     else:
+                        if synapse_store_mode:
+                            log.warning("Bait and switch.")
+                            yield from self._close_tunnels(rlist)
+                            yield from peer.protocol.close_channel(local_cid)
+                            return
+
                         r = yield from self._store_data(\
                             peer, fnmsg.node_id, rmsg, need_pruning)
 
@@ -2200,6 +2223,12 @@ class ChordTasks(object):
                     peer.protocol.write_channel_data(local_cid, dsmsg.encode())
                     continue
                 elif packet_type == cp.CHORD_MSG_STORE_KEY:
+                    if synapse_store_mode:
+                        log.warning("Bait and switch.")
+                        yield from self._close_tunnels(rlist)
+                        yield from peer.protocol.close_channel(local_cid)
+                        return
+
                     if log.isEnabledFor(logging.INFO):
                         log.info("Received ChordStoreKey packet, storing.")
 
@@ -2487,6 +2516,7 @@ class ChordTasks(object):
                 .to_bytes(chord.NODE_ID_BYTES, "big")
 
             #FIXME: This calculation is broken. See issue #95.
+            # UPDATE: What part is broken? Looking now, end_id seems ok.
             end_id = bytearray()
 
             for c1, c2 in zip(data_id, mask):
