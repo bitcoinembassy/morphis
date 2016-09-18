@@ -250,9 +250,29 @@ class Synapse(object):
             self.buf[:self.signature_offset], self.buf, self.signature_offset)
 
     def check_stamps(self):
-        assert self.stamps
-        #TODO: YOU_ARE_HERE
-        raise Exception()
+        stamps = self.stamps
+        assert stamps
+
+        for stamp in stamps:
+            dist, direction = stamp.log_distance
+            if direction < 0 or dist > consts.MAX_POW_DIST:
+                log.warning("Invalid Stamp; it lacks sufficient PoW.")
+                return False
+
+        stamp = stamps[0]
+        if stamp.signed_key != self.synapse_key\
+                and stamp.signed_key != self.signing_key:
+            log.warning("Invalid first stamp; it does not sign Synapse.")
+            return False
+
+        for idx in range(1, len(stamps)):
+            if stamps[idx].signed_key != stamps[idx-1].signing_key:
+                log.warning(\
+                    "Invalid stamp (idx={}); it does not sign previous."\
+                        .format(idx))
+                return False
+
+        return True
 
     @property
     def pubkey(self):
