@@ -9,6 +9,7 @@ modules = [\
     "bittrie",
     "brute",
     "chord_packet",
+    "consts",
     "dhgroup14",
     "enc",
     "htmlsafe",
