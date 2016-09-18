@@ -159,6 +159,7 @@ def _init_daos(Base, d):
             target_key = 3
             source_key = 4
             signing_key = 5
+            stamp_key = 6
 
     Index("synapsekey__data_id", SynapseKey.data_id)
 

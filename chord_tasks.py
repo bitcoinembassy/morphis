@@ -3297,6 +3297,11 @@ class ChordTasks(object):
                         synapse.signing_key,\
                         SynapseKey.KeyType.signing_key)
 
+                if synapse.stamps:
+                    store_key(\
+                        synapse.stamps[-1].signing_key,\
+                        SynapseKey.KeyType.stamp_key)
+
                 sess.commit()
 
         yield from self.loop.run_in_executor(None, dbcall)

@@ -583,6 +583,7 @@ class SynapseRequest(object):
                 target = 1
                 source = 2
                 signing = 3
+                stamp = 4
 
             def __init__(self, type_=None, value=None):
                 self.type = type_
