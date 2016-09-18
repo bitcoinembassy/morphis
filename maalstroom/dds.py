@@ -840,7 +840,7 @@ def _process_synapse_stamp(req):
 
     # Load private key.
     ident_dmail_address = yield from dmail.load_dmail_address(\
-        dispatcher.node, site_key=req.ident)
+        req.dispatcher.node, site_key=req.ident)
 
     signing_key =\
         rsakey.RsaKey(privdata=ident_dmail_address.site_privatekey)
@@ -852,7 +852,7 @@ def _process_synapse_stamp(req):
         log.info("Uploading newly StampPed Synapse.")
 
     # Upload StampPed Synapse back to DHT.
-    yield from dispatcher.node.engine.tasks.send_store_synapse(syn)
+    yield from req.dispatcher.node.engine.tasks.send_store_synapse(syn)
 
     req.dispatcher.send_204()
 
