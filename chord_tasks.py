@@ -2525,6 +2525,7 @@ class ChordTasks(object):
             if distance > self.engine.furthest_data_block:
                 d2 = mutil.calc_raw_distance(self.engine.node_id, end_id)
                 if d2 > self.engine.furthest_data_block:
+                    log.warning("BROKEN CALC USED.")
                     return False
         else:
             if distance > self.engine.furthest_data_block:
