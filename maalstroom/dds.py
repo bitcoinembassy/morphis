@@ -828,15 +828,17 @@ def _process_synapse_stamp(req):
 
     # Fetch Synapse object from the DHT.
     data_rw = yield from\
-        req.dispatcher.node.engine.tasks.send_get_data(synapse_key)
+        req.dispatcher.node.engine.tasks.send_get_targeted_data(synapse_key)
 
     if not data_rw or not data_rw.data:
-        req.dispatcher.send_error("request: {}".format(req), errcode=400)
+        req.dispatcher.send_error("No Synapse found.".format(req), errcode=400)
+        return
 
     syn = data_rw.object
 
     if type(syn) is not synapse.Synapse:
-        req.dispatcher.send_error("request: {}".format(req), errcode=400)
+        req.dispatcher.send_error("Not a Synapse.".format(req), errcode=400)
+        return
 
     # Load private key.
     ident_dmail_address = yield from dmail.load_dmail_address(\
