@@ -951,6 +951,7 @@ def _process_synapse_create_post(dispatcher, req):
     if log.isEnabledFor(logging.INFO):
         log.info("Stored Synapse (synapse_key=[{}]."\
             .format(mbase32.encode(syn.synapse_key)))
+
     if storing_nodes < 5:
         log.warning(\
             "Only [{}] storing nodes for content.".format(storing_nodes))
@@ -959,7 +960,7 @@ def _process_synapse_create_post(dispatcher, req):
         "Resulting&nbsp;<a href='morphis://.dds/axon/read/{synapse_addr}/"\
             "{target_addr}'>Synapse</a>&nbsp;Address:<br/>{synapse_addr}"\
                  .format(\
-                    synapse_addr=mbase32.encode(syn.synapse_pow),\
+                    synapse_addr=mbase32.encode(syn.synapse_key),\
                     target_addr=mbase32.encode(target_addr))
 
     dispatcher.send_content(resp)
