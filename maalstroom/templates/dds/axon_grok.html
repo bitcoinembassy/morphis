@@ -22,7 +22,19 @@
 							</ul>
 						</li>
 					</ul>
-				<div class="dashboard-active-convo-wrapper">
+					<div class="dashboard-active-convo-wrapper">
+					<div class="dashboard-active-convo-title">Add new channel:</div>
+					<form action="morphis://.dds/feed/add" method="post" accept-charset="UTF-8 ISO-8859-1">
+						<div class="dashboard-input-wrapper">
+							<input type="hidden" name="csrf_token" id="csrf_token" value=""/>
+							<input type="hidden" name="refresh_url" id="refresh_url" value=""/>
+							<div class="dashboard-input"><input type="text" name="name" id="name" placeholder="name"/></div>
+							<div class="dashboard-input"><input type="text" name="address" id="address" placeholder="address"/></div>
+						</div>
+						<div class="clearfix">
+							<button class="add-tag" type="submit">+</button>
+						</div>
+					</form>
 					<div class="dashboard-active-convo-title">Active conversations (6)</div>
 					<ul class="dashboard-convo-list">
 						<li class="dashboard-icon-chat-group dds-trunc"><a href=""><b>morphis-dev</b></a></li>
@@ -36,6 +48,13 @@
 					<ul class="dashboard-convo-list">
 						<li class="dashboard-active-user"><a href=""><div class="dashboard-user-status-icon-active"></div>bob</a></li>
 						<li class="dashboard-inactive-user"><a href=""><div class="dashboard-user-status-icon-inactive"></div>OfflineFriend</a></li>
+					</ul>
+					<hr class="thin-line"></hr>
+					<div class="dashboard-active-convo-title">Rough UI Things:</div>
+					<ul>
+						<li><a href=''>axon</a></li>
+						<li><a href=''>propedit</a></li>
+						<li><a href=''>site edit</a></li>
 					</ul>
 				</div>
 			</div>
@@ -104,7 +123,7 @@
 			</div>
 		</div><div class="dashboard-footer-push"></div>
 	 </div>
-	<div class ="dashboard-footer"><div class="magnifying-glass"></div><div class="dashboard-search"><input type="text" name="search" placeholder="Explore..."></div></div>
+	<div class ="dashboard-footer"><div class="magnifying-glass-wrapper"><div class="magnifying-glass"></div></div><div class="dashboard-search"><input type="text" name="search" placeholder="Explore..."></div></div>
 </nav>
 
 <div class="page-wrap">

@@ -1908,13 +1908,13 @@ display: block;
 }
 .dashboard-active-convo-wrapper li {
 	list-style-type: none;
-	padding: 0 0 .5em 0;
+	padding: 0 0 .3em 0;
 }
 .dashboard-active-convo-title {
 	color: #606467;
+	padding-bottom: .5em;
 }
 .dashboard-convo-list {
-	padding-top: .5em;
 	min-width: 20px;
 }
 .dashboard-icon-chat-group:before {
@@ -1970,22 +1970,21 @@ display: block;
 }
 .dashboard-footer-wrapper {
 	min-height: 100%;
-	margin: 0 auto -40px; /* the bottom margin is the negative value of the footer's height */
+	margin: 0 auto -27px; /* the bottom margin is the negative value of the footer's height */
 }
 .dashboard-footer, .dashboard-footer-push {
-	height: 40px; /* '.push' must be the same height as 'footer' */
-	color: white;
-	margin-left: 1em;
+	height: 27px; /* '.push' must be the same height as 'footer' */
+	color: #fff;
 }
 .magnifying-glass {
 	font-size: 2.5em; /* This controls the size. */
 	display: inline-block;
 	width: 0.4em;
 	height: 0.4em;
-	border: 0.08em solid white;
+	border: 0.08em solid #000;
 	position: relative;
 	border-radius: 0.35em;
-	margin-right: .4em;
+	margin-left: .2em;
 	top: .11em;
 	float: left;
 	opacity: .2;
@@ -1997,7 +1996,7 @@ display: block;
 	right: -0.2em;
 	bottom: -0.12em;
 	border-width: 0;
-	background: white;
+	background: #000;
 	width: 0.25em;
 	height: 0.08em;
 	-webkit-transform: rotate(45deg);
@@ -2005,14 +2004,32 @@ display: block;
 	-ms-transform: rotate(45deg);
 	-o-transform: rotate(45deg);
 }
+.magnifying-glass-wrapper {
+	background: #fff;
+	width: 10%;
+	height: 27px;
+	float: left;
+}
 .dashboard-search input {
+	padding:6px;
+	width: 90%;
+	border: 1px solid #fff;
+	font: 11px 'ralewaylight', sans-serif;
+}
+.dashboard-input input {
 	padding:5px;
-	width: 70%;
+	width: 100%;
 	border: 1px solid #1c2227;
 	border-radius: 4px;
 	font: 11px 'ralewaylight', sans-serif;
+	margin: .5em 0 0 0;
 }
-input[type="text"]:focus, {
+.dashboard-search input[type="text"]:focus {
+	outline: none;
+	border: 1px solid #fff;
+	box-shadow: none;
+}
+input[type="text"]:focus {
 	outline: medium none;
 	border: 1px solid #39a3af;
 	box-shadow: 0px 0px 2px 1px rgba(56, 163, 175, 0.9) inset;
@@ -2372,7 +2389,7 @@ button.add-tag {
 	height: 22px;
 	border-radius: 50%;
 	border: 1px solid #fff;
-	margin: .3em .5em 0 0;
+	margin: .3em .5em 0 .5em;
 	color: #fff;
 	font-size: .8em;
 	cursor: pointer;
@@ -2384,8 +2401,14 @@ button.add-tag {
 	-ms-transition: all ease 0.5s ;
 	transition: all ease 0.5s ;
 	line-height: 1.65em;
-	padding-right: .015em;
+	text-align: center;
+	float: right;
 }
 button.add-tag:hover {
 	opacity: 1;
+}
+.dashboard-input-wrapper {
+	width: 80%;
+	float: left;
+	margin-bottom: 1em;
 }
