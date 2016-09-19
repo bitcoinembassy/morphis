@@ -5,6 +5,7 @@ import llog
 
 import asyncio
 from enum import Enum
+import functools
 import logging
 import struct
 
@@ -47,7 +48,7 @@ class Synapse(object):
         self.timestamp = None
         self.key = None
         self._pubkey = None
-        self.signature = None
+        self._signature = None
         self.nonce = None
         self.stamps = []
         ##.
@@ -59,6 +60,7 @@ class Synapse(object):
         self.nonce_offset = None
 
         self.signature_type = None
+        self._signature_end_offset = None
         self.pubkey_len = None
 
         self._synapse_key = None
@@ -128,14 +130,35 @@ class Synapse(object):
         else:
             self.target_keys[0] = value
 
+    @property
+    def signature(self):
+        if self._signature:
+            return self._signature
+
+        if not self.buf:
+            return None
+
+        self._signature =\
+            self.buf[self.signature_offset:self._signature_end_offset]
+
+        return self._signature
+
+    @signature.setter
+    def signature(self, val):
+        self._signature = val
+
     @asyncio.coroutine
     def encode(self):
         "Encode the packet fields into the self.buf bytearray and return it."
-        if not self.buf:
-            self.buf = nbuf = bytearray()
-        else:
-            nbuf = self.buf
+        nbuf = self.buf
+        if nbuf:
+            self.signature
+        if type(nbuf) is bytearray:
+            # Need to ensure this runs before the buffer is cleared in order to
+            # read in the old sig.
             nbuf.clear()
+        else:
+            self.buf = nbuf = bytearray()
 
         # 0 and >=128 are reserved; also, logic requires at least one
         # target_key anyways.
@@ -173,14 +196,19 @@ class Synapse(object):
             assert not self.signature
             sshtype.encode_string_onto(nbuf, "")
 
-        self.nonce_offset = nonce_offset = len(nbuf)
-        nbuf += b' ' * Synapse.NONCE_SIZE
-        nonce_bytes = yield from\
-            self._calculate_nonce(nbuf, nonce_offset, self.difficulty)
-        self._store_nonce(nbuf, nonce_bytes, nonce_offset)
+        if self.nonce:
+            nbuf += self.nonce
+        else:
+            self.nonce_offset = nonce_offset = len(nbuf)
+            nbuf += b'\x00' * Synapse.NONCE_SIZE
+            nonce = yield from\
+                self._calculate_nonce(nbuf, nonce_offset, self.difficulty)
+            self._store_nonce(nbuf, nonce, nonce_offset)
+            self.nonce =\
+                b'\x00' * (consts.MIN_NONCE_SIZE - len(nonce)) + nonce
 
         for stamp in self.stamps:
-            stamp.encode_onto(nbuf)
+            yield from stamp.encode_onto(nbuf)
 
         return nbuf
 
@@ -215,6 +243,7 @@ class Synapse(object):
                     "Invalid signature_type [{}].".format(self.signature_type))
             sig_bin_len = struct.unpack_from(">L", self.buf, i)[0]
             i += 4 + sig_bin_len
+            self._signature_end_offset = i
         else:
             self.signature_type = None
 
@@ -234,7 +263,7 @@ class Synapse(object):
             stamps = self.stamps
             if stamps: stamps.clear()
             while i < len(self.buf):
-                i, stamp = Stamp().parse_from(self.buf[i:])
+                i, stamp = Stamp().parse_from(self.buf, i)
                 stamps.append(stamp)
 
     def is_signed(self):
@@ -256,7 +285,8 @@ class Synapse(object):
         for stamp in stamps:
             dist, direction = stamp.log_distance
             if direction < 0 or dist > consts.MAX_POW_DIST:
-                log.warning("Invalid Stamp; it lacks sufficient PoW.")
+                log.warning("Invalid Stamp; it lacks sufficient PoW ({}/{})."\
+                    .format(dist, direction))
                 return False
 
         stamp = stamps[0]
@@ -312,12 +342,11 @@ class Synapse(object):
                     " (target=[{}], difficulty=[{}])."\
                         .format(mbase32.encode(self.target_key), difficulty))
 
-        def threadcall():
-            return brute.generate_targeted_block(\
-                self.target_key, difficulty, buf, offset, Synapse.NONCE_SIZE)
-
-        nonce_bytes = yield from\
-            asyncio.get_event_loop().run_in_executor(None, threadcall)
+        nonce_bytes = yield from asyncio.get_event_loop().run_in_executor(\
+            None,\
+            functools.partial(\
+                brute.generate_targeted_block, self.target_key, difficulty,\
+                buf, offset, Synapse.NONCE_SIZE))
 
         if log.isEnabledFor(logging.INFO):
             log.info(\
@@ -343,10 +372,16 @@ class Stamp(object):
 
         self.difficulty = consts.MIN_DIFFICULTY
 
-        self._signed_data_end_idx = None
+        self._start_index = None
+        self._pubkey_offset = None
+        self._pubkey_end_idx = None
+        self._signature_offset = None
         self._pow_data_end_idx = None
 
+        self._stamp_pow = None
         self._log_distance = None
+
+        self.buf = None
 
     @property
     def stamp_pow(self):
@@ -357,29 +392,13 @@ class Stamp(object):
             raise Exception("_stamp_pow is not set and self.buf is empty.")
 
         self._stamp_pow =\
-            enc.generate_ID(self.buf[:self._pow_data_end_idx])
+            enc.generate_ID(self.buf[self._start_index:self._pow_data_end_idx])
 
         if log.isEnabledFor(logging.DEBUG):
-            log.debug(\
-                "stamp_pow=[{}].".format(mbase32.encode(self._stamp_pow)))
+            log.debug("self[{}]->stamp_pow=[{}]."\
+                .format(id(self), mbase32.encode(self._stamp_pow)))
 
         return self._stamp_pow
-
-    @property
-    def pubkey(self):
-        if self._pubkey:
-            return self._pubkey
-
-        assert self.buf
-
-        self._pubkey =\
-            self.buf[self._pubkey_offset:self._pubkey_offset+self._pubkey_len]
-
-        return self._pubkey
-
-    @pubkey.setter
-    def pubkey(self, value):
-        self._pubkey = value
 
     @property
     def signing_key(self):
@@ -403,24 +422,45 @@ class Stamp(object):
 
         return self._log_distance
 
-    def encode(self):
-        if not self.buf:
-            self.buf = nbuf = bytearray()
-        else:
-            nbuf = self.buf
-            nbuf.clear()
+    @property
+    def pubkey(self):
+        if self._pubkey:
+            return self._pubkey
 
-        self.encode_onto(nbuf)
+        assert self.buf
+
+        self._pubkey =\
+            self.buf[self._pubkey_offset:self._pubkey_end_idx]
+
+        return self._pubkey
+
+    @pubkey.setter
+    def pubkey(self, value):
+        self._pubkey = value
+
+    @asyncio.coroutine
+    def encode(self):
+        nbuf = self.buf
+        if type(nbuf) is bytearray:
+            nbuf.clear()
+        else:
+            nbuf = bytearray()
+
+        yield from self.encode_onto(nbuf)
 
         return nbuf
 
+    @asyncio.coroutine
     def encode_onto(self, nbuf):
+        self.buf = nbuf
+        self._start_index = len(nbuf)
+
         assert len(self.signed_key) == consts.NODE_ID_BYTES
         nbuf += self.signed_key
 
         sshtype.encode_mpint_onto(nbuf, self.version)
 
-        self._signed_data_end_idx = len(nbuf)
+        self._signature_offset = len(nbuf)
 
         if self.signature:
             nbuf += self.signature
@@ -428,21 +468,32 @@ class Stamp(object):
             # Will be one string and one binary.
             self.key.generate_rsassa_pss_sig(nbuf, nbuf)
 
-        self._pow_data_end_idx = len(nbuf)
-
         #FIXME: Make this nonce stuff use some new dynamic sizing API.
-        struct.pack(">L", consts.MIN_NONCE_SIZE)
-        nbuf += b' ' * consts.MIN_NONCE_SIZE
-        nbuf[len(nbuf)-consts.MIN_NONCE_SIZE:] = yield from\
-            asyncio.get_event_loop().run_in_executor(\
-                None,\
-                brute.generate_targeted_block(\
-                    self.signed_key, self.difficulty, nbuf, len(nbuf),\
-                    consts.MIN_NONCE_SIZE))
+        if self.nonce:
+            sshtype.encode_binary_onto(nbuf, self.nonce)
+        else:
+            nbuf += struct.pack(">L", consts.MIN_NONCE_SIZE)
+            nonce_offset = len(nbuf)
+            nbuf += b'\x00' * consts.MIN_NONCE_SIZE
+            self._pow_data_end_idx = len(nbuf)
+            pow_buf =\
+                nbuf if not self._start_index else nbuf[self._start_index:]
+            log.debug("Generating PoW for Stamp.")
+            nonce = yield from\
+                asyncio.get_event_loop().run_in_executor(\
+                    None,\
+                    functools.partial(
+                        brute.generate_targeted_block, self.signed_key,\
+                        self.difficulty, pow_buf,\
+                        len(pow_buf)-consts.MIN_NONCE_SIZE,\
+                        consts.MIN_NONCE_SIZE))
+
+            nbuf[nonce_offset+consts.MIN_NONCE_SIZE-len(nonce):] = nonce
+            self.nonce = b'\x00' * (consts.MIN_NONCE_SIZE - len(nonce)) + nonce
 
         self._pubkey_offset = len(nbuf) + 4
         if self._pubkey:
-            nbuf += sshtype.encode_binary_onto(nbuf, self._pubkey)
+            sshtype.encode_binary_onto(nbuf, self._pubkey)
         elif self.key:
             offset = len(nbuf)
             nbuf += consts.NULL_LONG
@@ -455,32 +506,44 @@ class Stamp(object):
         self.parse_from(self.buf, 0)
 
     def parse_from(self, buf, i):
-        self.signed_key = buf[i:consts.NODE_ID_BYTES]
+        self.buf = buf
+        self._start_index = i
+
+        self.signed_key = buf[i:i+consts.NODE_ID_BYTES]
         i += consts.NODE_ID_BYTES
 
         i, self.version = sshtype.parse_mpint_from(buf, i)
 
-        self._signed_data_end_idx = i
-
-        self.signature_offset = i
-        i, self.signature_type = sshtype.parse_string_from(self.buf, i)
+        self._signature_offset = i
+        i, self.signature_type = sshtype.parse_string_from(buf, i)
         # For now we only support rsassa_pss.
         if self.signature_type != rsakey.RSASSA_PSS:
             raise Exception(\
                 "Invalid signature_type [{}].".format(self.signature_type))
-        sig_bin_len = struct.unpack_from(">L", self.buf, i)[0]
+        sig_bin_len = struct.unpack_from(">L", buf, i)[0]
         i += 4 + sig_bin_len
 
+        i, self.nonce = sshtype.parse_binary_from(buf, i)
         self._pow_data_end_idx = i
 
-        i, self.nonce = sshtype.parse_binary_from(buf, i)
-
-        self.pubkey_len = struct.unpack_from(">L", self.buf, i)[0]
+        pubkey_len = struct.unpack_from(">L", buf, i)[0]
         i += 4
         self._pubkey_offset = i
-        i += self._pubkey_len
+        i += pubkey_len
+        self._pubkey_end_idx = i
 
         return i, self
+
+    def check_signature(self):
+        assert self.buf
+
+        if not self.key:
+            self.key = rsakey.RsaKey(self.buf, i=self._pubkey_offset)
+
+        return self.key.verify_rsassa_pss_sig(
+            self.buf[:self._signature_offset],\
+            self.buf,\
+            self._signature_offset)
 
 # DHT API Objects.
 class SynapseRequest(object):

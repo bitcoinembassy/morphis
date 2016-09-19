@@ -57,7 +57,9 @@ def generate_targeted_block(target, nbits, data, nonce_offset, nonce_size):
     except Exception:
         log.exception("Exception generating targeted block.")
 
-    log.info("Found TargetedBlock nonce; terminating workers.")
+    if log.isEnabledFor(logging.INFO):
+        log.info("Found TargetedBlock nonce [{}]; terminating workers."\
+            .format(mutil.hex_string(block)))
 
     pool.terminate()
 

@@ -849,6 +849,7 @@ def _process_synapse_stamp(req):
 
     # Create new stamp.
     syn.stamps = [synapse.Stamp(syn.synapse_key, signing_key)]
+    yield from syn.encode()
 
     if log.isEnabledFor(logging.INFO):
         log.info("Uploading newly StampPed Synapse.")

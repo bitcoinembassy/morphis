@@ -3207,21 +3207,32 @@ class ChordTasks(object):
             return (\
                 yield from self.__store_new_synapse(peer_dbid, dmsg, synapse))
 
+        if not synapse.stamps\
+                and existing.pow_difficulty == synapse.log_distance[0]:
+            if log.isEnabledFor(logging.INFO):
+                log.info("Already had Synapse, and no changes detected.")
+            return False
+
         if log.isEnabledFor(logging.INFO):
             log.info(\
                 "We already have Synapse (synapse_id=[{}]); adding additional"\
                     " keys -- if applicable."\
                         .format(mbase32.encode(synapse_id)))
 
-        #TODO: YOU_ARE_HERE: As of yet there cannot be keys we didn't store;
-        # so we are done here.
-        return True
+        yield from self.__update_synapse(dmsg, existing, synapse)
+
+    @asyncio.coroutine
+    def __update_synapse(self, dmsg, existing, synapse):
+        assert type(existing) is Synapse, type(existing)
+        assert type(synapse) is syn.Synapse, type(synapse)
 
         enc_key = None
 
-        for key in synapse.keys:
+        for key in existing.keys:
             if key.key_type is SynapseKey.KeyType.synapse_key:
-                enc_key = enc.decrypt_data_block(key.ekey, synapse.synapse_key)
+                enc_key =\
+                    enc.decrypt_data_block(key.ekey, existing.synapse_key)
+                break
 
         if not enc_key:
             errmsg = "Invalid database state; we had this Synapse but not the"\
@@ -3229,16 +3240,57 @@ class ChordTasks(object):
             log.warning(errmsg)
             raise ChordException(errmsg)
 
-        #TODO: YOU_ARE_HERE: Since we store all keys for a Synapse, the only
-        # ones that we wouldn't have are synapse_pow possibly and signatures/
-        # stamps. So this is to be done when we get to doing that stuff.
-        raise ChordException("TODO: YOU_ARE_HERE")
+        enc_data, b = enc.encrypt_data_block(dmsg.data, enc_key)
+        if b:
+            enc_data += b
+
+        distances = []
+
+        def dbcall():
+            with self.engine.node.db.open_session() as sess:
+                nsyn = sess.query(Synapse).get(existing.id)
+
+                nsyn.data = enc_data
+                nsyn.original_size = len(dmsg.data)
+                nsyn.pow_difficulty, direction = synapse.log_distance
+                assert direction == 1
+
+                def store_key(key, key_type):
+                    nonlocal distances
+                    sk = self.__store_key(self, nsyn, key, key_type, enc_key)
+                    distances.append(sk.distance)
+
+                if synapse.stamps:
+                    store_key(\
+                        synapse.stamps[-1].signing_key,\
+                        SynapseKey.KeyType.stamp_key)
+
+                sess.commit()
+
+        yield from self.loop.run_in_executor(None, dbcall)
+
+        for distance in distances:
+            if distance > self.engine.furthest_data_block:
+                self.engine.furthest_data_block = distance
+
+        if log.isEnabledFor(logging.INFO):
+            #NOTE: We only print IDs not KEYs; so as to prevent entrapment in
+            # the log file.
+            log.info(\
+                "Updated Synapse (synapse_id=[{}], target_id=[{}],"\
+                    " source_id=[{}])."\
+                        .format(\
+                            mbase32.encode(\
+                                enc.generate_ID(synapse.synapse_key)),\
+                            mbase32.encode(\
+                                enc.generate_ID(synapse.target_key)),\
+                            mbase32.encode(\
+                                enc.generate_ID(synapse.source_key))))
+
+        return True
 
     @asyncio.coroutine
     def __store_new_synapse(self, peer_dbid, dmsg, synapse):
-        if len(dmsg.data) > consts.MAX_DATA_BLOCK_SIZE:
-            raise ChordException("Synapse is larger than MAX_DATA_BLOCK_SIZE.")
-
         # We make up a random encryption key, encrypt the Synapse data with
         # that key and store in the Synapse table, encrypt that key with each
         # Synapse key that we are storing and store together in SynapseKey.
@@ -3265,25 +3317,7 @@ class ChordTasks(object):
 
                 def store_key(key, key_type):
                     nonlocal distances
-
-                    sk = SynapseKey()
-                    sk.data_id = enc.generate_ID(key)
-                    sk.distance = mutil.calc_raw_distance(\
-                            self.engine.node_id, sk.data_id)
-                    sk.synapse_id = s.id
-                    sk.key_type = key_type.value
-                    if type(key) is not bytes:
-                        key = bytes(key)
-                    sk.ekey, b = enc.encrypt_data_block(enc_key, key)
-
-                    sk.timestamp = s.timestamp
-                    sk.pow_difficulty = s.pow_difficulty
-
-                    # Because len(key) is multiple of AES blocksize.
-                    assert not b
-
-                    sess.add(sk)
-
+                    sk = self.__store_key(sess, s, key, key_type, enc_key)
                     distances.append(sk.distance)
 
                 store_key(synapse.synapse_key, SynapseKey.KeyType.synapse_key)
@@ -3341,6 +3375,28 @@ class ChordTasks(object):
 #                                            enc.generate_ID(\
 #                                                synapse.synapse_pow)),
 #                                        mbase32.encode(data_id))
+
+    def __store_key(self, sess, s, key, key_type, enc_key):
+        "Required to be run in a db session and thread."
+        sk = SynapseKey()
+        sk.data_id = enc.generate_ID(key)
+        sk.distance = mutil.calc_raw_distance(\
+                self.engine.node_id, sk.data_id)
+        sk.synapse_id = s.id
+        sk.key_type = key_type.value
+        if type(key) is not bytes:
+            key = bytes(key)
+        sk.ekey, b = enc.encrypt_data_block(enc_key, key)
+
+        sk.timestamp = s.timestamp
+        sk.pow_difficulty = s.pow_difficulty
+
+        # Because len(key) is multiple of AES blocksize.
+        assert not b
+
+        sess.add(sk)
+
+        return sk
 
     @asyncio.coroutine
     def _store_data(self, peer, data_id, dmsg, need_pruning):
@@ -3651,6 +3707,9 @@ class ChordTasks(object):
     def _check_synapse(self, data, data_key=None):
         "Checks if the passed Synapse data is valid; returning the Synapse or"\
         " None if the data was invalid."
+        if len(data) > consts.MAX_DATA_BLOCK_SIZE:
+            log.warning("Invalid Synapse; is larger than MAX_DATA_BLOCK_SIZE.")
+
         try:
             synapse = syn.Synapse(data)
         except:
