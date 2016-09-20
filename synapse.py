@@ -379,6 +379,7 @@ class Stamp(object):
         self._pow_data_end_idx = None
 
         self._stamp_pow = None
+        self._signing_key = None
         self._log_distance = None
 
         self.buf = None
@@ -649,7 +650,7 @@ class SynapseRequest(object):
                 stamp = 4
 
             def __init__(self, type_=None, value=None):
-                self.type = type_
+                self.type = type_ #FIXME: Have this type the enum, not int.
                 self.value = value
 
             def encode_onto(self, buf):

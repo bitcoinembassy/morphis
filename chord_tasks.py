@@ -3199,7 +3199,12 @@ class ChordTasks(object):
                                 SynapseKey.key_type\
                                     == SynapseKey.KeyType.synapse_key.value)))
 
-                return q.first()
+                existing = q.first()
+
+                if existing:
+                    existing.keys # Force fetch.
+
+                return existing
 
         existing = yield from self.loop.run_in_executor(None, dbcall_chk)
 
@@ -3229,9 +3234,8 @@ class ChordTasks(object):
         enc_key = None
 
         for key in existing.keys:
-            if key.key_type is SynapseKey.KeyType.synapse_key:
-                enc_key =\
-                    enc.decrypt_data_block(key.ekey, existing.synapse_key)
+            if key.key_type is SynapseKey.KeyType.synapse_key.value:
+                enc_key = enc.decrypt_data_block(key.ekey, synapse.synapse_key)
                 break
 
         if not enc_key:
@@ -3257,7 +3261,7 @@ class ChordTasks(object):
 
                 def store_key(key, key_type):
                     nonlocal distances
-                    sk = self.__store_key(self, nsyn, key, key_type, enc_key)
+                    sk = self.__store_key(sess, nsyn, key, key_type, enc_key)
                     distances.append(sk.distance)
 
                 if synapse.stamps:
