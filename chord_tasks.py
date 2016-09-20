@@ -3232,11 +3232,13 @@ class ChordTasks(object):
         assert type(synapse) is syn.Synapse, type(synapse)
 
         enc_key = None
+        existing_stamp_keys = set()
 
         for key in existing.keys:
             if key.key_type is SynapseKey.KeyType.synapse_key.value:
                 enc_key = enc.decrypt_data_block(key.ekey, synapse.synapse_key)
-                break
+            elif key.key_type is SynapseKey.KeyType.stamp_key.value:
+                existing_stamp_keys.add(key.data_id)
 
         if not enc_key:
             errmsg = "Invalid database state; we had this Synapse but not the"\
@@ -3261,13 +3263,17 @@ class ChordTasks(object):
 
                 def store_key(key, key_type):
                     nonlocal distances
-                    sk = self.__store_key(sess, nsyn, key, key_type, enc_key)
+                    data_id = enc.generate_ID(key)
+
+                    if data_id in existing_stamp_keys:
+                        return
+
+                    sk = self.__store_key(\
+                        sess, nsyn, data_id, key_type, enc_key)
                     distances.append(sk.distance)
 
-                if synapse.stamps:
-                    store_key(\
-                        synapse.stamps[-1].signing_key,\
-                        SynapseKey.KeyType.stamp_key)
+                for stamp in synapse.stamps:
+                    store_key(stamp.signing_key, SynapseKey.KeyType.stamp_key)
 
                 sess.commit()
 
@@ -3321,7 +3327,8 @@ class ChordTasks(object):
 
                 def store_key(key, key_type):
                     nonlocal distances
-                    sk = self.__store_key(sess, s, key, key_type, enc_key)
+                    data_id = enc.generate_ID(key)
+                    sk = self.__store_key(sess, s, data_id, key_type, enc_key)
                     distances.append(sk.distance)
 
                 store_key(synapse.synapse_key, SynapseKey.KeyType.synapse_key)
@@ -3335,10 +3342,8 @@ class ChordTasks(object):
                         synapse.signing_key,\
                         SynapseKey.KeyType.signing_key)
 
-                if synapse.stamps:
-                    store_key(\
-                        synapse.stamps[-1].signing_key,\
-                        SynapseKey.KeyType.stamp_key)
+                for stamp in synapse.stamps:
+                    store_key(stamp.signing_key, SynapseKey.KeyType.stamp_key)
 
                 sess.commit()
 
@@ -3380,10 +3385,10 @@ class ChordTasks(object):
 #                                                synapse.synapse_pow)),
 #                                        mbase32.encode(data_id))
 
-    def __store_key(self, sess, s, key, key_type, enc_key):
+    def __store_key(self, sess, s, data_id, key_type, enc_key):
         "Required to be run in a db session and thread."
         sk = SynapseKey()
-        sk.data_id = enc.generate_ID(key)
+        sk.data_id = data_id
         sk.distance = mutil.calc_raw_distance(\
                 self.engine.node_id, sk.data_id)
         sk.synapse_id = s.id
