@@ -2620,24 +2620,39 @@ class ChordTasks(object):
         if sreq.minimum_pow:
             q = q.filter(SynapseKey.pow_difficulty >= sreq.minimum_pow)
 
-        synapse_query = sreq.query
+        depth = 0 # Just for now to protect from whatever.
 
-        type_ = synapse_query.type
+        def build_query(synapse_query, depth=0):
+            if depth >= 2:
+                log.warning("Ignoring excessive SynapseRequest.Query depth.")
+                return and_(True)
+            depth += 1
 
-        if type_ is syn.SynapseRequest.Query.Type.and_\
-                or type_ is syn.SynapseRequest.Query.Type.or_:
-            assert len(synapse_query.entries) == 2
+            type_ = synapse_query.type
 
-            #TODO: YOU_ARE_HERE
-            raise ChordException("TODO.")
-        elif type_ is syn.SynapseRequest.Query.Type.key:
-            kq = synapse_query.entries
-            assert len(kq.value) == 64
-            q = q.filter(SynapseKey.key_type == kq.type.value + 2)\
-                .filter(SynapseKey.data_id == kq.value)
-        else:
-            log.warning("Ignoring unsupported SynapseRequest.Query.Type [{}]."\
-                .format(type_))
+            if type_ is syn.SynapseRequest.Query.Type.and_\
+                    or type_ is syn.SynapseRequest.Query.Type.or_:
+                assert len(synapse_query.entries) == 2
+
+                q1 = build_query(synapse_query.entries[0], depth)
+                q2 = build_query(synapse_query.entries[1], depth)
+
+                if type_ is syn.SynapseRequest.Query.Type.and_:
+                    return and_(q1, q2)
+                else:
+                    return or_(q1, q2)
+            elif type_ is syn.SynapseRequest.Query.Type.key:
+                kq = synapse_query.entries
+                assert len(kq.value) == 64
+                return and_(\
+                    SynapseKey.key_type == kq.type.value + 2,
+                    SynapseKey.data_id == kq.value)
+            else:
+                log.warning(\
+                    "Ignoring unsupported SynapseRequest.Query.Type [{}]."\
+                        .format(type_))
+
+        q = q.filter(build_query(sreq.query))
 
         # Since paging + save coding time, we always sort.
         als = aliased(SynapseKey)
