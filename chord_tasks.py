@@ -553,6 +553,25 @@ class ChordTasks(object):
 
                 all_keys.append((target_keys, target_id))
                 all_keys.append((source_key, source_id))
+            elif stamp_key:
+                assert not source_key and not signing_key
+                target_id = enc.generate_ID(target_keys)
+                stamp_id = enc.generate_ID(stamp_key)
+
+                query = syn.SynapseRequest.Query(
+                    syn.SynapseRequest.Query.Type.and_,\
+                    [
+                        syn.SynapseRequest.Query(\
+                            entries=syn.SynapseRequest.Query.Key(\
+                                syn.SynapseRequest.Query.Key.Type.target,\
+                                target_id)),\
+                        syn.SynapseRequest.Query(\
+                            entries=syn.SynapseRequest.Query.Key(\
+                                syn.SynapseRequest.Query.Key.Type.stamp,\
+                                source_id))])
+
+                all_keys.append((target_keys, target_id))
+                all_keys.append((stamp_key, stamp_id))
             else:
                 target_id = enc.generate_ID(target_keys)
 
