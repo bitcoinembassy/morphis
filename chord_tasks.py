@@ -2614,14 +2614,7 @@ class ChordTasks(object):
         return (yield from self.loop.run_in_executor(None, dbcall))
 
     def _build_synapse_db_query(self, sess, q, sreq):
-        if sreq.start_timestamp:
-            q = q.filter(SynapseKey.timestamp >= sreq.start_timestamp)
-        if sreq.end_timestamp:
-            q = q.filter(SynapseKey.timestamp < sreq.end_timestamp)
-        if sreq.minimum_pow:
-            q = q.filter(SynapseKey.pow_difficulty >= sreq.minimum_pow)
-
-        depth = 0 # Just for now to protect from whatever.
+        first_statement = True
 
         def build_query(synapse_query, q, alias, depth=0):
             if depth >= 2:
@@ -2634,8 +2627,12 @@ class ChordTasks(object):
             if type_ is syn.SynapseRequest.Query.Type.and_:
                 assert len(synapse_query.entries) == 2
 
-                a1 = aliased(SynapseKey)
-                q = q.join(a1, a1.synapse_id == SynapseKey.synapse_id)
+                if first_statement:
+                    a1 = SynapseKey
+                else:
+                    a1 = aliased(SynapseKey)
+                    q = q.join(a1, a1.synapse_id == SynapseKey.synapse_id)
+
                 a2 = aliased(SynapseKey)
                 q = q.join(a2, a2.synapse_id == SynapseKey.synapse_id)
 
@@ -2663,19 +2660,34 @@ class ChordTasks(object):
                 log.warning(\
                     "Ignoring unsupported SynapseRequest.Query.Type [{}]."\
                         .format(type_))
+
         q, statement = build_query(sreq.query, q, SynapseKey)
         q = q.filter(statement)
 
+        #TODO: Could optimize by storing first synapse_key row alias and using
+        # that for the following filtering and sorting, and only creating this
+        # alias if there were no joins to synapse_key.
+        als = aliased(SynapseKey)
+        q = q.join(als, als.synapse_id == SynapseKey.synapse_id)
+
+        # Additional SynapseRequest filters.
+        if sreq.start_timestamp:
+            q = q.filter(als.timestamp >= sreq.start_timestamp)
+        if sreq.end_timestamp:
+            q = q.filter(als.timestamp < sreq.end_timestamp)
+        if sreq.minimum_pow:
+            q = q.filter(als.pow_difficulty >= sreq.minimum_pow)
+
         # Since paging + save coding time, we always sort.
         q = q.filter(
-            SynapseKey.key_type == SynapseKey.KeyType.synapse_key.value)
+            als.key_type == SynapseKey.KeyType.synapse_key.value)
 
         if sreq.start_key:
-            q = q.filter(SynapseKey.data_id >= sreq.start_key)
+            q = q.filter(als.data_id >= sreq.start_key)
         if sreq.end_key:
-            q = q.filter(SynapseKey.data_id <= sreq.end_key)
+            q = q.filter(als.data_id <= sreq.end_key)
 
-        q = q.order_by(SynapseKey.data_id)
+        q = q.order_by(als.data_id)
 
         return q
 
