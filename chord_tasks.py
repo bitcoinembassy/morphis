@@ -634,11 +634,17 @@ class ChordTasks(object):
             else bytes(all_keys[0][0])
 
         tasks = []
+        requested = set()
 
         for key in all_keys:
+            if key[1] in requested:
+                continue
+
             tasks.append(self.send_find_node(\
                 key[1], for_data=True, data_key=data_key,\
                 synapse_request=synapse_request, retry_factor=retry_factor))
+
+            requested.add(key[1])
 
         data_rw = None
 
