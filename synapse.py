@@ -609,7 +609,7 @@ class SynapseRequest(object):
             if type(entries) is SynapseRequest.Query.Key:
                 self.type = SynapseRequest.Query.Type.key
             else:
-                assert not entries or entries in type(list, tuple)
+                assert not entries or type(entries) in (list, tuple)
                 self.type = type_
 
             if not entries:
