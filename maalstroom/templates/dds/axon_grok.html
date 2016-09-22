@@ -7,6 +7,8 @@
 			<label for="tab2"><span class="tab-icon-dmail">Dmail</span></label>
 			<input type="radio" name="tabs" id="tab3">
 			<label for="tab3"><span class="tab-icon-upload">Upload</span></label>
+			<input type="radio" name="tabs" id="tab4">
+			<label for="tab4"><span class="tab-icon-node">Node</span></label>
 			<div id="tab-content1" class="tab-content">
 				<div class="dashboard-user-icon"><img src="http://localhost:4251/.dds/images/user-img.png" height="28px" width="28px"></div>
 				<div class="dashboard-user-self-status-icon-active"></div>
@@ -121,9 +123,23 @@
 					other stuff...
 				</form>
 			</div>
+			<div id="tab-content4" class="tab-content">
+				Hi
+			</div>
 		</div><div class="dashboard-footer-push"></div>
 	 </div>
-	<div class ="dashboard-footer"><div class="magnifying-glass-wrapper"><div class="magnifying-glass"></div></div><div class="dashboard-search"><input type="text" name="search" placeholder="Explore..."></div></div>
+	<div class ="dashboard-footer">
+		<form action="search" method="get" id="dashboard-search" class="dashboard-search-form">
+			<div class="dashboard-search-wrapper">
+				<div class="magnifying-glass-wrapper">
+					<button type="submit" class="magnifying-glass"></button>
+				</div>
+				<div class="dashboard-search">
+					<input type="text" name="search" placeholder="Explore...">
+				</div>
+			</div>
+		</form>
+	</div>
 </nav>
 
 <div class="page-wrap">
