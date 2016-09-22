@@ -499,8 +499,9 @@ class ChordTasks(object):
     @asyncio.coroutine
     def send_get_synapses(\
             self, target_keys=None, source_key=None, signing_key=None,\
-            start_timestamp=None, end_timestamp=None, start_key=None,\
-            end_key=None, minimum_pow=8, result_callback=None, retry_factor=1):
+            stamp_key=None, start_timestamp=None, end_timestamp=None,\
+            start_key=None, end_key=None, minimum_pow=8, result_callback=None,\
+            retry_factor=1):
 
         req = syn.SynapseRequest()
         if start_timestamp:
@@ -568,7 +569,7 @@ class ChordTasks(object):
                         syn.SynapseRequest.Query(\
                             entries=syn.SynapseRequest.Query.Key(\
                                 syn.SynapseRequest.Query.Key.Type.stamp,\
-                                source_id))])
+                                stamp_id))])
 
                 all_keys.append((target_keys, target_id))
                 all_keys.append((stamp_key, stamp_id))
@@ -2622,51 +2623,59 @@ class ChordTasks(object):
 
         depth = 0 # Just for now to protect from whatever.
 
-        def build_query(synapse_query, depth=0):
+        def build_query(synapse_query, q, alias, depth=0):
             if depth >= 2:
                 log.warning("Ignoring excessive SynapseRequest.Query depth.")
-                return and_(True)
+                return q, None
             depth += 1
 
             type_ = synapse_query.type
 
-            if type_ is syn.SynapseRequest.Query.Type.and_\
-                    or type_ is syn.SynapseRequest.Query.Type.or_:
+            if type_ is syn.SynapseRequest.Query.Type.and_:
                 assert len(synapse_query.entries) == 2
 
-                q1 = build_query(synapse_query.entries[0], depth)
-                q2 = build_query(synapse_query.entries[1], depth)
+                a1 = aliased(SynapseKey)
+                q = q.join(a1, a1.synapse_id == SynapseKey.synapse_id)
+                a2 = aliased(SynapseKey)
+                q = q.join(a2, a2.synapse_id == SynapseKey.synapse_id)
 
-                if type_ is syn.SynapseRequest.Query.Type.and_:
-                    return and_(q1, q2)
-                else:
-                    return or_(q1, q2)
+                q, st1 = build_query(synapse_query.entries[0], q, a1, depth)
+                q, st2 = build_query(synapse_query.entries[1], q, a2, depth)
+
+                return q, and_(st1, st2)
+            elif type_ is syn.SynapseRequest.Query.Type.or_:
+                assert len(synapse_query.entries) == 2
+
+                a1 = aliased(SynapseKey)
+                q = q.join(a1, a1.synapse_id == SynapseKey.synapse_id)
+
+                q, st1 = build_query(synapse_query.entries[0], q, a1, depth)
+                q, st2 = build_query(synapse_query.entries[1], q, a1, depth)
+
+                return q, or_(st1, st2)
             elif type_ is syn.SynapseRequest.Query.Type.key:
                 kq = synapse_query.entries
                 assert len(kq.value) == 64
-                return and_(\
-                    SynapseKey.key_type == kq.type.value + 2,
-                    SynapseKey.data_id == kq.value)
+                return q, and_(\
+                    alias.key_type == kq.type.value + 2,
+                    alias.data_id == kq.value)
             else:
                 log.warning(\
                     "Ignoring unsupported SynapseRequest.Query.Type [{}]."\
                         .format(type_))
-
-        q = q.filter(build_query(sreq.query))
+        q, statement = build_query(sreq.query, q, SynapseKey)
+        q = q.filter(statement)
 
         # Since paging + save coding time, we always sort.
-        als = aliased(SynapseKey)
-
-        q = q.join(als, SynapseKey.synapse_id == als.synapse_id)
-        q = q.filter(\
-            als.key_type == SynapseKey.KeyType.synapse_key.value)
+        q = q.filter(
+            SynapseKey.key_type == SynapseKey.KeyType.synapse_key.value)
 
         if sreq.start_key:
-            q = q.filter(als.data_id >= sreq.start_key)
+            q = q.filter(SynapseKey.data_id >= sreq.start_key)
         if sreq.end_key:
-            q = q.filter(als.data_id <= sreq.end_key)
+            q = q.filter(SynapseKey.data_id <= sreq.end_key)
 
-        q = q.order_by(als.data_id)
+        q = q.order_by(SynapseKey.data_id)
 
         return q
 
