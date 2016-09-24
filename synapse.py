@@ -364,6 +364,7 @@ class Synapse(object):
 class Stamp(object):
     def __init__(self, signed_key=None, key=None):
         self.signed_key = signed_key
+#        self._stamp_key = None
         self.version = 1
         self.signature = None
         self.nonce = None
@@ -383,6 +384,23 @@ class Stamp(object):
         self._log_distance = None
 
         self.buf = None
+
+#    @property
+#    def stamp_key(self):
+#        if self._stamp_key:
+#            return self._stamp_key
+#
+#        if not self.buf:
+#            raise Exception("TODO")
+#
+#        self._stamp_key =\
+#            enc.generate_ID(self.buf[self._start_index:self._signature_offset])
+#
+#        if log.isEnabledFor(logging.DEBUG):
+#            log.debug("self[{}]->stamp_key=[{}]."\
+#                .format(id(self), mbase32.encode(self._stamp_key)))
+#
+#        return self._stamp_key
 
     @property
     def stamp_pow(self):
@@ -542,7 +560,7 @@ class Stamp(object):
             self.key = rsakey.RsaKey(self.buf, i=self._pubkey_offset)
 
         return self.key.verify_rsassa_pss_sig(
-            self.buf[:self._signature_offset],\
+            self.buf[self._start_index:self._signature_offset],\
             self.buf,\
             self._signature_offset)
 
