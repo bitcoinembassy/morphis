@@ -3330,7 +3330,7 @@ class ChordTasks(object):
                         return
 
                     sk = self.__store_key(\
-                        sess, nsyn, data_id, key_type, enc_key)
+                        sess, nsyn, key, data_id, key_type, enc_key)
                     distances.append(sk.distance)
 
                 for stamp in synapse.stamps:
@@ -3389,7 +3389,8 @@ class ChordTasks(object):
                 def store_key(key, key_type):
                     nonlocal distances
                     data_id = enc.generate_ID(key)
-                    sk = self.__store_key(sess, s, data_id, key_type, enc_key)
+                    sk = self.__store_key(\
+                        sess, s, key, data_id, key_type, enc_key)
                     distances.append(sk.distance)
 
                 store_key(synapse.synapse_key, SynapseKey.KeyType.synapse_key)
@@ -3446,7 +3447,7 @@ class ChordTasks(object):
 #                                                synapse.synapse_pow)),
 #                                        mbase32.encode(data_id))
 
-    def __store_key(self, sess, s, data_id, key_type, enc_key):
+    def __store_key(self, sess, s, key, data_id, key_type, enc_key):
         "Required to be run in a db session and thread."
         sk = SynapseKey()
         sk.data_id = data_id
