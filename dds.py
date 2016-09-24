@@ -7,10 +7,10 @@ import asyncio
 from concurrent import futures
 import logging
 
-from sqlalchemy import or_
+from sqlalchemy import or_, func
 
 import consts
-from db import DdsPost
+from db import DdsPost, DdsStamp
 import dpush
 import enc
 import mbase32
@@ -69,8 +69,51 @@ class DdsEngine(object):
 
         @asyncio.coroutine
         def process_synapse(synapse):
+            db_stamps = []
+
+            def dbcall():
+                with self.db.open_session() as sess:
+                    updates = False
+                    for stamp in synapse.stamps:
+                        q = sess.query(func.count("*"))\
+                            .select_from(DdsStamp)\
+                                .filter(\
+                                    DdsStamp.signed_key == stamp.signed_key,\
+                                    DdsStamp.version == stamp.version,\
+                                    DdsStamp.signing_key == stamp.signing_key)\
+
+                        if q.scalar():
+                            if log.isEnabledFor(logging.INFO):
+                                log.info("Skipping existing stamp.")
+                            continue
+
+                        if log.isEnabledFor(logging.INFO):
+                            log.info("Inserting new DdsStamp!")
+
+                        dbs = DdsStamp()
+                        dbs.signed_key = stamp.signed_key
+                        dbs.version = stamp.version
+                        dbs.signing_key = stamp.signing_key
+                        dbs.difficulty =\
+                            consts.NODE_ID_BITS - stamp.log_distance[0]
+                        dbs.first_seen = mutil.utc_datetime()
+
+                        sess.add(dbs)
+                        updates = True
+
+                    if updates:
+                        sess.commit()
+
+            # Update DdsStampS.
+            yield from self.loop.run_in_executor(None, dbcall)
+
             exists = yield from self.check_has_post(synapse.synapse_key)
             if exists:
+                if log.isEnabledFor(logging.INFO):
+                    log.info(\
+                        "Synapse (synapse_key=[{}]) already present in cache."\
+                            .format(mbase32.encode(synapse.synapse_key)))
+
                 return
 
             post = yield from self.fetch_post(synapse)
@@ -80,6 +123,14 @@ class DdsEngine(object):
                     log.debug("Synapse content not found for key [{}]."\
                         .format(mbase32.encode(synapse.source_key)))
                 return
+
+            if log.isEnabledFor(logging.INFO):
+                log.info(\
+                    "Found new Synapse (synapse_key=[{}], len(stamps)=[{}])."\
+                        .format(\
+                            mbase32.encode(synapse.synapse_key),\
+                            len(synapse.stamps)))
+
 
             yield from post_callback(post)
 
@@ -139,6 +190,14 @@ class DdsEngine(object):
                 yield from asyncio.sleep(300)
 
         @asyncio.coroutine
+        def st_task():
+            while True:
+                yield from self.node.engine.tasks.send_get_synapses(\
+                    target_key, stamp_key=target_key, result_callback=syn_cb,\
+                    retry_factor=25)
+                yield from asyncio.sleep(5)
+
+        @asyncio.coroutine
         def sk_task():
             while True:
                 yield from self.node.engine.tasks.send_get_synapses(\
@@ -154,6 +213,7 @@ class DdsEngine(object):
                 yield from asyncio.sleep(1)
 
         new_tasks.append(asyncio.async(tb_task(), loop=self.loop))
+        new_tasks.append(asyncio.async(st_task(), loop=self.loop))
         new_tasks.append(asyncio.async(sk_task(), loop=self.loop))
         new_tasks.append(asyncio.async(sy_task(), loop=self.loop))
 
