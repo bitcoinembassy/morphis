@@ -13,10 +13,10 @@ from urllib.parse import parse_qs, quote_plus
 import os
 
 from sqlalchemy import or_, and_, desc
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, aliased
 
 import consts
-from db import User, DdsPost, NodeState
+from db import User, DdsPost, DdsStamp, NodeState
 from dmail import DmailEngine
 from clientengine.dds import DdsQuery
 from dds import DdsEngine
@@ -186,6 +186,8 @@ def serve_get(dispatcher, rpath):
         yield from _process_propedit(mr)
     elif req.startswith("/site/edit/"):
         yield from _process_site_edit(mr)
+    elif req.startswith("/test/"):
+        yield from _process_test(mr)
     else:
         dispatcher.send_error("request: {}".format(req), errcode=400)
 
@@ -235,6 +237,21 @@ def _process_root(req):
         wrapper.format(title="MORPHiS Maalstroom DDS", child=template)
 
     req.dispatcher.send_content(wrapper)
+
+@asyncio.coroutine
+def _process_test(req):
+    rstr = req.req[6:]
+
+    log.warning("rstr=[{}].".format(rstr))
+
+    target_key_enc = rstr
+    target_key = mbase32.decode(target_key_enc)
+
+    log.info("target_key=[{}].".format(target_key_enc))
+
+    #TODO: Delete this test stub.
+
+    req.dispatcher.send_content("HI")
 
 @asyncio.coroutine
 def _process_propedit(req):
@@ -597,11 +614,28 @@ def _process_axon_synapses(req):
     def dbcall():
         with req.dispatcher.node.db.open_session(True) as sess:
 #                .options(joinedload("children"))\
-            q = sess.query(DdsPost)\
+
+            # Prepare recursive DdsStamp query.
+            children = sess.query(DdsStamp)\
+                .filter(DdsStamp.signing_key == axon_addr).\
+                cte(name="children", recursive=True)
+
+            ra = aliased(children, name="root")
+            sta = aliased(DdsStamp, name="stamp")
+
+            children = children.union_all(\
+                sess.query(sta)\
+                    .filter(sta.signing_key == ra.c.signed_key))
+
+            #rs = sess.query(ra).all()
+
+            # Main DdsPost query.
+            q = sess.query(DdsPost, ra)\
                 .filter(or_(\
                     DdsPost.target_key == axon_addr,\
                     DdsPost.target_key2 == axon_addr,\
                     DdsPost.signing_key == axon_addr))\
+                .outerjoin(ra, ra.c.signed_key == DdsPost.synapse_key)\
                 .order_by(\
                     desc(and_(\
                         DdsPost.signing_key != None,\
@@ -636,8 +670,8 @@ def _process_axon_synapses(req):
     anon_name = make_safe_for_html_content(anon_name.decode())
 
     @asyncio.coroutine
-    def process_post(post, depth=0):
-        assert type(post) is DdsPost
+    def process_post(post, stamp, depth=0):
+        assert type(post) is DdsPost, type(post)
 
         key = post.synapse_key
         if not key:
@@ -662,6 +696,8 @@ def _process_axon_synapses(req):
             style = "box-shadow: 0 1px 4px rgba(0,0,0,.04); border: 1px solid rgba(163, 163, 163,.3); border-radius: 5px; margin: 1em 1em; background: #e6e6e6;"
         elif post.signing_key == axon_addr:
             style = "box-shadow: 0 1px 4px rgba(0,0,0,.04); border: 1px solid rgba(56, 163, 175,.3); border-radius: 5px; margin: 1em 1em; background: #E6F6F7;"
+        elif stamp:
+            style = "box-shadow: 0 1px 4px rgba(0,0,0,.04); border: 1px solid rgba(56, 163, 175,.3); border-radius: 5px; margin: 1em 1em; background: #06F607;"
         else:
             style = "padding: 0 1em 0 1em;"
 
@@ -710,11 +746,13 @@ def _process_axon_synapses(req):
 
 #        if not depth:
 #            for post in post.children:
-#                yield from process_post(post, depth + 1)
+#                yield from process_post(post, depth=depth + 1)
 
     #TODO: Optimize by moving this into above gather.
-    for post in posts:
-        yield from process_post(post)
+    for row in posts:
+        post = row[0]
+        stamp = row[1]
+        yield from process_post(post, stamp)
 
     req.dispatcher.send_partial_content(\
         "<div class='dds-refresh-wrapper'><hr id='new' class='style2'/>")
