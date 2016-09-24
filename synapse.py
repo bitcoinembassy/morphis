@@ -524,7 +524,7 @@ class Stamp(object):
     def parse(self):
         self.parse_from(self.buf, 0)
 
-    def parse_from(self, buf, i):
+    def parse_from(self, buf, i=0):
         self.buf = buf
         self._start_index = i
 
