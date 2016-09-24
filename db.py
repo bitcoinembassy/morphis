@@ -39,6 +39,7 @@ DmailTag = None
 ##FIXME: NEW
 User = None
 DdsPost = None
+DdsStamp = None
 Synapse = None
 SynapseKey = None
 ##.
@@ -279,6 +280,27 @@ def _init_daos(Base, d):
     Index("ddspost__data_key", DdsPost.data_key)
 
     d.DdsPost = DdsPost
+
+    class DdsStamp(Base):
+        __tablename__ = "ddsstamp"
+
+        signed_key = Column(LargeBinary, nullable=False, primary_key=True)
+        # str for sqlite bigint :(.
+        version = Column(String, nullable=False, primary_key=True)
+        signing_key = Column(LargeBinary, nullable=False, primary_key=True)
+        difficulty = Column(Integer, nullable=False)
+        revoked = Column(Boolean, nullable=False, default=False)
+        first_seen = Column(UtcDateTime, nullable=False)
+        children = relationship(\
+            "DdsStamp",\
+            foreign_keys="DdsStamp.signing_key",\
+            primaryjoin="DdsStamp.signed_key == DdsStamp.signing_key",\
+            passive_deletes="all")
+
+    Index("ddsstamp__signed_key", DdsStamp.signed_key)
+    Index("ddsstamp__signing_key", DdsStamp.signing_key)
+
+    d.DdsStamp = DdsStamp
 
     return d
 
@@ -541,6 +563,7 @@ if Peer is None:
     AddressBook = d.AddressBook
     User = d.User
     DdsPost = d.DdsPost
+    DdsStamp = d.DdsStamp
     Synapse = d.Synapse
     SynapseKey = d.SynapseKey
 
