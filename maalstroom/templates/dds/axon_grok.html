@@ -34,7 +34,7 @@
 							<div class="dashboard-input"><input type="text" name="address" id="address" placeholder="address"/></div>
 						</div>
 						<div class="clearfix">
-							<button class="add-tag" type="submit">+</button>
+							<button class="dds-button" type="submit">ADD</button></br></br>
 						</div>
 					</form>
 					<div class="dashboard-active-convo-title">Active conversations (6)</div>
@@ -86,29 +86,22 @@
 							<li class="trash-icon "><a href="" style="display:block"><div class="mailbox-pad">Trash<div class="inactive-notify">1</div></div></a></li>
 						</ul>
 					</span>
-					<div class="dashboard-hr-pad">
-						<hr class="style2"></hr>
-					</div>
-					<ul>
-						<form target="_self" action="morphis://.dmail/create_tag" method="get" accept-charset="UTF-8 ISO-8859-1">
-							<input type="hidden" name="csrf_token" value=""/>
-							<input type="hidden" name="redirect" value=""/>
-								<div class="tag-icon"></div>
-									<div class="mailbox-pad">
-										<div class="dashboard-search">
-											<input class="tag-text" type="text" name="tag_name" placeholder="Add new tag"/>
-											<button class="add-tag" value="send" name="add-tag" type="submit">+</button>
-										</div>
-										
-									</div>
-								</li>
-						</form>
-						<span class="mailbox-list">
+					<div class="dashboard-hr-pad"><hr class="style2"></hr></div>
+					<form target="_self" action="morphis://.dmail/create_tag" method="get" accept-charset="UTF-8 ISO-8859-1">
+						<input type="hidden" name="csrf_token" value=""/>
+						<input type="hidden" name="redirect" value=""/>
+						<div class="dashboard-tag-input-wrapper">
+							<div class="dashboard-tag-input">
+								<input class="tag-text" type="text" name="tag_name" placeholder="Add new tag"/>
+								<button class="add-tag" value="send" name="add-tag" type="submit">+</button>
+							</div>
+						</div>
+					</form>
+					<span class="mailbox-list">
 						<ul>
 							<li class="bullet"><a href="" style="display:block"><div class="mailbox-pad">Bob<div class=""></div></div></a></li>
 						</ul>
 					</span>
-					</ul>
 				</div>
 			</div>
 			<div id="tab-content3" class="tab-content">
@@ -124,7 +117,12 @@
 				</form>
 			</div>
 			<div id="tab-content4" class="tab-content">
-				Hi
+				<div class="dashboard-convo-list">
+					<div class="dashboard-active-convo-title">Peers:</div>
+					<div class="dashboard-active-convo-title">Status:</div>
+					<div class="dashboard-active-convo-title">Tasks:</div>
+					<div class="dashboard-active-convo-title">Current downloads:</div>
+				</div>
 			</div>
 		</div><div class="dashboard-footer-push"></div>
 	 </div>

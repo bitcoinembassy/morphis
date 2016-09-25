@@ -1857,6 +1857,18 @@ left: 23%;
 	-moz-animation: all 0.7s ease-in-out;
 	animation: all 0.7s ease-in-out;*/
 }
+.tab-dds {
+	background: url("morphis://.dmail/images/comment_bubble.png") no-repeat center left;
+}
+.tab-dmail {
+	background: url("morphis://.dmail/images/mail.png") no-repeat center left;
+}
+.tab-upload {
+	background: url("morphis://.dmail/images/upload_cloud.png") no-repeat center left;
+}
+.tab-node {
+	background: url("morphis://.dmail/images/inbox_white.png") no-repeat center left;
+}
 /*@keyframes scale {
 	0% {
 		transform: scale(0.9);
@@ -2039,10 +2051,21 @@ button.magnifying-glass::before {
 	font: 11px 'ralewaylight', sans-serif;
 	margin: .5em 0 0 0;
 }
+.dashboard-tag-input input {
+	padding:5px;
+	width: 65%;
+	border: 1px solid #1c2227;
+	border-radius: 4px;
+	font: 11px 'ralewaylight', sans-serif;
+	margin: .5em .5em .5em 0;
+}
 input[type="text"]:focus {
 	outline: medium none;
 	border: 1px solid #39a3af;
 	box-shadow: 0px 0px 2px 1px rgba(56, 163, 175, 0.9) inset;
+}
+.dashboard-tag-input-wrapper {
+	margin: 0 0 0 1.3em;
 }
 
 /*Dashboard User Dropdown*/
@@ -2399,7 +2422,7 @@ button.add-tag {
 	height: 22px;
 	border-radius: 50%;
 	border: 1px solid #fff;
-	margin: .3em .5em 0 .5em;
+	margin: .2em .5em 0 0;
 	color: #fff;
 	font-size: .8em;
 	cursor: pointer;
@@ -2412,7 +2435,6 @@ button.add-tag {
 	transition: all ease 0.5s ;
 	line-height: 1.65em;
 	text-align: center;
-	float: right;
 }
 button.add-tag:hover {
 	opacity: 1;
