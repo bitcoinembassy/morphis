@@ -625,7 +625,7 @@ class ChordTasks(object):
                 return total
 
             total.extend(r.data)
-            req.start_key = mutil.bit_add(r.data[-1].synapse_key, 1)
+            req.start_key = mutil.bit_add(r.data[-1].synapse_key)
 
     @asyncio.coroutine
     def _send_get_synapses(self, synapse_request, all_keys, result_callback,\
