@@ -21,7 +21,7 @@ import chord
 import chord_packet as cp
 from chordexception import ChordException
 import consts
-from db import Peer, DataBlock, NodeState, Synapse, SynapseKey
+from db import Peer, DataBlock, NodeState, Stamp, Synapse, SynapseKey
 import mbase32
 from morphisblock import MorphisBlock
 import mutil
@@ -3252,7 +3252,7 @@ class ChordTasks(object):
 
         def dbcall_chk():
             with self.engine.node.db.open_session(True) as sess:
-                q = sess.query(Synapse)\
+                q = sess.query(Synapse, SynapseKey)\
                     .filter(\
                         Synapse.keys.any(\
                             and_(\
@@ -3262,8 +3262,8 @@ class ChordTasks(object):
 
                 existing = q.first()
 
-                if existing:
-                    existing.keys # Force fetch.
+#                if existing:
+#                    existing.keys # Force fetch.
 
                 return existing
 
@@ -3274,7 +3274,7 @@ class ChordTasks(object):
                 yield from self.__store_new_synapse(peer_dbid, dmsg, synapse))
 
         if not synapse.stamps\
-                and existing.pow_difficulty == synapse.log_distance[0]:
+                and existing[0].pow_difficulty == synapse.log_distance[0]:
             if log.isEnabledFor(logging.INFO):
                 log.info("Already had Synapse, and no changes detected.")
             return False
@@ -3285,27 +3285,19 @@ class ChordTasks(object):
                     " keys -- if applicable."\
                         .format(mbase32.encode(synapse_id)))
 
-        yield from self.__update_synapse(dmsg, existing, synapse)
+        yield from\
+            self.__update_synapse(dmsg, existing[0], existing[1], synapse)
 
     @asyncio.coroutine
-    def __update_synapse(self, dmsg, existing, synapse):
+    def __update_synapse(self, dmsg, existing, existing_key, synapse):
         assert type(existing) is Synapse, type(existing)
+        assert type(existing_key) is SynapseKey, type(existing_key)
         assert type(synapse) is syn.Synapse, type(synapse)
 
-        enc_key = None
-        existing_stamp_keys = set()
-
-        for key in existing.keys:
-            if key.key_type is SynapseKey.KeyType.synapse_key.value:
-                enc_key = enc.decrypt_data_block(key.ekey, synapse.synapse_key)
-            elif key.key_type is SynapseKey.KeyType.stamp_key.value:
-                existing_stamp_keys.add(key.data_id)
-
-        if not enc_key:
-            errmsg = "Invalid database state; we had this Synapse but not the"\
-                " synapse_key in SynapseKey?"
-            log.warning(errmsg)
-            raise ChordException(errmsg)
+        enc_key =\
+            enc.decrypt_data_block(existing_key.ekey, synapse.synapse_key)
+        assert existing_key.key_type == SynapseKey.KeyType.synapse_key.value,\
+            existing_key.key_type
 
         enc_data, b = enc.encrypt_data_block(dmsg.data, enc_key)
         if b:
@@ -3322,19 +3314,37 @@ class ChordTasks(object):
                 nsyn.pow_difficulty, direction = synapse.log_distance
                 assert direction == 1
 
-                def store_key(key, key_type):
+                def store_key(key, key_type, data_id=None):
                     nonlocal distances
-                    data_id = enc.generate_ID(key)
-
-                    if data_id in existing_stamp_keys:
-                        return
-
+                    if not data_id:
+                        data_id = enc.generate_ID(key)
                     sk = self.__store_key(\
                         sess, nsyn, key, data_id, key_type, enc_key)
                     distances.append(sk.distance)
 
                 for stamp in synapse.stamps:
-                    store_key(stamp.signing_key, SynapseKey.KeyType.stamp_key)
+                    signed_id = enc.generate_ID(stamp.signed_key)
+                    signing_id = enc.generate_ID(stamp.signing_key)
+
+                    # Store SynapseKey.
+                    exists = sess.query(func.count("*"))\
+                        .select_from(SynapseKey)\
+                        .filter(\
+                            SynapseKey.synapse_id\
+                                == existing.id,\
+                            SynapseKey.key_type\
+                                == SynapseKey.KeyType.stamp_key.value,\
+                            SynapseKey.data_id == signing_id)\
+                        .scalar()
+
+                    if not exists:
+                        store_key(\
+                            stamp.signing_key,\
+                            SynapseKey.KeyType.stamp_key,\
+                            signing_id)
+
+                    # Store Stamp.
+                    self.__store_stamp(sess, stamp, signed_id, signing_id)
 
                 sess.commit()
 
@@ -3386,9 +3396,10 @@ class ChordTasks(object):
                 sess.add(s)
                 sess.flush()
 
-                def store_key(key, key_type):
+                def store_key(key, key_type, data_id=None):
                     nonlocal distances
-                    data_id = enc.generate_ID(key)
+                    if not data_id:
+                        data_id = enc.generate_ID(key)
                     sk = self.__store_key(\
                         sess, s, key, data_id, key_type, enc_key)
                     distances.append(sk.distance)
@@ -3405,7 +3416,17 @@ class ChordTasks(object):
                         SynapseKey.KeyType.signing_key)
 
                 for stamp in synapse.stamps:
-                    store_key(stamp.signing_key, SynapseKey.KeyType.stamp_key)
+                    signed_id = enc.generate_ID(stamp.signed_key)
+                    signing_id = enc.generate_ID(stamp.signing_key)
+
+                    # Store SynapseKey.
+                    store_key(\
+                        stamp.signing_key,\
+                        SynapseKey.KeyType.stamp_key,\
+                        signing_id)
+
+                    # Store Stamp.
+                    self.__store_stamp(sess, stamp, signed_id, signing_id)
 
                 sess.commit()
 
@@ -3468,6 +3489,36 @@ class ChordTasks(object):
         sess.add(sk)
 
         return sk
+
+    def __store_stamp(self, sess, stamp, signed_id, signing_id):
+        "Required to be run in a db session and thread."
+
+        exists = sess.query(func.count("*")).select_from(Stamp)\
+            .filter(\
+                Stamp.signed_id == signed_id,\
+                Stamp.version == stamp.version,\
+                Stamp.signing_id == signing_id)\
+            .scalar()
+
+        if exists:
+            return None
+
+        dbs = Stamp()
+        dbs.signed_id = signed_id
+        dbs.version = stamp.version
+        dbs.signing_id = signing_id
+        dbs.difficulty, direction = stamp.log_distance
+        assert direction == 1
+        dbs.first_seen = mutil.utc_datetime()
+        #FIXME: We should probably encrypt the data as the pow
+        # could store arbitrary data. That presents a problem as
+        # we could be querying the Stamp by many different ways
+        # and not even know any of its keys.
+        dbs.data = stamp.sliced_buffer()
+
+        sess.add(dbs)
+
+        return dbs
 
     @asyncio.coroutine
     def _store_data(self, peer, data_id, dmsg, need_pruning):

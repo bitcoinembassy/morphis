@@ -77,10 +77,10 @@ class DdsEngine(object):
                     for stamp in synapse.stamps:
                         q = sess.query(func.count("*"))\
                             .select_from(DdsStamp)\
-                                .filter(\
-                                    DdsStamp.signed_key == stamp.signed_key,\
-                                    DdsStamp.version == stamp.version,\
-                                    DdsStamp.signing_key == stamp.signing_key)\
+                            .filter(\
+                                DdsStamp.signed_key == stamp.signed_key,\
+                                DdsStamp.version == stamp.version,\
+                                DdsStamp.signing_key == stamp.signing_key)\
 
                         if q.scalar():
                             if log.isEnabledFor(logging.INFO):

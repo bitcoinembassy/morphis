@@ -374,6 +374,7 @@ class Stamp(object):
         self.difficulty = consts.MIN_DIFFICULTY
 
         self._start_index = None
+        self._end_offset = None
         self._pubkey_offset = None
         self._pubkey_end_idx = None
         self._signature_offset = None
@@ -457,6 +458,9 @@ class Stamp(object):
     def pubkey(self, value):
         self._pubkey = value
 
+    def sliced_buffer(self):
+        return self.buf[self._start_index:self._end_offset]
+
     @asyncio.coroutine
     def encode(self):
         nbuf = self.buf
@@ -521,6 +525,8 @@ class Stamp(object):
         else:
             raise Exception()
 
+        self._end_offset = len(nbuf)
+
     def parse(self):
         self.parse_from(self.buf, 0)
 
@@ -550,6 +556,8 @@ class Stamp(object):
         self._pubkey_offset = i
         i += pubkey_len
         self._pubkey_end_idx = i
+
+        self._end_offset = i
 
         return i, self
 

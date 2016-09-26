@@ -42,6 +42,7 @@ DdsPost = None
 DdsStamp = None
 Synapse = None
 SynapseKey = None
+Stamp = None
 ##.
 
 class UtcDateTime(TypeDecorator):
@@ -165,6 +166,28 @@ def _init_daos(Base, d):
     Index("synapsekey__data_id", SynapseKey.data_id)
 
     d.SynapseKey = SynapseKey
+
+    class Stamp(Base):
+        __tablename__ = "stamp"
+
+        signed_id = Column(LargeBinary, nullable=False, primary_key=True)
+        # str for sqlite bigint :(.
+        version = Column(String, nullable=False, primary_key=True)
+        signing_id = Column(LargeBinary, nullable=False, primary_key=True)
+        difficulty = Column(Integer, nullable=False)
+        revoked = Column(Boolean, nullable=False, default=False)
+        first_seen = Column(UtcDateTime, nullable=False)
+        data = Column(LargeBinary, nullable=False)
+        children = relationship(\
+            "Stamp",\
+            foreign_keys="Stamp.signing_id",\
+            primaryjoin="Stamp.signed_id == Stamp.signing_id",\
+            passive_deletes="all")
+
+    Index("stamp__signed_id", Stamp.signed_id)
+    Index("stamp__signing_id", Stamp.signing_id)
+
+    d.Stamp = Stamp
 
     class NodeState(Base):
         __tablename__ = "nodestate"
@@ -566,6 +589,7 @@ if Peer is None:
     DdsStamp = d.DdsStamp
     Synapse = d.Synapse
     SynapseKey = d.SynapseKey
+    Stamp = d.Stamp
 
 def _update_node_state(sess, version):
     "Caller must call commit."
