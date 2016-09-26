@@ -2874,8 +2874,6 @@ class ChordTasks(object):
                 else:
                     assert drmsg.version == -1
                     # Synapse mode.
-                    data = self._decrypt_data_response(drmsg, data_rw.data_key)
-
                     # SynapseS are encrypted with random key of storing PeerS
                     # creation. The storing Peer then stores the random key
                     # encrypted with the request key. The storing node then
