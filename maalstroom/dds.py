@@ -966,6 +966,7 @@ def _process_synapse_create_post(dispatcher, req):
 
     target_addr = mbase32.decode(target_addr_enc)
 
+    # Create a Synapse linking all the target keys.
     if not target_addr2_enc:
         syn = synapse.Synapse.for_target(target_addr, content_key)
     else:
