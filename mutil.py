@@ -303,7 +303,9 @@ def make_safe_for_html_content(val):
         return html.escape(val)
 
 def bit_add(buf):
+    buf = bytearray(buf)
     for i in range(len(buf)-1, -1, -1):
         buf[i] = (buf[i] + 1) & 0xff
         if buf[i] != 0:
-            break
+            return buf
+    raise Exception("Overflow.")
