@@ -3251,6 +3251,7 @@ class ChordTasks(object):
         def dbcall_chk():
             with self.engine.node.db.open_session(True) as sess:
                 q = sess.query(Synapse, SynapseKey)\
+                    .join(Synapse.keys)\
                     .filter(\
                         Synapse.keys.any(\
                             and_(\
