@@ -3428,7 +3428,9 @@ class ChordTasks(object):
 
                 sess.commit()
 
-        yield from self.loop.run_in_executor(None, dbcall)
+                return s.id
+
+        dbid = yield from self.loop.run_in_executor(None, dbcall)
 
         for distance in distances:
             if distance > self.engine.furthest_data_block:
@@ -3438,9 +3440,10 @@ class ChordTasks(object):
             #NOTE: We only print IDs not KEYs; so as to prevent entrapment in
             # the log file.
             log.info(\
-                "Stored Synapse (synapse_id=[{}], target_id=[{}],"\
-                    " source_id=[{}])."\
+                "Stored new Synapse (dbid=[{}], synapse_id=[{}],\
+                    target_id=[{}], source_id=[{}])."\
                         .format(\
+                            dbid,\
                             mbase32.encode(\
                                 enc.generate_ID(synapse.synapse_key)),\
                             mbase32.encode(\
