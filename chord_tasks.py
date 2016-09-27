@@ -667,7 +667,7 @@ class ChordTasks(object):
     @asyncio.coroutine
     def send_store_synapse(\
             self, synapse, store_key=True, key_callback=None, retry_factor=5,\
-            min_storing_nodes=5, max_retries=30):
+            min_storing_nodes=5, max_retries=30, for_update=False):
         "Sends a StoreData request for a Synapse, returning the count of"\
         " nodes that claim to have stored it."
         assert type(synapse) is syn.Synapse
@@ -688,6 +688,8 @@ class ChordTasks(object):
                             thepow,
                             mbase32.encode(synapse.target_key),
                             mbase32.encode(synapse.source_key)))
+
+        key_retries = 5 if for_update else max_retries
 
         if key_callback:
             key_callback(synapse.synapse_key)
@@ -713,7 +715,7 @@ class ChordTasks(object):
             tasks.append(\
                 asyncio.async(\
                     mutil.retry_until(self.send_store_key, min_storing_nodes,\
-                        max_retries, data, synapse.synapse_key, targeted=True,\
+                        key_retries, data, synapse.synapse_key, targeted=True,\
                         retry_factor=retry_factor),\
                     loop=self.loop))
 
@@ -730,7 +732,7 @@ class ChordTasks(object):
                 tasks.append(\
                     asyncio.async(\
                         mutil.retry_until(self.send_store_key,\
-                            min_storing_nodes, max_retries, data,\
+                            min_storing_nodes, key_retries, data,\
                             synapse.synapse_pow, targeted=True,\
                             retry_factor=retry_factor),\
                         loop=self.loop))

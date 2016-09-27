@@ -893,7 +893,8 @@ def _process_synapse_stamp(req):
         log.info("Uploading newly StampPed Synapse.")
 
     # Upload StampPed Synapse back to DHT.
-    yield from req.dispatcher.node.engine.tasks.send_store_synapse(syn)
+    yield from req.dispatcher.node.engine.tasks.send_store_synapse(\
+        syn, for_update=True)
 
     req.dispatcher.send_204()
 
