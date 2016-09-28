@@ -630,12 +630,13 @@ def _process_axon_synapses(req):
             #rs = sess.query(ra).all()
 
             # Main DdsPost query.
-            q = sess.query(DdsPost, ra)\
+            q = sess.query(DdsPost, children)\
                 .filter(or_(\
                     DdsPost.target_key == axon_addr,\
                     DdsPost.target_key2 == axon_addr,\
                     DdsPost.signing_key == axon_addr))\
-                .outerjoin(ra, ra.c.signed_key == DdsPost.synapse_key)\
+                .outerjoin(\
+                    children, children.c.signed_key == DdsPost.synapse_key)\
                 .order_by(\
                     desc(and_(\
                         DdsPost.signing_key != None,\
