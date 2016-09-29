@@ -658,6 +658,9 @@ def _process_axon_synapses(req):
 
             r = q.all()
 
+            if log.isEnabledFor(logging.INFO):
+                log.info("Loaded [{}] DdsPost entries.".format(len(r)))
+
             sess.expunge_all()
 
             return r
