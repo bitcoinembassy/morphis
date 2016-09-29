@@ -593,8 +593,10 @@ class SshProtocol(asyncio.Protocol):
             if not r:
                 log.info(\
                     "Adding protocol (address={}) channel [{}] data"\
-                    " to queue (remote_cid=[{}])."\
-                    .format(self.address, msg.recipient_channel, remote_cid))
+                    " to queue (remote_cid=[{}]), len(data)=[{}]."\
+                    .format(\
+                        self.address, msg.recipient_channel, remote_cid,\
+                        len(msg.data)))
                 yield from self.channel_queues[msg.recipient_channel]\
                     .put(msg.data)
 
