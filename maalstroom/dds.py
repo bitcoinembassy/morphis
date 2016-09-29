@@ -12,7 +12,7 @@ import time
 from urllib.parse import parse_qs, quote_plus
 import os
 
-from sqlalchemy import or_, and_, desc
+from sqlalchemy import or_, and_, desc, literal
 from sqlalchemy.orm import joinedload, aliased
 
 import consts
@@ -616,7 +616,8 @@ def _process_axon_synapses(req):
 #                .options(joinedload("children"))\
 
             # Prepare recursive DdsStamp query.
-            children = sess.query(DdsStamp)\
+            children = sess.query(\
+                    DdsStamp, literal("0").label("deep"))\
                 .filter(DdsStamp.signing_key == axon_addr).\
                 cte(name="children", recursive=True)
 
@@ -624,8 +625,10 @@ def _process_axon_synapses(req):
             sta = aliased(DdsStamp, name="stamp")
 
             children = children.union_all(\
-                sess.query(sta)\
-                    .filter(sta.signing_key == ra.c.signed_key))
+                sess.query(sta, ra.c.deep.op("+")(1).label("deep"))\
+                    .filter(\
+                        sta.signing_key == ra.c.signed_key,
+                        ra.c.deep < 7))
 
             #rs = sess.query(ra).all()
 
@@ -637,6 +640,7 @@ def _process_axon_synapses(req):
                     DdsPost.signing_key == axon_addr))\
                 .outerjoin(\
                     children, children.c.signed_key == DdsPost.synapse_key)\
+                .group_by(DdsPost.synapse_key)\
                 .order_by(\
                     desc(and_(\
                         DdsPost.signing_key != None,\
