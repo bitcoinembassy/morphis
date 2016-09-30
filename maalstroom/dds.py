@@ -621,16 +621,14 @@ def _process_axon_synapses(req):
                 .filter(DdsStamp.signing_key == axon_addr).\
                 cte(name="children", recursive=True)
 
-            ra = aliased(children, name="root")
             sta = aliased(DdsStamp, name="stamp")
 
             children = children.union_all(\
-                sess.query(sta, ra.c.deep.op("+")(1).label("deep"))\
-                    .filter(\
-                        sta.signing_key == ra.c.signed_key,
-                        ra.c.deep < 7))
+                sess.query(sta, children.c.deep.op("+")(1).label("deep"))\
+                    .join(children, sta.signing_key == children.c.signed_key)\
+                    .filter(children.c.deep < 7))
 
-            #rs = sess.query(ra).all()
+            #rs = sess.query(children).all()
 
             # Main DdsPost query.
             q = sess.query(DdsPost, children)\
