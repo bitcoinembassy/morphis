@@ -10,7 +10,7 @@ import logging
 from contextlib import contextmanager
 
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.schema import Index
+from sqlalchemy.schema import Index, UniqueConstraint
 from sqlalchemy import create_engine, text, event, MetaData, func, Table,\
     Column, ForeignKey, Integer, String, DateTime, TypeDecorator, update
 from sqlalchemy.exc import ProgrammingError, OperationalError
@@ -170,10 +170,11 @@ def _init_daos(Base, d):
     class Stamp(Base):
         __tablename__ = "stamp"
 
-        signed_id = Column(LargeBinary, nullable=False, primary_key=True)
+        id = Column(Integer, primary_key=True)
+        signed_id = Column(LargeBinary, nullable=False)
         # str for sqlite bigint :(.
-        version = Column(String, nullable=False, primary_key=True)
-        signing_id = Column(LargeBinary, nullable=False, primary_key=True)
+        version = Column(String, nullable=False)
+        signing_id = Column(LargeBinary, nullable=False)
         difficulty = Column(Integer, nullable=False)
         revoked = Column(Boolean, nullable=False, default=False)
         first_seen = Column(UtcDateTime, nullable=False)
@@ -186,6 +187,7 @@ def _init_daos(Base, d):
 
     Index("stamp__signed_id", Stamp.signed_id)
     Index("stamp__signing_id", Stamp.signing_id)
+    UniqueConstraint(Stamp.signed_id, Stamp.version, Stamp.signing_id)
 
     d.Stamp = Stamp
 
@@ -527,6 +529,10 @@ class Db():
             version = 4.96
 
         if version == 4.96:
+            _upgrade_5_dev6_to_5dev7(self)
+            version = 4.97
+
+        if version == 4.97:
             _upgrade_5_dev(self)
 
 #        if version == 4:
@@ -905,6 +911,28 @@ def _upgrade_5_dev5_to_5dev6(db):
 
     log.warning("NOTE: Database schema upgraded.")
 
+def _upgrade_5_dev6_to_5dev7(db):
+    log.warning(\
+        "NOTE: Upgrading database schema from version 5-dev6 to 5-dev7.")
+
+    with db.open_session() as sess:
+        try:
+            sess.execute("select id from stamp")
+        except:
+            sess.rollback()
+            try:
+                rebuild = True
+                st = "drop table stamp"
+                sess.execute(st)
+                sess.commit()
+            except:
+                sess.rollback()
+
+        _update_node_state(sess, 4.97)
+
+        sess.commit()
+
+    log.warning("NOTE: Database schema upgraded.")
 def _upgrade_5_dev(db):
     log.warning("NOTE: Possibly upgrading v5-dev database schema.")
 
