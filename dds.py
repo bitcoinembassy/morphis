@@ -71,6 +71,10 @@ class DdsEngine(object):
         def process_synapse(synapse):
             db_stamps = []
 
+            if log.isEnabledFor(logging.DEBUG):
+                log.debug("Synapse [{}] has [{}] StampS.".format(\
+                    mbase32.encode(synapse.synapse_key), len(synapse.stamps)))
+
             def dbcall():
                 with self.db.open_session() as sess:
                     updates = False
@@ -84,7 +88,7 @@ class DdsEngine(object):
 
                         if q.scalar():
                             if log.isEnabledFor(logging.INFO):
-                                log.info("Skipping existing stamp.")
+                                log.info("Skipping existing DdsStamp.")
                             continue
 
                         if log.isEnabledFor(logging.INFO):
@@ -111,9 +115,8 @@ class DdsEngine(object):
             if exists:
                 if log.isEnabledFor(logging.INFO):
                     log.info(\
-                        "Synapse (synapse_key=[{}]) already present in cache."\
+                        "Synapse (synapse_key=[{}]) is already in local db."\
                             .format(mbase32.encode(synapse.synapse_key)))
-
                 return
 
             post = yield from self.fetch_post(synapse)
@@ -143,7 +146,7 @@ class DdsEngine(object):
 
             if key in loaded:
                 if log.isEnabledFor(logging.DEBUG):
-                    log.debug("Skipping already loaded TargetedBlock/Synapse"\
+                    log.debug("Skipping already seen TargetedBlock/Synapse"\
                         " for key=[{}].".format(mbase32.encode(key)))
                 return
 
@@ -166,7 +169,7 @@ class DdsEngine(object):
                 if key in loaded:
                     if log.isEnabledFor(logging.DEBUG):
                         log.debug(\
-                            "Skipping already loaded Synapse for key=[{}]."\
+                            "Skipping already seen Synapse for key=[{}]."\
                                 .format(mbase32.encode(key)))
                     continue
 
