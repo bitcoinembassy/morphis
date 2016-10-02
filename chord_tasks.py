@@ -3039,6 +3039,9 @@ class ChordTasks(object):
             data = enc.decrypt_data_block(edata, ekey)[:osize]
 
             if stamp_data:
+                if log.isEnabledFor(logging.DEBUG):
+                    log.info("Stamp data present.")
+
                 data += stamp_data[0]
 
             synapse = self._check_synapse(data)
@@ -3195,19 +3198,25 @@ class ChordTasks(object):
                 synapses = []
                 if joined:
                     for synapse, key, trail in r:
-                        log.warning("Stamp trail=[{}]".format(trail))
                         # str() as it may be int if just one value.
                         ids = str(trail).split()
 
+                        if log.isEnabledFor(logging.DEBUG):
+                            log.debug("Stamp trail=[{}].".format(trail))
+
                         stamps =\
                             sess.query(Stamp).filter(Stamp.id.in_(ids)).all()
+
+                        if log.isEnabledFor(logging.DEBUG):
+                            log.debug("loaded [{}] stamps."\
+                                .format(len(stamps)))
 
                         stamp_map = {stamp.id: stamp.data for stamp in stamps}
 
                         stamp_data = bytearray()
 
-                        for i in range(len(ids)-1):
-                            stamp_data += stamp_map[ids[i]].data
+                        for i in range(len(ids)-1, -1, -1):
+                            stamp_data += stamp_map[int(ids[i])]
 
                         synapses.append((\
                             key.ekey,\
