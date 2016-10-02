@@ -14,6 +14,7 @@ import os
 
 from sqlalchemy import or_, and_, desc, literal
 from sqlalchemy.orm import joinedload, aliased
+from sqlalchemy.exc import ResourceClosedError
 
 import consts
 from db import User, DdsPost, DdsStamp, NodeState
@@ -654,7 +655,12 @@ def _process_axon_synapses(req):
                             DdsPost.target_key2 == None))),\
                     DdsPost.timestamp)
 
-            r = q.all()
+            try:
+                r = q.all()
+            except ResourceClosedError as e:
+                #FIXME: Workaround for bug http://bugs.python.org/issue21718.
+                log.warning("FIXME: SqlAlchemy ResourceClosedError.")
+                r = []
 
             if log.isEnabledFor(logging.INFO):
                 log.info("Loaded [{}] DdsPost entries.".format(len(r)))
