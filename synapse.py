@@ -58,6 +58,7 @@ class Synapse(object):
         self.signature_offset = None
         self.pubkey_offset = None
         self.nonce_offset = None
+        self.stamps_offset = None
 
         self.signature_type = None
         self._signature_end_offset = None
@@ -147,6 +148,9 @@ class Synapse(object):
     def signature(self, val):
         self._signature = val
 
+    def buf_without_stamps(self):
+        return self.buf[:self.stamps_offset]
+
     @asyncio.coroutine
     def encode(self):
         "Encode the packet fields into the self.buf bytearray and return it."
@@ -207,6 +211,8 @@ class Synapse(object):
             self.nonce =\
                 b'\x00' * (consts.MIN_NONCE_SIZE - len(nonce)) + nonce
 
+        self.stamps_offset = len(nbuf)
+
         for stamp in self.stamps:
             yield from stamp.encode_onto(nbuf)
 
@@ -257,7 +263,7 @@ class Synapse(object):
         self.nonce_offset = i
         end = i + Synapse.NONCE_SIZE
         self.nonce = self.buf[i:end]
-        i = end
+        self.stamps_offset = i = end
 
         if i < len(self.buf):
             stamps = self.stamps

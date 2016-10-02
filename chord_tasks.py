@@ -13,7 +13,7 @@ import math
 import os
 import random
 
-from sqlalchemy import func, and_, or_
+from sqlalchemy import func, and_, or_, literal
 from sqlalchemy.orm import joinedload, aliased
 
 import bittrie
@@ -2610,7 +2610,7 @@ class ChordTasks(object):
             with self.engine.node.db.open_session(True) as sess:
                 q = sess.query(SynapseKey.data_id)
 
-                q = self._build_synapse_db_query(sess, q, sreq)
+                q, joined = self._build_synapse_db_query(sess, q, sreq)
 
                 q = sess.query(func.count("*")).select_from(q.subquery())
 
@@ -2621,10 +2621,13 @@ class ChordTasks(object):
 
         return (yield from self.loop.run_in_executor(None, dbcall))
 
-    def _build_synapse_db_query(self, sess, q, sreq):
+    def _build_synapse_db_query(self, sess, q, sreq, join_stamps=False):
         first_statement = True
+        stamp_join_val = None
 
         def build_query(synapse_query, q, alias, depth=0):
+            nonlocal stamp_join_val
+
             if depth >= 2:
                 log.warning("Ignoring excessive SynapseRequest.Query depth.")
                 return q, None
@@ -2661,6 +2664,10 @@ class ChordTasks(object):
             elif type_ is syn.SynapseRequest.Query.Type.key:
                 kq = synapse_query.entries
                 assert len(kq.value) == 64
+                if join_stamps\
+                        and kq.type.value + 2\
+                            == SynapseKey.KeyType.stamp_key.value:
+                    stamp_join_val = kq.value
                 return q, and_(\
                     alias.key_type == kq.type.value + 2,
                     alias.data_id == kq.value)
@@ -2669,6 +2676,7 @@ class ChordTasks(object):
                     "Ignoring unsupported SynapseRequest.Query.Type [{}]."\
                         .format(type_))
 
+        # Build filters based upon criteron in passed SynapseRequest.
         q, statement = build_query(sreq.query, q, SynapseKey)
         q = q.filter(statement)
 
@@ -2678,6 +2686,10 @@ class ChordTasks(object):
         als = aliased(SynapseKey)
         q = q.join(als, als.synapse_id == SynapseKey.synapse_id)
 
+        # Since paging + save coding time, we always sort by H(synapse_key).
+        q = q.filter(
+            als.key_type == SynapseKey.KeyType.synapse_key.value)
+
         # Additional SynapseRequest filters.
         if sreq.start_timestamp:
             q = q.filter(als.timestamp >= sreq.start_timestamp)
@@ -2686,10 +2698,6 @@ class ChordTasks(object):
         if sreq.minimum_pow:
             q = q.filter(als.pow_difficulty >= sreq.minimum_pow)
 
-        # Since paging + save coding time, we always sort.
-        q = q.filter(
-            als.key_type == SynapseKey.KeyType.synapse_key.value)
-
         if sreq.start_key:
             q = q.filter(als.data_id >= sreq.start_key)
         if sreq.end_key:
@@ -2697,7 +2705,32 @@ class ChordTasks(object):
 
         q = q.order_by(als.data_id)
 
-        return q
+        if stamp_join_val:
+            # Prepare recursive Stamp query.
+            children = sess.query(\
+                    Stamp,\
+                    literal("0").label("deep"),\
+                    Stamp.id.label("trail"))\
+                .filter(Stamp.signing_id == stamp_join_val)\
+                .cte(name="children", recursive=True)
+
+            sta = aliased(Stamp, name="stamp")
+
+            children = children.union_all(\
+                sess.query(\
+                        sta,\
+                        children.c.deep.op("+")(1).label("deep"),\
+                        children.c.trail.concat(literal(',')).concat(sta.id)\
+                            .label("trail"))\
+                    .join(children, sta.signing_id == children.c.signed_id)\
+                    .filter(children.c.deep < 7))
+
+            children = sess.query(children).limit(1).subquery()
+
+            q = q.add_columns(children.c.trail)\
+                .join(children, children.c.signed_id == als.data_id)
+
+        return q, bool(stamp_join_val)
 
     @asyncio.coroutine
     def _check_do_want_data(self, data_ids, version):
@@ -3001,11 +3034,12 @@ class ChordTasks(object):
         if log.isEnabledFor(logging.INFO):
             log.info("Processing SyanpseRequest response.")
 
-        for eekey, edata, osize in drmsg.data:
+        for eekey, edata, osize, *stamp_data in drmsg.data:
             ekey = enc.decrypt_data_block(eekey, data_rw.data_key)
-            enc_data = enc.decrypt_data_block(edata, ekey)
+            data = enc.decrypt_data_block(edata, ekey)[:osize]
 
-            data = enc_data[:osize]
+            if stamp_data:
+                data += stamp_data[0]
 
             synapse = self._check_synapse(data)
 
@@ -3148,21 +3182,46 @@ class ChordTasks(object):
                 q = sess.query(Synapse, SynapseKey)\
                     .join(Synapse.keys)
 
-                q = self._build_synapse_db_query(sess, q, synapse_request)
+                q, joined = self._build_synapse_db_query(\
+                    sess, q, synapse_request, join_stamps=True)
 
                 # No more than 256 SynapseS should be able to fit in one 32k
                 # packet.
-                return q.limit(256).all()
+                r = q.limit(256).all()
 
-        result = yield from self.loop.run_in_executor(None, dbcall)
+                if log.isEnabledFor(logging.INFO):
+                    log.info("Found [{}] Synapse results.".format(len(r)))
 
-        if log.isEnabledFor(logging.INFO):
-            log.info("Found [{}] Synapse results.".format(len(result)))
+                synapses = []
+                if joined:
+                    for synapse, key, trail in r:
+                        log.warning("Stamp trail=[{}]".format(trail))
+                        # str() as it may be int if just one value.
+                        ids = str(trail).split()
 
-        synapses = []
+                        stamps =\
+                            sess.query(Stamp).filter(Stamp.id.in_(ids)).all()
 
-        for synapse, key in result:
-            synapses.append((key.ekey, synapse.data, synapse.original_size))
+                        stamp_map = {stamp.id: stamp.data for stamp in stamps}
+
+                        stamp_data = bytearray()
+
+                        for i in range(len(ids)-1):
+                            stamp_data += stamp_map[ids[i]].data
+
+                        synapses.append((\
+                            key.ekey,\
+                            synapse.data,\
+                            synapse.original_size,\
+                            stamp_data))
+                else:
+                    for synapse, key in r:
+                        synapses.append(\
+                            (key.ekey, synapse.data, synapse.original_size))
+
+                return synapses
+
+        synapses = yield from self.loop.run_in_executor(None, dbcall)
 
         return synapses, None, None, None, None, None
 
@@ -3300,7 +3359,9 @@ class ChordTasks(object):
         assert existing_key.key_type == SynapseKey.KeyType.synapse_key.value,\
             existing_key.key_type
 
-        enc_data, b = enc.encrypt_data_block(dmsg.data, enc_key)
+        synapse_data = synapse.buf_without_stamps()
+
+        enc_data, b = enc.encrypt_data_block(synapse_data, enc_key)
         if b:
             enc_data += b
 
@@ -3311,7 +3372,7 @@ class ChordTasks(object):
                 nsyn = sess.query(Synapse).get(existing.id)
 
                 nsyn.data = enc_data
-                nsyn.original_size = len(dmsg.data)
+                nsyn.original_size = len(synapse_data)
                 nsyn.pow_difficulty, direction = synapse.log_distance
                 assert direction == 1
 
@@ -3377,7 +3438,10 @@ class ChordTasks(object):
         # that key and store in the Synapse table, encrypt that key with each
         # Synapse key that we are storing and store together in SynapseKey.
         enc_key = os.urandom(64)
-        enc_data, b = enc.encrypt_data_block(dmsg.data, enc_key)
+
+        synapse_data = synapse.buf_without_stamps()
+
+        enc_data, b = enc.encrypt_data_block(synapse_data, enc_key)
         if b:
             enc_data += b
 
@@ -3387,7 +3451,7 @@ class ChordTasks(object):
             with self.engine.node.db.open_session() as sess:
                 s = Synapse()
                 s.data = enc_data
-                s.original_size = len(dmsg.data)
+                s.original_size = len(synapse_data)
                 s.insert_timestamp = mutil.utc_datetime()
 
                 s.timestamp = mutil.utc_datetime(synapse.timestamp)

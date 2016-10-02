@@ -284,14 +284,22 @@ class ChordDataResponse(ChordMessage):
             # SynapseRequest response mode.
             nbuf += sshtype.encodeBinary(b'')
             nbuf += struct.pack(">L", 0)
-            nbuf += sshtype.encodeMpint(-1)
+
+            # They all have stamp_data or not; first row thus indicates.
+            has_stamps = len(self.data[0]) == 4
+            nbuf += sshtype.encodeMpint(-2) if has_stamps\
+                else sshtype.encodeMpint(-1)
 
             size = 0
             cnt = 0
             limited = False
 
-            for eekey, edata, original_size in self.data:
+            for eekey, edata, original_size, *stamp_data in self.data:
                 size = size + consts.NODE_ID_BYTES + 4 + len(edata) + 2
+
+                if has_stamps:
+                    size += len(stamp_data[0])
+
                 cnt += 1
                 if size > consts.MAX_DATA_BLOCK_SIZE:
                     limited = True
@@ -304,11 +312,14 @@ class ChordDataResponse(ChordMessage):
                 limited = True # Possibly.
 
             for idx in range(cnt):
-                eekey, edata, original_size = self.data[idx]
+                eekey, edata, original_size, *stamp_data = self.data[idx]
 
                 nbuf += eekey # len = NODE_ID_BYTES always.
                 sshtype.encode_binary_onto(nbuf, edata)
                 nbuf += struct.pack(">H", original_size)
+
+                if has_stamps:
+                    sshtype.encode_binary_onto(nbuf, stamp_data[0])
 
             nbuf += struct.pack("?", limited)
 
@@ -340,8 +351,10 @@ class ChordDataResponse(ChordMessage):
         l, self.version = sshtype.parseMpint(self.buf[i:])
         i += l
 
-        if self.version == -1:
+        if self.version < 0:
             assert self.data == b''
+
+            has_stamps = self.version == -2
 
             cnt = struct.unpack(">H", self.buf[i:i+2])[0]
             i += 2
@@ -356,8 +369,11 @@ class ChordDataResponse(ChordMessage):
                 # support a possible bigger packet and data block size.
                 original_size = struct.unpack_from(">H", self.buf, i)[0]
                 i += 2
-
-                rows.append((eekey, val, original_size))
+                if has_stamps:
+                    i, stamp_data = sshtype.parse_binary_from(self.buf, i)
+                    rows.append((eekey, val, original_size, stamp_data))
+                else:
+                    rows.append((eekey, val, original_size))
 
             self.limited = struct.unpack_from("?", self.buf, i)[0]
             i += 1
