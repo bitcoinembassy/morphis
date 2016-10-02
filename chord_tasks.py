@@ -2725,7 +2725,16 @@ class ChordTasks(object):
                     .join(children, sta.signing_id == children.c.signed_id)\
                     .filter(children.c.deep < 7))
 
-            children = sess.query(children).limit(1).subquery()
+            # According to http://stackoverflow.com/questions/25616867, the
+            # following func.min(..) should cause the group-wise minimum to be
+            # selected. (This is for Sqlite3, we may have to fix this for
+            # PostgreSQL.)
+            children = sess.query(\
+                    children.c.signed_id,\
+                    func.min(children.c.deep),\
+                    children.c.trail)\
+                .select_from(children).group_by(children.c.signed_id)\
+                .subquery()
 
             q = q.add_columns(children.c.trail)\
                 .join(children, children.c.signed_id == als.data_id)
