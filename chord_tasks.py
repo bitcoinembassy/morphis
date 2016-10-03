@@ -2664,7 +2664,7 @@ class ChordTasks(object):
             elif type_ is syn.SynapseRequest.Query.Type.key:
                 kq = synapse_query.entries
                 assert len(kq.value) == 64
-                if join_stamps\
+                if join_stamps and (not stamp_join_val)\
                         and kq.type.value + 2\
                             == SynapseKey.KeyType.stamp_key.value:
                     stamp_join_val = kq.value
