@@ -181,8 +181,10 @@ def serve_get(dispatcher, rpath):
     elif req.startswith("/synapse/create/"):
         # Render the Create Synapse entry form.
         yield from _process_synapse_create(mr)
-    elif req.startswith("/synapse/stamp/"):
-        yield from _process_synapse_stamp(mr)
+    elif req.startswith("/stamp/synapse/"):
+        yield from _process_stamp_synapse(mr)
+    elif req.startswith("/stamp/signer/"):
+        yield from _process_stamp_signer(mr)
     elif req.startswith("/propedit/"):
         yield from _process_propedit(mr)
     elif req.startswith("/site/edit/"):
@@ -872,8 +874,12 @@ def _process_synapse_create(req):
     req.dispatcher.send_content(template)
 
 @asyncio.coroutine
-def _process_synapse_stamp(req):
-    synapse_key_enc = req.req[15:]
+def _process_stamp_synapse(req, stamp_signing_key=False):
+    if stamp_signing_key:
+        synapse_key_enc = req.req[14:]
+    else:
+        synapse_key_enc = req.req[15:]
+
     synapse_key = mbase32.decode(synapse_key_enc)
 
     # Fetch Synapse object from the DHT.
@@ -894,11 +900,16 @@ def _process_synapse_stamp(req):
     ident_dmail_address = yield from dmail.load_dmail_address(\
         req.dispatcher.node, site_key=req.ident)
 
-    signing_key =\
+    our_signing_key =\
         rsakey.RsaKey(privdata=ident_dmail_address.site_privatekey)
 
+    key_to_sign = syn.signing_key if stamp_signing_key else syn.synapse_key
+
+    if log.isEnabledFor(logging.INFO):
+        log.info("Stamping key=[{}].".format(mbase32.encode(key_to_sign)))
+
     # Create new stamp.
-    syn.stamps = [synapse.Stamp(syn.synapse_key, signing_key)]
+    syn.stamps = [synapse.Stamp(key_to_sign, our_signing_key)]
     yield from syn.encode()
 
     if log.isEnabledFor(logging.INFO):
@@ -909,6 +920,10 @@ def _process_synapse_stamp(req):
         syn, for_update=True)
 
     req.dispatcher.send_204()
+
+@asyncio.coroutine
+def _process_stamp_signer(req):
+    return (yield from _process_stamp_synapse(req, True))
 
 @asyncio.coroutine
 def _process_synapse_create_post(dispatcher, req):
