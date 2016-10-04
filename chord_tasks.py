@@ -2665,11 +2665,11 @@ class ChordTasks(object):
                 kq = synapse_query.entries
                 assert len(kq.value) == 64
                 if join_stamps and (not stamp_join_val)\
-                        and kq.type.value + 2\
+                        and kq.type.value\
                             == SynapseKey.KeyType.stamp_key.value:
                     stamp_join_val = kq.value
                 return q, and_(\
-                    alias.key_type == kq.type.value + 2,
+                    alias.key_type == kq.type.value,\
                     alias.data_id == kq.value)
             else:
                 log.warning(\

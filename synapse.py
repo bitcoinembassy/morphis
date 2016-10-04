@@ -676,10 +676,10 @@ class SynapseRequest(object):
 
         class Key(object):
             class Type(Enum):
-                target = 1
-                source = 2
-                signing = 3
-                stamp = 4
+                target = 3
+                source = 4
+                signing = 5
+                stamp = 6
 
             def __init__(self, type_=None, value=None):
                 self.type = type_ #FIXME: Have this type the enum, not int.
