@@ -2624,9 +2624,10 @@ class ChordTasks(object):
     def _build_synapse_db_query(self, sess, q, sreq, join_stamps=False):
         first_statement = True
         stamp_join_val = None
+        signing_key_alias = None
 
         def build_query(synapse_query, q, alias, depth=0):
-            nonlocal stamp_join_val
+            nonlocal stamp_join_val, signing_key_alias
 
             if depth >= 2:
                 log.warning("Ignoring excessive SynapseRequest.Query depth.")
@@ -2664,10 +2665,14 @@ class ChordTasks(object):
             elif type_ is syn.SynapseRequest.Query.Type.key:
                 kq = synapse_query.entries
                 assert len(kq.value) == 64
-                if join_stamps and (not stamp_join_val)\
-                        and kq.type.value\
-                            == SynapseKey.KeyType.stamp_key.value:
-                    stamp_join_val = kq.value
+                if join_stamps:
+                    if kq.type.value == SynapseKey.KeyType.stamp_key.value:
+                        if not stamp_join_val:
+                            stamp_join_val = kq.value
+                    elif kq.type.value == SynapseKey.KeyType.signing_key.value:
+                        if not signing_key_alias:
+                            signing_key_alias = alias
+
                 return q, and_(\
                     alias.key_type == kq.type.value,\
                     alias.data_id == kq.value)
@@ -2736,8 +2741,21 @@ class ChordTasks(object):
                 .select_from(children).group_by(children.c.signed_id)\
                 .subquery()
 
+            if not signing_key_alias:
+                signing_key_alias = aliased(SynapseKey)
+                q = q.join(\
+                    signing_key_alias,\
+                    and_(\
+                        signing_key_alias.synapse_id == SynapseKey.synapse_id,\
+                        signing_key_alias.key_type\
+                            == SynapseKey.KeyType.signing_key.value))
+
             q = q.add_columns(children.c.trail)\
-                .join(children, children.c.signed_id == als.data_id)
+                .join(\
+                    children,\
+                    or_(\
+                        children.c.signed_id == als.data_id,\
+                        children.c.signed_id == signing_key_alias.data_id))
 
         return q, bool(stamp_join_val)
 
