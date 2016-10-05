@@ -4,11 +4,13 @@
 import llog
 
 import asyncio
-from enum import Enum
-import threading
-import logging
 from contextlib import contextmanager
+from enum import Enum
+import logging
+from pkg_resources import parse_version
+import threading
 
+from sqlalchemy import __version__ as sqlalchemy__version__
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.schema import Index, UniqueConstraint
 from sqlalchemy import create_engine, text, event, MetaData, func, Table,\
@@ -939,3 +941,6 @@ def _upgrade_5_dev(db):
     db._update_schema()
 
     log.warning("NOTE: Done possibly upgrading database schema.")
+
+sqlalchemy_pre_1_0_15 = parse_version(sqlalchemy__version__)\
+    < parse_version("1.0.15")

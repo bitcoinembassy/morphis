@@ -21,7 +21,8 @@ import chord
 import chord_packet as cp
 from chordexception import ChordException
 import consts
-from db import Peer, DataBlock, NodeState, Stamp, Synapse, SynapseKey
+from db import Peer, DataBlock, NodeState, Stamp, Synapse, SynapseKey,\
+	 sqlalchemy_pre_1_0_15
 import mbase32
 from morphisblock import MorphisBlock
 import mutil
@@ -2721,14 +2722,19 @@ class ChordTasks(object):
 
             sta = aliased(Stamp, name="stamp")
 
+            if sqlalchemy_pre_1_0_15:
+                ra = aliased(children, name="root")
+            else:
+                ra = children
+
             children = children.union_all(\
                 sess.query(\
                         sta,\
-                        children.c.deep.op("+")(1).label("deep"),\
-                        children.c.trail.concat(literal(',')).concat(sta.id)\
+                        ra.c.deep.op("+")(1).label("deep"),\
+                        ra.c.trail.concat(literal(',')).concat(sta.id)\
                             .label("trail"))\
-                    .join(children, sta.signing_id == children.c.signed_id)\
-                    .filter(children.c.deep < 7))
+                    .join(ra, sta.signing_id == ra.c.signed_id)\
+                    .filter(ra.c.deep < 7))
 
             # According to http://stackoverflow.com/questions/25616867, the
             # following func.min(..) should cause the group-wise minimum to be

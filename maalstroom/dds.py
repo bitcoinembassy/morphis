@@ -17,7 +17,7 @@ from sqlalchemy.orm import joinedload, aliased
 from sqlalchemy.exc import ResourceClosedError
 
 import consts
-from db import User, DdsPost, DdsStamp, NodeState
+from db import User, DdsPost, DdsStamp, NodeState, sqlalchemy_pre_1_0_15
 from dmail import DmailEngine
 from clientengine.dds import DdsQuery
 from dds import DdsEngine
@@ -626,10 +626,15 @@ def _process_axon_synapses(req):
 
             sta = aliased(DdsStamp, name="stamp")
 
+            if sqlalchemy_pre_1_0_15:
+                ra = aliased(children, name="root")
+            else:
+                ra = children
+
             children = children.union_all(\
-                sess.query(sta, children.c.deep.op("+")(1).label("deep"))\
-                    .join(children, sta.signing_key == children.c.signed_key)\
-                    .filter(children.c.deep < 7))
+                sess.query(sta, ra.c.deep.op("+")(1).label("deep"))\
+                    .join(ra, sta.signing_key == ra.c.signed_key)\
+                    .filter(ra.c.deep < 7))
 
             #rs = sess.query(children).all()
 
