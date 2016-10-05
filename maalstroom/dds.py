@@ -640,7 +640,10 @@ def _process_axon_synapses(req):
                     DdsPost.target_key2 == axon_addr,\
                     DdsPost.signing_key == axon_addr))\
                 .outerjoin(\
-                    children, children.c.signed_key == DdsPost.synapse_key)\
+                    children,\
+                    or_(\
+                        children.c.signed_key == DdsPost.synapse_key,\
+                        children.c.signed_key == DdsPost.signing_key))\
                 .group_by(DdsPost.synapse_key)\
                 .order_by(\
                     desc(and_(\
