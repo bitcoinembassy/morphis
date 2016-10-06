@@ -869,8 +869,11 @@ def _upgrade_5_dev3_to_5dev4(db):
     t_integer = "INTEGER" if db.is_sqlite else "integer"
 
     with db.open_session() as sess:
-        sess.execute(\
-            "ALTER TABLE ddspost add column score {}".format(t_integer))
+        try:
+            sess.execute(\
+                "ALTER TABLE ddspost add column score {}".format(t_integer))
+        except:
+            sess.rollback()
 
         _update_node_state(sess, 4.94)
 
