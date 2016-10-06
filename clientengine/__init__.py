@@ -60,15 +60,14 @@ class ClientEngine(object):
         self._version_poller_task =\
             asyncio.async(self._start_version_poller(), loop=self.loop)
 
-    @asyncio.coroutine
     def stop(self):
         if not self._running:
             return
 
         self._running = False
 
-        yield from self.dds.stop()
-        yield from self.dmail.stop()
+        self.dds.stop()
+        self.dmail.stop()
 
         if self._version_poller_task:
             self._version_poller_task.cancel()

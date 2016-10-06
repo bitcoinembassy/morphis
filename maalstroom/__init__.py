@@ -277,7 +277,8 @@ def start_maalstroom_server(the_node):
 
         server.server_close()
 
-    node.loop.run_in_executor(None, threadcall)
+    threading.Thread(target=threadcall, name="Maalstroom Thread", daemon=True)\
+        .start()
 
 def set_client_engine(ce):
     global _client_engine
@@ -300,8 +301,14 @@ def get_client_engine():
     return client_engine
 
 def shutdown():
+    global server
+
     if not server:
         return
+
+    log.info("Stopping ClientEngine.")
+    _client_engine.stop()
+    log.info("ClientEngine stopped.")
 
     log.info("Shutting down Maalstroom server instance.")
     server.server_close()

@@ -50,7 +50,6 @@ class DdsClientEngine(object):
 
         self._running = True
 
-    @asyncio.coroutine
     def stop(self):
         if not self._running:
             return

@@ -46,7 +46,6 @@ class DmailClientEngine(object):
         if self.auto_publish_enabled:
             asyncio.async(self._start_dmail_auto_publish(), loop=self.loop)
 
-    @asyncio.coroutine
     def stop(self):
         if not self._running:
             return

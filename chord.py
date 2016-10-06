@@ -308,6 +308,9 @@ class ChordEngine():
         if self.server:
             self.server.close()
 
+        for peer in self.peers.values():
+            peer.protocol.close()
+
     def _async_process_connection_count(self):
         self._process_connection_count_handle =\
             self.loop.call_later(150, self._async_process_connection_count)

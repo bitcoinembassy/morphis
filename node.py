@@ -28,7 +28,7 @@ NSK_DATASTORE_SIZE = "datastore_size"
 # dataMessage task code to handle a single block in multiple StoreData packets.
 MAX_DATA_BLOCK_SIZE = 32768
 
-log = logging.getLogger(__name__)
+log = logging.getLogger("node")#__name__)
 
 loop = None
 nodes = []
@@ -282,11 +282,12 @@ def main():
 
     for node in nodes:
         node.stop()
-    loop.close()
 
     if maalstroom_enabled:
         import maalstroom
         maalstroom.shutdown()
+
+    loop.close()
 
     log.info("Shutdown.")
 
