@@ -709,7 +709,7 @@ ul.dds-submenu li a:hover {
 	/*float: left;*/
 	/*margin-right: 1em;*/
 	margin-left: .7em;
-	position: relative;
+	/*position: relative;*/
 	display: inline-block;
 	vertical-align: middle;
 	max-width: 70%;
@@ -1694,16 +1694,24 @@ span.profile-comment-bubble-header::after {
 /* DASHBOARD */
 
 .dds-header-wrapper {
+	/*height: 4em;*/
+	/*background-color: #1c2227;*/
+}
+.main-header {
+	padding: 0 0 0 20px;
+}
+.dds-header-wrapper-dashboard {
 	height: 4em;
 	background-color: #1c2227;
 }
-.main-header {
+.main-header-dashboard {
 	padding: 0 0 0 20px;
 	position: fixed;
 	width: 100%;
 	left: 0;
 	transition: all 0.3s ease;
 }
+
 .icon a {
 	position: absolute;
 	left: 0;
@@ -1787,9 +1795,12 @@ width: 77%;
 display: block;
 }
 
-#site-nav:target + .page-wrap .main-header {
+#site-nav:target + .page-wrap .main-header-dashboard {
 width: 77%;
 left: 23%;
+}
+.dds-header-height {
+	height: 4em;
 }
 
 /* DASHBOARD TABS */
@@ -1817,7 +1828,7 @@ left: 23%;
 	font-weight: normal;
 	text-decoration: none;
 	text-align: center;
-	line-height: 3;
+	line-height: 2;
 	cursor: pointer;
 	-webkit-transition: all 0.5s; /* Safari 3.1 to 6.0 */
 	transition: all 0.5s;
@@ -1831,9 +1842,8 @@ left: 23%;
 .tabs label span {
 	display: none;
 }
-.tabs label i {
-	padding: 5px;
-	margin-right: 0;
+.tabs label div {
+	margin-top: .5em;
 }
 .tabs > label:hover {
 	color: #38a3af;
@@ -1857,17 +1867,29 @@ left: 23%;
 	-moz-animation: all 0.7s ease-in-out;
 	animation: all 0.7s ease-in-out;*/
 }
-.tab-dds {
-	background: url("morphis://.dmail/images/comment_bubble.png") no-repeat center left;
+.tab-icon-dds {
+	background: url("morphis://.dds/images/comment_bubble.png") no-repeat center;
+	background-size: contain;
+	height: 13px;
+	margin: .5em auto .5em auto;
 }
-.tab-dmail {
-	background: url("morphis://.dmail/images/mail.png") no-repeat center left;
+.tab-icon-dmail {
+	background: url("morphis://.dds/images/mail.png") no-repeat center;
+	background-size: contain;
+	height: 13px;
+	margin: .5em auto .5em auto;
 }
-.tab-upload {
-	background: url("morphis://.dmail/images/upload_cloud.png") no-repeat center left;
+.tab-icon-upload {
+	background: url("morphis://.dds/images/upload_cloud.png") no-repeat center;
+	background-size: contain;
+	height: 13px;
+	margin: .5em auto .5em auto;
 }
-.tab-node {
-	background: url("morphis://.dmail/images/inbox_white.png") no-repeat center left;
+.tab-icon-node {
+	background: url("morphis://.dds/images/nodes6.png") no-repeat center;
+	background-size: contain;
+	height: 13px;
+	margin: .5em auto .5em auto;
 }
 /*@keyframes scale {
 	0% {
@@ -1894,9 +1916,9 @@ left: 23%;
 display: block;
 }
 @media (min-width: 768px) {
-	.tabs i {
-		padding: 5px;
-		margin-right: 10px;
+	.tabs label div {
+		margin-bottom: 0;
+		margin-top: .5em;
 	}
 	.tabs label span {
 		display: inline-block;
@@ -2010,6 +2032,7 @@ button.magnifying-glass {
 	left: .2em;
 	top: .38em;
 	opacity: .3;
+	cursor: pointer;
 }
 button.magnifying-glass::before {
 	content: "";

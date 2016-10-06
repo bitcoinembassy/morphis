@@ -1,2 +1,168 @@
-<html><head><title>{title}</title><link rel="stylesheet" href="morphis://.dds/style.css"/></head>
-<body class="dds">{child}</body></html>
+<html>
+<head><title>{title}</title><link rel="stylesheet" href="morphis://.dds/style.css"/></head>
+<body class="dds">
+<nav class="site-nav" id="site-nav">
+	<div class="dashboard-footer-wrapper">
+		<div class="tabs">
+			<input type="radio" name="tabs" id="tab1" checked >
+			<label for="tab1"><div class="tab-icon-dds"></div><span>DDS</span></label>
+			<input type="radio" name="tabs" id="tab2">
+			<label for="tab2"><div class="tab-icon-dmail"></div><span>Dmail</span></label>
+			<input type="radio" name="tabs" id="tab3">
+			<label for="tab3"><div class="tab-icon-upload"></div><span>Upload</span></label>
+			<input type="radio" name="tabs" id="tab4">
+			<label for="tab4"><div class="tab-icon-node"></div><span>Node</span></label>
+			<div id="tab-content1" class="tab-content">
+				<div class="dashboard-user-icon"><img src="http://localhost:4251/.dds/images/user-img.png" height="28px" width="28px"></div>
+				<div class="dashboard-user-self-status-icon-active"></div>
+					<ul class="dashboard-user-menu">
+						<li>
+							<input class="dashboard-user-menu-input" id="user-status" type="checkbox" name="dashboard-user-menu"/>
+							<label class="dashboard-user-menu-input" for="user-status">user</label>
+							<ul class="dashboard-user-submenu">
+								<li><a href="#">user</a></li>
+								<li><a href="#">userrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr</a></li>
+								<li><a href="#">user</a></li>
+								<li><a href="#">user</a></li>
+							</ul>
+						</li>
+					</ul>
+					<div class="dashboard-active-convo-wrapper">
+					<div class="dashboard-active-convo-title">Add new channel:</div>
+					<form action="morphis://.dds/feed/add" method="post" accept-charset="UTF-8 ISO-8859-1">
+						<div class="dashboard-input-wrapper">
+							<input type="hidden" name="csrf_token" id="csrf_token" value=""/>
+							<input type="hidden" name="refresh_url" id="refresh_url" value=""/>
+							<div class="dashboard-input"><input type="text" name="name" id="name" placeholder="name"/></div>
+							<div class="dashboard-input"><input type="text" name="address" id="address" placeholder="address"/></div>
+						</div>
+						<div class="clearfix">
+							<button class="dds-button" type="submit">ADD</button></br></br>
+						</div>
+					</form>
+					<div class="dashboard-active-convo-title">Active conversations (6)</div>
+					<ul class="dashboard-convo-list">
+						<li class="dashboard-icon-chat-group dds-trunc"><a href=""><b>morphis-dev</b></a></li>
+						<li class="dashboard-icon-chat-group dds-trunc"><a href="">bitcoin-dev</a></li>
+						<li class="dashboard-icon-chat-group dds-trunc"><a href="">math</a></li>
+						<li class="dashboard-icon-chat-group-lock dds-trunc"><a href="">privateGroup</a></li>
+						<li class="dashboard-icon-chat-blog dds-trunc"><a href="">bob's blog</a></li>
+					</ul>
+					<hr class="thin-line"></hr>
+					<div class="dashboard-active-convo-title">Private conversations (6)</div>
+					<ul class="dashboard-convo-list">
+						<li class="dashboard-active-user"><a href=""><div class="dashboard-user-status-icon-active"></div>bob</a></li>
+						<li class="dashboard-inactive-user"><a href=""><div class="dashboard-user-status-icon-inactive"></div>OfflineFriend</a></li>
+					</ul>
+					<hr class="thin-line"></hr>
+					<div class="dashboard-active-convo-title">Rough UI Things:</div>
+					<ul>
+						<li><a href=''>axon</a></li>
+						<li><a href=''>propedit</a></li>
+						<li><a href=''>site edit</a></li>
+					</ul>
+				</div>
+			</div>
+			<div id="tab-content2" class="tab-content-dmail">
+				<div class="dashboard-convo-list">
+					<div class="dashboard-dmail-header">
+						<p class="mailboxes">MAILBOXES FOR</p>
+						<ul class="dashboard-user-menu">
+							<li>
+								<input class="dashboard-user-menu-input" id="dmail-address" type="checkbox" name="dashboard-user-menu"/>
+								<label class="dashboard-user-menu-input" for="dmail-address">user</label>
+								<ul class="dashboard-user-submenu">
+									<li><a href="#">dmail</a></li>
+									<li><a href="#">dmail2</a></li>
+									<li><a href="#">dmail3</a></li>
+									<li><a href="#">dmail4</a></li>
+								</ul>
+							</li>
+						</ul>
+					</div>
+					<span class="mailbox-list">
+						<ul>
+							<li class="inbox-icon active-mailbox"><a href="" style="display:block"><div class="mailbox-pad">Inbox<div class=""></div></div></a></li>
+							<li class="outbox-icon "><a href="" style="display:block"><div class="mailbox-pad">Outbox<div class=""></div></div></a></li>
+							<li class="sent-icon "><a href="" style="display:block"><div class="mailbox-pad">Sent<div class=""></div></div></a></li>
+							<li class="drafts-icon "><a href="" style="display:block"><div class="mailbox-pad">Drafts<div class=""></div></div></a></li>
+							<li class="trash-icon "><a href="" style="display:block"><div class="mailbox-pad">Trash<div class="inactive-notify">1</div></div></a></li>
+						</ul>
+					</span>
+					<div class="dashboard-hr-pad"><hr class="style2"></hr></div>
+					<form target="_self" action="morphis://.dmail/create_tag" method="get" accept-charset="UTF-8 ISO-8859-1">
+						<input type="hidden" name="csrf_token" value=""/>
+						<input type="hidden" name="redirect" value=""/>
+						<div class="dashboard-tag-input-wrapper">
+							<div class="dashboard-tag-input">
+								<input class="tag-text" type="text" name="tag_name" placeholder="Add new tag"/>
+								<button class="add-tag" value="send" name="add-tag" type="submit">+</button>
+							</div>
+						</div>
+					</form>
+					<span class="mailbox-list">
+						<ul>
+							<li class="bullet"><a href="" style="display:block"><div class="mailbox-pad">Bob<div class=""></div></div></a></li>
+						</ul>
+					</span>
+				</div>
+			</div>
+			<div id="tab-content3" class="tab-content">
+				<p>Select the file to upload below:</p>
+				<form action="upload" method="post" enctype="multipart/form-data">
+					<input type="file" name="fileToUpload" id="fileToUpload" class="inputfile"/>
+					<!--<label for="file">Choose a file</label>-->
+					<!--<input type="file" name="file" id="file" />
+					<label for="file" class="custom-file-upload"><div class="dashboard-upload-icon"></div>Choose a file</label>-->
+					<button type="submit" name="submit" class="dds-button dashboard-upload-button">Upload</button>
+					<hr class="thin-line"></hr>
+					other stuff...
+				</form>
+			</div>
+			<div id="tab-content4" class="tab-content">
+				<div class="dashboard-convo-list">
+					<div class="dashboard-active-convo-title">Peers:</div>
+					25
+					<hr class="thin-line"></hr>
+					<div class="dashboard-active-convo-title">Status:</div>
+					Start Stop
+					<hr class="thin-line"></hr>
+					<div class="dashboard-active-convo-title">Tasks:</div>
+					Hih i
+					<hr class="thin-line"></hr>
+					<div class="dashboard-active-convo-title">Current downloads:</div>
+					<a href="">Hih i</a><br />
+					<a href="">Hih i</a><br />
+					<a href="">Hih i</a><br />
+					<a href="">Hih i</a>
+				</div>
+			</div>
+		</div><div class="dashboard-footer-push"></div>
+	 </div>
+	<div class ="dashboard-footer">
+		<form action="search" method="get" id="dashboard-search" class="dashboard-search-form">
+			<div class="dashboard-search-wrapper">
+				<div class="magnifying-glass-wrapper">
+					<button type="submit" class="magnifying-glass"></button>
+				</div>
+				<div class="dashboard-search">
+					<input type="text" name="search" placeholder="Explore...">
+				</div>
+			</div>
+		</form>
+	</div>
+</nav>
+<div class="page-wrap">
+	<div class='dds-header-wrapper-dashboard'>
+		<header class="main-header-dashboard">
+			<div class="icon">
+				<a href="#site-nav">&#x25CF;<br />&#x25CF;<br />&#x25CF;</a>
+				<a href="#" class="close-menu">&#x25CF;<br />&#x25CF;<br />&#x25CF;</a>
+			</div>
+			<div class="dds-header-height">
+			</div>
+		</header>
+	 </div>
+{child}
+</body>
+</html>
