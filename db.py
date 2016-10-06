@@ -902,10 +902,13 @@ def _upgrade_5_dev5_to_5dev6(db):
     t_bytea = "BLOB" if db.is_sqlite else "bytea"
 
     with db.open_session() as sess:
-        sess.execute(\
-            "ALTER TABLE ddspost add column target_key2 {}".format(t_bytea))
-        sess.execute(\
-            "CREATE INDEX ddspost__target_key2 ON ddspost (target_key2)")
+        try:
+            sess.execute(\
+                "ALTER TABLE ddspost add column target_key2 {}".format(t_bytea))
+            sess.execute(\
+                "CREATE INDEX ddspost__target_key2 ON ddspost (target_key2)")
+        except:
+            sess.rollback()
 
         _update_node_state(sess, 4.96)
 
