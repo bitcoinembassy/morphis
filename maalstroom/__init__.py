@@ -28,6 +28,7 @@ port = 4251
 node = None
 server = None
 client_engine = None
+_client_engine = None
 
 disable_csrf_check = False
 dmail_enabled = True
@@ -301,13 +302,14 @@ def get_client_engine():
     return client_engine
 
 def shutdown():
-    global server
+    global server, client_engine
 
     if not server:
         return
 
     log.info("Stopping ClientEngine.")
-    _client_engine.stop()
+    if client_engine:
+        client_engine.stop()
     log.info("ClientEngine stopped.")
 
     log.info("Shutting down Maalstroom server instance.")
