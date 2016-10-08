@@ -491,7 +491,6 @@ button.dds-reply-button:active {
 	float: left;
 	position: relative;
 	padding-left: .3em;
-	
 }
 
 
@@ -1179,8 +1178,12 @@ a.blog-photo-post-tags2 {
 	margin-right: 12px;
 	padding-right: 12px;
 }
-.blog-grey-text {
+.post-grey-text {
 	color: #a2a6ab;
+}
+.post-grey-text-sm {
+	color: #a2a6ab;
+	font-size: .85em;
 }
 .blog-post-header-left {
 	float: left;
@@ -1249,7 +1252,7 @@ span.blog-comment-bubble::after {
 	border-width: 8px 8px 0 0;
 	border-color: #1e2329 transparent transparent transparent;
 }
-.blog-vertical-line {
+.post-vertical-line {
 	border-right: 1px solid #e6e6e6;
 }
 .blog-header-profile h1 {
@@ -1559,6 +1562,30 @@ span.blog-comment-bubble-header::after {
 .dds-post-flag:hover {
 	background-image: url("morphis://.dds/images/vote3-color.png");
 }
+.dds-post-upvote2 {
+	background-image: url("morphis://.dds/images/vote3.png");
+	background-size: 18px;
+	background-repeat: no-repeat;
+	width:15px;
+	height:8px;
+	background-position: -2 -5;
+	/*margin: 2px auto 4px auto;*/
+}
+.dds-post-upvote2:hover {
+	background-image: url("morphis://.dds/images/vote3-color.png");
+}
+.dds-post-flag2 {
+	background-image: url("morphis://.dds/images/vote3.png");
+	background-size: 18px;
+	background-repeat: no-repeat;
+	width:12px;
+	height:10px;
+	background-position: -2 -22;
+	/*margin: 4px auto 0 auto;*/
+}
+.dds-post-flag2:hover {
+	background-image: url("morphis://.dds/images/vote3-color.png");
+}
 /*.dds-post-upvote {
  * width: 20px;
  } *
@@ -1715,6 +1742,7 @@ span.profile-comment-bubble-header::after {
 	float: left;
 	position: absolute;
 	padding-top: 1.8em;
+	margin-left: 1.2em;
 }
 .dds-approve-user {
 	background-image: url("morphis://.dds/images/check3.png");
@@ -1760,5 +1788,34 @@ span.profile-comment-bubble-header::after {
 	background-image: url("morphis://.dds/images/check3.png");
 }
 .dds-approve-msg2:hover {
+	background-image: url("morphis://.dds/images/check3.png");
+}
+.dds-post-vote {
+	text-align: center;
+	float: left;
+}
+.dds-approve-wrapper3 {
+	float: left;
+	position: absolute;
+	margin-left: 3.4em;
+}
+.dds-approve-user3 {
+	background-image: url("morphis://.dds/images/check3.png");
+	background-size: 15px;
+	height: 15px;
+	width: 15px;
+	margin-top: -2px
+}
+.dds-approve-msg3 {
+	background-image: url("morphis://.dds/images/check3.png");
+	background-size: 15px;
+	height: 15px;
+	width: 15px;
+	margin-top: 4px;
+}
+.dds-approve-user3:hover {
+	background-image: url("morphis://.dds/images/check3.png");
+}
+.dds-approve-msg3:hover {
 	background-image: url("morphis://.dds/images/check3.png");
 }
