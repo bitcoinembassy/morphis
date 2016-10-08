@@ -13,8 +13,9 @@
 			<input type="radio" name="tabs" id="tab4">
 			<label for="tab4"><div class="tab-icon-node"></div><span>Node</span></label>
 			<div id="tab-content1" class="tab-content">
-				<div class="dashboard-user-icon"><img src="http://localhost:4251/.dds/images/user-img.png" height="28px" width="28px"></div>
-				<div class="dashboard-user-self-status-icon-active"></div>
+				<div class="dashboard-user-wrapper">
+					<div class="dashboard-user-icon"><img src="http://localhost:4251/.dds/images/user-img.png" height="28px" width="28px"></div>
+					<div class="dashboard-user-self-status-icon-active"></div>
 					<ul class="dashboard-user-menu">
 						<li>
 							<input class="dashboard-user-menu-input" id="user-status" type="checkbox" name="dashboard-user-menu"/>
@@ -27,6 +28,7 @@
 							</ul>
 						</li>
 					</ul>
+					</div>
 					<div class="dashboard-active-convo-wrapper">
 					<div class="dashboard-active-convo-title">Add new channel:</div>
 					<form action="morphis://.dds/feed/add" method="post" accept-charset="UTF-8 ISO-8859-1">

@@ -1930,7 +1930,9 @@ display: block;
 }
 
 /* DASHBOARD STYLES */
-
+.dashboard-user-wrapper {
+	padding-bottom: .5em;
+}
 .dashboard-active-user, .dashboard-active-user a {
 	font-weight: bold;
 }
@@ -1947,7 +1949,7 @@ display: block;
 }
 .dashboard-active-convo-title {
 	color: #606467;
-	padding-bottom: .5em;
+	padding-bottom: .3em;
 }
 .dashboard-convo-list {
 	min-width: 20px;
@@ -1982,11 +1984,21 @@ display: block;
 	border-radius: 50%;
 	border: 2px solid #1c2227;
 	float: left;
-	margin: .3em .5em 0 0;
-	position: absolute;
+	margin: 1em .5em 0 -.5em;
 	top: 4.85em;
 	left: 2.8em;
 }
+/*.dashboard-user-self-status-icon-active {
+	background: #4CC378;
+	width: 14px;
+	height: 14px;
+	border-radius: 50%;
+	border: 2px solid #1c2227;
+	float: left;
+	margin: .27em .2em 0 .8em;
+	top: 4.85em;
+	left: 2.8em;
+}*/
 .dashboard-user-status-icon-active {
 	background: #4CC378;
 	width: 10px;
@@ -2206,9 +2218,7 @@ ul.dashboard-user-submenu li a:hover {
 }
 .dashboard-user-icon {
 	float: left;
-	position: relative;
-	padding-right: .8em;
-	top: -5;
+	top: -5px;
 }
 input[type="file"] {
 	width: 100%;
@@ -2216,6 +2226,7 @@ input[type="file"] {
 	opacity: .4;
 	cursor: pointer;
 }
+
 /*
 input[type="file"] {
 	display: none;
