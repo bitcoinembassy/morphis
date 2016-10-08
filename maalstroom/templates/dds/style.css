@@ -201,7 +201,7 @@ iframe {
 	display: inline-block;
 }
 .dds-reply-top {
-	height: 3.5em;
+	height: 2.8em;
 }
 .dds-reply-id {
 	font-size: 0.75em;
@@ -214,8 +214,10 @@ iframe {
 }
 .dds-reply-text {
 	color: #fff;
-	margin: 1em 0 .5em 0;
+	margin: .7em 0 .5em 0;
 	float: left;
+	font-size: .9em;
+	max-width: 30%;
 }
 .dds-reply-wrapper {
 	/*position: fixed;*/
@@ -269,6 +271,7 @@ input[type="text"]:focus, textarea:focus {
 .dds-reply-button-wrapper {
 	padding-top: .5em;
 	float: right;
+	white-space: nowrap;
 }
 button.dds-reply-button {
 	vertical-align: top;
@@ -334,6 +337,7 @@ button.dds-reply-button:active {
 	max-width: 25%;
 	float: left;
 	font-weight: bold;
+	height: 15px;
 }
 .dds-post-name a {
 	color: #1c2227;
@@ -578,7 +582,6 @@ a.close {
 ul.dds-menu {
 	position:fixed;
 	top:0;
-	height:3em;
 	border: 1px solid #fff;
 	border-radius: 3px;
 	color: #fff;
@@ -587,8 +590,8 @@ ul.dds-menu {
 	position: relative;
 	display: inline-block;
 	vertical-align: middle;
-	font-size: .9em;
-	max-width: 85%;
+	font-size: .8em;
+	max-width: 55%;
 	-webkit-transition: all 0.10s ease-in-out;
 	-moz-transition: all 0.10s ease-in-out;
 	transition: all 0.15s ease-in-out;
@@ -606,7 +609,7 @@ label.dds-menu-input {
 	position:relative;
 	display:block;
 	padding:0 18px 0 12px;
-	line-height:3em;
+	line-height:2.5em;
 	transition:background 0.3s;
 	cursor:pointer;
 	overflow:hidden;
@@ -643,6 +646,8 @@ input.dds-menu-input {
 /*show the second level menu of the selected voice*/
 input.dds-menu-input:checked ~ ul.dds-submenu {
 	max-height: 300px;
+	max-width: 100%;
+	min-width: 300px;
 	transition: max-height 0.2s ease-in;
 	max-height: 95px;
 	overflow-y: auto;
@@ -659,12 +664,12 @@ ul.dds-submenu {
 	list-style-type: none;
 	background: #26162f;
 	box-shadow: 0 0 1px rgba(0,0,0,.3);
-	transition: max-height 0.5s ease-out;
 	position: absolute;
 	min-width: 100%;
-	-webkit-transition: all 0.10s ease-in-out;
-	-moz-transition: all 0.10s ease-in-out;
-	transition: all 0.15s ease-in-out;
+	transition:max-height 0.10s ease-out;
+	-webkit-transition: max-height 0.10s ease-in-out;
+	-moz-transition: max-height 0.10s ease-in-out;
+	transition: max-height 0.10s ease-in-out;
 }
 
 ul.dds-submenu li {
@@ -783,6 +788,7 @@ input.dds-channel-menu-input:checked ~ ul.dds-channel-submenu {
 	max-height: 300px;
 	transition: max-height 0.2s ease-in;
 	min-width: 300px;
+	max-width: 100%;
 	overflow-y: auto;
 	overflow-x: hidden;
 	z-index: 999;
@@ -797,12 +803,12 @@ ul.dds-channel-submenu {
 	list-style-type:none;
 	background:#1c2227;
 	box-shadow:0 0 1px rgba(0,0,0,.3);
-	transition:max-height 0.5s ease-out;
+	transition:max-height 0.10s ease-out;
 	position:absolute;
 	min-width:100%;
 	-webkit-transition: all 0.10s ease-in-out;
 	-moz-transition: all 0.10s ease-in-out;
-	transition: all 0.15s ease-in-out;
+	transition: all 0.10s ease-in-out;
 	font-size: .8em;
 }
 
@@ -1520,60 +1526,28 @@ span.blog-comment-bubble-header::after {
 	margin-top: .1em;
 	opacity: .4;
 }
-.dds-post-vote-wrapper {
-	bottom: 0;
-	height: 20px;
-	width: 100%;
-	margin-top: 0;
-}
 .dds-post-upvote {
 	background-image: url("morphis://.dds/images/vote3.png");
+	background-size: 18px;
 	background-repeat: no-repeat;
-	width:18px;
-	height:20px;
-	background-position: left top;
-	margin: 0 .5em 0 0;
-	float: left;
-	cursor: pointer;
+	width:15px;
+	height:8px;
+	background-position: -2px -5px;
+	/*margin: 2px auto 4px auto;*/
 }
 .dds-post-upvote:hover {
 	background-image: url("morphis://.dds/images/vote3-color.png");
 }
 .dds-post-flag {
 	background-image: url("morphis://.dds/images/vote3.png");
-	background-repeat: no-repeat;
-	width:18px;
-	height:20px;
-	background-position: left bottom;
-	margin: 0  0 0 .4em;
-	float: left;
-	cursor: pointer;
-}
-.dds-post-flag:hover {
-	background-image: url("morphis://.dds/images/vote3-color.png");
-}
-.dds-post-upvote2 {
-	background-image: url("morphis://.dds/images/vote3.png");
-	background-size: 18px;
-	background-repeat: no-repeat;
-	width:15px;
-	height:8px;
-	background-position: -2 -5;
-	/*margin: 2px auto 4px auto;*/
-}
-.dds-post-upvote2:hover {
-	background-image: url("morphis://.dds/images/vote3-color.png");
-}
-.dds-post-flag2 {
-	background-image: url("morphis://.dds/images/vote3.png");
 	background-size: 18px;
 	background-repeat: no-repeat;
 	width:12px;
 	height:10px;
-	background-position: -2 -22;
+	background-position: -2px -22px;
 	/*margin: 4px auto 0 auto;*/
 }
-.dds-post-flag2:hover {
+.dds-post-flag:hover {
 	background-image: url("morphis://.dds/images/vote3-color.png");
 }
 /*.dds-post-upvote {
@@ -1706,33 +1680,9 @@ span.profile-comment-bubble-header::after {
 	height: 200px;
 	border-radius: 50%;
 }
-.dds-approve-wrapper1 {
-	float: left;
-}
-.dds-approve-user1 {
-	background-image: url("morphis://.dds/images/check3.png");
-	background-size: 15px;
-	height: 15px;
-	width: 15px;
-}
-.dds-approve-msg1 {
-	background-image: url("morphis://.dds/images/check3.png");
-	background-size: 15px;
-	height: 15px;
-	width: 15px;
-	margin-top: .5em;
-}
-.dds-approve-user1:hover {
-	background-image: url("morphis://.dds/images/check3.png");
-}
-.dds-approve-msg1:hover {
-	background-image: url("morphis://.dds/images/check3.png");
-}
 .dds-approve-wrapper {
 	float: left;
-	position: absolute;
-	padding-top: 1.8em;
-	margin-left: 1.2em;
+	margin: .15em .5em 0 .5em;
 }
 .dds-approve-user {
 	background-image: url("morphis://.dds/images/check3.png");
@@ -1755,57 +1705,10 @@ span.profile-comment-bubble-header::after {
 .dds-approve-msg:hover {
 	background-image: url("morphis://.dds/images/check3.png");
 }
-.dds-approve-wrapper2 {
-	float: left;
-	margin: 0 .5em 0 .5em
-}
-.dds-approve-user2 {
-	background-image: url("morphis://.dds/images/check3.png");
-	background-size: 15px;
-	height: 15px;
-	width: 15px;
-	float: left;
-}
-.dds-approve-msg2 {
-	background-image: url("morphis://.dds/images/check3.png");
-	background-size: 15px;
-	height: 15px;
-	width: 15px;
-	float: left;
-	margin-left: .5em;
-}
-.dds-approve-user2:hover {
-	background-image: url("morphis://.dds/images/check3.png");
-}
-.dds-approve-msg2:hover {
-	background-image: url("morphis://.dds/images/check3.png");
-}
 .dds-post-vote {
 	text-align: center;
 	float: left;
 }
-.dds-approve-wrapper3 {
-	float: left;
-	position: absolute;
-	margin-left: 3.4em;
-}
-.dds-approve-user3 {
-	background-image: url("morphis://.dds/images/check3.png");
-	background-size: 15px;
-	height: 15px;
-	width: 15px;
-	margin-top: -2px
-}
-.dds-approve-msg3 {
-	background-image: url("morphis://.dds/images/check3.png");
-	background-size: 15px;
-	height: 15px;
-	width: 15px;
-	margin-top: 4px;
-}
-.dds-approve-user3:hover {
-	background-image: url("morphis://.dds/images/check3.png");
-}
-.dds-approve-msg3:hover {
-	background-image: url("morphis://.dds/images/check3.png");
+.score-color {
+	background: #DBD9A8;
 }
