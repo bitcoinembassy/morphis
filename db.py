@@ -301,7 +301,7 @@ def _init_daos(Base, d):
         children = relationship("DdsPost", cascade="all, delete-orphan")
 
     Index("ddspost__target_key", DdsPost.target_key)
-    Index("ddspost__target_key", DdsPost.target_key2)
+    Index("ddspost__target_key2", DdsPost.target_key2)
     Index("ddspost__synapse_key", DdsPost.synapse_key)
     Index("ddspost__synapse_pow", DdsPost.synapse_pow)
     Index("ddspost__data_key", DdsPost.data_key)
