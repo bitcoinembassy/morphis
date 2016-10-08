@@ -433,6 +433,7 @@ if not initialized_template:
     dds_css = load("dds/style.css", True)
 
     dds_wrapper = load("dds/wrapper.html", True)
+    dds_wrapper_lite = load("dds/wrapper_lite.html", True)
 
     dds_identbar = load("dds/identbar.html", True)
 

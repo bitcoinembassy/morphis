@@ -880,8 +880,8 @@ def _process_synapse_create(req):
         ident_str=ident_str,\
         query=req.query)
 
-    template =\
-        templates.dds_wrapper[0].format(title="DDS Post Box", child=template)
+    template = templates.dds_wrapper_lite[0].format(\
+        title="DDS Post Box", child=template)
 
     req.dispatcher.send_content(template)
 
