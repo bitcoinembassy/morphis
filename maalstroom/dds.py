@@ -235,12 +235,18 @@ def _process_root(req):
 
     template = template2 + template
 
-    wrapper = _render_wrapper(req, template, "MORPHiS Maalstroom DDS")
+    wrapper =\
+        yield from _render_wrapper(req, template, "MORPHiS Maalstroom DDS")
 
     req.dispatcher.send_content(wrapper)
 
+@asyncio.coroutine
 def _render_wrapper(req, template, title="MORPHiS Maalstroom DDS"):
+    channel_html =\
+        yield from _render_channel_html(req, "dashboard-convo-list", True)
+
     return templates.dds_wrapper[0].format(\
+        channel_html=channel_html,\
         child=template,\
         node_connections=len(req.dispatcher.node.engine.peers),\
         query=req.query,\
@@ -295,7 +301,7 @@ def _process_propedit(req):
         version=data_rw.version,\
         value=value)
 
-    wrapper = _render_wrapper(req, template, "MORPHiS Propedit")
+    wrapper = yield from _render_wrapper(req, template, "MORPHiS Propedit")
 
     req.dispatcher.send_content(wrapper)
 
@@ -344,7 +350,7 @@ def _process_site_edit(req):
         version=latest_version,\
         **out)
 
-    wrapper = _render_wrapper(req, template, "MORPHiS Siteedit")
+    wrapper = yield from _render_wrapper(req, template, "MORPHiS Siteedit")
 
     req.dispatcher.send_content(wrapper)
 
@@ -405,7 +411,7 @@ def _process_site_edit_post(req):
     req.dispatcher.send_301(refresh_url)
 
 @asyncio.coroutine
-def _render_channel_html(req, ul_class=None):
+def _render_channel_html(req, ul_class=None, site_nav=False):
     def dbcall():
         with req.dispatcher.node.db.open_session(True) as sess:
             r = sess.query(NodeState)\
@@ -444,29 +450,37 @@ def _render_channel_html(req, ul_class=None):
     else:
         channel_html = "<ul>"
 
+    nav = "#site-nav" if site_nav else ""
+
     for channel_row in channels_list:
         if channel_row is None:
             channel_html += "<br/>"
             continue
 
+        clazz = "dashboard-icon-chat-group"
+
         if type(channel_row) is str:
-            addr_enc = text = channel_row
+            addr_enc = channel_row
+            text = addr_enc[1:]
         else:
             addr_enc = channel_row[0]
             text = channel_row[1] if len(channel_row) > 1 else addr_enc
 
         if addr_enc == "$RANDOM":
             addr_enc = mbase32.encode(os.urandom(consts.NODE_ID_BYTES))
+            text = "$RANDOM"
         elif addr_enc == "$OWN":
             addr_enc = req.ident_enc
 
             name = yield from fetch_display_name(\
                 req.dispatcher.node, req.ident, req.ident_enc)
             text = name + "'s Blog"
+            clazz = "dashboard-icon-chat-blog"
 
         channel_html +=\
-            "<li><a href='morphis://.grok/{}{}'>{}</a></li>"\
-                .format(addr_enc, req.query, text)
+            "<li class='{} dds-trunc'>"\
+            "<a href='morphis://.grok/{}{}{}'>{}</a></li>"\
+                .format(clazz, addr_enc, req.query, nav, text)
 
     channel_html += "</ul>"
 
@@ -480,7 +494,7 @@ def _process_axon_create(req):
         csrf_token=req.dispatcher.client_engine.csrf_token,
         delete_class="display_none")
 
-    wrapper = _render_wrapper(req, template, "MORPHiS Axon Create")
+    wrapper = yield from _render_wrapper(req, template, "MORPHiS Axon Create")
 
     req.dispatcher.send_content(wrapper)
 
@@ -538,7 +552,8 @@ def _process_axon_grok(req):
         channel_bare=title,\
         channel_html=channel_html)
 
-    wrapper = _render_wrapper(req, template, "MORPHiS Maalstroom DDS")
+    wrapper =\
+        yield from _render_wrapper(req, template, "MORPHiS Maalstroom DDS")
 
     req.dispatcher.send_content(wrapper)
     return
