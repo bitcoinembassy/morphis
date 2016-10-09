@@ -235,11 +235,15 @@ def _process_root(req):
 
     template = template2 + template
 
-    wrapper = templates.dds_wrapper[0]
-    wrapper =\
-        wrapper.format(title="MORPHiS Maalstroom DDS", child=template)
+    wrapper = _render_wrapper(req, template, "MORPHiS Maalstroom DDS")
 
     req.dispatcher.send_content(wrapper)
+
+def _render_wrapper(req, template, title):
+    return templates.dds_wrapper[0].format(\
+        child=template,\
+        title=title,\
+        node_connections=len(req.dispatcher.node.engine.peers))
 
 @asyncio.coroutine
 def _process_test(req):
@@ -289,9 +293,7 @@ def _process_propedit(req):
         version=data_rw.version,\
         value=value)
 
-    wrapper = templates.dds_wrapper[0]
-    wrapper =\
-        wrapper.format(title="MORPHiS Propedit", child=template)
+    wrapper = _render_wrapper(req, template, "MORPHiS Propedit")
 
     req.dispatcher.send_content(wrapper)
 
@@ -340,9 +342,7 @@ def _process_site_edit(req):
         version=latest_version,\
         **out)
 
-    wrapper = templates.dds_wrapper[0]
-    wrapper =\
-        wrapper.format(title="MORPHiS Propedit", child=template)
+    wrapper = _render_wrapper(req, template, "MORPHiS Siteedit")
 
     req.dispatcher.send_content(wrapper)
 
@@ -534,9 +534,7 @@ def _process_axon_grok(req):
         channel_bare=title,\
         channel_html=channel_html)
 
-    wrapper = templates.dds_wrapper[0]
-    wrapper =\
-        wrapper.format(title="MORPHiS Maalstroom DDS", child=template)
+    wrapper = _render_wrapper(req, template, "MORPHiS Maalstroom DDS")
 
     req.dispatcher.send_content(wrapper)
     return
