@@ -167,7 +167,7 @@ def serve_get(dispatcher, rpath):
         dispatcher.send_content(templates.dds_imgs[req[8:]])
     elif req == "/axon/create":
         # Render the Create Axon (Targeted or not) page.
-        yield from _process_axon_create(dispatcher, req[5:])
+        yield from _process_axon_create(mr)
     elif req.startswith("/axon/grok/"):
         # Render the Grok View; which shows the Axon, SynapseS and Synapse
         # create form.
@@ -239,11 +239,13 @@ def _process_root(req):
 
     req.dispatcher.send_content(wrapper)
 
-def _render_wrapper(req, template, title):
+def _render_wrapper(req, template, title="MORPHiS Maalstroom DDS"):
     return templates.dds_wrapper[0].format(\
         child=template,\
-        title=title,\
-        node_connections=len(req.dispatcher.node.engine.peers))
+        node_connections=len(req.dispatcher.node.engine.peers),\
+        query=req.query,\
+        current_ident=req.ident_enc,\
+        title=title)
 
 @asyncio.coroutine
 def _process_test(req):
@@ -471,14 +473,16 @@ def _render_channel_html(req, ul_class=None):
     return channel_html
 
 @asyncio.coroutine
-def _process_axon_create(dispatcher, req):
+def _process_axon_create(req):
     template = templates.dds_axon[0]
     template = template.format(\
         message_text="",
-        csrf_token=dispatcher.client_engine.csrf_token,
+        csrf_token=req.dispatcher.client_engine.csrf_token,
         delete_class="display_none")
 
-    dispatcher.send_content([template, req])
+    wrapper = _render_wrapper(req, template, "MORPHiS Axon Create")
+
+    req.dispatcher.send_content(wrapper)
 
 @asyncio.coroutine
 def _process_axon_grok(req):
