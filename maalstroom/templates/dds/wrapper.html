@@ -120,9 +120,6 @@
 			</div>
 			<div id="tab-content4" class="tab-content">
 				<div class="dashboard-convo-list">
-					<div class="dashboard-active-convo-title">Peers:</div>
-					{node_connections}
-					<hr class="thin-line"></hr>
 					<div class="dashboard-active-convo-title">Status:</div>
 					<div class="switch">
 						<input type="radio" class="switch-input" name="view" value="online" id="online" checked>
@@ -131,6 +128,9 @@
 						<label for="offline" class="switch-label switch-label-on">OFFLINE</label>
 						<span class="switch-selection"></span>
 					</div>
+					<hr class="thin-line"></hr>
+					<div class="dashboard-active-convo-title">Peers:</div>
+					{node_connections}
 					<hr class="thin-line"></hr>
 					<div class="dashboard-active-convo-title">Tasks:</div>
 					<ul class="dashboard-nodes-tasks">
