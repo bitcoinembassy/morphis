@@ -1705,9 +1705,7 @@ span.profile-comment-bubble-header::after {
 	background-color: #1c2227;
 }
 .main-header-dashboard {
-	padding: 0 0 0 20px;
 	position: fixed;
-	width: 100%;
 	left: 0;
 	transition: all 0.3s ease;
 }
@@ -1795,8 +1793,8 @@ display: block;
 }
 
 #site-nav:target + .page-wrap .main-header-dashboard {
-width: 77%;
-left: 23%;
+/*width: 77%;
+left: 23%;*/
 }
 .dds-header-height {
 	height: 4em;
@@ -1805,10 +1803,11 @@ left: 23%;
 /* DASHBOARD TABS */
 
 .tabs {
-	width: 100%;
+	width: calc(100%-20px);
 	float: none;
 	list-style: none;
 	padding: 0;
+	margin-left: 20px;
 }
 .tabs:after {
 	content: '';
@@ -1827,7 +1826,7 @@ left: 23%;
 	font-weight: normal;
 	text-decoration: none;
 	text-align: center;
-	line-height: 2;
+	height: 4em;
 	cursor: pointer;
 	-webkit-transition: all 0.5s; /* Safari 3.1 to 6.0 */
 	transition: all 0.5s;
@@ -1854,6 +1853,7 @@ left: 23%;
 	float: left;
 	padding: 15px;
 	color: #fff;
+	margin-left: -20px;
 }
 .tab-content-dmail {
 	display: none;
