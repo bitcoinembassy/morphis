@@ -2471,10 +2471,14 @@ button.add-tag:hover {
 /* DDS statusbar */
 .dds-statusbar {
 	background: #161a1e;
+	top: 0;
 	padding: .3em;
 	height: 30px;
 	border-bottom: 1px dotted #3b3e43;
 	color: #5A5A5A;
+	position: fixed;
+	width: 100%;
+	z-index: 10;
 	/*font-style: italic;*/
 }
 .dds-statusbar a {
