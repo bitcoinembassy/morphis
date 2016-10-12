@@ -1654,7 +1654,7 @@ span.profile-comment-bubble-header::after {
 .site-nav {
 	position: fixed;
 	width: 0;
-	height: calc(100% - 24px);
+	height: calc(100% - 30px);
 	background-color: #1c2227;
 	overflow-y: auto;
 	transition: width 0.3s ease;
@@ -1713,7 +1713,7 @@ left: 23%;*/
 /* DASHBOARD TABS */
 
 .tabs {
-	width: calc(100%-20px);
+	width: calc(100% - 20px);
 	float: none;
 	list-style: none;
 	padding: 0;
@@ -1741,6 +1741,8 @@ left: 23%;*/
 	-webkit-transition: all 0.5s; /* Safari 3.1 to 6.0 */
 	transition: all 0.5s;
 	background: #171C20;
+	line-height: 2em;
+	padding-top: 3px;
 }
 /*.tab-shadow {
 	-webkit-box-shadow: 10px 0 5px -2px #000;
@@ -1763,6 +1765,8 @@ left: 23%;*/
 	float: left;
 	padding-top: 15px;
 	color: #fff;
+	/*padding-left: 20px;*/
+	padding-right: 20px;
 }
 .tab-content-dmail {
 	display: none;
@@ -2565,45 +2569,124 @@ span.dds-statusbar-comment-bubble::after {
 .dds-statusbar-user-icon-author:hover {
 	opacity: 1;
 }
-.dds-menu-settings {
+
+/*Settings hidden div*/
+/*.settings-buttons {
+	position: relative;
+	height: 100%;
+	clear: both;
+}
+.settings-button1 label {
+	cursor: pointer;
+	top: 0;
+	right: 0;
+	position: absolute;
+	margin-top: -65px;
+	margin-right:50px;
+}
+.settings-button2 label {
+	cursor: pointer;
+	top: 0;
+	right: 0;
+	position: absolute;
+	margin-top: -65px;
+	margin-right:20px;
+}
+.settings-button1 [type=radio] {
+	position: absolute;
+	left: -10000px;
+}
+.settings-button2 [type=radio] {
+	position: absolute;
+	left: -10000px;
+}
+.dds-content {
+	position: absolute;
+	top: 0;
+	left: 0;
+	background: red;
+	right: 0;
+	bottom: 0;
+}
+[type=radio]:checked ~ .dds-content label {
+	background: #f3f6f8;
+	z-index: 2;
+}
+[type=radio]:checked ~ label ~ .dds-content {
+	z-index: 1;*/
+
+.settings-tabs {
+	width: 100%;
+	list-style: none;
+	padding: 0;
+}
+.settings-tabs input[type=radio] {
+	display:none;
+}
+.settings-tabs > label {
+	display: block;
+	font-size: 1em;
+	font-weight: normal;
+	text-decoration: none;
+	text-align: center;
+	cursor: pointer;
+	-webkit-transition: all 0.5s; /* Safari 3.1 to 6.0 */
+	transition: all 0.5s;
+}
+.settings-tabs > label:hover {
+	color: #38a3af;
+}
+.settings-tab-content {
+	display: none;
+	width: 100%;
 	float: left;
+}
+.dds-menu-settings {
 	background: url("morphis://.dds/images/settings2.png");
 	height: 20px;
 	width: 20px;
 	margin-left: .9em;
 	opacity: .7;
-	margin-top: 16px;
+	cursor: pointer;
+	top: 0;
+	right: 0;
+	position: absolute;
+	margin-top: 15px;
+	margin-right: 20px;
 }
 .dds-menu-settings:hover {
 	opacity: 1;
 	transition: opacity 0.5s;
 }
-
-/**/
-input[type=checkbox] {
-	position: absolute;
-	top: -9999px;
-	left: -9999px;
-}
-label { 
-	-webkit-appearance: push-button;
-	-moz-appearance: button; 
-	display: inline-block;
-	margin: 60px 0 10px 0;
-	cursor: pointer;
-}
-
-/* Default State */
-div {
-	background: green;
-	width: 400px;
-	height: 100px;
-	line-height: 100px;
+.dds-menu-settings-close {
+	border: 1px solid white;
+	height: 20px;
+	width: 20px;
+	opacity: .4;
 	color: white;
 	text-align: center;
+	cursor: pointer;
+	top: 0;
+	right: 0;
+	position: absolute;
+	margin-top: 15px;
+	margin-right: 50px;
+	border-radius: 50px;
+	padding-left: 1px;
 }
-
-/* Toggled State */
-input[type=checkbox]:checked ~ div {
-	background: red;
+.dds-menu-settings-close:hover {
+	opacity: .6;
+	transition: opacity 0.5s;
+}
+.settings-tabs [id^="settings-tab"]:checked + label {
+}
+#settings-tab1:checked ~ #settings-tab-content1,
+#settings-tab2:checked ~ #settings-tab-content2 {
+display: block;
+}
+.dds-settings-wrapper {
+	padding: 2em;
+}
+.dds-settings-wrapper p {
+	padding-bottom: 1em;
 }
