@@ -1851,9 +1851,8 @@ left: 23%;*/
 	display: none;
 	width: 100%;
 	float: left;
-	padding: 15px;
+	padding-top: 15px;
 	color: #fff;
-	margin-left: -20px;
 }
 .tab-content-dmail {
 	display: none;
