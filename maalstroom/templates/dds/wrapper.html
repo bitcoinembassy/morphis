@@ -1,10 +1,19 @@
 <html>
 <head><title>{title}</title><link rel="stylesheet" href="morphis://.dds/style.css"/></head>
 <body class="dds">
-<div style="width: 100%; height: 24px; z-index: 10; position: fixed; top: 0px; background-color: red; color: white; border: 1px solid blue; margin: 0; padding: 0;">
-test
+<!--<div style="width: 100%; height: 24px; z-index: 10; position: fixed; top: 0px; background-color: red; color: white; border: 1px solid blue; margin: 0; padding: 0;">-->
+<div class="dds-statusbar">
+	<div class="dds-statusbar-user-icon-author">
+		<a href=""><img src="morphis://.dds/images/user-img2.png" width="20px" height="20px"></a>
+	</div>
+	<span class="dds-statusbar-text">Current identity is <a href="">@user</a></span>
+	<div class="dds-statusbar-right">
+		<a href=""><div class="dds-statusbar-settings"></div></a>
+		<a href=""><div class="dds-statusbar-global-settings"></div></a>
+		<a href=""><span class="dds-statusbar-comment-bubble">30</span></a>
+	</div>
 </div>
-<div style="position: absolute; top: 24px; width: 100%; height: calc(100% - 24px); padding: 0; margin: 0;">
+<div style="position: absolute; top: 30px; width: 100%; height: calc(100% - 30px); padding: 0; margin: 0;">
 <nav class="site-nav" id="site-nav">
 	<div class="dashboard-footer-wrapper">
 		<div class="tabs" style="overflow: hidden; height: 100%;">
