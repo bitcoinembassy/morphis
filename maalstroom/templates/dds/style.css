@@ -702,7 +702,7 @@ ul.dds-submenu li a:hover {
 /*Style for the first level menu bar*/
 .dds-header-wrapper ul.dds-channel-menu {
 	position: fixed;
-	top: 0;
+	top: 24px;
 	/*height: 100%;*/
 	border: none;
 	color: #fff;
@@ -1745,9 +1745,8 @@ span.profile-comment-bubble-header::after {
 
 .site-nav {
 	position: fixed;
-	top: 0;
 	width: 0;
-	height: 100%;
+	height: calc(100% - 24px);
 	background-color: #1c2227;
 	overflow-y: auto;
 	transition: width 0.3s ease;
