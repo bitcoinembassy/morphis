@@ -855,11 +855,15 @@ def fetch_display_name(node, signing_key, signing_key_enc=None):
             if data_rw:
                 json_bytes = data_rw.data
                 if json_bytes:
-                    name = json.loads(json_bytes.decode()).get("name")
-                    if name:
-                        signer_name = make_safe_for_html_content(name)
-                        log.info("Using Dsite name=[{}] for key=[{}]."\
-                            .format(signer_name, signing_key_enc))
+                    try:
+                        name = json.loads(json_bytes.decode()).get("name")
+
+                        if name:
+                            signer_name = make_safe_for_html_content(name)
+                            log.info("Using Dsite name=[{}] for key=[{}]."\
+                                .format(signer_name, signing_key_enc))
+                    except Exception:
+                        pass
 
     return signer_name
 
