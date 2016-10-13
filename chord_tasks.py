@@ -3944,7 +3944,7 @@ class ChordTasks(object):
 
         try:
             synapse = syn.Synapse(data)
-        except:
+        except Exception:
             log.exception(\
                 "Invalid Synapse; data=[\n{}]."\
                     .format(mutil.hex_dump(data)))
