@@ -255,18 +255,93 @@ def _render_wrapper(req, template, title="MORPHiS Maalstroom DDS"):
 
 @asyncio.coroutine
 def _process_test(req):
+    #TODO: Delete this test stub.
     rstr = req.req[6:]
 
-    log.warning("rstr=[{}].".format(rstr))
+    req.dispatcher.send_content("rstr=[{}].".format(rstr))
 
-    target_key_enc = rstr
-    target_key = mbase32.decode(target_key_enc)
+@asyncio.coroutine
+def _render_axon_grok_config(req):
+    local_name =\
+        yield from dmail.get_contact_name(req.dispatcher.node, req.ident)
+    public_name =\
+        yield from fetch_display_name(req.dispatcher.node, req.ident)
 
-    log.info("target_key=[{}].".format(target_key_enc))
+    output = [\
+        "<div>ident=[", req.ident_enc, "].</div><br/>",\
+        "<div>local name=[", local_name, "].</div>",\
+        "<div>public name=[", public_name, "].</div>"]
 
-    #TODO: Delete this test stub.
+    output.append("<br/><div>")
 
-    req.dispatcher.send_content("HI")
+    stamped = yield from _render_stamped(req, req.ident)
+    output.append("<p>Stamped:</p>")
+    if stamped:
+        output.append(stamped)
+    else:
+        output.append("No stamped keys found.")
+
+    output.append("</div><br/><div>")
+
+    stampers = yield from _render_stampers(req, req.ident)
+    output.append("<p>Stampers:</p>")
+    if stampers:
+        output.append(stampers)
+    else:
+        output.append("No stamping keys found.")
+
+    output.append("</div>")
+
+    return ''.join(output)
+
+@asyncio.coroutine
+def _render_stamped(req, key):
+    def dbcall():
+        with req.dispatcher.node.db.open_session(True) as sess:
+            return\
+                sess.query(DdsStamp).filter(DdsStamp.signing_key == key).all()
+
+    stamps = yield from req.dispatcher.loop.run_in_executor(None, dbcall)
+
+    if not stamps:
+        return None
+
+    return (yield from _render_stamps(req, stamps))
+
+@asyncio.coroutine
+def _render_stampers(req, key):
+    def dbcall():
+        with req.dispatcher.node.db.open_session(True) as sess:
+            return\
+                sess.query(DdsStamp).filter(DdsStamp.signed_key == key).all()
+
+    stamps = yield from req.dispatcher.loop.run_in_executor(None, dbcall)
+
+    if not stamps:
+        return None
+
+    return (yield from _render_stamps(req, stamps))
+
+@asyncio.coroutine
+def _render_stamps(req, stamps):
+    out = []
+
+    for stamp in stamps:
+        out.append("<div style='border: blue solid 1px;'><div>signing_key: ")
+
+        signing_name = yield from fetch_display_name(\
+            req.dispatcher.node, stamp.signing_key)
+        signed_name = yield from fetch_display_name(\
+            req.dispatcher.node, stamp.signed_key)
+
+        out.append(signing_name)
+        out.append("</div><div>version: ")
+        out.append(stamp.version)
+        out.append("</div><div>signed_key: ")
+        out.append(signed_name)
+        out.append("</div></div>")
+
+    return ''.join(out)
 
 @asyncio.coroutine
 def _process_propedit(req):
@@ -542,11 +617,11 @@ def _process_axon_grok(req):
     else:
         title = channel_bare
 
-
     template = templates.dds_axon_grok[0]
     template = template.format(\
         key=mbase32.encode(key),\
         query=req.query,\
+        settings_html=(yield from _render_axon_grok_config(req)),\
         user=username,\
         channel=arg,\
         channel_bare=title,\
