@@ -245,10 +245,34 @@ def _render_wrapper(req, template, title="MORPHiS Maalstroom DDS"):
     channel_html =\
         yield from _render_channel_html(req, "dashboard-convo-list", True)
 
+    current_version = req.dispatcher.node.morphis_version
+    latest_version_number = req.dispatcher.latest_version_number
+
+    if latest_version_number\
+            and current_version != latest_version_number:
+        version_str =\
+            '<span class="dds-strikethrough">{}</span>'\
+            '&nbsp;[<a href="{}{}">New Version: {}</a>]'\
+                .format(current_version,\
+                    req.dispatcher.handler.maalstroom_url_prefix_str,\
+                    "sp1nara3xhndtgswh7fznt414we4mi3y6kdwbkz4jmt8ocb6"\
+                        "x4w1faqjotjkcrefta11swe3h53dt6oru3r13t667pr7"\
+                        "cpe3ocxeuma/latest_version",\
+                    latest_version_number)
+    else:
+        version_str = current_version
+
+    connections = req.dispatcher.connection_count
+    if connections == 1:
+        connection_str = "1 Connection"
+    else:
+        connection_str = str(connections) + " Connections"
+
     return templates.dds_wrapper[0].format(\
+        node_version=version_str,\
+        node_connections=connection_str,\
         channel_html=channel_html,\
         child=template,\
-        node_connections=len(req.dispatcher.node.engine.peers),\
         query=req.query,\
         current_ident=req.ident_enc,\
         title=title)

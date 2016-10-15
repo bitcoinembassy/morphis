@@ -2693,3 +2693,7 @@ display: block;
 .dds-settings-wrapper p {
 	padding-bottom: 1em;
 }
+
+.dds-strikethrough {
+    text-decoration: line-through;
+}
