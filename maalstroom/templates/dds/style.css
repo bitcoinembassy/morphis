@@ -127,10 +127,13 @@ iframe {
 	white-space: nowrap;
 }
 
-
+.dds-hash {
+	max-width: 50%;
+	display: inline-block;
+	vertical-align: top;
+}
 
 /*dds header*/
-
 
 .dds-header-dash-icon {
 	background-color: #1c2227;

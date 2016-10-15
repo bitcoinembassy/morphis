@@ -440,6 +440,8 @@ if not initialized_template:
     dds_main = load("dds/main.html", True)
     dds_axon = load("dds/axon.html", True)
     dds_axon_grok = load("dds/axon_grok.html", True)
+    dds_axon_config = load("dds/axon_config.html", True)
+    dds_stamp = load("dds/stamp.html", True)
     dds_synapse_create = load("dds/synapse_create.html", True)
     dds_axon_synapses_start = load("dds/axon_synapses_start.html", True)
     dds_synapse_view = load("dds/synapse_view.html", True)

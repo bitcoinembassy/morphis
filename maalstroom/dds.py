@@ -267,32 +267,20 @@ def _render_axon_grok_config(req):
     public_name =\
         yield from fetch_display_name(req.dispatcher.node, req.ident)
 
-    output = [\
-        "<div>ident=[", req.ident_enc, "].</div><br/>",\
-        "<div>local name=[", local_name, "].</div>",\
-        "<div>public name=[", public_name, "].</div>"]
-
-    output.append("<br/><div>")
-
     stamped = yield from _render_stamped(req, req.ident)
-    output.append("<p>Stamped:</p>")
-    if stamped:
-        output.append(stamped)
-    else:
-        output.append("No stamped keys found.")
-
-    output.append("</div><br/><div>")
+    if not stamped:
+        stamped = "No stamped keys found."
 
     stampers = yield from _render_stampers(req, req.ident)
-    output.append("<p>Stampers:</p>")
-    if stampers:
-        output.append(stampers)
-    else:
-        output.append("No stamping keys found.")
+    if not stampers:
+        stampers = "No stamping keys found."
 
-    output.append("</div>")
-
-    return ''.join(output)
+    return templates.dds_axon_config[0].format(\
+        ident=req.ident_enc,\
+        local_name=local_name,\
+        public_name=public_name,\
+        stamped=stamped,\
+        stampers=stampers)
 
 @asyncio.coroutine
 def _render_stamped(req, key):
@@ -327,19 +315,15 @@ def _render_stamps(req, stamps):
     out = []
 
     for stamp in stamps:
-        out.append("<div style='border: blue solid 1px;'><div>signing_key: ")
-
         signing_name = yield from fetch_display_name(\
             req.dispatcher.node, stamp.signing_key)
         signed_name = yield from fetch_display_name(\
             req.dispatcher.node, stamp.signed_key)
 
-        out.append(signing_name)
-        out.append("</div><div>version: ")
-        out.append(stamp.version)
-        out.append("</div><div>signed_key: ")
-        out.append(signed_name)
-        out.append("</div></div>")
+        out.append(templates.dds_stamp[0].format(\
+            signing_name=signing_name,\
+            version=stamp.version,\
+            signed_name=signed_name))
 
     return ''.join(out)
 
