@@ -46,6 +46,7 @@ class ClientEngine(object):
     def update_test(self, value):
         if value:
             self._path = b"test_version"
+            self.latest_version_number = "0.0.1"
 
     @asyncio.coroutine
     def start(self):
