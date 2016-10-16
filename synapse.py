@@ -180,8 +180,8 @@ class Synapse(object):
         sshtype.encode_mpint_onto(nbuf, int(self.timestamp*1000))
 
         self.signature_offset = len(nbuf)
-        if self.signature:
-            nbuf += self.signature
+        if self._signature:
+            nbuf += self._signature
         elif self.key:
             # Will be one string and one binary.
             self.key.generate_rsassa_pss_sig(nbuf, nbuf)
@@ -197,7 +197,7 @@ class Synapse(object):
             self.key.encode_pubkey_onto(nbuf)
             struct.pack_into(">L", nbuf, offset, len(nbuf) - offset - 4)
         else:
-            assert not self.signature
+            assert not self._signature, mutil.hex_string(self._signature)
             sshtype.encode_string_onto(nbuf, "")
 
         if self.nonce:
@@ -320,8 +320,9 @@ class Synapse(object):
             # by parse and not encode.
             self._pubkey = self.key.asbytes()
         else:
-            self._pubkey =\
-                self.buf[self.pubkey_offset:self.pubkey_offset+self.pubkey_len]
+            if self.pubkey_offset:
+                self._pubkey = self.buf[\
+                    self.pubkey_offset:self.pubkey_offset+self.pubkey_len]
 
         return self._pubkey
 
