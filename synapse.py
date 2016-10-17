@@ -136,7 +136,7 @@ class Synapse(object):
         if self._signature:
             return self._signature
 
-        if not self.buf:
+        if not self.buf or not self._signature_end_offset:
             return None
 
         self._signature =\
