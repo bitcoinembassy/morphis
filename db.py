@@ -297,7 +297,7 @@ def _init_daos(Base, d):
         signing_key = Column(LargeBinary, nullable=True)
         timestamp = Column(UtcDateTime, nullable=False)
         first_seen = Column(UtcDateTime, nullable=False)
-        score = Column(Integer, nullable=True)
+        score = Column(Integer, nullable=True) # difficulty.
         children = relationship("DdsPost", cascade="all, delete-orphan")
 
     Index("ddspost__target_key", DdsPost.target_key)
