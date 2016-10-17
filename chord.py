@@ -929,7 +929,7 @@ class ChordEngine():
     @asyncio.coroutine
     def _process_chord_packet(self, peer, local_cid, queue):
         while True:
-            log.info("Waiting for chord packet.")
+            log.debug("Waiting for chord packet.")
             r = yield from\
                 self.__process_chord_packet(peer, queue, local_cid)
             if r:
@@ -943,7 +943,7 @@ class ChordEngine():
         if not data:
             return True
 
-        log.info("Processing chord packet.")
+        log.debug("Processing chord packet.")
 
         if log.isEnabledFor(logging.DEBUG):
             log.debug("data=\n[{}].".format(hex_dump(data)))

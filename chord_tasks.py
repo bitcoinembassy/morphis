@@ -1458,11 +1458,11 @@ class ChordTasks(object):
 
         rnodes = [vpeer.peer for vpeer in result_trie if vpeer and vpeer.path]
 
-        if log.isEnabledFor(logging.INFO):
+        if log.isEnabledFor(logging.DEBUG):
             for vpeer in result_trie:
                 if not vpeer or not vpeer.path:
                     continue
-                log.info("Found closer Peer (address={})."\
+                log.debug("Found closer Peer (address={})."\
                     .format(vpeer.peer.address))
 
         if log.isEnabledFor(logging.INFO):
@@ -1906,8 +1906,8 @@ class ChordTasks(object):
 
             pmsg = cp.ChordPeerList(pkt)
 
-            if log.isEnabledFor(logging.INFO):
-                log.info("Peer (tun_meta.peer.dbid=[{}], path=[{}]) returned"\
+            if log.isEnabledFor(logging.DEBUG):
+                log.debug("Peer (tun_meta.peer.dbid=[{}], path=[{}]) returned"\
                     " PeerList of size {}."\
                     .format(tun_meta.peer.dbid, path, len(pmsg.peers)))
 
