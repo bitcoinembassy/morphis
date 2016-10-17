@@ -790,10 +790,10 @@ def _process_axon_synapses(req):
     title, image, anon_name, min_unsigned_pow, min_unstamped_pow =\
         [result.data\
             if result and not isinstance(result, Exception) and result.data\
-                else b''\
-                    for result in results]
+                else None for result in results]
 
-    anon_name = make_safe_for_html_content(anon_name.decode())
+    if anon_name:
+        anon_name = make_safe_for_html_content(anon_name.decode())
 
     @asyncio.coroutine
     def process_post(post, stamp, depth=0):
@@ -824,8 +824,14 @@ def _process_axon_synapses(req):
             style = "box-shadow: 0 1px 4px rgba(0,0,0,.04); border: 1px solid rgba(56, 163, 175,.3); border-radius: 5px; margin: 1em 1em; background: #E6F6F7;"
         elif stamp:
             style = "box-shadow: 0 1px 4px rgba(0,0,0,.04); border: 1px solid rgba(56, 163, 175,.3); border-radius: 5px; margin: 1em 1em; background: #06F607;"
+        elif post.signing_key and (not min_unstamped_pow\
+                or post.score > int(min_unstamped_pow)):
+            style = "box-shadow: 0 1px 4px rgba(0,0,0,.04); border: 1px solid rgba(56, 163, 175,.3); border-radius: 5px; margin: 1em 1em; background: lightblue;"
+        elif not post.signing_key and (not min_unsigned_pow\
+                or post.score > int(min_unsigned_pow)):
+            style = "box-shadow: 0 1px 4px rgba(0,0,0,.04); border: 1px solid rgba(56, 163, 175,.3); border-radius: 5px; margin: 1em 1em; background: cyan;"
         else:
-            style = ""
+            style = "background: gray; text-color: gray;"
 
         target_key_enc = mbase32.encode(post.target_key)
 
