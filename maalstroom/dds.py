@@ -399,8 +399,8 @@ def _process_site_edit(req):
 
 #    timeout = 0.25
 
-    props =\
-        ("title", "image", "anon_name", "min_anon_pow", "min_unstamped_pow")
+    props = (\
+        "title", "image", "anon_name", "min_unsigned_pow", "min_unstamped_pow")
 
     tasks = []
 
@@ -453,8 +453,8 @@ def _process_site_edit_post(req):
         yield from dmail.load_dmail_address(req.dispatcher.node, site_key=addr)
     key = rsakey.RsaKey(privdata=dm.site_privatekey)
 
-    props =\
-        ("title", "image", "anon_name", "min_anon_pow", "min_unstamped_pow")
+    props = (\
+        "title", "image", "anon_name", "min_unsigned_pow", "min_unstamped_pow")
 
     version = int(time.time()*1000)
 
@@ -699,8 +699,8 @@ def _process_axon_synapses(req):
 
     timeout = 0.25
 
-    props =\
-        ("title", "image", "anon_name", "min_anon_pow", "min_unstamped_pow")
+    props = (\
+        "title", "image", "anon_name", "min_unsigned_pow", "min_unstamped_pow")
 
     gtask = asyncio.async(\
         asyncio.gather(*[\
@@ -787,7 +787,7 @@ def _process_axon_synapses(req):
 
     results, posts = yield from asyncio.gather(gtask, load_task)
 
-    title, image, anon_name, min_anon_pow, min_unstamped_pow =\
+    title, image, anon_name, min_unsigned_pow, min_unstamped_pow =\
         [result.data\
             if result and not isinstance(result, Exception) and result.data\
                 else b''\
