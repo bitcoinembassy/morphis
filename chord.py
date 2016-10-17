@@ -22,6 +22,7 @@ import chord_packet as cp
 import chord_tasks as ct
 import packet as mnetpacket
 import rsakey
+import mbase32
 import mn1
 import mutil
 import peer as mnpeer
@@ -43,6 +44,9 @@ class ChordEngine():
     def __init__(self, node, bind_address=None):
         self.node = node
         self.node_id = enc.generate_ID(node.node_key.asbytes())
+        if log.isEnabledFor(logging.INFO):
+            log.info("Node Id (public key hash): [{}]."\
+                .format(mbase32.encode(self.node_id)))
 
         self.loop = node.loop
 
