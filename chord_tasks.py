@@ -1392,8 +1392,10 @@ class ChordTasks(object):
                     pass
 
                 if log.isEnabledFor(logging.INFO):
-                    log.info("Sent StoreData to [{}/{}] tried nodes."\
-                        .format(data_rw.storing_nodes, stores_sent))
+                    log.info("Sent Store{{Data/Key}} (node_id=[{}]) to [{}/{}]"\
+                        "tried nodes.".format(\
+                            data_rw.storing_nodes, mbase32.encode(node_id),\
+                            stores_sent))
 
 #            if query_cntr.value:
 #                # query_cntr can be zero if no PeerS were tried.
@@ -1808,8 +1810,8 @@ class ChordTasks(object):
                             continue
                         else:
                             store_msg = cp.ChordDataStored(pkts[0])
-                            if log.isEnabledFor(logging.DEBUG):
-                                log.debug("Received DataStored (stored=[{}])"\
+                            if log.isEnabledFor(logging.INFO):
+                                log.info("Received DataStored (stored=[{}])"\
                                     " message from Peer (dbid={})."\
                                         .format(store_msg.stored,\
                                             tun_meta.peer.dbid, path))
@@ -2071,6 +2073,10 @@ class ChordTasks(object):
                 assert data_mode is cp.DataMode.store
 
                 msg = cp.ChordDataStored(pkt)
+                if log.isEnabledFor(logging.INFO):
+                    log.info("Received DataStored (stored=[{}])"\
+                        " message from Peer (dbid={})."\
+                            .format(msg.stored, tun_meta.peer.dbid))
 
                 if msg.stored:
                     data_rw.storing_nodes += 1
@@ -2246,6 +2252,11 @@ class ChordTasks(object):
                         r = yield from self._store_data(\
                             peer, fnmsg.node_id, rmsg, need_pruning)
 
+                    if log.isEnabledFor(logging.INFO):
+                        log.info("Data stored (fnmsg.node_id=[{}]); sending"\
+                            " ChordDataStored packet (stored={})."\
+                                .format(mbase32.encode(fnmsg.node_id), r))
+
                     dsmsg = cp.ChordDataStored()
                     dsmsg.stored = r
 
@@ -2264,6 +2275,11 @@ class ChordTasks(object):
                     rmsg = cp.ChordStoreKey(pkt)
 
                     r = yield from self._store_key(peer, fnmsg.node_id, rmsg)
+
+                    if log.isEnabledFor(logging.INFO):
+                        log.info("Key stored (fnmsg.node_id=[{}]); sending"\
+                            " ChordDataStored packet (stored={})."\
+                                .format(mbase32.encode(fnmsg.node_id), r))
 
                     dsmsg = cp.ChordDataStored()
                     dsmsg.stored = r

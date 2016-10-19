@@ -1014,8 +1014,18 @@ class ChordEngine():
             self._notify_protocol_ready()
 
         elif packet_type == cp.CHORD_MSG_FIND_NODE:
-            log.info("Received CHORD_MSG_FIND_NODE message.")
+            if log.isEnabledFor(logging.INFO):
+                log.info("Received CHORD_MSG_FIND_NODE message (cid={})."\
+                    .format(local_cid))
+
             msg = cp.ChordFindNode(data)
+            if log.isEnabledFor(logging.INFO):
+                log.info(\
+                    "ChordFindNode: node_id=[{}], data_mode=[{}], query=[{}]."\
+                        .format(\
+                            mbase32.encode(msg.node_id),\
+                            msg.data_mode,\
+                            bool(msg.query)))
 
             task = self.tasks.process_find_node_request(\
                 msg, data, peer, queue, local_cid)
