@@ -279,8 +279,12 @@ class DdsEngine(object):
                 obj = data_rw.object
 
                 if obj:
-                    assert type(obj) is tb.TargetedBlock, type(obj)
-                    data_rw.data = data_rw.data[tb.TargetedBlock.BLOCK_OFFSET:]
+                    type_ = type(obj)
+                    if type_ is tb.TargetedBlock:
+                        data_rw.data =\
+                            data_rw.data[tb.TargetedBlock.BLOCK_OFFSET:]
+                    elif type_ is syn.Synapse:
+                        return (yield from self.fetch_post(obj))
 
             else:
                 # Plain static data.
