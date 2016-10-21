@@ -18,6 +18,7 @@ log = logging.getLogger(__name__)
 
 class ClientEngine(object):
     def __init__(self, node):
+        self.node = node
         self.loop = node.loop
 
         self.dds = dds.DdsClientEngine(node)
