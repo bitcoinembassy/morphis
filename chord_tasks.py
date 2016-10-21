@@ -3269,7 +3269,12 @@ class ChordTasks(object):
 
                 # No more than 256 SynapseS should be able to fit in one 32k
                 # packet.
-                r = q.limit(256).all()
+                try:
+                    r = q.limit(256).all()
+                except ResourceClosedError as e:
+                    #FIXME: Workaround for http://bugs.python.org/issue21718.
+                    log.warning("FIXME: SqlAlchemy ResourceClosedError.")
+                    r = []
 
                 if log.isEnabledFor(logging.INFO):
                     log.info("Found [{}] Synapse results.".format(len(r)))
