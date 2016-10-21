@@ -12,6 +12,7 @@ import logging
 import math
 import os
 import random
+import traceback
 
 from sqlalchemy import func, and_, or_, literal
 from sqlalchemy.orm import joinedload, aliased
@@ -263,6 +264,17 @@ class ChordTasks(object):
             "type(data_key)=[{}], len={}."\
                 .format(type(data_key), len(data_key))
 
+        if log.isEnabledFor(logging.INFO):
+            log.info(\
+                "send_get_data(..) called: data_key=[{}], path=[{}],"\
+                " scan_only=[{}], force_cache=[{}]."\
+                    .format(\
+                        mbase32.encode(data_key), path, scan_only,\
+                        force_cache, retry_factor))
+
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("Caller: [{}].".format(traceback.format_stack()[-2]))
+
         orig_data_key = data_key
 
         if path:
@@ -503,6 +515,18 @@ class ChordTasks(object):
             stamp_key=None, start_timestamp=None, end_timestamp=None,\
             start_key=None, end_key=None, minimum_pow=8, result_callback=None,\
             retry_factor=1):
+
+        if log.isEnabledFor(logging.INFO):
+            target_key = target_key[0] if type(target_keys) is list\
+                else target_keys
+            log.info(\
+                "send_get_synapses(..) called: target_key[0]=[{}],"\
+                " source_key=[{}], signing_key=[{}], stamp_key=[{}]."\
+                    .format(\
+                        mbase32.encode(target_key),\
+                        mbase32.encode(source_key),\
+                        mbase32.encode(signing_key),\
+                        mbase32.encode(stamp_key)))
 
         req = syn.SynapseRequest()
         if start_timestamp:
@@ -2619,7 +2643,13 @@ class ChordTasks(object):
                     else:
                         return False
 
-        return (yield from self.loop.run_in_executor(None, dbcall))
+        result = yield from self.loop.run_in_executor(None, dbcall)
+
+        if log.isEnabledFor(logging.INFO):
+            log.info("Result of check for data_id=[{}] is [{}].".format(\
+                mbase32.encode(data_id), result))
+
+        return result
 
     @asyncio.coroutine
     def _check_synapse_request(self, sreq):
