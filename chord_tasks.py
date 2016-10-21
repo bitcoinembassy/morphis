@@ -3395,7 +3395,7 @@ class ChordTasks(object):
                 and existing[0].pow_difficulty == synapse.log_distance[0]:
             if log.isEnabledFor(logging.INFO):
                 log.info("Already had Synapse, and no changes detected.")
-            return False
+            return True # For Synapse we signal no changes detected as success.
 
         if log.isEnabledFor(logging.INFO):
             log.info(\
