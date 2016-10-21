@@ -53,6 +53,8 @@ class DdsEngine(object):
         @asyncio.coroutine
         def process_key(key):
             assert type(key) in (bytes, bytearray)
+            log.debug("process_key(): called.")
+
             exists = yield from self.check_has_post(key)
             if exists:
                 return
@@ -64,6 +66,13 @@ class DdsEngine(object):
                     log.debug("Data not found for found targeted key [{}]."\
                         .format(mbase32.encode(key)))
                 return
+
+            if log.isEnabledFor(logging.INFO):
+                log.info(\
+                    "Found new DdsPost via targeted (key=[{}], type=[{}])."\
+                        .format(\
+                            mbase32.encode(key),\
+                            type(post)))
 
             yield from post_callback(post)
 
@@ -133,7 +142,6 @@ class DdsEngine(object):
                         .format(\
                             mbase32.encode(synapse.synapse_key),\
                             len(synapse.stamps)))
-
 
             yield from post_callback(post)
 
