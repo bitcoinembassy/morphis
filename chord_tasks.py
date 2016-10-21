@@ -3403,8 +3403,8 @@ class ChordTasks(object):
                     " keys -- if applicable."\
                         .format(mbase32.encode(synapse_id)))
 
-        yield from\
-            self.__update_synapse(dmsg, existing[0], existing[1], synapse)
+        return (yield from\
+            self.__update_synapse(dmsg, existing[0], existing[1], synapse))
 
     @asyncio.coroutine
     def __update_synapse(self, dmsg, existing, existing_key, synapse):
