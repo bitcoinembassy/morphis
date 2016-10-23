@@ -59,16 +59,16 @@ def retry_until(func, amount, max_retries, *args, **kwargs):
                 task_id = None
 
             log.warning(\
-                "Retry task (id=[{}]) reached max_retries ({})"\
-                " with total=[{}]."\
-                    .format(task_id, max_retries, total))
+                "Retry task (id=[{}], func_name=[{}]) reached max_retries"\
+                " ({}) with total=[{}]."\
+                    .format(task_id, func.__name__, max_retries, total))
             return total
 
         kwargs["retry_factor"] = retry_factor
 
         if log.isEnabledFor(logging.INFO):
-            log.info("Retrying task_id=[{}], func_name=[{}]) with"\
+            log.info("Retrying (id=[{}] func_name=[{}]) with"\
                 "retry_factor=[{}]."\
-                    .format(task_id, func.func_name, retry_factor))
+                    .format(task_id, func.__name__, retry_factor))
 ##.
 
