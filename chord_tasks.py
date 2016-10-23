@@ -15,6 +15,7 @@ import random
 import traceback
 
 from sqlalchemy import func, and_, or_, literal
+from sqlalchemy.exc import ResourceClosedError
 from sqlalchemy.orm import joinedload, aliased
 
 import bittrie
@@ -2782,10 +2783,9 @@ class ChordTasks(object):
                     .join(ra, sta.signing_id == ra.c.signed_id)\
                     .filter(ra.c.deep < 7))
 
-            # According to http://stackoverflow.com/questions/25616867, the
-            # following func.min(..) should cause the group-wise minimum to be
-            # selected. (This is for Sqlite3, we may have to fix this for
-            # PostgreSQL.)
+            # The following func.min(..) causes the group-wise minimum to be
+            # selected. (This was tested for Sqlite3, have to test and or fix
+            # for PostgreSQL.)
             children = sess.query(\
                     children.c.signed_id,\
                     func.min(children.c.deep),\
