@@ -2795,7 +2795,7 @@ class ChordTasks(object):
 
             if not signing_key_alias:
                 signing_key_alias = aliased(SynapseKey)
-                q = q.join(\
+                q = q.outerjoin(\
                     signing_key_alias,\
                     and_(\
                         signing_key_alias.synapse_id == SynapseKey.synapse_id,\
