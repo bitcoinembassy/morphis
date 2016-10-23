@@ -10,8 +10,8 @@
 			<div class="dds-post-name dds-trunc"><a href="morphis://.dds/axon/grok/{signing_key}" target="_parent" title="{signing_key}">{signer}</a></div>
 			<div class="dds-post-name dds-trunc"><a href="{target_key_link}" {target_key_link_target_attr} title="{target_key}">{target_str}</a></div>
 			<!--<div class="dds-post-title">&nbsp;</div>-->
-			<div class="dds-approve-wrapper">
-				<a href="morphis://.dds/stamp/signer/{key}{query}"><div class="dds-approve-user"></div></a>
+			<div style="{stamp_button_visibility}" class="dds-approve-wrapper">
+				<a style="{stamp_signer_visibility}" href="morphis://.dds/stamp/signer/{key}{query}"><div class="dds-approve-user"></div></a>
 				<a href="morphis://.dds/stamp/synapse/{key}{query}"><div class="dds-approve-msg"></div></a>
 			</div>
 			<div class="dds-post-time">{relative_time} ({timestamp})</div>

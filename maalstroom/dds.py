@@ -844,6 +844,15 @@ def _process_axon_synapses(req):
         else:
             style = "background: gray; text-color: gray;"
 
+        stamp_signer_visibility = ""
+        if req.ident:
+            stamp_button_visibility = ""
+
+            if not post.signing_key:
+                stamp_signer_visibility = "display: none;"
+        else:
+            stamp_button_visibility = "display: none;"
+
         target_key_enc = mbase32.encode(post.target_key)
 
         if post.target_key != axon_addr:
@@ -878,6 +887,8 @@ def _process_axon_synapses(req):
             key=key_enc,\
             signing_key=signing_key_enc,\
             signer=signer_name,\
+            stamp_button_visibility=stamp_button_visibility,\
+            stamp_signer_visibility=stamp_signer_visibility,\
             content=content,\
             timestamp=timestr,\
             relative_time=\
