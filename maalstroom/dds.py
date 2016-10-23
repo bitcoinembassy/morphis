@@ -710,8 +710,9 @@ def _process_axon_synapses(req):
                 timeout)\
             for prop in props], return_exceptions=True))
 
-    style = "background: url('morphis://.dds/images/sayagata-400px.png'); background-attachment: fixed;" if axon_addr == req.ident == axon_addr\
-        else ""
+    style = "background: url('morphis://.dds/images/sayagata-400px.png');"\
+        " background-attachment: fixed;"\
+            if axon_addr == req.ident == axon_addr else ""
 
     template = templates.dds_axon_synapses_start[0]\
         .format(style=style)
@@ -819,17 +820,27 @@ def _process_axon_synapses(req):
             signer_name = anon_name
 
         if post.signing_key == req.ident:
-            style = "box-shadow: 0 1px 4px rgba(0,0,0,.04); border: 1px solid rgba(163, 163, 163,.3); border-radius: 5px; margin: 1em 1em; background: #e6e6e6;"
+            style = "box-shadow: 0 1px 4px rgba(0,0,0,.04); border: 1px solid"\
+            " rgba(163, 163, 163,.3); border-radius: 5px; margin: 1em 1em;"\
+            " background: #e6e6e6;"
         elif post.signing_key == axon_addr:
-            style = "box-shadow: 0 1px 4px rgba(0,0,0,.04); border: 1px solid rgba(56, 163, 175,.3); border-radius: 5px; margin: 1em 1em; background: #E6F6F7;"
+            style = "box-shadow: 0 1px 4px rgba(0,0,0,.04); border: 1px solid"\
+            " rgba(56, 163, 175,.3); border-radius: 5px; margin: 1em 1em;"\
+            " background: #E6F6F7;"
         elif stamp:
-            style = "box-shadow: 0 1px 4px rgba(0,0,0,.04); border: 1px solid rgba(56, 163, 175,.3); border-radius: 5px; margin: 1em 1em; background: #06F607;"
+            style = "box-shadow: 0 1px 4px rgba(0,0,0,.04); border: 1px solid"\
+            " rgba(56, 163, 175,.3); border-radius: 5px; margin: 1em 1em;"\
+            " background: #06F607;"
         elif post.signing_key and (not min_unstamped_pow\
                 or post.score > int(min_unstamped_pow)):
-            style = "box-shadow: 0 1px 4px rgba(0,0,0,.04); border: 1px solid rgba(56, 163, 175,.3); border-radius: 5px; margin: 1em 1em; background: lightblue;"
+            style = "box-shadow: 0 1px 4px rgba(0,0,0,.04); border: 1px solid"\
+            " rgba(56, 163, 175,.3); border-radius: 5px; margin: 1em 1em;"\
+            " background: lightblue;"
         elif not post.signing_key and (not min_unsigned_pow\
                 or post.score > int(min_unsigned_pow)):
-            style = "box-shadow: 0 1px 4px rgba(0,0,0,.04); border: 1px solid rgba(56, 163, 175,.3); border-radius: 5px; margin: 1em 1em; background: cyan;"
+            style = "box-shadow: 0 1px 4px rgba(0,0,0,.04); border: 1px solid"\
+            " rgba(56, 163, 175,.3); border-radius: 5px; margin: 1em 1em;"\
+            " background: cyan;"
         else:
             style = "background: gray; text-color: gray;"
 
