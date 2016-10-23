@@ -1029,14 +1029,21 @@ def _process_stamp_synapse(req, stamp_signing_key=False):
         req.dispatcher.send_error("Not a Synapse.".format(req), errcode=400)
         return
 
+    if stamp_signing_key:
+        if not syn.is_signed():
+            req.dispatcher.send_error(\
+                "Not a signed Synapse.".format(req), errcode=400)
+            return
+        key_to_sign = syn.signing_key
+    else:
+        key_to_sign = syn.synapse_key
+
     # Load private key.
     ident_dmail_address = yield from dmail.load_dmail_address(\
         req.dispatcher.node, site_key=req.ident)
 
     our_signing_key =\
         rsakey.RsaKey(privdata=ident_dmail_address.site_privatekey)
-
-    key_to_sign = syn.signing_key if stamp_signing_key else syn.synapse_key
 
     if log.isEnabledFor(logging.INFO):
         log.info("Stamping key=[{}].".format(mbase32.encode(key_to_sign)))
