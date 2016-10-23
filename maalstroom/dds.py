@@ -12,7 +12,7 @@ import time
 from urllib.parse import parse_qs, quote_plus
 import os
 
-from sqlalchemy import or_, and_, desc, literal
+from sqlalchemy import and_, desc, func, literal, or_
 from sqlalchemy.orm import joinedload, aliased
 from sqlalchemy.exc import ResourceClosedError
 
@@ -725,9 +725,13 @@ def _process_axon_synapses(req):
 
             # Prepare recursive DdsStamp query.
             children = sess.query(\
-                    DdsStamp, literal("0").label("deep"))\
-                .filter(DdsStamp.signing_key == axon_addr).\
-                cte(name="children", recursive=True)
+                    DdsStamp,\
+                    literal("0").label("deep"),\
+                    DdsStamp.signing_key.label("source"))\
+                .filter(or_(\
+                    DdsStamp.signing_key == axon_addr,\
+                    DdsStamp.signing_key == req.ident))\
+                .cte(name="children", recursive=True)
 
             sta = aliased(DdsStamp, name="stamp")
 
@@ -737,23 +741,54 @@ def _process_axon_synapses(req):
                 ra = children
 
             children = children.union_all(\
-                sess.query(sta, ra.c.deep.op("+")(1).label("deep"))\
+                sess.query(\
+                        sta,\
+                        ra.c.deep.op("+")(1).label("deep"),\
+                        ra.c.source)\
                     .join(ra, sta.signing_key == ra.c.signed_key)\
                     .filter(ra.c.deep < 7))
+
+            #TODO: Optimize by putting some if statements to not do both
+            # subqueries when axon_addr == req.ident.
+
+            # The following func.min(..) causes the group-wise minimum to be
+            # selected. (This was tested for Sqlite3, have to test and or fix
+            # for PostgreSQL.)
+            axon_stamped = sess.query(\
+                    children.c.signed_key,\
+                    func.min(children.c.deep))\
+                .select_from(children).group_by(children.c.signed_key)\
+                .filter(children.c.source == axon_addr)\
+                .subquery()
+
+            self_stamped = sess.query(\
+                    children.c.signed_key,\
+                    func.min(children.c.deep))\
+                .select_from(children).group_by(children.c.signed_key)\
+                .filter(children.c.source == req.ident)\
+                .subquery()
 
             #rs = sess.query(children).all()
 
             # Main DdsPost query.
-            q = sess.query(DdsPost, children)\
+            q = sess.query(\
+                    DdsPost,\
+                    axon_stamped.c.signed_key,\
+                    self_stamped.c.signed_key)\
                 .filter(or_(\
                     DdsPost.target_key == axon_addr,\
                     DdsPost.target_key2 == axon_addr,\
                     DdsPost.signing_key == axon_addr))\
                 .outerjoin(\
-                    children,\
+                    axon_stamped,\
                     or_(\
-                        children.c.signed_key == DdsPost.synapse_key,\
-                        children.c.signed_key == DdsPost.signing_key))\
+                        axon_stamped.c.signed_key == DdsPost.synapse_key,\
+                        axon_stamped.c.signed_key == DdsPost.signing_key))\
+                .outerjoin(\
+                    self_stamped,\
+                    or_(\
+                        self_stamped.c.signed_key == DdsPost.synapse_key,\
+                        self_stamped.c.signed_key == DdsPost.signing_key))\
                 .group_by(DdsPost.synapse_key)\
                 .order_by(\
                     desc(and_(\
@@ -797,7 +832,7 @@ def _process_axon_synapses(req):
         anon_name = make_safe_for_html_content(anon_name.decode())
 
     @asyncio.coroutine
-    def process_post(post, stamp, depth=0):
+    def process_post(post, axon_stamped, self_stamped, depth=0):
         assert type(post) is DdsPost, type(post)
 
         key = post.synapse_key
@@ -827,10 +862,14 @@ def _process_axon_synapses(req):
             style = "box-shadow: 0 1px 4px rgba(0,0,0,.04); border: 1px solid"\
             " rgba(56, 163, 175,.3); border-radius: 5px; margin: 1em 1em;"\
             " background: #E6F6F7;"
-        elif stamp:
+        elif axon_stamped:
             style = "box-shadow: 0 1px 4px rgba(0,0,0,.04); border: 1px solid"\
             " rgba(56, 163, 175,.3); border-radius: 5px; margin: 1em 1em;"\
             " background: #06F607;"
+        elif self_stamped:
+            style = "box-shadow: 0 1px 4px rgba(0,0,0,.04); border: 1px solid"\
+            " rgba(56, 163, 175,.3); border-radius: 5px; margin: 1em 1em;"\
+            " background: #F6F607;" # Yellow.
         elif post.signing_key and (not min_unstamped_pow\
                 or post.score > int(min_unstamped_pow)):
             style = "box-shadow: 0 1px 4px rgba(0,0,0,.04); border: 1px solid"\
@@ -905,8 +944,10 @@ def _process_axon_synapses(req):
     #TODO: Optimize by moving this into above gather.
     for row in posts:
         post = row[0]
-        stamp = row[1]
-        yield from process_post(post, stamp)
+        axon_stamped = row[1]
+        self_stamped = row[2]
+
+        yield from process_post(post, axon_stamped, self_stamped)
 
     req.dispatcher.send_partial_content(\
         "<div class='dds-refresh-wrapper'><hr id='new' class='style2'/>")
