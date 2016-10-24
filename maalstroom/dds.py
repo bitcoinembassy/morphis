@@ -805,6 +805,9 @@ def _process_axon_synapses(req):
                             DdsPost.target_key2 == None))),\
                     DdsPost.timestamp)
 
+            if log.isEnabledFor(logging.INFO):
+                start = time.time()
+
             try:
                 r = q.all()
             except ResourceClosedError as e:
@@ -813,6 +816,8 @@ def _process_axon_synapses(req):
                 r = []
 
             if log.isEnabledFor(logging.INFO):
+                log.info("Maalstroom DDS Grok CTE took [{:0.4f}] s."\
+                    .format(time.time() - start))
                 log.info("Loaded [{}] DdsPost entries.".format(len(r)))
 
             sess.expunge_all()
