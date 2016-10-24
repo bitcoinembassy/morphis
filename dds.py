@@ -77,7 +77,7 @@ class DdsEngine(object):
             yield from post_callback(post)
 
         @asyncio.coroutine
-        def process_synapse(synapse):
+        def process_synapse(synapse, just_stamps=False):
             if log.isEnabledFor(logging.DEBUG):
                 log.debug("Synapse [{}] has [{}] StampS.".format(\
                     mbase32.encode(synapse.synapse_key), len(synapse.stamps)))
@@ -118,6 +118,9 @@ class DdsEngine(object):
             if synapse.stamps:
                 # Update DdsStampS.
                 yield from self.loop.run_in_executor(None, dbcall)
+
+            if just_stamps:
+                return
 
             exists = yield from self.check_has_post(synapse.synapse_key)
             if exists:
@@ -173,24 +176,28 @@ class DdsEngine(object):
                 if type(key) is bytearray:
                     key = bytes(key)
 
-                new_stamp = False
+                new_stamps = False
                 for stamp in synapse.stamps:
                     if stamp.stamp_pow not in loaded:
                         loaded.add(stamp.stamp_pow)
-                        new_stamp = True
+                        new_stamps = True
 
-                if key in loaded and not new_stamp:
-                    if log.isEnabledFor(logging.DEBUG):
-                        log.debug(\
-                            "Skipping already seen Synapse for key=[{}]."\
-                                .format(mbase32.encode(key)))
-                    continue
-
-                loaded.add(key)
+                if key in loaded:
+                    if new_stamps:
+                        just_stamps = True
+                    else:
+                        if log.isEnabledFor(logging.DEBUG):
+                            log.debug(\
+                                "Skipping already seen Synapse for key=[{}]."\
+                                    .format(mbase32.encode(key)))
+                        continue
+                else:
+                    loaded.add(key)
+                    just_stamps = False
 
                 new_tasks.append(\
                     asyncio.async(\
-                        process_synapse(synapse),\
+                        process_synapse(synapse, just_stamps),\
                         loop=self.loop))
 
         if log.isEnabledFor(logging.DEBUG):
