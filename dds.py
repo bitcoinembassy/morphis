@@ -364,8 +364,8 @@ class DdsEngine(object):
 
                 sess.commit()
 
-                # Make sure data is loaded for use by caller.
-                len(post.data)
+#                # Make sure data is loaded for use by caller.
+#                len(post.data)
 
                 sess.expunge_all()
 
