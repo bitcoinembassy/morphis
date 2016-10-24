@@ -78,8 +78,6 @@ class DdsEngine(object):
 
         @asyncio.coroutine
         def process_synapse(synapse):
-            db_stamps = []
-
             if log.isEnabledFor(logging.DEBUG):
                 log.debug("Synapse [{}] has [{}] StampS.".format(\
                     mbase32.encode(synapse.synapse_key), len(synapse.stamps)))
@@ -117,8 +115,9 @@ class DdsEngine(object):
                     if updates:
                         sess.commit()
 
-            # Update DdsStampS.
-            yield from self.loop.run_in_executor(None, dbcall)
+            if synapse.stamps:
+                # Update DdsStampS.
+                yield from self.loop.run_in_executor(None, dbcall)
 
             exists = yield from self.check_has_post(synapse.synapse_key)
             if exists:
@@ -174,7 +173,13 @@ class DdsEngine(object):
                 if type(key) is bytearray:
                     key = bytes(key)
 
-                if key in loaded:
+                new_stamp = False
+                for stamp in synapse.stamps:
+                    if stamp.stamp_pow not in loaded:
+                        loaded.add(stamp.stamp_pow)
+                        new_stamp = True
+
+                if key in loaded and not new_stamp:
                     if log.isEnabledFor(logging.DEBUG):
                         log.debug(\
                             "Skipping already seen Synapse for key=[{}]."\
