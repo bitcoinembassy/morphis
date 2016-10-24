@@ -754,41 +754,47 @@ def _process_axon_synapses(req):
             # The following func.min(..) causes the group-wise minimum to be
             # selected. (This was tested for Sqlite3, have to test and or fix
             # for PostgreSQL.)
-            axon_stamped = sess.query(\
+            axon_stamp = sess.query(\
+                    children.c.signing_key,\
                     children.c.signed_key,\
                     func.min(children.c.deep))\
                 .select_from(children).group_by(children.c.signed_key)\
                 .filter(children.c.source == axon_addr)\
                 .subquery()
 
-            self_stamped = sess.query(\
+            self_stamp = sess.query(\
+                    children.c.signing_key,\
                     children.c.signed_key,\
                     func.min(children.c.deep))\
                 .select_from(children).group_by(children.c.signed_key)\
                 .filter(children.c.source == req.ident)\
                 .subquery()
 
+            self_stamp2 = aliased(self_stamp)
+
             #rs = sess.query(children).all()
 
             # Main DdsPost query.
             q = sess.query(\
                     DdsPost,\
-                    axon_stamped.c.signed_key,\
-                    self_stamped.c.signed_key)\
+                    axon_stamp.c.signing_key,\
+                    self_stamp.c.signing_key,\
+                    self_stamp2.c.signing_key)\
                 .filter(or_(\
                     DdsPost.target_key == axon_addr,\
                     DdsPost.target_key2 == axon_addr,\
                     DdsPost.signing_key == axon_addr))\
                 .outerjoin(\
-                    axon_stamped,\
+                    axon_stamp,\
                     or_(\
-                        axon_stamped.c.signed_key == DdsPost.synapse_key,\
-                        axon_stamped.c.signed_key == DdsPost.signing_key))\
+                        axon_stamp.c.signed_key == DdsPost.synapse_key,\
+                        axon_stamp.c.signed_key == DdsPost.signing_key))\
                 .outerjoin(\
-                    self_stamped,\
-                    or_(\
-                        self_stamped.c.signed_key == DdsPost.synapse_key,\
-                        self_stamped.c.signed_key == DdsPost.signing_key))\
+                    self_stamp,\
+                    self_stamp.c.signed_key == DdsPost.synapse_key)\
+                .outerjoin(\
+                    self_stamp2,\
+                    self_stamp2.c.signed_key == DdsPost.signing_key)\
                 .group_by(DdsPost.synapse_key)\
                 .order_by(\
                     desc(and_(\
@@ -837,7 +843,8 @@ def _process_axon_synapses(req):
         anon_name = make_safe_for_html_content(anon_name.decode())
 
     @asyncio.coroutine
-    def process_post(post, axon_stamped, self_stamped, depth=0):
+    def process_post(post, axon_stamp, self_synapse_stamp, self_signer_stamp,\
+            depth=0):
         assert type(post) is DdsPost, type(post)
 
         key = post.synapse_key
@@ -867,11 +874,11 @@ def _process_axon_synapses(req):
             style = "box-shadow: 0 1px 4px rgba(0,0,0,.04); border: 1px solid"\
             " rgba(56, 163, 175,.3); border-radius: 5px; margin: 1em 1em;"\
             " background: #E6F6F7;"
-        elif axon_stamped:
+        elif axon_stamp:
             style = "box-shadow: 0 1px 4px rgba(0,0,0,.04); border: 1px solid"\
             " rgba(56, 163, 175,.3); border-radius: 5px; margin: 1em 1em;"\
             " background: #06F607;"
-        elif self_stamped:
+        elif self_synapse_stamp or self_signer_stamp:
             style = "box-shadow: 0 1px 4px rgba(0,0,0,.04); border: 1px solid"\
             " rgba(56, 163, 175,.3); border-radius: 5px; margin: 1em 1em;"\
             " background: #F6F607;" # Yellow.
@@ -888,12 +895,26 @@ def _process_axon_synapses(req):
         else:
             style = "background: gray; text-color: gray;"
 
+        stamp_button_visibility = ""
         stamp_signer_visibility = ""
-        if req.ident:
-            stamp_button_visibility = ""
+        stamp_synapse_visibility = ""
 
-            if not post.signing_key:
-                stamp_signer_visibility = "display: none;"
+        if req.ident:
+            if post.signing_key:
+                if post.signing_key == req.ident:
+                    # Don't stamp Synapse we signed ourselves.
+                    stamp_button_visibility = "display: none;"
+                else:
+                    if self_signer_stamp == req.ident:
+                        stamp_signer_visibility = "display: none;"
+                    if self_synapse_stamp == req.ident:
+                        stamp_synapse_visibility = "display: none;"
+            else:
+                if self_synapse_stamp == req.ident:
+                    # Unsigned and we already stamped synapse_key.
+                    stamp_button_visibility = "display: none;"
+                else:
+                    stamp_signer_visibility = "display: none;"
         else:
             stamp_button_visibility = "display: none;"
 
@@ -933,6 +954,7 @@ def _process_axon_synapses(req):
             signer=signer_name,\
             stamp_button_visibility=stamp_button_visibility,\
             stamp_signer_visibility=stamp_signer_visibility,\
+            stamp_synapse_visibility=stamp_synapse_visibility,\
             content=content,\
             timestamp=timestr,\
             relative_time=\
@@ -948,11 +970,7 @@ def _process_axon_synapses(req):
 
     #TODO: Optimize by moving this into above gather.
     for row in posts:
-        post = row[0]
-        axon_stamped = row[1]
-        self_stamped = row[2]
-
-        yield from process_post(post, axon_stamped, self_stamped)
+        yield from process_post(*row)
 
     req.dispatcher.send_partial_content(\
         "<div class='dds-refresh-wrapper'><hr id='new' class='style2'/>")
