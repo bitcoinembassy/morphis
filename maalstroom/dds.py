@@ -62,6 +62,14 @@ class MaalstroomRequest(object):
     def set_modified(self):
         self._modified = True
 
+    def check_csrf_token(self):
+        return self.dispatcher.check_csrf_token(fia(\
+            self.qdict.get("csrf_token")))
+
+    @property
+    def csrf_query_element(self):
+        return "&csrf_token=" + self.dispatcher.client_engine.csrf_token
+
 class DdsRequest(MaalstroomRequest):
     def __init__(self, dispatcher, rpath):
         super().__init__(dispatcher, ".dds", rpath)
@@ -944,6 +952,7 @@ def _process_axon_synapses(req):
 
         template = template.format(\
             axon_addr=axon_addr_enc,\
+            csrf=req.csrf_query_element,\
             query=req.query,\
             target_key=target_key_enc,\
             target_key_link=target_key_link,\
@@ -1083,6 +1092,9 @@ def _process_synapse_create(req):
 
 @asyncio.coroutine
 def _process_stamp_synapse(req, stamp_signing_key=False):
+    if not req.check_csrf_token():
+        return
+
     if stamp_signing_key:
         synapse_key_enc = req.req[14:]
     else:
