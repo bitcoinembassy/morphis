@@ -619,6 +619,15 @@ class ChordTasks(object):
                     source_id))
 
             all_keys.append((source_key, source_id))
+        elif stamp_key:
+            stamp_id = enc.generate_ID(stamp_key)
+
+            query = syn.SynapseRequest.Query(\
+                entries=syn.SynapseRequest.Query.Key(\
+                    syn.SynapseRequest.Query.Key.Type.stamp,\
+                    stamp_id))
+
+            all_keys.append((stamp_key, stamp_id))
         else:
             assert signing_key
 
