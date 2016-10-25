@@ -104,6 +104,8 @@ class ChordTasks(object):
         self.last_peer_add_time = None
         self.add_peer_memory_cache = {} # {Peer.address, Peer}
 
+        self.synapse_store_locks = {}
+
     @asyncio.coroutine
     def send_node_info(self, peer):
         log.info("Sending ChordNodeInfo message.")
@@ -3420,26 +3422,34 @@ class ChordTasks(object):
 
                 return existing
 
-        existing = yield from self.loop.run_in_executor(None, dbcall_chk)
+        lock = self.synapse_store_locks.get(synapse_id)
+        if not lock:
+            lock = asyncio.Lock(loop=self.loop)
+            self.synapse_store_locks[synapse_id] = lock
 
-        if not existing:
-            return (\
-                yield from self.__store_new_synapse(peer_dbid, dmsg, synapse))
+        with (yield from lock):
+            existing = yield from self.loop.run_in_executor(None, dbcall_chk)
 
-        if not synapse.stamps\
-                and existing[0].pow_difficulty == synapse.log_distance[0]:
+            if not existing:
+                return (\
+                    yield from\
+                        self.__store_new_synapse(peer_dbid, dmsg, synapse))
+
+            if not synapse.stamps\
+                    and existing[0].pow_difficulty == synapse.log_distance[0]:
+                if log.isEnabledFor(logging.INFO):
+                    log.info("Already had Synapse, and no changes detected.")
+                # For Synapse we signal no changes detected as success.
+                return True
+
             if log.isEnabledFor(logging.INFO):
-                log.info("Already had Synapse, and no changes detected.")
-            return True # For Synapse we signal no changes detected as success.
+                log.info(\
+                    "We already have Synapse (synapse_id=[{}]); adding"\
+                        " additional keys -- if applicable."\
+                            .format(mbase32.encode(synapse_id)))
 
-        if log.isEnabledFor(logging.INFO):
-            log.info(\
-                "We already have Synapse (synapse_id=[{}]); adding additional"\
-                    " keys -- if applicable."\
-                        .format(mbase32.encode(synapse_id)))
-
-        return (yield from\
-            self.__update_synapse(dmsg, existing[0], existing[1], synapse))
+            return (yield from\
+                self.__update_synapse(dmsg, existing[0], existing[1], synapse))
 
     @asyncio.coroutine
     def __update_synapse(self, dmsg, existing, existing_key, synapse):
