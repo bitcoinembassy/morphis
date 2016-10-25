@@ -11,6 +11,7 @@ import logging
 import queue
 from socketserver import ThreadingMixIn
 import threading
+import time
 
 import clientengine
 import enc
@@ -39,6 +40,8 @@ proxy_url = None
 
 _request_lock = threading.Lock()
 _concurrent_request_count = 0
+
+_last_reload_time = 0
 
 req_dict = []
 
@@ -163,10 +166,12 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
                 self.maalstroom_url_prefix_str.encode()
 
         if self.node.web_devel and self.headers["Cache-Control"] == "no-cache":
-            global _concurrent_request_count
+            global _concurrent_request_count, _last_reload_time
             with _request_lock:
                 _concurrent_request_count += 1
-                if _concurrent_request_count == 1:
+                now = time.time()
+                if _concurrent_request_count == 1\
+                        and (now - _last_reload_time) > 2.5:
                     log.warning(\
                         "Reloading maalstroom packages due to web_dev mode.")
                     try:
@@ -178,6 +183,8 @@ class MaalstroomHandler(BaseHTTPRequestHandler):
                         raise
                     except Exception as e:
                         log.exception(e)
+
+                    _last_reload_time = now
 
             self._dispatcher = self._create_dispatcher()
 
