@@ -2773,7 +2773,7 @@ class ChordTasks(object):
             # Prepare recursive Stamp query.
             children = sess.query(\
                     Stamp,\
-                    literal("0").label("deep"),\
+                    literal(0).label("deep"),\
                     Stamp.id.label("trail"))\
                 .filter(Stamp.signing_id == stamp_join_val)\
                 .cte(name="children", recursive=True)

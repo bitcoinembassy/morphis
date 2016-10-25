@@ -726,7 +726,7 @@ def _process_axon_synapses(req):
             # Prepare recursive DdsStamp query.
             children = sess.query(\
                     DdsStamp,\
-                    literal("0").label("deep"),\
+                    literal(0).label("deep"),\
                     DdsStamp.signing_key.label("source"))\
                 .filter(or_(\
                     DdsStamp.signing_key == axon_addr,\
