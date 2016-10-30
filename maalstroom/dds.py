@@ -1105,11 +1105,15 @@ def _process_stamp_synapse(req, stamp_signing_key=False):
         return
 
     if stamp_signing_key:
-        synapse_key_enc = req.req[14:]
+        rstr = req.req[14:]
     else:
-        synapse_key_enc = req.req[15:]
+        rstr = req.req[15:]
+
+    synapse_key_enc, axon_addr_enc = rstr.split('/', 1)
 
     synapse_key = mbase32.decode(synapse_key_enc)
+    if axon_addr_enc:
+        axon_addr = mbase32.decode(axon_addr_enc)
 
     # Fetch Synapse object from the DHT.
     data_rw = yield from\
@@ -1147,6 +1151,107 @@ def _process_stamp_synapse(req, stamp_signing_key=False):
     # Create new stamp.
     syn.stamps = [synapse.Stamp(key_to_sign, our_signing_key)]
     yield from syn.encode()
+
+    if axon_addr_enc and axon_addr != req.ident:
+        def dbcall():
+            with req.dispatcher.node.db.open_session(True) as sess:
+                # Prepare recursive DdsStamp query.
+                children = sess.query(\
+                        DdsStamp,\
+                        literal(0).label("deep"),\
+                        DdsStamp.id.label("trail"))\
+                    .filter(DdsStamp.signing_key == axon_addr)\
+                    .cte(name="children", recursive=True)
+
+                sta = aliased(DdsStamp, name="stamp")
+
+                if sqlalchemy_pre_1_0_15:
+                    ra = aliased(children, name="root")
+                else:
+                    ra = children
+
+                children = children.union_all(\
+                    sess.query(\
+                            sta,\
+                            ra.c.deep.op("+")(1).label("deep"),\
+                            ra.c.trail\
+                                .concat(literal(","))\
+                                .concat(sta.id)\
+                                .label("trail"))\
+                        .join(ra, sta.signing_key == ra.c.signed_key)\
+                        .filter(ra.c.deep < 7))
+
+                # The following func.min(..) causes the group-wise minimum to
+                # be selected. (This was tested for Sqlite3, have to test and
+                # or fix for PostgreSQL.)
+                q = sess.query(\
+                        children.c.trail,\
+                        children.c.signed_key,\
+                        func.min(children.c.deep))\
+                    .select_from(children).group_by(children.c.signed_key)\
+                    .filter(children.c.signed_key == req.ident)
+
+                try:
+                    r = q.one_or_none()
+                except ResourceClosedError as e:
+                    #FIXME: Workaround for bug
+                    # http://bugs.python.org/issue21718.
+                    log.warning("FIXME: SqlAlchemy ResourceClosedError.")
+                    r = None
+
+                if not r:
+                    return None
+
+                stamp_path = r[0].split(',')
+
+                if log.isEnabledFor(logging.DEBUG):
+                    log.debug("DdsStamp path=[{}].".format(stamp_path))
+
+                stamps = sess.query(DdsStamp)\
+                    .filter(DdsStamp.id.in_(stamp_path))\
+                    .all()
+
+                stamp_map = {stamp.id: stamp for stamp in stamps}
+                stamps.clear()
+
+                for i in range(len(stamp_path)-1, -1, -1):
+                    stamps.append(stamp_map[int(stamp_path[i])])
+
+                sess.expunge_all()
+
+                return stamps
+
+        auth_stamps =\
+            yield from req.dispatcher.loop.run_in_executor(None, dbcall)
+
+        if auth_stamps:
+            if log.isEnabledFor(logging.INFO):
+                log.info("Found [{}] length Stamp path to axon_addr."\
+                    .format(len(auth_stamps)))
+
+            syn_stamps = []
+
+            for db_stamp in auth_stamps:
+                #TODO: YOU_ARE_HERE: Fetch from DHT.
+
+            syn.stamps.extend(syn_stamps)
+
+            if log.isEnabledFor(logging.DEBUG):
+                idx = 0
+                for stamp in syn.stamps:
+                    log.debug("syn.stamp[{}]=[{}]."\
+                        .format(idx, mbase32.encode(stamp.signing_key)))
+                    idx += 1
+
+            #TODO: YOU_ARE_HERE: Remove next line, just for testing.
+            syn.check_stamps()
+        else:
+            if log.isEnabledFor(logging.INFO):
+                log.info("No known Stamp path from ident to axon_addr.")
+
+        #TODO: YOU_ARE_HERE: Remove next two lines to allow to go further.
+        req.dispatcher.send_204()
+        return
 
     if log.isEnabledFor(logging.INFO):
         log.info("Uploading newly StampPed Synapse.")
