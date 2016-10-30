@@ -874,33 +874,42 @@ def _process_axon_synapses(req):
         else:
             signer_name = anon_name
 
-        if post.signing_key == req.ident:
+        if post.signing_key == axon_addr:
+            # Post is by owner of axon.
+            style = "box-shadow: 0 1px 4px rgba(0,0,0,.04); border: 1px solid"\
+            " rgba(56, 163, 175,.3); border-radius: 5px; margin: 1em 1em;"\
+            " background: #cyan;" # Blue tint.
+        elif axon_stamp:
+            # Post is authorized (by owner) to post in axon.
+            style = "box-shadow: 0 1px 4px rgba(0,0,0,.04); border: 1px solid"\
+            " rgba(56, 163, 175,.3); border-radius: 5px; margin: 1em 1em;"\
+            " background: #FFFFFF;" # White.
+        elif post.signing_key == req.ident:
+            # Post is by us and not authorized to post in axon by the owner.
             style = "box-shadow: 0 1px 4px rgba(0,0,0,.04); border: 1px solid"\
             " rgba(163, 163, 163,.3); border-radius: 5px; margin: 1em 1em;"\
-            " background: #e6e6e6;"
-        elif post.signing_key == axon_addr:
-            style = "box-shadow: 0 1px 4px rgba(0,0,0,.04); border: 1px solid"\
-            " rgba(56, 163, 175,.3); border-radius: 5px; margin: 1em 1em;"\
-            " background: #E6F6F7;"
-        elif axon_stamp:
-            style = "box-shadow: 0 1px 4px rgba(0,0,0,.04); border: 1px solid"\
-            " rgba(56, 163, 175,.3); border-radius: 5px; margin: 1em 1em;"\
-            " background: #06F607;"
+            " background: #fffc92;" # Gold..
         elif self_synapse_stamp or self_signer_stamp:
+            # Post is by someone in our WOT but not authorized by axon owner.
             style = "box-shadow: 0 1px 4px rgba(0,0,0,.04); border: 1px solid"\
             " rgba(56, 163, 175,.3); border-radius: 5px; margin: 1em 1em;"\
-            " background: #F6F607;" # Yellow.
+            " background: #e6e384;" # Gold tint.
         elif post.signing_key and (not min_unstamped_pow\
                 or post.score > int(min_unstamped_pow)):
+            # Post is not in our WOT nor authorized by axon owner, but signed.
             style = "box-shadow: 0 1px 4px rgba(0,0,0,.04); border: 1px solid"\
             " rgba(56, 163, 175,.3); border-radius: 5px; margin: 1em 1em;"\
-            " background: lightblue;"
+            " background: #e7f7f7;"
         elif not post.signing_key and (not min_unsigned_pow\
                 or post.score > int(min_unsigned_pow)):
+            # Post is not in our WOT nor authorized by axon owner, un-signed.
             style = "box-shadow: 0 1px 4px rgba(0,0,0,.04); border: 1px solid"\
             " rgba(56, 163, 175,.3); border-radius: 5px; margin: 1em 1em;"\
-            " background: cyan;"
+            " background: #d8e6e6;"
         else:
+            # Post is not in our WOT, not authorized by owner, AND has below
+            # required minimum proof of work to show up (so TODO: make this row
+            # something like a collapsed css accordian trick).
             style = "background: gray; text-color: gray;"
 
         stamp_button_visibility = ""
