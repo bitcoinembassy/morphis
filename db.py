@@ -311,10 +311,11 @@ def _init_daos(Base, d):
     class DdsStamp(Base):
         __tablename__ = "ddsstamp"
 
-        signed_key = Column(LargeBinary, nullable=False, primary_key=True)
+        id = Column(Integer, primary_key=True)
+        signed_key = Column(LargeBinary, nullable=False)
         # str for sqlite bigint :(.
-        version = Column(String, nullable=False, primary_key=True)
-        signing_key = Column(LargeBinary, nullable=False, primary_key=True)
+        version = Column(String, nullable=False)
+        signing_key = Column(LargeBinary, nullable=False)
         difficulty = Column(Integer, nullable=False)
         revoked = Column(Boolean, nullable=False, default=False)
         first_seen = Column(UtcDateTime, nullable=False)
@@ -326,6 +327,8 @@ def _init_daos(Base, d):
 
     Index("ddsstamp__signed_key", DdsStamp.signed_key)
     Index("ddsstamp__signing_key", DdsStamp.signing_key)
+    UniqueConstraint(\
+        DdsStamp.signed_key, DdsStamp.version, DdsStamp.signing_key)
 
     d.DdsStamp = DdsStamp
 
@@ -535,6 +538,10 @@ class Db():
             version = 4.97
 
         if version == 4.97:
+            _upgrade_5_dev7_to_5dev8(self)
+            version = 4.98
+
+        if version == 4.98:
             _upgrade_5_dev(self)
 
 #        if version == 4:
@@ -941,6 +948,30 @@ def _upgrade_5_dev6_to_5dev7(db):
         sess.commit()
 
     log.warning("NOTE: Database schema upgraded.")
+
+def _upgrade_5_dev7_to_5dev8(db):
+    log.warning(\
+        "NOTE: Upgrading database schema from version 5-dev7 to 5-dev8.")
+
+    with db.open_session() as sess:
+        try:
+            sess.execute("select id from ddsstamp")
+        except:
+            sess.rollback()
+            try:
+                rebuild = True
+                st = "drop table ddsstamp"
+                sess.execute(st)
+                sess.commit()
+            except:
+                sess.rollback()
+
+        _update_node_state(sess, 4.98)
+
+        sess.commit()
+
+    log.warning("NOTE: Database schema upgraded.")
+
 def _upgrade_5_dev(db):
     log.warning("NOTE: Possibly upgrading v5-dev database schema.")
 
