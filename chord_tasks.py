@@ -3093,6 +3093,7 @@ class ChordTasks(object):
             return data
 
         if sreq:
+            # For SynapseRequest responses (a list of SynapseS).
             if not type(drmsg.data) is list:
                 log.info(\
                     "ChordDataResponse contained other than list for"\
@@ -3105,7 +3106,7 @@ class ChordTasks(object):
             log.info("DataReponse is empty.")
             return False
         else:
-            # Normal non-Synapse response handling.
+            # For normal (non-Synapse), and single Synapse response handling.
             r = yield from self.loop.run_in_executor(None, threadcall)
 
         if r is not None:
