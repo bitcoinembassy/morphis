@@ -3215,6 +3215,7 @@ class ChordTasks(object):
             return None, None, None, None, None, None
 
         if type(result) is Synapse:
+            # Single Synapse response mode.
             for key in result.keys:
                 if key.data_id == data_id:
                     found = True
