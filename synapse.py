@@ -502,7 +502,11 @@ class Stamp(object):
             nbuf += self.signature
         elif self.key:
             # Will be one string and one binary.
-            self.key.generate_rsassa_pss_sig(nbuf, nbuf)
+            sign_data = nbuf\
+                if not self._start_index else nbuf[self._start_index:]
+
+            self.signature = sig = self.key.generate_rsassa_pss_sig(sign_data)
+            nbuf += sig
 
         #FIXME: Make this nonce stuff use some new dynamic sizing API.
         if self.nonce:
