@@ -308,6 +308,12 @@ class Synapse(object):
                         .format(idx))
                 return False
 
+        for idx in range(0, len(stamps)):
+            if not stamps[idx].check_signature():
+                log.warning(\
+                    "Invalid stamp (idx={}); invalid signature.".format(idx))
+                return False
+
         return True
 
     @property
