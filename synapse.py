@@ -507,6 +507,7 @@ class Stamp(object):
         #FIXME: Make this nonce stuff use some new dynamic sizing API.
         if self.nonce:
             sshtype.encode_binary_onto(nbuf, self.nonce)
+            self._pow_data_end_idx = len(nbuf)
         else:
             nbuf += struct.pack(">L", consts.MIN_NONCE_SIZE)
             nonce_offset = len(nbuf)
