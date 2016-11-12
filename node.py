@@ -335,6 +335,8 @@ def __main():
         help="Disable Dmail auto-scan scanning.")
     parser.add_argument("--disable-csrf-check", action="store_true",\
         help="Disable CSRF token check (ONLY FOR DEVELOPMENT).")
+    parser.add_argument("--disable-version-check", action="store_true",\
+        help="Disable Maalstroom UI's MORPHiS latest version check.")
     parser.add_argument("--disableshell", action="store_true",\
         help="Disable MORPHiS from allowing ssh shell connections from"\
             " localhost.")
@@ -495,6 +497,8 @@ def __main():
                     ce.dmail.auto_publish_enabled = False
                 if args.disableautoscan:
                     ce.dmail.auto_scan_enabled = False
+                if args.disable_version_check:
+                    ce.version_check_enabled = False
 
                 maalstroom.set_client_engine(ce)
 

@@ -30,6 +30,8 @@ class ClientEngine(object):
         #FIXME: Why is this here? It should be in Maalstroom somewhere.
         self.csrf_token = base58.encode(os.urandom(64))
 
+        self.version_poller_enabled = True
+
         self._running = False
 
         self._data_key =\
@@ -59,8 +61,9 @@ class ClientEngine(object):
         yield from self.dds.start()
         yield from self.dmail.start()
 
-        self._version_poller_task =\
-            asyncio.async(self._start_version_poller(), loop=self.loop)
+        if self.version_poller_enabled:
+            self._version_poller_task =\
+                asyncio.async(self._start_version_poller(), loop=self.loop)
 
     def stop(self):
         if not self._running:
