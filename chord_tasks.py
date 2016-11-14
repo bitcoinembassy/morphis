@@ -520,7 +520,7 @@ class ChordTasks(object):
             retry_factor=1):
 
         if log.isEnabledFor(logging.INFO):
-            target_key = target_key[0] if type(target_keys) is list\
+            target_key = target_keys[0] if type(target_keys) is list\
                 else target_keys
             log.info(\
                 "send_get_synapses(..) called: target_key[0]=[{}],"\
