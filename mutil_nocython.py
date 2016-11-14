@@ -21,7 +21,7 @@ def _yield_from(coroutine, result_queue):
         result_queue.put(r)
     except Exception as e:
         log.exception(e)
-        result_queue.put(mutil.ExceptionResult(e))
+        result_queue.put(ExceptionResult(e))
 
 def _schedule_yield_from(coroutine, result_queue):
     task = asyncio.async(_yield_from(coroutine, result_queue))
