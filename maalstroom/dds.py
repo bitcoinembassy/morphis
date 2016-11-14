@@ -1171,9 +1171,14 @@ def _process_stamp_synapse(req, stamp_signing_key=False):
 
     # Create new stamp.
     syn.stamps = [synapse.Stamp(key_to_sign, our_signing_key)]
+
     yield from syn.encode()
 
     if axon_addr_enc and axon_addr != req.ident:
+        if log.isEnabledFor(logging.INFO):
+            log.info(\
+                "Stamping Synapse while not axon owner, searching for path.")
+
         def dbcall():
             with req.dispatcher.node.db.open_session(True) as sess:
                 # Prepare recursive DdsStamp query.
@@ -1223,7 +1228,15 @@ def _process_stamp_synapse(req, stamp_signing_key=False):
                 if not r:
                     return None
 
-                stamp_path = r[0].split(',')
+                log.info("r[0]=[{}], r=[{}].".format(r[0], r))
+
+                path = r[0]
+
+                if type(path) is str:
+                    stamp_path = str(path.split(','))
+                else:
+                    # If it is one deep, SQLite returns int.
+                    stamp_path = (str(path),)
 
                 if log.isEnabledFor(logging.DEBUG):
                     log.debug("DdsStamp path=[{}].".format(stamp_path))
@@ -1232,28 +1245,35 @@ def _process_stamp_synapse(req, stamp_signing_key=False):
                     .filter(DdsStamp.id.in_(stamp_path))\
                     .all()
 
-                stamp_map = {stamp.id: stamp for stamp in stamps}
-                stamps.clear()
-
-                for i in range(len(stamp_path)-1, -1, -1):
-                    stamps.append(stamp_map[int(stamp_path[i])])
-
                 sess.expunge_all()
 
-                return stamps
+                return stamp_path, stamps
 
-        auth_stamps =\
+        stamp_path, db_stamps =\
             yield from req.dispatcher.loop.run_in_executor(None, dbcall)
 
-        if auth_stamps:
+        stamp_map = {stamp.id: stamp for stamp in db_stamps}
+        db_stamps.clear()
+
+        for i in range(len(stamp_path)-1, -1, -1):
+            db_stamps.append(stamp_map[int(stamp_path[i])])
+
+        if db_stamps:
             if log.isEnabledFor(logging.INFO):
                 log.info("Found [{}] length Stamp path to axon_addr."\
-                    .format(len(auth_stamps)))
+                    .format(len(db_stamps)))
+                if log.isEnabledFor(logging.DEBUG):
+                    idx = 0
+                    for db_stamp in db_stamps:
+                        log.debug("db_stamp[{}]=[{}]."\
+                            .format(idx, mbase32.encode(db_stamp.signing_key)))
+                        idx += 1
 
             syn_stamps = []
 
-            for db_stamp in auth_stamps:
+            for db_stamp in db_stamps:
                 #TODO: YOU_ARE_HERE: Fetch from DHT.
+                pass
 
             syn.stamps.extend(syn_stamps)
 
