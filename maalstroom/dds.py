@@ -297,7 +297,8 @@ def _render_axon_grok_config(req):
     local_name =\
         yield from dmail.get_contact_name(req.dispatcher.node, req.ident)
     public_name =\
-        yield from fetch_display_name(req.dispatcher.node, req.ident)
+        yield from fetch_display_name(\
+            req.dispatcher.node, req.ident, addr_fallback=True)
 
     stamped = yield from _render_stamped(req, req.ident)
     if not stamped:
@@ -349,8 +350,19 @@ def _render_stamps(req, stamps):
     for stamp in stamps:
         signing_name = yield from fetch_display_name(\
             req.dispatcher.node, stamp.signing_key)
+        if signing_name:
+            signing_name = "{} ({})".format(\
+                signing_name, mbase32.encode(stamp.signing_key))
+        else:
+            signing_name = mbase32.encode(stamp.signing_key)
+
         signed_name = yield from fetch_display_name(\
             req.dispatcher.node, stamp.signed_key)
+        if signed_name:
+            signed_name = "{} ({})".format(\
+                signed_name, mbase32.encode(stamp.signed_key))
+        else:
+            signed_name = mbase32.encode(stamp.signed_key)
 
         out.append(templates.dds_stamp[0].format(\
             signing_name=signing_name,\
@@ -564,7 +576,8 @@ def _render_channel_html(req, ul_class=None, site_nav=False):
             addr_enc = req.ident_enc
 
             name = yield from fetch_display_name(\
-                req.dispatcher.node, req.ident, req.ident_enc)
+                req.dispatcher.node, req.ident, req.ident_enc,\
+                addr_fallback=True)
             text = name + "'s Blog"
             clazz = "dashboard-icon-chat-blog"
 
@@ -615,7 +628,8 @@ def _process_axon_grok(req):
             return
 
     username = yield from\
-        fetch_display_name(req.dispatcher.node, req.ident, req.ident_enc)
+        fetch_display_name(\
+            req.dispatcher.node, req.ident, req.ident_enc, addr_fallback=True)
 
     channel_html = yield from _render_channel_html(req, "dds-channel-submenu")
 
@@ -870,7 +884,8 @@ def _process_axon_synapses(req):
 
         if signing_key or not anon_name:
             signer_name = yield from fetch_display_name(\
-                req.dispatcher.node, signing_key, signing_key_enc)
+                req.dispatcher.node, signing_key, signing_key_enc,\
+                addr_fallback=True)
         else:
             signer_name = anon_name
 
@@ -1034,29 +1049,35 @@ def _process_axon_synapses(req):
     req.dispatcher.end_partial_content()
 
 @asyncio.coroutine
-def fetch_display_name(node, signing_key, signing_key_enc=None):
+def fetch_display_name(\
+        node, signing_key, signing_key_enc=None, addr_fallback=False):
+    if not signing_key:
+        return "[Unsigned?]"
+
     signer_name =\
-        yield from dmail.get_contact_name(node, signing_key)
+        yield from dmail._get_contact_name(node, signing_key)
 
-    if signing_key:
-        if not signing_key_enc:
-            signing_key_enc = mbase32.encode(signing_key)
-        if signer_name == signing_key_enc:
-            data_rw = yield from node.engine.tasks.send_get_data(\
-                    signing_key, force_cache=True)
+    if not signer_name:
+        data_rw = yield from node.engine.tasks.send_get_data(\
+                signing_key, force_cache=True)
 
-            if data_rw:
-                json_bytes = data_rw.data
-                if json_bytes:
-                    try:
-                        name = json.loads(json_bytes.decode()).get("name")
+        if data_rw:
+            json_bytes = data_rw.data
+            if json_bytes:
+                try:
+                    name = json.loads(json_bytes.decode()).get("name")
 
-                        if name:
-                            signer_name = make_safe_for_html_content(name)
+                    if name:
+                        signer_name = make_safe_for_html_content(name)
+                        if log.isEnabledFor(logging.INFO):
                             log.info("Using Dsite name=[{}] for key=[{}]."\
-                                .format(signer_name, signing_key_enc))
-                    except Exception:
-                        pass
+                                .format(\
+                                    signer_name, mbase32.encode(signing_key)))
+                except Exception:
+                    pass
+
+    if not signer_name:
+        return mbase32.encode(signing_key)
 
     return signer_name
 

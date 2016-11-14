@@ -2098,10 +2098,16 @@ def get_contact_name(node, addr, anon_name="[Unsigned]"):
     if not addr:
         return anon_name
 
+    val = yield from _get_contact_name(node, addr)
+
+    return val if val else mbase32.encode(addr)
+
+@asyncio.coroutine
+def _get_contact_name(node, addr):
     contact = yield from _load_contact(node, addr)
 
     if not contact:
-        return mbase32.encode(addr)
+        return None
     else:
         if contact.name:
             return contact.name
@@ -2115,7 +2121,7 @@ def get_contact_name(node, addr, anon_name="[Unsigned]"):
                 if contact.last:
                     return contact.last
                 else:
-                    return mbase32.encode(addr)
+                    return None
 
 @asyncio.coroutine
 def _load_contact(node, addr):
