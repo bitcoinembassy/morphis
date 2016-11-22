@@ -145,6 +145,7 @@ def _init_daos(Base, d):
         __tablename__ = "synapsekey"
 
         data_id = Column(LargeBinary, nullable=False, primary_key=True)
+        #FIXME: I don't think distance is used anywhere (although it gets set).
         distance = Column(LargeBinary, nullable=False)
         synapse = relationship(Synapse)
         synapse_id =\

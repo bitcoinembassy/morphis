@@ -190,7 +190,9 @@ class ChordFindNode(ChordMessage):
     def __init__(self, buf = None):
         self.node_id = None
         self.data_mode = DataMode.none
-        self.version = None # Currently seems only used for StoreData.
+        # Used for StoreData if positive, Store{Data,Key} if negative to signal
+        # if Synapse or Stamp, +0.1 if StoreKey in those cases.
+        self.version = None
         self.significant_bits = None
         self.target_key = None # I believe this is only for get (not put).
 

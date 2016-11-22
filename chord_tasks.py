@@ -7,6 +7,7 @@ import asyncio
 from collections import namedtuple
 from concurrent import futures
 from datetime import datetime
+from enum import Enum
 import functools
 import logging
 import math
@@ -23,7 +24,7 @@ import chord
 import chord_packet as cp
 from chordexception import ChordException
 import consts
-from db import Peer, DataBlock, NodeState, Stamp, Synapse, SynapseKey,\
+from db import Peer, DataBlock, NodeState, Stamp, Synapse, SynapseKey, Stamp,\
 	 sqlalchemy_pre_1_0_15
 import mbase32
 from morphisblock import MorphisBlock
@@ -42,6 +43,12 @@ log2 = logging.getLogger(__name__ + ".datastore")
 class Counter(object):
     def __init__(self, value=None):
         self.value = value
+
+class DataType(Enum):
+    # So far values are internal and stored, so it is okay to change the #'s.
+    none = 0
+    synapse = 10
+    stamp = 20
 
 #TODO: The existence of the following (DataResponseWrapper) is the indicator
 # that we should really refactor this whole file into a new class that is an
@@ -425,7 +432,7 @@ class ChordTasks(object):
 
     @asyncio.coroutine
     def send_store_key(self, data, data_key=None, targeted=False,\
-            key_callback=None, retry_factor=5):
+            data_type=None, key_callback=None, retry_factor=5):
         if log.isEnabledFor(logging.INFO):
             data_key_enc = mbase32.encode(data_key) if data_key else None
             log.info("Sending ChordStoreKey for data_key=[{}], targeted=[{}]."\
@@ -442,7 +449,7 @@ class ChordTasks(object):
 
         storing_nodes =\
             yield from self.send_find_node(\
-                data_key, for_data=True, data_msg=skmsg,\
+                data_key, for_data=True, data_msg=skmsg, data_type=data_type,\
                 retry_factor=retry_factor)
 
         return storing_nodes
@@ -807,6 +814,61 @@ class ChordTasks(object):
         return vals
 
     @asyncio.coroutine
+    def send_store_stamp(\
+            self, stamp, store_key=True, key_callback=None, retry_factor=5,\
+            min_storing_nodes=5, max_retries=30, for_update=False):
+        "Sends a StoreData request for a Stamp, returning the count of"\
+        " nodes that claim to have stored it."
+        assert type(stamp) is syn.Stamp
+
+        data = stamp.buf if stamp.buf else (yield from stamp.encode())
+
+        if log.isEnabledFor(logging.INFO):
+            log.info(\
+                "Sending Store{{Data/Key}} for Stamp (stamp_pow=[{}],"\
+                    " signed_key=[{}], version=[{}], signing_key=[{}])."\
+                        .format(\
+                            mbase32.encode(stamp.stamp_pow),
+                            mbase32.encode(stamp.signed_key),
+                            stamp.version,
+                            mbase32.encode(stamp.signing_key)))
+
+        key_retries = 5 if for_update else max_retries
+
+        if key_callback:
+            key_callback(stamp.stamp_key)
+
+        sdmsg = cp.ChordStoreData()
+        sdmsg.data = data
+        sdmsg.targeted = True
+
+        tasks = []
+
+        #NOTE: We use the hashes of the keys as the IDs (DHT Key) due to the
+        # DHT anti-entrapment feature.
+
+        # Store for stamp_key (natural key of stamp).
+        tasks.append(\
+            asyncio.async(\
+                mutil.retry_until(self.send_find_node, min_storing_nodes,\
+                    max_retries, enc.generate_ID(stamp.stamp_key),\
+                    for_data=True, data_msg=sdmsg, retry_factor=retry_factor,\
+                    data_type=DataType.stamp),\
+                loop=self.loop))
+        if store_key:
+            # Store the stamp_key itself (for find_key operations).
+            tasks.append(\
+                asyncio.async(\
+                    mutil.retry_until(self.send_store_key, min_storing_nodes,\
+                        key_retries, data, stamp.stamp_key, targeted=True,\
+                        retry_factor=retry_factor, data_type=DataType.stamp),\
+                    loop=self.loop))
+
+        vals = yield from asyncio.gather(*tasks, loop=self.loop)
+
+        return vals
+
+    @asyncio.coroutine
     def send_store_updateable_key(\
             self, data, privatekey, path=None, version=None, store_key=None,\
             key_callback=None, retry_factor=5):
@@ -859,7 +921,7 @@ class ChordTasks(object):
     def send_find_node(self, node_id, significant_bits=None, input_trie=None,\
             for_data=False, data_msg=None, data_key=None, path_hash=None,\
             targeted=False, target_key=None, scan_only=False,\
-            synapse_request=None, retry_factor=1):
+            synapse_request=None, data_type=None, retry_factor=1):
         "Returns found nodes sorted by closets. If for_data is True then"\
         " this is really {get/store}_data instead of find_node. If data_msg"\
         " is None than it is get_data and the data is returned. Store data"\
@@ -921,12 +983,20 @@ class ChordTasks(object):
         fnmsg = cp.ChordFindNode()
         fnmsg.node_id = node_id
         fnmsg.data_mode = data_mode
-        if data_msg_type is cp.ChordStoreData:
+
+        if data_msg_type in (cp.ChordStoreData, cp.ChordStoreKey):
+            key_request_flag = -0.1 if data_msg_type is cp.ChordStoreKey else 0
+
             if data_msg.targeted and data_msg.data[:16] != MorphisBlock.UUID:
-                # Signal we are storing a Synapse to the other end.
-                fnmsg.version = -1
-            else:
+                if data_type is DataType.synapse:
+                    # Signal we are storing a Synapse to the other end.
+                    fnmsg.version = -1 + key_request_flag
+                else:
+                    assert data_type is DataType.stamp
+                    fnmsg.version = -3 + key_request_flag
+            elif not key_request_flag: # ChordStoreKey doesn't have a version.
                 fnmsg.version = data_msg.version
+
         if significant_bits:
             fnmsg.significant_bits = significant_bits
             if target_key:
@@ -1276,13 +1346,16 @@ class ChordTasks(object):
                     else:
                         assert data_mode is cp.DataMode.store
 
-                        if fnmsg.version == -1:
+                        version = fnmsg.version
+                        if version in (-1, -3):
                             will_store = True
                             need_pruning = False
                         else:
+                            if version < 0:
+                                version = None
                             will_store, need_pruning =\
                                 yield from self._check_do_want_data(\
-                                    node_id, fnmsg.version)
+                                    node_id, version)
 
                             if not will_store:
                                 continue
@@ -1293,16 +1366,21 @@ class ChordTasks(object):
                         if data_msg_type is cp.ChordStoreData:
                             if data_msg.targeted and data_msg.data[:16]\
                                     != MorphisBlock.UUID:
-                                r = yield from self._store_synapse(\
-                                    None, node_id, data_msg, need_pruning)
+                                if fnmsg.version == -1:
+                                    r = yield from self._store_synapse(\
+                                        None, node_id, data_msg, need_pruning)
+                                elif fnmsg.version == -3:
+                                    r = yield from self._store_stamp(\
+                                        None, node_id, data_msg, need_pruning)
+
                             else:
                                 r = yield from self._store_data(\
                                     None, node_id, data_msg, need_pruning)
                         else:
                             assert data_msg_type is cp.ChordStoreKey
 
-                            r = yield from\
-                                self._store_key(peer, fnmsg.node_id, data_msg)
+                            r = yield from self._store_key(\
+                                peer, fnmsg.node_id, data_msg, fnmsg.version)
 
                         if not r:
                             log.info("We failed to store the data.")
@@ -2181,7 +2259,7 @@ class ChordTasks(object):
         will_store = False
         need_pruning = False
         data_present = False
-        synapse_store_mode = False
+        object_store_mode = False
 
         if fnmsg.data_mode.value:
             # In for_data mode we respond with two packets.
@@ -2210,15 +2288,18 @@ class ChordTasks(object):
 
                 peer.protocol.write_channel_data(local_cid, pmsg.encode())
             elif fnmsg.data_mode is cp.DataMode.store:
-                if fnmsg.version == -1:
+                version = fnmsg.version
+                if version in (-1, -3):
                     # Synapse Multi-index/Shared-keyspace Request Mode.
                     will_store = True
                     need_pruning = False
-                    synapse_store_mode = True
+                    object_store_mode = True
                 else:
+                    if version < 0:
+                        version = None
                     will_store, need_pruning =\
                         yield from self._check_do_want_data(\
-                            fnmsg.node_id, fnmsg.version)
+                            fnmsg.node_id, version)
 
                 imsg = cp.ChordStorageInterest()
                 imsg.will_store = will_store
@@ -2245,7 +2326,9 @@ class ChordTasks(object):
         lmsg = cp.ChordPeerList()
         lmsg.peers = rlist
 
-        log.info("Writing PeerList (size={}) response.".format(len(rlist)))
+        if log.isEnabledFor(logging.INFO):
+            log.info("Writing PeerList (size={}) response.".format(len(rlist)))
+
         peer.protocol.write_channel_data(local_cid, lmsg.encode())
 
         rlist = [TunnelMeta(rpeer) for rpeer in rlist]
@@ -2276,10 +2359,14 @@ class ChordTasks(object):
                     rmsg = cp.ChordStoreData(pkt)
 
                     if rmsg.targeted and rmsg.data[:16] != MorphisBlock.UUID:
-                        r = yield from self._store_synapse(\
-                            peer, fnmsg.node_id, rmsg, need_pruning)
+                        if fnmsg.version == -1:
+                            r = yield from self._store_synapse(\
+                                peer, fnmsg.node_id, rmsg, need_pruning)
+                        elif fnmsg.version == -3:
+                            r = yield from self._store_stamp(\
+                                peer, fnmsg.node_id, rmsg, need_pruning)
                     else:
-                        if synapse_store_mode:
+                        if object_store_mode:
                             log.warning("Bait and switch.")
                             yield from self._close_tunnels(rlist)
                             yield from peer.protocol.close_channel(local_cid)
@@ -2299,7 +2386,7 @@ class ChordTasks(object):
                     peer.protocol.write_channel_data(local_cid, dsmsg.encode())
                     continue
                 elif packet_type == cp.CHORD_MSG_STORE_KEY:
-                    if synapse_store_mode:
+                    if object_store_mode:
                         log.warning("Bait and switch.")
                         yield from self._close_tunnels(rlist)
                         yield from peer.protocol.close_channel(local_cid)
@@ -2310,7 +2397,8 @@ class ChordTasks(object):
 
                     rmsg = cp.ChordStoreKey(pkt)
 
-                    r = yield from self._store_key(peer, fnmsg.node_id, rmsg)
+                    r = yield from self._store_key(\
+                        peer, fnmsg.node_id, rmsg, fnmsg.version)
 
                     if log.isEnabledFor(logging.INFO):
                         log.info("Key stored (fnmsg.node_id=[{}]); sending"\
@@ -2998,7 +3086,7 @@ class ChordTasks(object):
                         self._check_targeted_block(data, data_rw.data_key)
                 else:
                     assert drmsg.version == -1
-                    # Synapse mode.
+                    # Single Synapse response mode.
                     # SynapseS are encrypted with random key of storing PeerS
                     # creation. The storing Peer then stores the random key
                     # encrypted with the request key. The storing node then
@@ -3135,6 +3223,7 @@ class ChordTasks(object):
 
                 data += stamp_data[0]
 
+            #FIXME: Check it actually matches our query.
             synapse = self._check_synapse(data)
 
             if synapse:
@@ -3332,15 +3421,31 @@ class ChordTasks(object):
         return synapses, None, None, None, None, None
 
     @asyncio.coroutine
-    def _store_key(self, peer, data_id, dmsg):
+    def _store_key(self, peer, data_id, dmsg, version):
         if dmsg.targeted:
             valid = False
             if dmsg.data[:16] == MorphisBlock.UUID:
+                if version < 0:
+                    log.info("Bait and switch.")
+                    #TODO: Close channel or such.
+                    return False
+
                 valid, data_key =\
                     self._check_targeted_block(dmsg.data, data_id)
             else:
-                valid = self._check_synapse(dmsg.data, data_id)
+                int_version = int(version)
+                if int_version == -1 or version is None:
+                    #TODO: Remove or None check above as it is to be backwards
+                    # compatible with DDS dev branch from before this commit..
+                    valid = self._check_synapse(dmsg.data, data_id)
+                elif int_version == -3:
+                    valid = self._check_stamp(dmsg.data, data_id)
         else:
+            if version < 0:
+                log.info("Bait and switch.")
+                #TODO: Close channel or such.
+                return False
+
             data_key = enc.generate_ID(dmsg.data)
             valid = data_id == data_key
 
@@ -3397,6 +3502,98 @@ class ChordTasks(object):
         return True
 
     @asyncio.coroutine
+    def _store_stamp(self, peer, data_id, dmsg, need_pruning):
+        "Store the Stamp in our local database. Returns True if the data"\
+        " was stored, False otherwise."
+
+        peer_dbid = peer.dbid if peer else "<self>"
+
+        stamp = self._check_stamp(dmsg.data)
+
+        if not stamp:
+            errmsg = "Peer dbid=[{}] sent an invalid Stamp!"\
+                .format(peer_dbid)
+            log.warning(errmsg)
+            raise ChordException(errmsg)
+
+        signed_id = enc.generate_ID(stamp.signed_key)
+        signing_id = enc.generate_ID(stamp.signing_key)
+
+        lock = self.stamp_store_locks.get(stamp.stamp_key)
+        if not lock:
+            lock = asyncio.Lock(loop=self.loop)
+            self.stamp_store_locks[stamp.stamp_key] = lock
+
+        with (yield from lock):
+            def dbcall_chk():
+                with self.engine.node.db.open_session(True) as sess:
+                    q = sess.query(Stamp)\
+                        .filter(\
+                            Stamp.signed_id == signed_id,\
+                            Stamp.version == stamp.version,\
+                            Stamp.signing_id == signing_id)
+
+                    return q.first()
+
+            existing = yield from self.loop.run_in_executor(None, dbcall_chk)
+
+            #TODO: YOU_ARE_HERE: Encryption goes here.
+
+            if existing:
+                if existing.difficulty == stamp.log_distance:
+                    if log.isEnabledFor(logging.INFO):
+                        log.info("Already had Stamp, and no changes detected.")
+                    # For Stamp we signal no changes detected as success.
+                    return True
+
+            def dbcall():
+                with self.engine.node.db.open_session() as sess:
+                    if existing:
+                        nstamp = sess.query(Stamp).get(existing.id)
+                    else:
+                        nstamp = Stamp()
+                        nstamp.signed_id = signed_id
+                        nstamp.version = stamp.version
+                        nstamp.signing_id = signing_id
+                        nstamp.first_seen = mutil.utc_datetime()
+
+                    nstamp.data = stamp.buf
+                    nstamp.difficulty, direction = stamp.log_distance
+                    assert direction == 1
+
+                    if not existing:
+                        sess.add(nstamp)
+
+                    sess.commit()
+
+                    return nstamp
+
+            nstamp = yield from self.loop.run_in_executor(None, dbcall)
+
+        stamp_id = enc.generate_ID(stamp.stamp_key)
+        distance = mutil.calc_raw_distance(self.engine.node_id, stamp_id)
+
+        if distance > self.engine.furthest_data_block:
+            self.engine.furthest_data_block = distance
+
+        if log.isEnabledFor(logging.INFO):
+            #NOTE: We only print IDs not KEYs; so as to prevent entrapment in
+            # the log file.
+            log.info(\
+                "Stored new Stamp (dbid=[{}], stamp_id=[{}],\
+                    signed_id=[{}], signing_id=[{}])."\
+                        .format(\
+                            nstamp.id,\
+                            mbase32.encode(\
+                                enc.generate_ID(stamp_id)),\
+                            mbase32.encode(\
+                                enc.generate_ID(signed_id)),\
+                            mbase32.encode(\
+                                enc.generate_ID(signing_id))))
+
+        return True
+
+    @asyncio.coroutine
     def _store_synapse(self, peer, data_id, dmsg, need_pruning):
         "Store the Synapse in our local database. Returns True if the data"\
         " was stored, False otherwise."
@@ -3405,9 +3602,7 @@ class ChordTasks(object):
 
         synapse = self._check_synapse(dmsg.data)
 
-        if synapse:
-            valid = True
-        else:
+        if not synapse:
             errmsg = "Peer dbid=[{}] sent an invalid Synapse!"\
                 .format(peer_dbid)
             log.warning(errmsg)
@@ -4070,6 +4265,44 @@ class ChordTasks(object):
                 return None
 
         return synapse
+
+    def _check_stamp(self, data, data_key=None):
+        if len(data) > consts.MAX_DATA_BLOCK_SIZE:
+            log.warning("Invalid Stamp; is larger than MAX_DATA_BLOCK_SIZE.")
+
+        try:
+            stamp = syn.Stamp(data)
+        except Exception:
+            log.exception(\
+                "Invalid Stamp; data=[\n{}]."\
+                    .format(mutil.hex_dump(data)))
+            return None
+
+        if data_key and data_key != stamp.stamp_key:
+            log.warning(\
+                "Invalid Stamp; data_key != stamp_key"\
+                    " ({}/{})."\
+                        .format(\
+                            mbase32.encode(data_key),\
+                            mbase32.encode(stamp.stamp_key)))
+            return None
+
+        dist, direction = stamp.log_distance
+        if direction < 0 or dist > consts.MAX_POW_DIST:
+            log.warning(\
+                "Invalid Stamp; PoW is insufficient ({}/{}/{}/{})."\
+                    .format(\
+                        direction, dist, mbase32.encode(stamp.signed_key),\
+                        mbase32.encode(stamp.stamp_pow)))
+            return None
+
+        if not stamp.check_signature():
+            log.warning(\
+                "Invalid Stamp (stamp_key=[{}]); Signature is invalid."\
+                    .format(mbase32.encode(stamp.stamp_key)))
+            return None
+
+        return stamp
 
     def _check_targeted_block(self, data, data_key=None, data_id=None):
         # Check that the hash(header) matches the data_key we expect.
