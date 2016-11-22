@@ -752,7 +752,8 @@ class ChordTasks(object):
             asyncio.async(\
                 mutil.retry_until(self.send_find_node, min_storing_nodes,\
                     max_retries, enc.generate_ID(synapse.synapse_key),\
-                    for_data=True, data_msg=sdmsg, retry_factor=retry_factor),\
+                    for_data=True, data_msg=sdmsg, data_type=DataType.synapse,\
+                    retry_factor=retry_factor),\
                 loop=self.loop))
         if store_key:
             # Store the synapse_key itself (for find_key operations).
@@ -760,6 +761,7 @@ class ChordTasks(object):
                 asyncio.async(\
                     mutil.retry_until(self.send_store_key, min_storing_nodes,\
                         key_retries, data, synapse.synapse_key, targeted=True,\
+                        data_type=DataType.synapse,\
                         retry_factor=retry_factor),\
                     loop=self.loop))
 
@@ -770,6 +772,7 @@ class ChordTasks(object):
                     mutil.retry_until(self.send_find_node, min_storing_nodes,\
                         max_retries, enc.generate_ID(synapse.synapse_pow),\
                         for_data=True, data_msg=sdmsg,\
+                        data_type=DataType.synapse,\
                         retry_factor=retry_factor),\
                     loop=self.loop))
             if store_key:
@@ -778,6 +781,7 @@ class ChordTasks(object):
                         mutil.retry_until(self.send_store_key,\
                             min_storing_nodes, key_retries, data,\
                             synapse.synapse_pow, targeted=True,\
+                            data_type=DataType.synapse,\
                             retry_factor=retry_factor),\
                         loop=self.loop))
 
@@ -788,6 +792,7 @@ class ChordTasks(object):
                     mutil.retry_until(self.send_find_node, min_storing_nodes,\
                         max_retries, enc.generate_ID(target_key),\
                         for_data=True, data_msg=sdmsg,\
+                        data_type=DataType.synapse,\
                         retry_factor=retry_factor),\
                     loop=self.loop))
 
@@ -796,7 +801,8 @@ class ChordTasks(object):
             asyncio.async(\
                 mutil.retry_until(self.send_find_node, min_storing_nodes,\
                     max_retries, enc.generate_ID(synapse.source_key),\
-                    for_data=True, data_msg=sdmsg, retry_factor=retry_factor),\
+                    for_data=True, data_msg=sdmsg, data_type=DataType.synapse,\
+                    retry_factor=retry_factor),\
                 loop=self.loop))
 
         if synapse.is_signed():
@@ -806,6 +812,7 @@ class ChordTasks(object):
                     mutil.retry_until(self.send_find_node, min_storing_nodes,\
                         max_retries, enc.generate_ID(synapse.signing_key),\
                         for_data=True, data_msg=sdmsg,\
+                        data_type=DataType.synapse,\
                         retry_factor=retry_factor),\
                     loop=self.loop))
 
@@ -992,7 +999,7 @@ class ChordTasks(object):
                     # Signal we are storing a Synapse to the other end.
                     fnmsg.version = -1 + key_request_flag
                 else:
-                    assert data_type is DataType.stamp
+                    assert data_type is DataType.stamp, data_type
                     fnmsg.version = -3 + key_request_flag
             elif not key_request_flag: # ChordStoreKey doesn't have a version.
                 fnmsg.version = data_msg.version
