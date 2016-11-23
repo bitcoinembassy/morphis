@@ -38,18 +38,23 @@ if log.isEnabledFor(logging.INFO):
     task_id_seq = itertools.count()
 
 @asyncio.coroutine
-def retry_until(func, amount, max_retries, *args, **kwargs):
+def retry_until(func, _amount, _max_retries, *args, **kwargs):
     total = 0
     if log.isEnabledFor(logging.INFO):
         task_id = task_id_seq.__next__()
 
     retry_factor = kwargs.get("retry_factor", 5)
-    total_max_retries = retry_factor + max_retries
+    total_max_retries = retry_factor + _max_retries
 
     while True:
-        total += yield from func(*args, **kwargs)
+        rval = yield from func(*args, **kwargs)
+        if type(rval) is list:
+            for val in rval:
+                total += val
+        else:
+            total += rval
 
-        if total >= amount:
+        if total >= _amount:
             return total
 
         retry_factor += 1
@@ -61,7 +66,7 @@ def retry_until(func, amount, max_retries, *args, **kwargs):
             log.warning(\
                 "Retry task (id=[{}], func_name=[{}]) reached max_retries"\
                 " ({}) with total=[{}]."\
-                    .format(task_id, func.__name__, max_retries, total))
+                    .format(task_id, func.__name__, _max_retries, total))
             return total
 
         kwargs["retry_factor"] = retry_factor
