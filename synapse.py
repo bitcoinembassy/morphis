@@ -393,39 +393,58 @@ class Stamp(object):
         self._signature_offset = None
         self._pow_data_end_idx = None
 
+        self._stamp_key = None
         self._stamp_pow = None
         self._signing_key = None
         self._log_distance = None
 
-        self.buf = None
+        self._buf = None
+
+    @property
+    def stamp_key(self):
+        if self._stamp_key:
+            return self._stamp_key
+
+        if not self.signed_key or not self.signing_key:
+            raise Exception("signed_key and signing_key must be set.")
+
+        self._stamp_key =\
+            enc.generate_ID(self.signed_key + self.signing_key)
+
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("self[{}]->stamp_key=[{}]."\
+                .format(id(self), mbase32.encode(self._stamp_key)))
+
+        return self._stamp_key
 
 #    @property
-#    def stamp_key(self):
-#        if self._stamp_key:
-#            return self._stamp_key
+#    def stamp_???(self):
+#        if self._stamp_???:
+#            return self._stamp_???
 #
-#        if not self.buf:
+#        if not self._buf:
 #            raise Exception("TODO")
 #
-#        self._stamp_key =\
-#            enc.generate_ID(self.buf[self._start_index:self._signature_offset])
+#        self._stamp_??? = enc.generate_ID(\
+#            self._buf[self._start_index:self._signature_offset])
 #
 #        if log.isEnabledFor(logging.DEBUG):
-#            log.debug("self[{}]->stamp_key=[{}]."\
-#                .format(id(self), mbase32.encode(self._stamp_key)))
+#            log.debug("self[{}]->stamp_???=[{}]."\
+#                .format(id(self), mbase32.encode(self._stamp_???)))
 #
-#        return self._stamp_key
+#        return self._stamp_???
 
     @property
     def stamp_pow(self):
         if self._stamp_pow:
             return self._stamp_pow
 
-        if not self.buf:
+        if not self._buf:
             raise Exception("_stamp_pow is not set and self.buf is empty.")
 
         self._stamp_pow =\
-            enc.generate_ID(self.buf[self._start_index:self._pow_data_end_idx])
+            enc.generate_ID(\
+                self._buf[self._start_index:self._pow_data_end_idx])
 
         if log.isEnabledFor(logging.DEBUG):
             log.debug("self[{}]->stamp_pow=[{}]."\
@@ -460,10 +479,10 @@ class Stamp(object):
         if self._pubkey:
             return self._pubkey
 
-        assert self.buf
+        assert self._buf
 
         self._pubkey =\
-            self.buf[self._pubkey_offset:self._pubkey_end_idx]
+            self._buf[self._pubkey_offset:self._pubkey_end_idx]
 
         return self._pubkey
 
@@ -471,12 +490,18 @@ class Stamp(object):
     def pubkey(self, value):
         self._pubkey = value
 
-    def sliced_buffer(self):
-        return self.buf[self._start_index:self._end_offset]
+    @property
+    def buf(self):
+        if self._sliced_buffer:
+            return self._sliced_buffer
+
+        self._sliced_buffer = self._buf[self._start_index:self._end_offset]
+
+        return self._sliced_buffer
 
     @asyncio.coroutine
     def encode(self):
-        nbuf = self.buf
+        nbuf = self._buf
         if type(nbuf) is bytearray:
             nbuf.clear()
         else:
@@ -488,8 +513,9 @@ class Stamp(object):
 
     @asyncio.coroutine
     def encode_onto(self, nbuf):
-        self.buf = nbuf
+        self._buf = nbuf
         self._start_index = len(nbuf)
+        self._sliced_buffer = None
 
         assert len(self.signed_key) == consts.NODE_ID_BYTES
         nbuf += self.signed_key
@@ -546,11 +572,12 @@ class Stamp(object):
         self._end_offset = len(nbuf)
 
     def parse(self):
-        self.parse_from(self.buf, 0)
+        self.parse_from(self._buf, 0)
 
     def parse_from(self, buf, i=0):
-        self.buf = buf
+        self._buf = buf
         self._start_index = i
+        self._sliced_buffer = None
 
         self.signed_key = buf[i:i+consts.NODE_ID_BYTES]
         i += consts.NODE_ID_BYTES
@@ -580,14 +607,14 @@ class Stamp(object):
         return i, self
 
     def check_signature(self):
-        assert self.buf
+        assert self._buf
 
         if not self.key:
-            self.key = rsakey.RsaKey(self.buf, i=self._pubkey_offset)
+            self.key = rsakey.RsaKey(self._buf, i=self._pubkey_offset)
 
         return self.key.verify_rsassa_pss_sig(
-            self.buf[self._start_index:self._signature_offset],\
-            self.buf,\
+            self._buf[self._start_index:self._signature_offset],\
+            self._buf,\
             self._signature_offset)
 
 # DHT API Objects.

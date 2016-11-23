@@ -112,6 +112,7 @@ class ChordTasks(object):
         self.add_peer_memory_cache = {} # {Peer.address, Peer}
 
         self.synapse_store_locks = {}
+        self.stamp_store_locks = {}
 
     @asyncio.coroutine
     def send_node_info(self, peer):
@@ -815,6 +816,16 @@ class ChordTasks(object):
                         data_type=DataType.synapse,\
                         retry_factor=retry_factor),\
                     loop=self.loop))
+
+        for stamp in synapse.stamps:
+            tasks.append(\
+                asyncio.async(\
+                    mutil.retry_until(self.send_store_stamp,\
+                        min_storing_nodes, max_retries, stamp,\
+                        retry_factor=retry_factor,\
+                        min_storing_nodes=min_storing_nodes,\
+                        max_retries=max_retries, for_update=for_update),\
+                loop=self.loop))
 
         vals = yield from asyncio.gather(*tasks, loop=self.loop)
 
@@ -3431,6 +3442,7 @@ class ChordTasks(object):
     def _store_key(self, peer, data_id, dmsg, version):
         if dmsg.targeted:
             valid = False
+            has_target_key = True
             if dmsg.data[:16] == MorphisBlock.UUID:
                 if version < 0:
                     log.info("Bait and switch.")
@@ -3447,6 +3459,7 @@ class ChordTasks(object):
                     valid = self._check_synapse(dmsg.data, data_id)
                 elif int_version == -3:
                     valid = self._check_stamp(dmsg.data, data_id)
+                    has_target_key = False
         else:
             if version < 0:
                 log.info("Bait and switch.")
@@ -3480,7 +3493,7 @@ class ChordTasks(object):
                 data_block.original_size = 0
                 data_block.insert_timestamp = mutil.utc_datetime()
 
-                if dmsg.targeted:
+                if dmsg.targeted and has_target_key:
                     data_block.target_key = valid.target_key
 
                 sess.add(data_block)
@@ -3544,14 +3557,14 @@ class ChordTasks(object):
 
             existing = yield from self.loop.run_in_executor(None, dbcall_chk)
 
-            #TODO: YOU_ARE_HERE: Encryption goes here.
-
             if existing:
-                if existing.difficulty == stamp.log_distance:
+                if existing.difficulty <= stamp.log_distance[0]:
                     if log.isEnabledFor(logging.INFO):
                         log.info("Already had Stamp, and no changes detected.")
                     # For Stamp we signal no changes detected as success.
                     return True
+
+            #TODO: YOU_ARE_HERE: Encryption goes here.
 
             def dbcall():
                 with self.engine.node.db.open_session() as sess:
@@ -3573,9 +3586,16 @@ class ChordTasks(object):
 
                     sess.commit()
 
+                    nstamp.id # Fetch id while still in Session.
+
+                    sess.expunge_all()
+
                     return nstamp
 
             nstamp = yield from self.loop.run_in_executor(None, dbcall)
+
+        #TODO: Add a cnt to the lock and remove from map when no waiters to
+        # free up memory.
 
         stamp_id = enc.generate_ID(stamp.stamp_key)
         distance = mutil.calc_raw_distance(self.engine.node_id, stamp_id)
@@ -3663,6 +3683,9 @@ class ChordTasks(object):
 
             return (yield from\
                 self.__update_synapse(dmsg, existing[0], existing[1], synapse))
+
+        #TODO: Add a cnt to the lock and remove from map when no waiters to
+        # free up memory.
 
     @asyncio.coroutine
     def __update_synapse(self, dmsg, existing, existing_key, synapse):
@@ -3898,7 +3921,7 @@ class ChordTasks(object):
         # could store arbitrary data. That presents a problem as
         # we could be querying the Stamp by many different ways
         # and not even know any of its keys.
-        dbs.data = stamp.sliced_buffer()
+        dbs.data = stamp.buf
 
         sess.add(dbs)
 
@@ -4278,7 +4301,7 @@ class ChordTasks(object):
             log.warning("Invalid Stamp; is larger than MAX_DATA_BLOCK_SIZE.")
 
         try:
-            stamp = syn.Stamp(data)
+            i, stamp = syn.Stamp().parse_from(data)
         except Exception:
             log.exception(\
                 "Invalid Stamp; data=[\n{}]."\
