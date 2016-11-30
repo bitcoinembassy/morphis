@@ -3655,12 +3655,16 @@ class ChordTasks(object):
 
                 return existing
 
-        lock = self.synapse_store_locks.get(synapse_id)
-        if not lock:
-            lock = asyncio.Lock(loop=self.loop)
-            self.synapse_store_locks[synapse_id] = lock
+        lock_row = self.synapse_store_locks.get(synapse_id)
+        if not lock_row:
+            syn_lock = asyncio.Lock(loop=self.loop)
+            lock_row = [syn_lock, 1]
+            self.synapse_store_locks[synapse_id] = lock_row
+        else:
+            syn_lock = lock_row[0]
+            lock_row[1] += 1
 
-        with (yield from lock):
+        with (yield from syn_lock):
             existing = yield from self.loop.run_in_executor(None, dbcall_chk)
 
             if not existing:
@@ -3684,8 +3688,10 @@ class ChordTasks(object):
             return (yield from\
                 self.__update_synapse(dmsg, existing[0], existing[1], synapse))
 
-        #TODO: Add a cnt to the lock and remove from map when no waiters to
-        # free up memory.
+        lock_row[1] -= 1
+        if not lock_row[1]:
+            # If no other waiters, delete lock row to save memory.
+            del self.synapse_store_locks[synapse_id]
 
     @asyncio.coroutine
     def __update_synapse(self, dmsg, existing, existing_key, synapse):
