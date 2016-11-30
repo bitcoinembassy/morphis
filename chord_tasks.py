@@ -28,6 +28,7 @@ from db import Peer, DataBlock, NodeState, Stamp, Synapse, SynapseKey, Stamp,\
 	 sqlalchemy_pre_1_0_15
 import mbase32
 from morphisblock import MorphisBlock
+from multilock import MultiLock
 import mutil
 import enc
 import node as mnnode
@@ -112,7 +113,7 @@ class ChordTasks(object):
         self.add_peer_memory_cache = {} # {Peer.address, Peer}
 
         self.synapse_store_locks = {}
-        self.stamp_store_locks = {}
+        self.stamp_multi_lock_key_space = {}
 
     @asyncio.coroutine
     def send_node_info(self, peer):
@@ -3539,12 +3540,10 @@ class ChordTasks(object):
         signed_id = enc.generate_ID(stamp.signed_key)
         signing_id = enc.generate_ID(stamp.signing_key)
 
-        lock = self.stamp_store_locks.get(stamp.stamp_key)
-        if not lock:
-            lock = asyncio.Lock(loop=self.loop)
-            self.stamp_store_locks[stamp.stamp_key] = lock
+        # Lock stamp.stamp_key.
+        mlock = MultiLock(self.stamp_multi_lock_key_space, [stamp.stamp_key])
 
-        with (yield from lock):
+        with (yield from mlock):
             def dbcall_chk():
                 with self.engine.node.db.open_session(True) as sess:
                     q = sess.query(Stamp)\
@@ -3593,9 +3592,6 @@ class ChordTasks(object):
                     return nstamp
 
             nstamp = yield from self.loop.run_in_executor(None, dbcall)
-
-        #TODO: Add a cnt to the lock and remove from map when no waiters to
-        # free up memory.
 
         stamp_id = enc.generate_ID(stamp.stamp_key)
         distance = mutil.calc_raw_distance(self.engine.node_id, stamp_id)
@@ -3655,6 +3651,7 @@ class ChordTasks(object):
 
                 return existing
 
+        # Lock for synapse.synapse_id.
         lock_row = self.synapse_store_locks.get(synapse_id)
         if not lock_row:
             syn_lock = asyncio.Lock(loop=self.loop)
@@ -3664,7 +3661,12 @@ class ChordTasks(object):
             syn_lock = lock_row[0]
             lock_row[1] += 1
 
-        with (yield from syn_lock):
+        # Lock stamp.stamp_key(s) for stamp in synapse.stamps.
+        stamp_keys = [stamp.stamp_key for stamp in synapse.stamps]\
+            if synapse.stamps else None
+        mlock = MultiLock(self.stamp_multi_lock_key_space, stamp_keys)
+
+        with (yield from syn_lock), (yield from mlock):
             existing = yield from self.loop.run_in_executor(None, dbcall_chk)
 
             if not existing:
