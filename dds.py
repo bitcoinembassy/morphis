@@ -102,6 +102,7 @@ class DdsEngine(object):
                             log.info("Inserting new DdsStamp!")
 
                         dbs = DdsStamp()
+                        dbs.stamp_key = stamp.stamp_key
                         dbs.signed_key = stamp.signed_key
                         dbs.version = stamp.version
                         dbs.signing_key = stamp.signing_key
@@ -214,14 +215,25 @@ class DdsEngine(object):
 
         @asyncio.coroutine
         def st_task():
+            # Fetch target owner authorized SynapseS targeted at target_key.
             while True:
                 yield from self.node.engine.tasks.send_get_synapses(\
                     target_key, stamp_key=target_key, result_callback=syn_cb,\
                     retry_factor=25)
-                yield from asyncio.sleep(5)
+                yield from asyncio.sleep(1)
+
+        @asyncio.coroutine
+        def st_a_task():
+            # Fetch SynapseS to any axon authorized by target owner.
+            while True:
+                yield from self.node.engine.tasks.send_get_synapses(\
+                    stamp_key=target_key, result_callback=syn_cb,\
+                    retry_factor=25)
+                yield from asyncio.sleep(60)
 
         @asyncio.coroutine
         def sk_task():
+            # Fetch all SynapseS signed by target owner.
             while True:
                 yield from self.node.engine.tasks.send_get_synapses(\
                     signing_key=target_key, result_callback=syn_cb,\
@@ -230,13 +242,18 @@ class DdsEngine(object):
 
         @asyncio.coroutine
         def sy_task():
+            # Fetch any (including unsigned and unauthorized) SynapseS
+            # targeting target axon.
             while True:
                 yield from self.node.engine.tasks.send_get_synapses(\
                     target_key, result_callback=syn_cb, retry_factor=25)
                 yield from asyncio.sleep(1)
 
+        # Various fetches for this target Axon. We do a bunch of different
+        # fetches and tasks so that they can be on different timers.
         new_tasks.append(asyncio.async(tb_task(), loop=self.loop))
         new_tasks.append(asyncio.async(st_task(), loop=self.loop))
+        new_tasks.append(asyncio.async(st_a_task(), loop=self.loop))
         new_tasks.append(asyncio.async(sk_task(), loop=self.loop))
         new_tasks.append(asyncio.async(sy_task(), loop=self.loop))
 

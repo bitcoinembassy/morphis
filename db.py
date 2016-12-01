@@ -174,6 +174,7 @@ def _init_daos(Base, d):
         __tablename__ = "stamp"
 
         id = Column(Integer, primary_key=True)
+        stamp_id = Column(LargeBinary, nullable=False)
         signed_id = Column(LargeBinary, nullable=False)
         # str for sqlite bigint :(.
         version = Column(String, nullable=False)
@@ -313,6 +314,7 @@ def _init_daos(Base, d):
         __tablename__ = "ddsstamp"
 
         id = Column(Integer, primary_key=True)
+        stamp_key = Column(LargeBinary, nullable=False)
         signed_key = Column(LargeBinary, nullable=False)
         # str for sqlite bigint :(.
         version = Column(String, nullable=False)
@@ -543,6 +545,10 @@ class Db():
             version = 4.98
 
         if version == 4.98:
+            _upgrade_5_dev8_to_5dev9(self)
+            version = 4.99
+
+        if version == 4.99:
             _upgrade_5_dev(self)
 
 #        if version == 4:
@@ -968,6 +974,32 @@ def _upgrade_5_dev7_to_5dev8(db):
                 sess.rollback()
 
         _update_node_state(sess, 4.98)
+
+        sess.commit()
+
+    log.warning("NOTE: Database schema upgraded.")
+
+def _upgrade_5_dev8_to_5dev9(db):
+    log.warning(\
+        "NOTE: Upgrading database schema from version 5-dev8 to 5-dev9.")
+
+    with db.open_session() as sess:
+        try:
+            sess.execute("select stamp_key from ddsstamp")
+            sess.execute("select stamp_id from stamp")
+        except:
+            sess.rollback()
+            try:
+                rebuild = True
+                st = "drop table ddsstamp"
+                sess.execute(st)
+                st = "drop table stamp"
+                sess.execute(st)
+                sess.commit()
+            except:
+                sess.rollback()
+
+        _update_node_state(sess, 4.99)
 
         sess.commit()
 

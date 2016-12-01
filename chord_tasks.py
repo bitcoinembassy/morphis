@@ -2744,6 +2744,10 @@ class ChordTasks(object):
                     else:
                         return False
                 else:
+                    #FIXME: This query seems to work, but it creates some very
+                    # strange looking SQL that I'm sure isn't optimized and
+                    # maybe won't work on PostgreSQL (currenlty only tested on
+                    # SQLite).
                     q1 = sess.query(DataBlock.data_id)
                     q2 = sess.query(SynapseKey.data_id)\
                         .filter(\
@@ -2752,10 +2756,12 @@ class ChordTasks(object):
                                     == SynapseKey.KeyType.synapse_pow.value,
                                 SynapseKey.key_type\
                                     == SynapseKey.KeyType.synapse_key.value))
+                    q3 = sess.query(Stamp.stamp_id.label("data_id"))
 
-                    q3 = q1.union(q2).filter_by(data_id = data_id)
+                    q4 = q1.union(q2).union(q3)\
+                        .filter_by(data_id = data_id)
 
-                    q = sess.query(func.count("*")).select_from(q3.subquery())
+                    q = sess.query(func.count("*")).select_from(q4.subquery())
 
                     if q.scalar() > 0:
                         return True
@@ -3095,16 +3101,15 @@ class ChordTasks(object):
                     .format(drmsg.version, peer_dbid, path, data_rw.targeted))
 
         def threadcall():
-            if data_rw.targeted or drmsg.version == -1:
-                # TargetedBlock/Synapse mode.
+            if data_rw.targeted or drmsg.version in (-1, -3):
+                # TargetedBlock/(single)Synapse/Stamp mode.
                 if drmsg.version is None:
                     # TargetedBlock mode.
                     data = self._decrypt_data_response(drmsg, data_rw.data_key)
 
                     valid, data_key =\
                         self._check_targeted_block(data, data_rw.data_key)
-                else:
-                    assert drmsg.version == -1
+                elif drmsg.version == -1:
                     # Single Synapse response mode.
                     # SynapseS are encrypted with random key of storing PeerS
                     # creation. The storing Peer then stores the random key
@@ -3124,13 +3129,28 @@ class ChordTasks(object):
                     data = self._decrypt_data_response(drmsg, data_key)
 
                     valid = self._check_synapse(data, data_rw.data_key)
+                else:
+                    # Single Stamp response mode.
+                    #TODO: This will work like above single Synapse mode with
+                    # encryption (a bit more complex maybe) once I implement
+                    # that. I realized the proper way to do it but already
+                    # coded it without and don't want to slow down right now to
+                    # retrofit it (as that requires fixing all Stamp related
+                    # DHT store and fetch code -- which includes Synapse code).
+                    # Answer is: Stamp is stored encrypted twice (two data
+                    # columns), one for signing_key other for signed_key.
+                    assert drmsg.version == -3
+
+                    data = drmsg.data
+
+                    valid = self._check_stamp(data, data_rw.data_key)
 
                 if not valid:
                     if log.isEnabledFor(logging.INFO):
                         log.info("DataResponse is invalid!")
                     return None
                 else:
-                    # valid holds a TargetedBlock or Synapse.
+                    # valid holds a TargetedBlock, Synapse, or Stamp.
                     data_rw.object = valid
 
                 if data_rw.target_key is not None and\
@@ -3289,6 +3309,8 @@ class ChordTasks(object):
 
         def dbcall():
             with self.engine.node.db.open_session(True) as sess:
+                #TODO: Optimize: Do query as one query with three columns (so
+                # that code can tell which table(column) had the data).
                 data_block = sess.query(DataBlock).filter(\
                     DataBlock.data_id == data_id).first()
 
@@ -3309,6 +3331,13 @@ class ChordTasks(object):
                 if synapse:
                     sess.expunge(synapse)
                     return synapse
+
+                # Otherwise, check the Stamp table for a matching Stamp.
+                stamp = sess.query(Stamp).filter(Stamp.stamp_id == data_id)\
+                    .first()
+                if stamp:
+                    sess.expunge(stamp)
+                    return stamp
 
                 return None
 
@@ -3332,6 +3361,10 @@ class ChordTasks(object):
             assert found
 
             return result.data, result.original_size, -1, key.ekey, None, None
+        elif type(result) is Stamp:
+            # Single Stamp response mode.
+            # original_size = -1 for now to signify it is not (yet) encrypted.
+            return result.data, -1, -3, None, None, None
 
         assert type(result) is DataBlock, type(result)
 
@@ -3565,12 +3598,15 @@ class ChordTasks(object):
 
             #TODO: YOU_ARE_HERE: Encryption goes here.
 
+            stamp_id = enc.generate_ID(stamp.stamp_key)
+
             def dbcall():
                 with self.engine.node.db.open_session() as sess:
                     if existing:
                         nstamp = sess.query(Stamp).get(existing.id)
                     else:
                         nstamp = Stamp()
+                        nstamp.stamp_id = stamp_id
                         nstamp.signed_id = signed_id
                         nstamp.version = stamp.version
                         nstamp.signing_id = signing_id
@@ -3593,7 +3629,6 @@ class ChordTasks(object):
 
             nstamp = yield from self.loop.run_in_executor(None, dbcall)
 
-        stamp_id = enc.generate_ID(stamp.stamp_key)
         distance = mutil.calc_raw_distance(self.engine.node_id, stamp_id)
 
         if distance > self.engine.furthest_data_block:
@@ -3919,6 +3954,7 @@ class ChordTasks(object):
             return None
 
         dbs = Stamp()
+        dbs.stamp_id = enc.generate_ID(stamp.stamp_key)
         dbs.signed_id = signed_id
         dbs.version = stamp.version
         dbs.signing_id = signing_id

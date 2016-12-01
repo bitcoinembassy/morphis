@@ -1228,7 +1228,9 @@ def _process_stamp_synapse(req, stamp_signing_key=False):
                 if not r:
                     return None
 
-                log.info("r[0]=[{}], r=[{}].".format(r[0], r))
+                if log.isEnabledFor(logging.DEBUG):
+                    log.debug("DdsStamp path query result: r[0]=[{}], r=[{}]."\
+                        .format(r[0], r))
 
                 path = r[0]
 
@@ -1265,34 +1267,47 @@ def _process_stamp_synapse(req, stamp_signing_key=False):
                 if log.isEnabledFor(logging.DEBUG):
                     idx = 0
                     for db_stamp in db_stamps:
-                        log.debug("db_stamp[{}]=[{}]."\
+                        log.debug("db_stamp[{}].signing_key=[{}]."\
                             .format(idx, mbase32.encode(db_stamp.signing_key)))
                         idx += 1
 
-            syn_stamps = []
-
             for db_stamp in db_stamps:
-                #TODO: YOU_ARE_HERE: Fetch from DHT.
-                pass
+                # Fetch Stamp object from the DHT.
+                data_rw = yield from\
+                    req.dispatcher.node.engine.tasks.send_get_targeted_data(\
+                        db_stamp.stamp_key)
 
-            syn.stamps.extend(syn_stamps)
+                if not data_rw or not data_rw.data:
+                    req.dispatcher.send_error(\
+                        "Required Stamp in Stamp path was not found."\
+                            .format(req),\
+                        errcode=400)
+                    return
+
+                stamp = data_rw.object
+
+                if log.isEnabledFor(logging.DEBUG):
+                    log.debug("Found Stamp for path, signing_key=[{}]."\
+                        .format(mbase32.encode(stamp.signing_key)))
+
+                syn.stamps.append(stamp)
 
             if log.isEnabledFor(logging.DEBUG):
                 idx = 0
                 for stamp in syn.stamps:
-                    log.debug("syn.stamp[{}]=[{}]."\
+                    log.debug("syn.stamp[{}].signing_key=[{}]."\
                         .format(idx, mbase32.encode(stamp.signing_key)))
                     idx += 1
 
-            #TODO: YOU_ARE_HERE: Remove next line, just for testing.
+            # Ensure that we have built a valid StampPed Synapse.
             syn.check_stamps()
+
+            if log.isEnabledFor(logging.INFO):
+                log.info("Synapse [{}] is now StampPed to axon_addr."\
+                    .format(mbase32.encode(syn.synapse_key)))
         else:
             if log.isEnabledFor(logging.INFO):
                 log.info("No known Stamp path from ident to axon_addr.")
-
-        #TODO: YOU_ARE_HERE: Remove next two lines to allow to go further.
-        req.dispatcher.send_204()
-        return
 
     if log.isEnabledFor(logging.INFO):
         log.info("Uploading newly StampPed Synapse.")
