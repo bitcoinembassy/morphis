@@ -3363,8 +3363,8 @@ class ChordTasks(object):
             return result.data, result.original_size, -1, key.ekey, None, None
         elif type(result) is Stamp:
             # Single Stamp response mode.
-            # original_size = -1 for now to signify it is not (yet) encrypted.
-            return result.data, -1, -3, None, None, None
+            # original_size = 0 for now to signify it is not (yet) encrypted.
+            return result.data, 0, -3, b"", None, None
 
         assert type(result) is DataBlock, type(result)
 
