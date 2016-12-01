@@ -1,3 +1,6 @@
+# Höfundarréttur (c) eilífur  Heimur-Heilinn
+# License: GPL v2.
+
 import llog
 
 import asyncio
