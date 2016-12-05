@@ -353,9 +353,7 @@ class ChordDataResponse(ChordMessage):
         l, self.version = sshtype.parseMpint(self.buf[i:])
         i += l
 
-        if self.version < 0:
-            assert self.data == b''
-
+        if self.version < 0 and not self.data:
             has_stamps = self.version == -2
 
             cnt = struct.unpack(">H", self.buf[i:i+2])[0]
