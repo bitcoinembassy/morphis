@@ -1052,7 +1052,7 @@ def _process_axon_synapses(req):
 def fetch_display_name(\
         node, signing_key, signing_key_enc=None, addr_fallback=False):
     if not signing_key:
-        return "[Unsigned?]"
+        return "[Unsigned]"
 
     signer_name =\
         yield from dmail._get_contact_name(node, signing_key)
