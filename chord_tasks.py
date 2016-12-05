@@ -158,6 +158,8 @@ class ChordTasks(object):
             log.info("No connected nodes, unable to perform stabilize.")
             return
 
+        log.info("Performing stabilize.")
+
         # Fetch closest to ourselves.
         closest_nodes, new_nodes = yield from\
             self._perform_stabilize(self.engine.node_id, self.engine.peer_trie)
