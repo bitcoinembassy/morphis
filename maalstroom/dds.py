@@ -1235,10 +1235,10 @@ def _process_stamp_synapse(req, stamp_signing_key=False):
                 path = r[0]
 
                 if type(path) is str:
-                    stamp_path = str(path.split(','))
+                    stamp_path = [int(dbid) for dbid in path.split(',')]
                 else:
-                    # If it is one deep, SQLite returns int.
-                    stamp_path = (str(path),)
+                    assert type(path) is int
+                    stamp_path = (path,)
 
                 if log.isEnabledFor(logging.DEBUG):
                     log.debug("DdsStamp path=[{}].".format(stamp_path))
@@ -1258,7 +1258,7 @@ def _process_stamp_synapse(req, stamp_signing_key=False):
         db_stamps.clear()
 
         for i in range(len(stamp_path)-1, -1, -1):
-            db_stamps.append(stamp_map[int(stamp_path[i])])
+            db_stamps.append(stamp_map[stamp_path[i]])
 
         if db_stamps:
             if log.isEnabledFor(logging.INFO):
