@@ -288,6 +288,10 @@ class Synapse(object):
         stamps = self.stamps
         assert stamps
 
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("Synapse (stamp_key=[{}]) has [{}] StampS."\
+                .format(mbase32.encode(self.synapse_key), len(stamps)))
+
         for stamp in stamps:
             dist, direction = stamp.log_distance
             if direction < 0 or dist > consts.MAX_POW_DIST:

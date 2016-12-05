@@ -398,6 +398,15 @@ class ChordTasks(object):
             "type(data_key)=[{}], len={}."\
                 .format(type(data_key), len(data_key))
 
+        if log.isEnabledFor(logging.INFO):
+            log.info(\
+                "send_get_targeted_data(..) called: data_key=[{}],"\
+                    " target_key=[{}], retry_factor=[{}]."
+                        .format(\
+                            mbase32.encode(data_key),\
+                            mbase32.encode(target_key),\
+                            retry_factor))
+
         data_id = enc.generate_ID(data_key)
 
         data_rw = yield from\
@@ -1527,10 +1536,10 @@ class ChordTasks(object):
                     pass
 
                 if log.isEnabledFor(logging.INFO):
-                    log.info("Sent Store{{Data/Key}} (node_id=[{}]) to [{}/{}]"\
-                        "tried nodes.".format(\
-                            data_rw.storing_nodes, mbase32.encode(node_id),\
-                            stores_sent))
+                    log.info("Sent Store{{Data/Key}} (node_id=[{}]) to"\
+                        " [{}/{}] tried nodes.".format(\
+                            mbase32.encode(node_id),\
+                            stores_sent, data_rw.storing_nodes))
 
 #            if query_cntr.value:
 #                # query_cntr can be zero if no PeerS were tried.
@@ -3723,8 +3732,10 @@ class ChordTasks(object):
             if log.isEnabledFor(logging.INFO):
                 log.info(\
                     "We already have Synapse (synapse_id=[{}]); adding"\
-                        " additional keys -- if applicable."\
-                            .format(mbase32.encode(synapse_id)))
+                        " additional keys -- if applicable (has [{}] StampS)."\
+                            .format(\
+                                mbase32.encode(synapse_id),\
+                                len(synapse.stamps)))
 
             return (yield from\
                 self.__update_synapse(dmsg, existing[0], existing[1], synapse))
