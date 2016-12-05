@@ -2187,8 +2187,9 @@ class ChordTasks(object):
 
                     r = yield from self._process_data_response(\
                         sreq, rmsg, tun_meta, None, data_rw)
-                except Exception:
+                except Exception as e:
                     r = None
+                    log.exception("_process_data_reponse(..).")
                     if log.isEnabledFor(logging.INFO):
                         log.info(\
                             "Peer [{}] sent corrupt ChordDataResponse."\
@@ -3235,7 +3236,8 @@ class ChordTasks(object):
             log.info("DataReponse is empty.")
             return False
         else:
-            # For normal (non-Synapse), and single Synapse response handling.
+            # For normal (non-Synapse), and single Synapse/Stamp response
+            # handling.
             r = yield from self.loop.run_in_executor(None, threadcall)
 
         if r is not None:
