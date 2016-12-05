@@ -1636,7 +1636,7 @@ class ChordTasks(object):
 
             conn_nodes.setdefault(node.address, node)
 
-        if only_memory:
+        if only_memory or not conn_nodes.values():
             return
 
         log.info("Adding noticed PeerS to the database.")
