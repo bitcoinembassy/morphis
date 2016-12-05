@@ -818,7 +818,8 @@ class SshProtocol(asyncio.Protocol):
                         mnetpacket.SshDisconnectMessage(packet))
                 return None
 
-            log.info("P: Returning next packet.")
+            if log.isEnabledFor(logging.DEBUG):
+                log.debug("P: Returning next packet.")
 
             #asyncio.call_soon(self.process_buffer())
             # For now, call process_buffer in this event.
@@ -830,7 +831,9 @@ class SshProtocol(asyncio.Protocol):
         if self.status is Status.closed or self.status is Status.disconnected:
             return None
 
-        log.info("P: Waiting for packet.")
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("P: Waiting for packet.")
+
         yield from self.do_wait()
 
         if self.status is Status.closed or self.status is Status.disconnected:
@@ -840,7 +843,8 @@ class SshProtocol(asyncio.Protocol):
         packet = self.packet
         self.packet = None
 
-        log.info("P: Notified of packet.")
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("P: Notified of packet.")
 
         if packet[0] == 0x01:
             yield from\
@@ -1020,11 +1024,15 @@ class SshProtocol(asyncio.Protocol):
                     tmac.update(self.cbuf)
                     cmac = tmac.digest()
                     if log.isEnabledFor(logging.DEBUG):
-                        log.debug("inPacketId={} len(cmac)={}, cmac=[\n{}].".format(self.inPacketId, len(cmac), hex_dump(cmac)))
+                        log.debug("inPacketId={} len(cmac)={}, cmac=[\n{}]."\
+                            .format(\
+                                self.inPacketId, len(cmac), hex_dump(cmac)))
                     r = hmac.compare_digest(cmac, mac)
-                    log.info("HMAC check result: [{}].".format(r))
+                    if log.isEnabledFor(logging.DEBUG):
+                        log.debug("HMAC check result: [{}].".format(r))
                     if not r:
-                        raise SshException("HMAC check failure, packetId={}.".format(self.inPacketId))
+                        raise SshException("HMAC check failure, packetId={}."\
+                            .format(self.inPacketId))
 
                 newbuf = self.cbuf[self.bpLength + self.inHmacSize:]
                 if self.cbuf == self.buf:
