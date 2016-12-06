@@ -1141,19 +1141,24 @@ def _process_stamp_synapse(req, stamp_signing_key=False):
         req.dispatcher.node.engine.tasks.send_get_targeted_data(synapse_key)
 
     if not data_rw or not data_rw.data:
-        req.dispatcher.send_error("No Synapse found.".format(req), errcode=400)
+        msg = "No Synapse found."
+        log.warning(msg)
+        req.dispatcher.send_error(msg, errcode=400)
         return
 
     syn = data_rw.object
 
     if type(syn) is not synapse.Synapse:
-        req.dispatcher.send_error("Not a Synapse.".format(req), errcode=400)
+        msg = "Not a Synapse."
+        log.warning(msg)
+        req.dispatcher.send_error(msg, errcode=400)
         return
 
     if stamp_signing_key:
         if not syn.is_signed():
-            req.dispatcher.send_error(\
-                "Not a signed Synapse.".format(req), errcode=400)
+            msg = "Not a signed Synapse."
+            log.warning(msg)
+            req.dispatcher.send_error(msg, errcode=400)
             return
         key_to_sign = syn.signing_key
     else:
@@ -1278,10 +1283,9 @@ def _process_stamp_synapse(req, stamp_signing_key=False):
                         db_stamp.stamp_key)
 
                 if not data_rw or not data_rw.data:
-                    req.dispatcher.send_error(\
-                        "Required Stamp in Stamp path was not found."\
-                            .format(req),\
-                        errcode=400)
+                    msg = "Required Stamp in Stamp path was not found."
+                    log.warning(msg)
+                    req.dispatcher.send_error(msg, errcode=400)
                     return
 
                 stamp = data_rw.object
@@ -1308,9 +1312,15 @@ def _process_stamp_synapse(req, stamp_signing_key=False):
         else:
             if log.isEnabledFor(logging.INFO):
                 log.info("No known Stamp path from ident to axon_addr.")
+            #TODO: YOU_ARE_HERE: What do we do here? Still upload StampPed
+            # Synapse, with just our Stamp, and then notify the user it was not
+            # StampPed all the way to the axon?
 
     if log.isEnabledFor(logging.INFO):
         log.info("Uploading newly StampPed Synapse.")
+
+    # Reencode the Synapse, so that the new StampS are now included.
+    syn.encode()
 
     # Upload StampPed Synapse back to DHT.
     yield from req.dispatcher.node.engine.tasks.send_store_synapse(\

@@ -595,7 +595,9 @@ class Stamp(object):
             raise Exception(\
                 "Invalid signature_type [{}].".format(self.signature_type))
         sig_bin_len = struct.unpack_from(">L", buf, i)[0]
-        i += 4 + sig_bin_len
+        sig_end = i + 4 + sig_bin_len
+        self.signature = buf[self._signature_offset:sig_end]
+        i = sig_end
 
         i, self.nonce = sshtype.parse_binary_from(buf, i)
         self._pow_data_end_idx = i
@@ -618,8 +620,7 @@ class Stamp(object):
 
         return self.key.verify_rsassa_pss_sig(
             self._buf[self._start_index:self._signature_offset],\
-            self._buf,\
-            self._signature_offset)
+            self.signature)
 
 # DHT API Objects.
 class SynapseRequest(object):
