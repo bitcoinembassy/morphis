@@ -87,9 +87,12 @@ class RsaKey(asymkey.AsymKey):
         return m
 
     def encode_pubkey_onto(self, output):
-        sshtype.encode_string_onto(output, "ssh-rsa")
-        sshtype.encode_mpint_onto(output, self.e)
-        sshtype.encode_mpint_onto(output, self.n)
+        if self.__public_key_bytes:
+            output += self.__public_key_bytes
+        else:
+            sshtype.encode_string_onto(output, "ssh-rsa")
+            sshtype.encode_mpint_onto(output, self.e)
+            sshtype.encode_mpint_onto(output, self.n)
 
     def __str__(self):
         return self.asbytes()

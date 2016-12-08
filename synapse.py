@@ -483,10 +483,11 @@ class Stamp(object):
         if self._pubkey:
             return self._pubkey
 
-        assert self._buf
-
-        self._pubkey =\
-            self._buf[self._pubkey_offset:self._pubkey_end_idx]
+        if self._buf:
+            self._pubkey = self._buf[self._pubkey_offset:self._pubkey_end_idx]
+        else:
+            assert self.key
+            self._pubkey = self.key.asbytes()
 
         return self._pubkey
 

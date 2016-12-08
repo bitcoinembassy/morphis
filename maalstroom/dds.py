@@ -1177,8 +1177,6 @@ def _process_stamp_synapse(req, stamp_signing_key=False):
     # Create new stamp.
     syn.stamps = [synapse.Stamp(key_to_sign, our_signing_key)]
 
-    yield from syn.encode()
-
     if axon_addr_enc and axon_addr != req.ident:
         if log.isEnabledFor(logging.INFO):
             log.info(\
@@ -1302,13 +1300,6 @@ def _process_stamp_synapse(req, stamp_signing_key=False):
                     log.debug("syn.stamp[{}].signing_key=[{}]."\
                         .format(idx, mbase32.encode(stamp.signing_key)))
                     idx += 1
-
-            # Ensure that we have built a valid StampPed Synapse.
-            syn.check_stamps()
-
-            if log.isEnabledFor(logging.INFO):
-                log.info("Synapse [{}] is now StampPed to axon_addr."\
-                    .format(mbase32.encode(syn.synapse_key)))
         else:
             if log.isEnabledFor(logging.INFO):
                 log.info("No known Stamp path from ident to axon_addr.")
@@ -1317,10 +1308,17 @@ def _process_stamp_synapse(req, stamp_signing_key=False):
             # StampPed all the way to the axon?
 
     if log.isEnabledFor(logging.INFO):
-        log.info("Uploading newly StampPed Synapse.")
+        log.info("Synapse [{}] is now StampPed to axon_addr [{}]."\
+            .format(mbase32.encode(syn.synapse_key), axon_addr_enc))
 
     # Reencode the Synapse, so that the new StampS are now included.
-    syn.encode()
+    yield from syn.encode()
+
+    # Ensure that we have built a valid StampPed Synapse.
+    syn.check_stamps()
+
+    if log.isEnabledFor(logging.INFO):
+        log.info("Uploading newly StampPed Synapse.")
 
     # Upload StampPed Synapse back to DHT.
     yield from req.dispatcher.node.engine.tasks.send_store_synapse(\
