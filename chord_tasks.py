@@ -3449,11 +3449,14 @@ class ChordTasks(object):
                 synapses = []
                 if joined:
                     for synapse, key, trail in r:
-                        # str() as it may be int if just one value.
-                        ids = str(trail).split()
-
                         if log.isEnabledFor(logging.DEBUG):
                             log.debug("Stamp trail=[{}].".format(trail))
+
+                        if type(trail) is str:
+                            ids = [int(dbid) for dbid in trail.split(',')]
+                        else:
+                            assert type(trail) is int
+                            ids = (trail,)
 
                         stamps =\
                             sess.query(Stamp).filter(Stamp.id.in_(ids)).all()
@@ -3467,7 +3470,7 @@ class ChordTasks(object):
                         stamp_data = bytearray()
 
                         for i in range(len(ids)-1, -1, -1):
-                            stamp_data += stamp_map[int(ids[i])]
+                            stamp_data += stamp_map[ids[i]]
 
                         synapses.append((\
                             key.ekey,\
