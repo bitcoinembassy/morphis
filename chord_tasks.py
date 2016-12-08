@@ -1378,10 +1378,16 @@ class ChordTasks(object):
 
                         version = fnmsg.version
                         if version in (-1, -3):
+                            # Synapse store mode; it could be updated version
+                            # they want to send so we have to signal for them
+                            # to send the data for us to check.
                             will_store = True
                             need_pruning = False
                         else:
-                            if version < 0:
+                            if version and version < 0:
+                                # Float are for Stamp, which is not changeable,
+                                # so we never update it, so we check if we have
+                                # it.
                                 version = None
                             will_store, need_pruning =\
                                 yield from self._check_do_want_data(\
@@ -2322,11 +2328,17 @@ class ChordTasks(object):
                 version = fnmsg.version
                 if version in (-1, -3):
                     # Synapse Multi-index/Shared-keyspace Request Mode.
+                    # Synapse store mode; it could be updated version
+                    # they want to send so we have to signal for them
+                    # to send the data for us to check.
                     will_store = True
                     need_pruning = False
                     object_store_mode = True
                 else:
-                    if version < 0:
+                    if version and version < 0:
+                        # Negative floats are for Stamp, which is not
+                        # changeable, so we never update it, so we check if we
+                        # have it.
                         version = None
                     will_store, need_pruning =\
                         yield from self._check_do_want_data(\
@@ -3494,7 +3506,8 @@ class ChordTasks(object):
             valid = False
             has_target_key = True
             if dmsg.data[:16] == MorphisBlock.UUID:
-                if version < 0:
+                if version and version < 0:
+                    # Negative floats are Stamp mode.
                     log.info("Bait and switch.")
                     #TODO: Close channel or such.
                     return False
@@ -3511,7 +3524,8 @@ class ChordTasks(object):
                     valid = self._check_stamp(dmsg.data, data_id)
                     has_target_key = False
         else:
-            if version < 0:
+            if version and version < 0:
+                # Negative floats are Stamp mode.
                 log.info("Bait and switch.")
                 #TODO: Close channel or such.
                 return False
