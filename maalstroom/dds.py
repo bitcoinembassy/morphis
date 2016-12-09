@@ -889,38 +889,42 @@ def _process_axon_synapses(req):
         else:
             signer_name = anon_name
 
+        if axon_stamp or post.signing_key == axon_addr:
+            # Post is authorized by owner of axon.
+            if req.ident == axon_addr:
+                border_color = "#dfc700"
+            else:
+                border_color = "#1f0000"
+        elif post.signing_key == req.ident or self_synapse_stamp\
+                or self_signer_stamp:
+            # Post is authorized by us but not owner.
+            border_color = "#dfc700"
+        else:
+            # Post is unauthorized.
+            border_color = "#58c3cf"
+
         if post.signing_key == axon_addr:
             # Post is by owner of axon.
             style = "box-shadow: 0 1px 4px rgba(0,0,0,.04); border: 1px solid"\
-            " rgba(56, 163, 175,.3); border-radius: 5px; margin: 1em 1em;"\
-            " background: #cyan;" # Blue tint.
-        elif axon_stamp:
-            # Post is authorized (by owner) to post in axon.
-            style = "box-shadow: 0 1px 4px rgba(0,0,0,.04); border: 1px solid"\
-            " rgba(56, 163, 175,.3); border-radius: 5px; margin: 1em 1em;"\
-            " background: #FFFFFF;" # White.
+            " {}; border-radius: 5px; margin: 1em 1em;"\
+            " background: #ffe700;".format(border_color)
         elif post.signing_key == req.ident:
-            # Post is by us and not authorized to post in axon by the owner.
+            # Post is by us.
             style = "box-shadow: 0 1px 4px rgba(0,0,0,.04); border: 1px solid"\
-            " rgba(163, 163, 163,.3); border-radius: 5px; margin: 1em 1em;"\
-            " background: #fffc92;" # Gold..
-        elif self_synapse_stamp or self_signer_stamp:
-            # Post is by someone in our WOT but not authorized by axon owner.
-            style = "box-shadow: 0 1px 4px rgba(0,0,0,.04); border: 1px solid"\
-            " rgba(56, 163, 175,.3); border-radius: 5px; margin: 1em 1em;"\
-            " background: #e6e384;" # Gold tint.
+            " {}; border-radius: 5px; margin: 1em 1em;"\
+            " background: #faffff;".format(border_color) # Gold..
         elif post.signing_key and (not min_unstamped_pow\
                 or post.score > int(min_unstamped_pow)):
             # Post is not in our WOT nor authorized by axon owner, but signed.
             style = "box-shadow: 0 1px 4px rgba(0,0,0,.04); border: 1px solid"\
-            " rgba(56, 163, 175,.3); border-radius: 5px; margin: 1em 1em;"\
-            " background: #e7f7f7;"
+            " {}; border-radius: 5px; margin: 1em 1em;"\
+            " background: #e7f7f7;".format(border_color)
         elif not post.signing_key and (not min_unsigned_pow\
                 or post.score > int(min_unsigned_pow)):
             # Post is not in our WOT nor authorized by axon owner, un-signed.
             style = "box-shadow: 0 1px 4px rgba(0,0,0,.04); border: 1px solid"\
-            " rgba(56, 163, 175,.3); border-radius: 5px; margin: 1em 1em;"\
-            " background: #d8e6e6;"
+            " {}; border-radius: 5px; margin: 1em 1em;"\
+            " background: #d8e6e6;".format(border_color)
         else:
             # Post is not in our WOT, not authorized by owner, AND has below
             # required minimum proof of work to show up (so TODO: make this row
