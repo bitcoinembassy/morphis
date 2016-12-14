@@ -1010,7 +1010,7 @@ def _process_axon_synapses(req):
         yield from process_post(*row)
 
     req.dispatcher.send_partial_content(\
-        "<div class='dds-refresh-wrapper'><hr id='new' class='style2'/>")
+        "<div class='dds-refresh-wrapper'><div style='color: gray'>({} comments.)</div><br/><hr id='new' class='style2'/>".format(len(posts)))
 
 #    dds_engine = DdsEngine(dispatcher.node)
 #    yield from dispatcher.client_engine.dds.dds_engine.scan_target_key(\
@@ -1022,9 +1022,7 @@ def _process_axon_synapses(req):
         req.dispatcher.client_engine.dds.enable_query_autoscan(query)
 
         req.dispatcher.send_partial_content(\
-            "<div>Started scanning for new messages...</div>"\
-            "<span id='end' style='color: gray'/></body></html>"\
-                .format(mutil.utc_datetime()))
+            "<div>Started scanning for new messages...</div>")
 
         req.dispatcher.end_partial_content()
         return
