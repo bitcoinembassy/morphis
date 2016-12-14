@@ -1305,24 +1305,24 @@ def _process_stamp_synapse(req, stamp_signing_key=False):
         else:
             if log.isEnabledFor(logging.INFO):
                 log.info("No known Stamp path from ident to axon_addr.")
-            #TODO: YOU_ARE_HERE: What do we do here? Still upload StampPed
+            #TODO: YOU_ARE_HERE: What do we do here? Still upload StampEd
             # Synapse, with just our Stamp, and then notify the user it was not
-            # StampPed all the way to the axon?
+            # StampEd all the way to the axon?
 
     if log.isEnabledFor(logging.INFO):
-        log.info("Synapse [{}] is now StampPed to axon_addr [{}]."\
+        log.info("Synapse [{}] is now StampEd to axon_addr [{}]."\
             .format(mbase32.encode(syn.synapse_key), axon_addr_enc))
 
     # Reencode the Synapse, so that the new StampS are now included.
     yield from syn.encode()
 
-    # Ensure that we have built a valid StampPed Synapse.
+    # Ensure that we have built a valid StampEd Synapse.
     syn.check_stamps()
 
     if log.isEnabledFor(logging.INFO):
-        log.info("Uploading newly StampPed Synapse.")
+        log.info("Uploading newly StampEd Synapse.")
 
-    # Upload StampPed Synapse back to DHT.
+    # Upload StampEd Synapse back to DHT.
     yield from req.dispatcher.node.engine.tasks.send_store_synapse(\
         syn, for_update=True)
 
