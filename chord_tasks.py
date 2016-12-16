@@ -1385,9 +1385,9 @@ class ChordTasks(object):
                             need_pruning = False
                         else:
                             if version and version < 0:
-                                # Float are for Stamp, which is not changeable,
-                                # so we never update it, so we check if we have
-                                # it.
+                                # Float are for StoreKey, which never changes;
+                                # therefor we never update it, and thus we do
+                                # want to check if we have it already.
                                 version = None
                             will_store, need_pruning =\
                                 yield from self._check_do_want_data(\
@@ -2327,7 +2327,7 @@ class ChordTasks(object):
             elif fnmsg.data_mode is cp.DataMode.store:
                 version = fnmsg.version
                 if version in (-1, -3):
-                    # Synapse Multi-index/Shared-keyspace Request Mode.
+                    # Synapse/Stamp Multi-index/Shared-keyspace Request Mode.
                     # Synapse store mode; it could be updated version
                     # they want to send so we have to signal for them
                     # to send the data for us to check.
@@ -2336,9 +2336,9 @@ class ChordTasks(object):
                     object_store_mode = True
                 else:
                     if version and version < 0:
-                        # Negative floats are for Stamp, which is not
-                        # changeable, so we never update it, so we check if we
-                        # have it.
+                        # Negative floats are for Synapse/Stamp StoreKey, which
+                        # is not changeable, so we never update it, so we check
+                        # if we have it already.
                         version = None
                     will_store, need_pruning =\
                         yield from self._check_do_want_data(\
@@ -2988,6 +2988,9 @@ class ChordTasks(object):
         else:
             data_id = data_ids
 
+        #TODO: This is messy. Merge these two into one dbcall with ifs based on
+        # if there is space contention or not.
+
         if self.engine.node.datastore_size\
                 < self.engine.node.datastore_max_size:
 #            # We only store stuff closer than 2^2 less then the maximum
@@ -3004,6 +3007,7 @@ class ChordTasks(object):
             def dbcall():
                 with self.engine.node.db.open_session(True) as sess:
                     if version:
+                        assert version > 0
                         old_entry = sess.query(DataBlock)\
                             .filter(DataBlock.data_id == data_id)\
                             .first()
@@ -3053,6 +3057,12 @@ class ChordTasks(object):
                 # First check if we have this block already.
                 q = sess.query(func.count("*")).select_from(DataBlock)
                 q = q.filter(DataBlock.data_id == data_id)
+
+                #FIXME: YOU_ARE_HERE: We must fix this code as currently as
+                # written it will not update updateable keys when there is
+                # space contention -- even if we were sent a newer version. It
+                # is not as easy as just overwriting it because the new version
+                # could be a bigger size and thus violate the max space.
 
                 if q.scalar() > 0:
                     # We already have this block.
@@ -3507,7 +3517,8 @@ class ChordTasks(object):
             has_target_key = True
             if dmsg.data[:16] == MorphisBlock.UUID:
                 if version and version < 0:
-                    # Negative floats are Stamp mode.
+                    # Negative version is Synapse/Stamp data or key mode --
+                    # instead of TargetedBlock mode.
                     log.info("Bait and switch.")
                     #TODO: Close channel or such.
                     return False
@@ -3525,7 +3536,8 @@ class ChordTasks(object):
                     has_target_key = False
         else:
             if version and version < 0:
-                # Negative floats are Stamp mode.
+                # Negative versions are Synapse/Stamp mode, as opposed to
+                # updateable key mode.
                 log.info("Bait and switch.")
                 #TODO: Close channel or such.
                 return False
