@@ -12,7 +12,7 @@ import time
 from urllib.parse import parse_qs, quote_plus
 import os
 
-from sqlalchemy import and_, desc, func, literal, or_
+from sqlalchemy import and_, desc, func, literal, or_, case
 from sqlalchemy.orm import joinedload, aliased
 from sqlalchemy.exc import ResourceClosedError
 
@@ -193,6 +193,8 @@ def serve_get(dispatcher, rpath):
         yield from _process_stamp_synapse(mr)
     elif req.startswith("/stamp/signer/"):
         yield from _process_stamp_signer(mr)
+    elif req.startswith("/stamp/revoke/"):
+        yield from _process_stamp_revoke(mr)
     elif req.startswith("/propedit/"):
         yield from _process_propedit(mr)
     elif req.startswith("/site/edit/"):
@@ -749,6 +751,11 @@ def _process_axon_synapses(req):
             children = sess.query(\
                     DdsStamp,\
                     literal(0).label("deep"),\
+                    DdsStamp.id.label("trail"),\
+                    (DdsStamp.signing_key == req.ident).label("we_stamped"),\
+                    case(\
+                        [(DdsStamp.signing_key == req.ident, DdsStamp.id)],\
+                        else_=None).label("our_stamp"),\
                     DdsStamp.signing_key.label("source"))\
                 .filter(or_(\
                     DdsStamp.signing_key == axon_addr,\
@@ -766,6 +773,19 @@ def _process_axon_synapses(req):
                 sess.query(\
                         sta,\
                         ra.c.deep.op("+")(1).label("deep"),\
+                        ra.c.trail\
+                            .concat(literal(","))\
+                            .concat(sta.id)\
+                            .label("trail"),\
+                        or_(ra.c.we_stamped, sta.signing_key\
+                            == req.ident).label("we_stamped"),\
+                        case(\
+                            [(ra.c.our_stamp == None,\
+                                case(\
+                                    [(sta.signing_key == req.ident,\
+                                        sta.id)],\
+                                    else_=None))],\
+                            else_=ra.c.our_stamp).label("our_stamp"),\
                         ra.c.source)\
                     .join(ra, sta.signing_key == ra.c.signed_key)\
                     .filter(ra.c.deep < 7))
@@ -779,7 +799,10 @@ def _process_axon_synapses(req):
             axon_stamp = sess.query(\
                     children.c.signing_key,\
                     children.c.signed_key,\
-                    func.min(children.c.deep))\
+                    func.min(children.c.deep),\
+                    children.c.trail,\
+                    children.c.we_stamped,\
+                    children.c.our_stamp)\
                 .select_from(children).group_by(children.c.signed_key)\
                 .filter(children.c.source == axon_addr)\
                 .subquery()
@@ -801,7 +824,10 @@ def _process_axon_synapses(req):
                     DdsPost,\
                     axon_stamp.c.signing_key,\
                     self_stamp.c.signing_key,\
-                    self_stamp2.c.signing_key)\
+                    self_stamp2.c.signing_key,\
+                    axon_stamp.c.trail,\
+                    axon_stamp.c.we_stamped,\
+                    axon_stamp.c.our_stamp)\
                 .filter(or_(\
                     DdsPost.target_key == axon_addr,\
                     DdsPost.target_key2 == axon_addr,\
@@ -866,8 +892,12 @@ def _process_axon_synapses(req):
 
     @asyncio.coroutine
     def process_post(post, axon_stamp, self_synapse_stamp, self_signer_stamp,\
-            depth=0):
+            trail, we_stamped, our_stamp, depth=0):
         assert type(post) is DdsPost, type(post)
+
+        log.info("TRAIL=[{}].".format(trail))
+        log.info("WE_STAMPED=[{}].".format(we_stamped))
+        log.info("OUR_STAMP=[{}].".format(our_stamp))
 
         key = post.synapse_key
         if not key:
@@ -934,8 +964,12 @@ def _process_axon_synapses(req):
         stamp_button_visibility = ""
         stamp_signer_visibility = ""
         stamp_synapse_visibility = ""
+        stamp_revoke_visibility = "display: none;"
 
         if req.ident:
+            if we_stamped:
+                stamp_revoke_visibility = ""
+
             if post.signing_key:
                 if post.signing_key == req.ident:
                     # Don't stamp Synapse we signed ourselves.
@@ -992,6 +1026,7 @@ def _process_axon_synapses(req):
             stamp_button_visibility=stamp_button_visibility,\
             stamp_signer_visibility=stamp_signer_visibility,\
             stamp_synapse_visibility=stamp_synapse_visibility,\
+            stamp_revoke_visibility=stamp_revoke_visibility,\
             content=content,\
             timestamp=timestr,\
             relative_time=\
@@ -1231,6 +1266,10 @@ def _process_stamp_synapse(req, stamp_signing_key=False):
                     r = None
 
                 if not r:
+                    #TODO: YOU_ARE_HERE: There is no path we know, we are not
+                    # authorized to authorize as far as we know; give good msg
+                    # to the user; also, can't return None as caller expects
+                    # tuple.
                     return None
 
                 if log.isEnabledFor(logging.DEBUG):
@@ -1331,6 +1370,10 @@ def _process_stamp_synapse(req, stamp_signing_key=False):
 @asyncio.coroutine
 def _process_stamp_signer(req):
     return (yield from _process_stamp_synapse(req, True))
+
+@asyncio.coroutine
+def _process_stamp_revoke(req):
+    pass
 
 @asyncio.coroutine
 def _process_synapse_create_post(dispatcher, req):
