@@ -755,7 +755,7 @@ def _process_axon_synapses(req):
                     (DdsStamp.signing_key == req.ident).label("we_stamped"),\
                     case(\
                         [(DdsStamp.signing_key == req.ident, DdsStamp.id)],\
-                        else_=None).label("our_stamp"),\
+                        else_=None).label("our_stamp_id"),\
                     DdsStamp.signing_key.label("source"))\
                 .filter(or_(\
                     DdsStamp.signing_key == axon_addr,\
@@ -780,12 +780,12 @@ def _process_axon_synapses(req):
                         or_(ra.c.we_stamped, sta.signing_key\
                             == req.ident).label("we_stamped"),\
                         case(\
-                            [(ra.c.our_stamp == None,\
+                            [(ra.c.our_stamp_id == None,\
                                 case(\
                                     [(sta.signing_key == req.ident,\
                                         sta.id)],\
                                     else_=None))],\
-                            else_=ra.c.our_stamp).label("our_stamp"),\
+                            else_=ra.c.our_stamp_id).label("our_stamp_id"),\
                         ra.c.source)\
                     .join(ra, sta.signing_key == ra.c.signed_key)\
                     .filter(ra.c.deep < 7))
@@ -802,7 +802,7 @@ def _process_axon_synapses(req):
                     func.min(children.c.deep),\
                     children.c.trail,\
                     children.c.we_stamped,\
-                    children.c.our_stamp)\
+                    children.c.our_stamp_id)\
                 .select_from(children).group_by(children.c.signed_key)\
                 .filter(children.c.source == axon_addr)\
                 .subquery()
@@ -827,7 +827,7 @@ def _process_axon_synapses(req):
                     self_stamp2.c.signing_key,\
                     axon_stamp.c.trail,\
                     axon_stamp.c.we_stamped,\
-                    axon_stamp.c.our_stamp)\
+                    axon_stamp.c.our_stamp_id)\
                 .filter(or_(\
                     DdsPost.target_key == axon_addr,\
                     DdsPost.target_key2 == axon_addr,\
@@ -892,12 +892,12 @@ def _process_axon_synapses(req):
 
     @asyncio.coroutine
     def process_post(post, axon_stamp, self_synapse_stamp, self_signer_stamp,\
-            trail, we_stamped, our_stamp, depth=0):
+            trail, we_stamped, our_stamp_id, depth=0):
         assert type(post) is DdsPost, type(post)
 
         log.info("TRAIL=[{}].".format(trail))
         log.info("WE_STAMPED=[{}].".format(we_stamped))
-        log.info("OUR_STAMP=[{}].".format(our_stamp))
+        log.info("OUR_STAMP=[{}].".format(our_stamp_id))
 
         key = post.synapse_key
         if not key:
@@ -1021,6 +1021,7 @@ def _process_axon_synapses(req):
             target_key_link_target_attr=target_key_link_target_attr,\
             target_str=target_str,\
             key=key_enc,\
+            our_stamp_id=our_stamp_id,\
             signing_key=signing_key_enc,\
             signer=signer_name,\
             stamp_button_visibility=stamp_button_visibility,\
@@ -1172,6 +1173,8 @@ def _process_stamp_synapse(req, stamp_signing_key=False):
     synapse_key = mbase32.decode(synapse_key_enc)
     if axon_addr_enc:
         axon_addr = mbase32.decode(axon_addr_enc)
+
+    #TODO: Check if we have already StampEd this Synapse, and if so abort.
 
     # Fetch Synapse object from the DHT.
     data_rw = yield from\
@@ -1329,6 +1332,12 @@ def _process_stamp_synapse(req, stamp_signing_key=False):
 
                 stamp = data_rw.object
 
+                if type(stamp) is not synapse.Stamp:
+                    msg = "Not a Stamp."
+                    log.warning(msg)
+                    req.dispatcher.send_error(msg, errcode=400)
+                    return
+
                 if log.isEnabledFor(logging.DEBUG):
                     log.debug("Found Stamp for path, signing_key=[{}]."\
                         .format(mbase32.encode(stamp.signing_key)))
@@ -1373,7 +1382,77 @@ def _process_stamp_signer(req):
 
 @asyncio.coroutine
 def _process_stamp_revoke(req):
-    pass
+    if not req.check_csrf_token():
+        return
+
+    dds_stamp_id = req.req[14:]
+
+    def dbcall():
+        with req.dispatcher.node.db.open_session(True) as sess:
+            stamp = sess.query(DdsStamp).get(dds_stamp_id)
+
+            return stamp
+
+    db_stamp = yield from req.dispatcher.loop.run_in_executor(None, dbcall)
+
+    if log.isEnabledFor(logging.INFO):
+        log.info("Revoking Stamp (id=[{}], key=[{}])."\
+            .format(db_stamp.id, mbase32.encode(db_stamp.stamp_key)))
+
+    # Fetch data.
+    log.info("Fetching Stamp data.")
+
+    data_rw =\
+        yield from req.dispatcher.node.engine.tasks.send_get_targeted_data(\
+            db_stamp.stamp_key)
+
+    if not data_rw or not data_rw.data:
+        msg = "No Stamp found."
+        log.warning(msg)
+        req.dispatcher.send_error(msg, errcode=400)
+        return
+
+    stamp = data_rw.object
+
+    if type(stamp) is not synapse.Stamp:
+        msg = "Not a Stamp."
+        log.warning(msg)
+        req.dispatcher.send_error(msg, errcode=400)
+        return
+
+    if log.isEnabledFor(logging.INFO):
+        log.info("Loaded Stamp data for key=[{}].".format(\
+            mbase32.encode(stamp.stamp_key)))
+
+    if stamp.version < 0:
+        msg = "Stamp already revoked."
+        log.warning(msg)
+        req.dispatcher.send_error(msg, errcode=400)
+        return
+
+    # Mark as revoked.
+    stamp.version *= -1
+
+    # Trigger re-signing of now revoked Stamp.
+    stamp.signature = None
+
+    # Load and set private key (needed for signing).
+    ident_dmail_address = yield from dmail.load_dmail_address(\
+        req.dispatcher.node, site_key=req.ident)
+    our_signing_key =\
+        rsakey.RsaKey(privdata=ident_dmail_address.site_privatekey)
+    stamp.key = our_signing_key
+
+    # POW nonce will be invalid as POWed data includes version field.
+    stamp.pow = None
+
+    yield from stamp.encode()
+
+    r = stamp.check_signature()
+
+    log.info("SIG CHECK=[{}].".format(r))
+
+    req.dispatcher.send_204()
 
 @asyncio.coroutine
 def _process_synapse_create_post(dispatcher, req):
