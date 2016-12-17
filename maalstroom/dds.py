@@ -1596,7 +1596,7 @@ def _process_feed_add_post(req):
 
             sess.commit()
 
-    req.dispatcher.loop.run_in_executor(None, dbcall)
+    yield from req.dispatcher.loop.run_in_executor(None, dbcall)
 
     req.dispatcher.send_301(refresh_url)
 
