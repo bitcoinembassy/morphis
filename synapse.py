@@ -623,6 +623,11 @@ class Stamp(object):
             self._buf[self._start_index:self._signature_offset],\
             self.signature)
 
+    def reset_pow(self):
+        self.nonce = None
+        self._stamp_pow = None
+        self._log_distance = None
+
 # DHT API Objects.
 class SynapseRequest(object):
     def __init__(self, buf=None):

@@ -1080,8 +1080,8 @@ def _process_axon_synapses(req):
 #        yield from all_done.wait()
 
     req.dispatcher.send_partial_content(\
-        "<div class='dds-refresh-text'>Last refreshed: {}</div><span id='end' style='color: gray'/></div>"\
-        "</body></html>"\
+        "<div class='dds-refresh-text'>Last refreshed: {}</div><span id='end'"\
+        " style='color: gray'/></div></body></html>"\
             .format(mutil.utc_datetime()))
 
     req.dispatcher.end_partial_content()
@@ -1444,13 +1444,17 @@ def _process_stamp_revoke(req):
     stamp.key = our_signing_key
 
     # POW nonce will be invalid as POWed data includes version field.
-    stamp.pow = None
+    stamp.reset_pow()
 
+    # Ensure new data is encoded, including new POW and signature.
     yield from stamp.encode()
 
-    r = stamp.check_signature()
+    # Upload Stamp revocation to DHT.
+    yield from req.dispatcher.node.engine.tasks.send_store_stamp(stamp)
 
-    log.info("SIG CHECK=[{}].".format(r))
+    if log.isEnabledFor(logging.INFO):
+        log.info("Revoked Stamp (stamp_key=[{}]) sent to DHT.".format(\
+            mbase32.encode(stamp.stamp_key)))
 
     req.dispatcher.send_204()
 
