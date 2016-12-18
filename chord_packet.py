@@ -215,7 +215,8 @@ class ChordFindNode(ChordMessage):
 
         nbuf += struct.pack("?", self.version is not None)
         if self.version is not None:
-            nbuf += sshtype.encodeMpint(self.version)
+            # Multiply by 1000 to support float values.
+            nbuf += sshtype.encodeMpint(self.version*1000)
 
         if self.significant_bits is not None:
             nbuf += struct.pack(">H", self.significant_bits)
@@ -237,7 +238,8 @@ class ChordFindNode(ChordMessage):
         has_version = struct.unpack_from("?", self.buf, i)[0]
         i += 1
         if has_version:
-            i, self.version = sshtype.parse_mpint_from(self.buf, i)
+            i, ver = sshtype.parse_mpint_from(self.buf, i)
+            self.version = ver/1000 # Support float values.
 
         if i == len(self.buf):
             return
