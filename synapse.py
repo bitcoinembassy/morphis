@@ -293,6 +293,10 @@ class Synapse(object):
                 .format(mbase32.encode(self.synapse_key), len(stamps)))
 
         for stamp in stamps:
+            if stamp.revoked:
+                log.warning("Invalid Stamp; it is revoked.")
+                return False
+
             dist, direction = stamp.log_distance
             if direction < 0 or dist > consts.MAX_POW_DIST:
                 log.warning("Invalid Stamp; it lacks sufficient PoW ({}/{})."\
@@ -494,6 +498,10 @@ class Stamp(object):
     @pubkey.setter
     def pubkey(self, value):
         self._pubkey = value
+
+    @property
+    def revoked(self):
+        return self.version < 0
 
     @property
     def buf(self):

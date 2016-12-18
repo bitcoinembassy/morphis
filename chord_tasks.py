@@ -2912,7 +2912,9 @@ class ChordTasks(object):
                     Stamp,\
                     literal(0).label("deep"),\
                     Stamp.id.label("trail"))\
-                .filter(Stamp.signing_id == stamp_join_val)\
+                .filter(\
+                    Stamp.signing_id == stamp_join_val,\
+                    Stamp.revoked == False)\
                 .cte(name="children", recursive=True)
 
             sta = aliased(Stamp, name="stamp")
@@ -2929,7 +2931,9 @@ class ChordTasks(object):
                         ra.c.trail.concat(literal(',')).concat(sta.id)\
                             .label("trail"))\
                     .join(ra, sta.signing_id == ra.c.signed_id)\
-                    .filter(ra.c.deep < 7))
+                    .filter(\
+                        Stamp.revoked == False,\
+                        ra.c.deep < 7))
 
             # The following func.min(..) causes the group-wise minimum to be
             # selected. (This was tested for Sqlite3, have to test and or fix
@@ -3621,12 +3625,19 @@ class ChordTasks(object):
         stored_new = True
 
         with (yield from mlock):
+            version = stamp.version
+            if version < 0:
+                version *= -1 # We keep version positive in the database.
+                revoke = True
+            else:
+                revoke = False
+
             def dbcall_chk():
                 with self.engine.node.db.open_session(True) as sess:
                     q = sess.query(Stamp)\
                         .filter(\
                             Stamp.signed_id == signed_id,\
-                            Stamp.version == stamp.version,\
+                            Stamp.version == version,\
                             Stamp.signing_id == signing_id)
 
                     return q.first()
@@ -3634,7 +3645,8 @@ class ChordTasks(object):
             existing = yield from self.loop.run_in_executor(None, dbcall_chk)
 
             if existing:
-                if existing.difficulty <= stamp.log_distance[0]:
+                if existing.difficulty <= stamp.log_distance[0]\
+                        and existing.version == stamp.version:
                     if log.isEnabledFor(logging.INFO):
                         log.info("Already had Stamp, and no changes detected.")
                     # For Stamp we signal no changes detected as success.
@@ -3661,6 +3673,10 @@ class ChordTasks(object):
                     nstamp.difficulty, direction = stamp.log_distance
                     assert direction == 1
 
+                    if revoke:
+                        # We use this column and have version positive.
+                        nstamp.revoked = True
+
                     if not existing:
                         sess.add(nstamp)
 
@@ -3684,7 +3700,7 @@ class ChordTasks(object):
             # the log file.
             log.info(\
                 "Stored {} Stamp (dbid=[{}], stamp_id=[{}],"\
-                    " signed_id=[{}], signing_id=[{}])."\
+                    " signed_id=[{}], signing_id=[{}], revoked=[{}])."\
                         .format(\
                             "new" if stored_new else "updated",\
                             nstamp.id,\
@@ -3693,7 +3709,8 @@ class ChordTasks(object):
                             mbase32.encode(\
                                 enc.generate_ID(signed_id)),\
                             mbase32.encode(\
-                                enc.generate_ID(signing_id))))
+                                enc.generate_ID(signing_id)),\
+                            stamp.revoked))
 
         return True
 

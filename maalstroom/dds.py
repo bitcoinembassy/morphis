@@ -757,9 +757,11 @@ def _process_axon_synapses(req):
                         [(DdsStamp.signing_key == req.ident, DdsStamp.id)],\
                         else_=None).label("our_stamp_id"),\
                     DdsStamp.signing_key.label("source"))\
-                .filter(or_(\
-                    DdsStamp.signing_key == axon_addr,\
-                    DdsStamp.signing_key == req.ident))\
+                .filter(\
+                    or_(\
+                        DdsStamp.signing_key == axon_addr,\
+                        DdsStamp.signing_key == req.ident),\
+                    DdsStamp.revoked == False)\
                 .cte(name="children", recursive=True)
 
             sta = aliased(DdsStamp, name="stamp")
@@ -788,7 +790,9 @@ def _process_axon_synapses(req):
                             else_=ra.c.our_stamp_id).label("our_stamp_id"),\
                         ra.c.source)\
                     .join(ra, sta.signing_key == ra.c.signed_key)\
-                    .filter(ra.c.deep < 7))
+                    .filter(\
+                        sta.revoked == False,\
+                        ra.c.deep < 7))
 
             #TODO: Optimize by putting some if statements to not do both
             # subqueries when axon_addr == req.ident.
@@ -1229,7 +1233,9 @@ def _process_stamp_synapse(req, stamp_signing_key=False):
                         DdsStamp,\
                         literal(0).label("deep"),\
                         DdsStamp.id.label("trail"))\
-                    .filter(DdsStamp.signing_key == axon_addr)\
+                    .filter(\
+                        DdsStamp.signing_key == axon_addr,\
+                        DdsStamp.revoked == False)\
                     .cte(name="children", recursive=True)
 
                 sta = aliased(DdsStamp, name="stamp")
@@ -1248,7 +1254,9 @@ def _process_stamp_synapse(req, stamp_signing_key=False):
                                 .concat(sta.id)\
                                 .label("trail"))\
                         .join(ra, sta.signing_key == ra.c.signed_key)\
-                        .filter(ra.c.deep < 7))
+                        .filter(\
+                            sta.revoked == False,\
+                            ra.c.deep < 7))
 
                 # The following func.min(..) causes the group-wise minimum to
                 # be selected. (This was tested for Sqlite3, have to test and
