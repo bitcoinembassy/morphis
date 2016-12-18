@@ -746,7 +746,7 @@ class ChordTasks(object):
                             mbase32.encode(synapse.target_key),
                             mbase32.encode(synapse.source_key)))
 
-        key_retries = 5 if for_update else max_retries
+        key_retries = min(5, max_retries) if for_update else max_retries
 
         if key_callback:
             key_callback(synapse.synapse_key)
@@ -863,7 +863,7 @@ class ChordTasks(object):
                             stamp.version,
                             mbase32.encode(stamp.signing_key)))
 
-        key_retries = 5 if for_update else max_retries
+        key_retries = min(5, max_retries) if for_update else max_retries
 
         if key_callback:
             key_callback(stamp.stamp_key)
