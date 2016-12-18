@@ -76,7 +76,7 @@ def retry_until(func, _amount, _max_retries, *args, **kwargs):
 
         if log.isEnabledFor(logging.INFO):
             log.info("Retrying (id=[{}] func_name=[{}]) with"\
-                "retry_factor=[{}]."\
+                " retry_factor=[{}]."\
                     .format(task_id, func.__name__, retry_factor))
 ##.
 

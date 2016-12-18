@@ -3618,6 +3618,8 @@ class ChordTasks(object):
         # Lock stamp.stamp_key.
         mlock = MultiLock(self.stamp_multi_lock_key_space, [stamp.stamp_key])
 
+        stored_new = True
+
         with (yield from mlock):
             def dbcall_chk():
                 with self.engine.node.db.open_session(True) as sess:
@@ -3646,6 +3648,7 @@ class ChordTasks(object):
                 with self.engine.node.db.open_session() as sess:
                     if existing:
                         nstamp = sess.query(Stamp).get(existing.id)
+                        stored_new = False
                     else:
                         nstamp = Stamp()
                         nstamp.stamp_id = stamp_id
@@ -3680,9 +3683,10 @@ class ChordTasks(object):
             #NOTE: We only print IDs not KEYs; so as to prevent entrapment in
             # the log file.
             log.info(\
-                "Stored new Stamp (dbid=[{}], stamp_id=[{}],\
-                    signed_id=[{}], signing_id=[{}])."\
+                "Stored {} Stamp (dbid=[{}], stamp_id=[{}],"\
+                    " signed_id=[{}], signing_id=[{}])."\
                         .format(\
+                            "new" if stored_new else "updated",\
                             nstamp.id,\
                             mbase32.encode(\
                                 enc.generate_ID(stamp_id)),\
@@ -3933,8 +3937,8 @@ class ChordTasks(object):
             #NOTE: We only print IDs not KEYs; so as to prevent entrapment in
             # the log file.
             log.info(\
-                "Stored new Synapse (dbid=[{}], synapse_id=[{}],\
-                    target_id=[{}], source_id=[{}])."\
+                "Stored new Synapse (dbid=[{}], synapse_id=[{}],"\
+                    " target_id=[{}], source_id=[{}])."\
                         .format(\
                             dbid,\
                             mbase32.encode(\
