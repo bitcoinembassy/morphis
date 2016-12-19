@@ -2093,7 +2093,9 @@ def _create_or_update_contact(node, addr, user, name, first=None, last=None):
 
 @asyncio.coroutine
 def get_contact_name(node, addr, anon_name="[Unsigned]"):
-    assert addr is not None
+    # Remarked out the following line to allow DDS to work when the user has no
+    # identities yet.
+#    assert addr is not None
 
     if not addr:
         return anon_name
