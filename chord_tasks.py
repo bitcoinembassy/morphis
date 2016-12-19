@@ -2934,7 +2934,7 @@ class ChordTasks(object):
                             .label("trail"))\
                     .join(ra, sta.signing_id == ra.c.signed_id)\
                     .filter(\
-                        Stamp.revoked == False,\
+                        sta.revoked == False,\
                         ra.c.deep < 7))
 
             # The following func.min(..) causes the group-wise minimum to be
