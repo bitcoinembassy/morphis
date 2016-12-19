@@ -2795,8 +2795,10 @@ class ChordTasks(object):
         result = yield from self.loop.run_in_executor(None, dbcall)
 
         if log.isEnabledFor(logging.INFO):
+            result_to_print = result if type(result) is bool\
+                else mbase32.encode(result)
             log.info("Result of check for data_id=[{}] is [{}].".format(\
-                mbase32.encode(data_id), result))
+                mbase32.encode(data_id), result_to_print))
 
         return result
 
