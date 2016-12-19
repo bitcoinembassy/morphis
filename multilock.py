@@ -7,9 +7,11 @@ import asyncio
 from collections import deque
 import logging
 
+import python_locks
+
 log = logging.getLogger(__name__)
 
-class MultiLock(asyncio.locks._ContextManagerMixin):
+class MultiLock(python_locks._ContextManagerMixin):
     def __init__(self, key_space=None, keys=None):
         self.key_space = {} if key_space is None else key_space
 
