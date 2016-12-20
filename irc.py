@@ -15,19 +15,34 @@ class Status(Enum):
     closed = 20
     disconnected = 30
 
+class IrcClient(object):
+    def __init__(self):
+        self._nick = None
+
+    @property
+    def nick(self):
+        return self._nick
+
+    @nick.setter
+    def nick(self, value):
+        if log.isEnabledFor(logging.INFO):
+            log.info("IrcClient(id=[{}]) set NICK=[{}].".format(\
+                id(self), value))
+
+        self._nick = value
+
 class IrcProtocol(asyncio.Protocol):
     def __init__(self, loop):
         self.loop = loop
 
-        self.address = None # (host, port)
+        self.connection_handler = None
+        self.server_mode = None
+        self.client = None
 
+        self.address = None # (host, port)
         self.transport = None
 
-        self.server_mode = None
-
         self.status = Status.new
-
-        self.connection_handler = None
 
         self._packet = None
         self._waiter = None
@@ -56,6 +71,11 @@ class IrcProtocol(asyncio.Protocol):
         asyncio.async(self._process_irc_protocol(), loop=self.loop)
 
     @asyncio.coroutine
+    def read_line(self):
+        packet = yield from self.read_packet()
+        return packet.decode()
+
+    @asyncio.coroutine
     def read_packet(self):
         if self.status is Status.disconnected:
             return None
@@ -72,7 +92,7 @@ class IrcProtocol(asyncio.Protocol):
             self._packet = None
 
             if log.isEnabledFor(logging.DEBUG):
-                log.debug("Returning next packet.")
+                log.debug("Returning next packet [{}].".format(packet))
 
             if len(self._buf) > 0:
                 self._process_buffer()
@@ -97,7 +117,19 @@ class IrcProtocol(asyncio.Protocol):
         if len(self._buf) > 0:
             self._process_buffer()
 
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("Returning packet [{}].".format(packet))
+
         return packet
+
+    def write_packet(self, packet_data):
+        self.transport.write(packet_data + b"\r\n")
+
+    def send_451(self):
+        self.write_packet(b"451 :You have not registered.")
+
+    def send_461(self, command):
+        self.write_packet(b"461 {} {} :Not enough parameters.")
 
     @asyncio.coroutine
     def _process_irc_protocol(self):
@@ -118,6 +150,8 @@ class IrcProtocol(asyncio.Protocol):
         while True:
             packet = yield from self.read_packet()
             if not packet:
+                if not self.is_closed():
+                    log.warning("NO MORE PACKETS?! [{}]".format(packet))
                 return
 
             yield from self._process_irc_packet(packet)
@@ -186,7 +220,7 @@ class IrcProtocol(asyncio.Protocol):
 
         self._packet = self._buf[:p1]
 
-        self._buf = self._buf[p1:]
+        self._buf = self._buf[p1+2:]
 
         if self._waiter != None:
             self._waiter.set_result(False)
@@ -196,6 +230,28 @@ class IrcProtocol(asyncio.Protocol):
 @asyncio.coroutine
 def connectTaskServer(protocol):
     log.info("doing task...")
+
+    line = yield from protocol.read_packet()
+
+    split = line.split(b' ')
+    if split[0] != b"NICK":
+        protocol.send_451()
+        return False
+    elif len(split) != 2:
+        protocol.write_packet(b"431 :No nickname given.")
+        return False
+
+    protocol.client.nick = split[1].decode()
+
+    line = yield from protocol.read_packet()
+
+    split = line.split(b' ')
+    if split[0] != b"USER":
+        protocol.send_451()
+        return False
+    elif len(split) < 4:
+        protocol.send_461("USER")
+        return False
 
     protocol.transport.write(b"HI\r\n")
 
@@ -232,7 +288,9 @@ def _main(loop):
     host, port = addr.split(':')
 
     def create_server_protocol():
-        return IrcProtocol(loop)
+        server = IrcProtocol(loop)
+        server.client = IrcClient()
+        return server
 
     server = loop.create_server(create_server_protocol, host, port)
 
