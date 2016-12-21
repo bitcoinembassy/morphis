@@ -6,6 +6,7 @@ import llog
 import asyncio
 from enum import Enum
 import logging
+import time
 
 log = logging.getLogger(__name__)
 
@@ -44,11 +45,17 @@ class IrcProtocol(asyncio.Protocol):
 
         self.status = Status.new
 
+        self._server_create_time = time.time()
         self._packet = None
         self._waiter = None
 
         self._buf = bytearray()
         self._buf_last_check_idx = 0
+
+        self._version = open("VERSION").read().strip()
+        self._server_host_str = "MORPHiS"
+        self._server_host = self._server_host_str.encode()
+        self._reply_prefix = b':' + self._server_host + b' '
 
     def close(self):
         if self.transport:
@@ -122,14 +129,23 @@ class IrcProtocol(asyncio.Protocol):
 
         return packet
 
+    def write_reply(self, reply):
+        assert type(reply) is str, type(packet_data)
+
+        self.transport.writelines((\
+            self._reply_prefix,\
+            reply.encode(),\
+            b"\r\n"))
+
     def write_packet(self, packet_data):
         self.transport.write(packet_data + b"\r\n")
 
     def send_451(self):
-        self.write_packet(b"451 :You have not registered.")
+        self.write_reply("451 :You have not registered.")
 
     def send_461(self, command):
-        self.write_packet(b"461 {} {} :Not enough parameters.")
+        self.write_reply("461 {} {} :Not enough parameters.".format(\
+            self.client.nick, command))
 
     @asyncio.coroutine
     def _process_irc_protocol(self):
@@ -148,20 +164,33 @@ class IrcProtocol(asyncio.Protocol):
             yield from self.connection_handler.connection_ready(self)
 
         while True:
-            packet = yield from self.read_packet()
+            packet = yield from self.read_line()
             if not packet:
                 if not self.is_closed():
                     log.warning("NO MORE PACKETS?! [{}]".format(packet))
                 return
 
-            yield from self._process_irc_packet(packet)
+            r = yield from self._process_irc_packet(packet)
+            if not r:
+                log.info("Remote end shutdown cleanly.")
+                break
 
     @asyncio.coroutine
     def _process_irc_packet(self, packet):
         if log.isEnabledFor(logging.DEBUG):
             log.info("Received packet: [{}].".format(packet))
 
+        if packet.startswith("QUIT"):
+            self.write_packet(":{} QUIT :Client Quit".format(self.client.nick)\
+                .encode())
+            self.write_packet("ERROR :Closing Link: {} (Client Quit)".format(\
+                self.address[0]).encode())
+            log.info("Remote end quit.")
+            self.close()
+            return False
+
         #TODO: YOU_ARE_HERE:
+        return True
 
     def data_received(self, data):
         try:
@@ -253,7 +282,18 @@ def connectTaskServer(protocol):
         protocol.send_461("USER")
         return False
 
-    protocol.transport.write(b"HI\r\n")
+    protocol.write_reply("001 {} :Welcome to MORPHiS IRCd."\
+        .format(protocol.client.nick))
+    protocol.write_reply("002 {} :Your host is {}, running version {}."\
+        .format(\
+            protocol.client.nick, protocol._server_host_str,\
+            protocol._version))
+    protocol.write_reply("003 {} :This server was created {}."\
+        .format(protocol.client.nick, protocol._server_create_time))
+    protocol.write_reply("004 {} {} 1.0 oiws obtkmlvsn"\
+        .format(\
+            protocol.client.nick, protocol._server_host_str,\
+            protocol._version))
 
     return True
 
@@ -288,8 +328,12 @@ def _main(loop):
     host, port = addr.split(':')
 
     def create_server_protocol():
-        server = IrcProtocol(loop)
-        server.client = IrcClient()
+        try:
+            server = IrcProtocol(loop)
+            server.client = IrcClient()
+        except Exception:
+            log.exception("Exception creating IrcProtocol.")
+
         return server
 
     server = loop.create_server(create_server_protocol, host, port)
